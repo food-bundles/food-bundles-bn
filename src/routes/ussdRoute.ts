@@ -3,6 +3,6 @@ import { ussdHandler } from "../controllers/ussdControllers";
 
 const ussdRoutes = Router();
 
-ussdRoutes.post("/ussd", ussdHandler);
+ussdRoutes.post("/user/ussd", ussdHandler);
 
 export default ussdRoutes;

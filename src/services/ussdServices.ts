@@ -1,16 +1,8 @@
-import { UssdRequest } from "../types/ussd";
 import prisma from "../prisma";
+import { ISessionData, IUssdRequest } from "../types/userTypes";
+import { comparePassword, hashPassword } from "../utils/password";
 
-interface SessionData {
-  location?: string;
-  password?: string;
-  confirmPassword?: string;
-  selectedProduct?: string;
-  quantity?: string;
-  mode?: "register" | "submit";
-}
-
-let ussdSessions: Record<string, SessionData> = {};
+let ussdSessions: Record<string, ISessionData> = {};
 
 const products = ["Tomatoes", "Onions", "Maize"];
 
@@ -18,7 +10,7 @@ export async function handleUssdLogic({
   sessionId,
   phoneNumber,
   text,
-}: UssdRequest): Promise<string> {
+}: IUssdRequest): Promise<string> {
   const parts = text.split("*");
 
   const session = ussdSessions[sessionId] || {};
@@ -36,7 +28,7 @@ export async function handleUssdLogic({
     case "1": {
       session.mode = "register";
 
-      const existingUser = await prisma.user.findUnique({
+      const existingUser = await prisma.farmer.findUnique({
         where: { phone: phoneNumber },
       });
 
@@ -67,21 +59,14 @@ export async function handleUssdLogic({
         }
 
         try {
-          const farmer = await prisma.farmer.create({
-            data: {
-              location: session.location || "UNKNOWN",
-              submissions: {},
-            },
-          });
-
-          await prisma.user.create({
-            data: {
-              role: "FARMER",
-              phone: phoneNumber,
-              password: session.password,
-              farmerId: farmer.id,
-            },
-          });
+          let hashedPassword = await hashPassword(session.password);
+         await prisma.farmer.create({
+           data: {
+             phone: phoneNumber,
+             location: session.location || "UNKNOWN",
+             password: hashedPassword,
+           },
+         });
 
           delete ussdSessions[sessionId];
           return "END Registration successful. Thank you!";
@@ -98,11 +83,11 @@ export async function handleUssdLogic({
     case "2": {
       session.mode = "submit";
 
-      const user = await prisma.user.findUnique({
+      const farmer = await prisma.farmer.findUnique({
         where: { phone: phoneNumber },
       });
 
-      if (!user) {
+      if (!farmer) {
         return "END Please register first before submitting a product.";
       }
 
@@ -129,15 +114,15 @@ export async function handleUssdLogic({
 
       if (parts.length === 4) {
         const enteredPassword = parts[3];
-
-        if (enteredPassword !== user.password) {
+        const isMatch = await comparePassword(enteredPassword, farmer.password ?? "");
+        if (!isMatch) {
           return "END Incorrect password. Submission canceled.";
         }
 
         try {
           await prisma.farmerSubmission.create({
             data: {
-              farmerId: user.farmerId!,
+              farmerId: farmer.id,
               productName: session.selectedProduct!,
               quantity: parseFloat(session.quantity!),
             },

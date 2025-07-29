@@ -14,37 +14,27 @@ enum Role {
   FOOD_BUNDLE
 }
 
-model User {
-  id        Int       @id @default(autoincrement())
-  role      Role
-  email     String?   @unique
-  phone     String?   @unique
-  password  String?   
-  createdAt DateTime  @default(now())
-
-  farmer     Farmer?      @relation(fields: [farmerId], references: [id])
-  farmerId   Int? @unique
-
-  restaurant Restaurant?  @relation(fields: [restaurantId], references: [id])
-  restaurantId Int? @unique
-
-}
-
 model Farmer {
   id          Int      @id @default(autoincrement())
   location    String
+  role      Role @default(FARMER)
+  phone       String? @unique
+  email      String? @unique
+  password   String?
   submissions FarmerSubmission[]
-  user        User?
   createdAt   DateTime @default(now())
 }
 
 model Restaurant {
   id         Int        @id @default(autoincrement())
   name       String
+  email      String   @unique
+  phone     String?   @unique
   location   String
+  password  String
+  role      Role @default(RESTAURANT)
   orders     Order[]
   posSales   POSSale[]
-  user       User?
   createdAt  DateTime   @default(now())
 }
 
@@ -57,6 +47,14 @@ model FarmerSubmission {
   submittedAt  DateTime  @default(now())
 }
 
+model Admin {
+  id           Int       @id @default(autoincrement())
+  username  String
+  email     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+}
 
 model Product {
   id            Int           @id @default(autoincrement())
