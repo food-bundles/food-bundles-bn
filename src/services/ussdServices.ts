@@ -4,7 +4,15 @@ import { comparePassword, hashPassword } from "../utils/password";
 
 let ussdSessions: Record<string, ISessionData> = {};
 
-const products = ["Tomatoes", "Onions", "Maize"];
+const products = [
+  "Tomatoes",
+  "Onions",
+  "Maize",
+  "Potatoes",
+  "Cassava",
+  "Irish Potatoes",
+  "Banana",
+];
 
 export async function handleUssdLogic({
   sessionId,
@@ -14,7 +22,7 @@ export async function handleUssdLogic({
   const parts = text.split("*");
 
   const session = ussdSessions[sessionId] || {};
-  ussdSessions[sessionId] = session; 
+  ussdSessions[sessionId] = session;
 
   if (text === "") {
     return `CON Welcome to SmartAgri!
@@ -42,41 +50,56 @@ export async function handleUssdLogic({
 
       if (parts.length === 2) {
         session.location = parts[1];
-        return "CON Create a password:";
+        return "CON Create a 4-digit PIN:";
       }
 
       if (parts.length === 3) {
-        session.password = parts[2];
-        return "CON Confirm your password:";
+        const password = parts[2];
+
+        // Validate PIN: must be exactly 4 digits
+        if (!/^\d{4}$/.test(password)) {
+          delete ussdSessions[sessionId];
+          return "END Please enter a 4-digit numeric PIN only. Try again.";
+        }
+
+        session.password = password;
+        return "CON Confirm your 4-digit PIN:";
       }
 
       if (parts.length === 4) {
-        session.confirmPassword = parts[3];
+        const confirmPassword = parts[3];
 
-        if (session.password !== session.confirmPassword) {
+        // Validate confirm password: must be exactly 4 digits
+        if (!/^\d{4}$/.test(confirmPassword)) {
           delete ussdSessions[sessionId];
-          return "END Passwords do not match. Registration failed.";
+          return "END Please enter a 4-digit numeric PIN only. Try again.";
+        }
+
+        if (session.password !== confirmPassword) {
+          delete ussdSessions[sessionId];
+          return "END PINs do not match. Please try again.";
         }
 
         try {
           let hashedPassword = await hashPassword(session.password);
-         await prisma.farmer.create({
-           data: {
-             phone: phoneNumber,
-             location: session.location || "UNKNOWN",
-             password: hashedPassword,
-           },
-         });
+          await prisma.farmer.create({
+            data: {
+              phone: phoneNumber,
+              location: session.location || "UNKNOWN",
+              password: hashedPassword,
+            },
+          });
 
           delete ussdSessions[sessionId];
           return "END Registration successful. Thank you!";
         } catch (err) {
           console.error("DB Error:", err);
+          delete ussdSessions[sessionId];
           return "END Registration failed. Please try again later.";
         }
       }
 
-      break;
+      return "END Invalid input during registration.";
     }
 
     // 2. Submit Product
@@ -95,28 +118,51 @@ export async function handleUssdLogic({
         return `CON Select a product:
 1. Tomatoes
 2. Onions
-3. Maize`;
+3. Maize
+4. Potatoes
+5. Cassava
+6. Irish Potatoes
+7. Banana`;
       }
 
       if (parts.length === 2) {
         const index = parseInt(parts[1]) - 1;
         if (index < 0 || index >= products.length) {
-          return "END Invalid product selection.";
+          return "END Invalid product selection. Please try again.";
         }
         session.selectedProduct = products[index];
         return "CON Enter quantity in kg:";
       }
 
       if (parts.length === 3) {
-        session.quantity = parts[2];
-        return "CON Enter your password to confirm submission:";
+        const quantity = parts[2];
+
+        // Validate quantity is a positive number
+        if (isNaN(parseFloat(quantity)) || parseFloat(quantity) <= 0) {
+          delete ussdSessions[sessionId];
+          return "END Please enter a valid quantity. Try again.";
+        }
+
+        session.quantity = quantity;
+        return "CON Enter your 4-digit PIN to confirm:";
       }
 
       if (parts.length === 4) {
         const enteredPassword = parts[3];
-        const isMatch = await comparePassword(enteredPassword, farmer.password ?? "");
+
+        // Validate PIN format before checking password
+        if (!/^\d{4}$/.test(enteredPassword)) {
+          delete ussdSessions[sessionId];
+          return "END Please enter a 4-digit numeric PIN only. Try again.";
+        }
+
+        const isMatch = await comparePassword(
+          enteredPassword,
+          farmer.password ?? ""
+        );
         if (!isMatch) {
-          return "END Incorrect password. Submission canceled.";
+          delete ussdSessions[sessionId];
+          return "END Incorrect PIN. Please try again.";
         }
 
         try {
@@ -132,11 +178,12 @@ export async function handleUssdLogic({
           return "END Submission successful. Thank you!";
         } catch (err) {
           console.error("DB Error:", err);
+          delete ussdSessions[sessionId];
           return "END Submission failed. Try again.";
         }
       }
 
-      break;
+      return "END Invalid input during product submission.";
     }
 
     case "3":
