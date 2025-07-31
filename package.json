@@ -8,7 +8,8 @@
     "ussd": "npx ngrok http 4000",
     "build": "tsc",
     "start": "node dist/index.js",
-    "generate": "prisma generate",
+    "db:push": "npx prisma db push",
+    "generate": "npx prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -22,7 +23,9 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.16.3"
+    "multer": "^2.0.2",
+    "pg": "^8.16.3",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@types/africastalking": "^0.6.2",
@@ -30,6 +33,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.0.0",
     "@types/node": "^24.1.0",
     "nodemon": "^3.1.10",
     "prisma": "^6.12.0",

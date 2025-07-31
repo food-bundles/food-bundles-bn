@@ -14,8 +14,29 @@ enum Role {
   FOOD_BUNDLE
 }
 
+enum SubmissionStatus {
+  PENDING    
+  VERIFIED    
+  APPROVED   
+  PAID       
+}
+
+enum ProductCategory {
+  VEGETABLES
+  FRUITS
+  GRAINS
+  TUBERS
+  LEGUMES
+  HERBS_SPICES
+}
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
+
 model Farmer {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   location    String
   role      Role @default(FARMER)
   phone       String? @unique
@@ -26,7 +47,7 @@ model Farmer {
 }
 
 model Restaurant {
-  id         Int        @id @default(autoincrement())
+  id         String   @id @default(uuid())
   name       String
   email      String   @unique
   phone     String?   @unique
@@ -39,38 +60,67 @@ model Restaurant {
 }
 
 model FarmerSubmission {
-  id           Int       @id @default(autoincrement())
-  farmer       Farmer    @relation(fields: [farmerId], references: [id])
-  farmerId     Int
-  productName  String   
-  quantity     Float
-  submittedAt  DateTime  @default(now())
+  id              String   @id @default(uuid())
+  farmer          Farmer    @relation(fields: [farmerId], references: [id])
+  farmerId        String
+  productName     String
+  submittedQty    Float?      
+  acceptedQty     Float?     
+  unitPrice       Float?    
+  totalAmount     Float?   
+  status          SubmissionStatus @default(PENDING) 
+
+  foodBundleId String?   
+  foodBundle   Admin? @relation("Foodbundle", fields: [foodBundleId], references: [id])
+
+  approvedProductId String?
+  approvedProduct   Product? @relation(fields: [approvedProductId], references: [id])
+
+  submittedAt     DateTime  @default(now())
+  verifiedAt      DateTime? 
+  approvedAt      DateTime? 
+  paidAt          DateTime? 
 }
 
 model Admin {
-  id           Int       @id @default(autoincrement())
+  id           String   @id @default(uuid())
   username  String
   email     String   @unique
   password  String
+  phone     String?  @unique
   role      Role
+  foodbundleAssignments FarmerSubmission[] @relation("Foodbundle")
+  products   Product[]
   createdAt DateTime @default(now())
 }
 
 model Product {
-  id            Int           @id @default(autoincrement())
-  name          String
-  category      String
-  unitPrice     Float
+  id            String   @id @default(uuid())
+  productName          String
+  unitPrice         Float
+  category      ProductCategory
+  bonus         Int    
+  sku           String     @unique
+  quantity      Float
+  images        String[]   
+  expiryDate    DateTime?
   unit          String
-  stockQuantity Float
+  status        ProductStatus @default(ACTIVE)     
+  
+  createdBy     String
+  admin         Admin      @relation(fields: [createdBy], references: [id])
+  
   orderItems    OrderItem[]
+  farmerSubmissions FarmerSubmission[]
+  
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Order {
-  id            Int        @id @default(autoincrement())
+  id            String   @id @default(uuid())
   restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
-  restaurantId  Int
+  restaurantId  String
   status        String
   totalAmount   Float
   orderItems    OrderItem[]
@@ -78,19 +128,19 @@ model Order {
 }
 
 model OrderItem {
-  id           Int     @id @default(autoincrement())
+  id           String   @id @default(uuid())
   order        Order   @relation(fields: [orderId], references: [id])
-  orderId      Int
+  orderId      String
   product      Product @relation(fields: [productId], references: [id])
-  productId    Int
+  productId    String
   quantity     Float
-  pricePerUnit Float
+  unitPrice Float
 }
 
 model POSSale {
-  id           Int        @id @default(autoincrement())
+  id           String   @id @default(uuid())
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
-  restaurantId Int
+  restaurantId String
   totalAmount  Float
   paymentMethod String
   createdAt    DateTime   @default(now())

@@ -170,7 +170,7 @@ export async function handleUssdLogic({
             data: {
               farmerId: farmer.id,
               productName: session.selectedProduct!,
-              quantity: parseFloat(session.quantity!),
+              submittedQty: parseFloat(session.quantity!),
             },
           });
 

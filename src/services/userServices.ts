@@ -101,7 +101,7 @@ export const getAllFarmersService = async (query: IPaginationQuery) => {
   };
 };
 
-export const getFarmerByIdService = async (id: number) => {
+export const getFarmerByIdService = async (id: string) => {
   const farmer = await prisma.farmer.findUnique({
     where: { id },
     select: {
@@ -115,7 +115,7 @@ export const getFarmerByIdService = async (id: number) => {
         select: {
           id: true,
           productName: true,
-          quantity: true,
+          submittedQty: true,
           submittedAt: true,
         },
         orderBy: {
@@ -129,7 +129,7 @@ export const getFarmerByIdService = async (id: number) => {
 };
 
 export const updateFarmerService = async (
-  id: number,
+  id: string,
   updateData: IUpdateFarmerData
 ) => {
   const { password, ...otherData } = updateData;
@@ -163,7 +163,7 @@ export const updateFarmerService = async (
   }
 };
 
-export const deleteFarmerService = async (id: number) => {
+export const deleteFarmerService = async (id: string) => {
   const existingFarmer = await prisma.farmer.findUnique({
     where: { id },
   });
@@ -270,7 +270,7 @@ export const getAllRestaurantsService = async (query: IPaginationQuery) => {
   };
 };
 
-export const getRestaurantByIdService = async (id: number) => {
+export const getRestaurantByIdService = async (id: string) => {
   const restaurant = await prisma.restaurant.findUnique({
     where: { id },
     select: {
@@ -291,10 +291,10 @@ export const getRestaurantByIdService = async (id: number) => {
             select: {
               id: true,
               quantity: true,
-              pricePerUnit: true,
+              unitPrice: true,
               product: {
                 select: {
-                  name: true,
+                  productName: true,
                   category: true,
                 },
               },
@@ -323,7 +323,7 @@ export const getRestaurantByIdService = async (id: number) => {
 };
 
 export const updateRestaurantService = async (
-  id: number,
+  id: string,
   updateData: IUpdateRestaurantData
 ) => {
   const { password, ...otherData } = updateData;
@@ -357,7 +357,7 @@ export const updateRestaurantService = async (
   }
 };
 
-export const deleteRestaurantService = async (id: number) => {
+export const deleteRestaurantService = async (id: string) => {
   const existingRestaurant = await prisma.restaurant.findUnique({
     where: { id },
   });
@@ -445,7 +445,7 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
   };
 };
 
-export const getAdminByIdService = async (id: number) => {
+export const getAdminByIdService = async (id: string) => {
   const admin = await prisma.admin.findUnique({
     where: { id },
     select: {
@@ -461,7 +461,7 @@ export const getAdminByIdService = async (id: number) => {
 };
 
 export const updateAdminService = async (
-  id: number,
+  id: string,
   updateData: IUpdateAdminData
 ) => {
   const { password, ...otherData } = updateData;
@@ -495,7 +495,7 @@ export const updateAdminService = async (
   }
 };
 
-export const deleteAdminService = async (id: number) => {
+export const deleteAdminService = async (id: string) => {
   const existingAdmin = await prisma.admin.findUnique({
     where: { id },
   });

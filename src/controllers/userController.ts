@@ -63,10 +63,19 @@ export class UserController {
     try {
       const adminData = req.body;
       const result = await createAdminService(adminData);
+      const isAdmin = result.role === Role.ADMIN;
+      let sms;
+
+      if (isAdmin) { 
+       sms = "Admin created successfully";
+      }
+      else {
+        sms = "Food bundle created successfully";
+      }
   
       res.status(201).json({
         success: true,
-        message: "Admin created successfully",
+        message: sms,
         data: result,
       });
     } catch (error: any) {
@@ -145,7 +154,7 @@ export class UserController {
   static getFarmerById = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const farmer = await getFarmerByIdService(parseInt(id));
+      const farmer = await getFarmerByIdService(id);
   
       if (!farmer) {
         return res.status(404).json({
@@ -169,7 +178,7 @@ export class UserController {
   static getRestaurantById = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const restaurant = await getRestaurantByIdService(parseInt(id));
+      const restaurant = await getRestaurantByIdService(id);
   
       if (!restaurant) {
         return res.status(404).json({
@@ -193,7 +202,7 @@ export class UserController {
   static getAdminById = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const admin = await getAdminByIdService(parseInt(id));
+      const admin = await getAdminByIdService(id);
   
       if (!admin) {
         return res.status(404).json({
@@ -219,7 +228,7 @@ export class UserController {
       const { id } = req.params;
       const updateData = req.body;
   
-      const updatedFarmer = await updateFarmerService(parseInt(id), updateData);
+      const updatedFarmer = await updateFarmerService(id, updateData);
   
       res.status(200).json({
         success: true,
@@ -240,7 +249,7 @@ export class UserController {
       const updateData = req.body;
   
       const updatedRestaurant = await updateRestaurantService(
-        parseInt(id),
+        id,
         updateData
       );
   
@@ -262,7 +271,7 @@ export class UserController {
       const { id } = req.params;
       const updateData = req.body;
   
-      const updatedAdmin = await updateAdminService(parseInt(id), updateData);
+      const updatedAdmin = await updateAdminService(id, updateData);
   
       res.status(200).json({
         success: true,
@@ -280,7 +289,7 @@ export class UserController {
   static deleteFarmer = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      await deleteFarmerService(parseInt(id));
+      await deleteFarmerService(id);
   
       res.status(200).json({
         success: true,
@@ -297,7 +306,7 @@ export class UserController {
   static deleteRestaurant = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      await deleteRestaurantService(parseInt(id));
+      await deleteRestaurantService(id);
   
       res.status(200).json({
         success: true,
@@ -314,7 +323,7 @@ export class UserController {
   static deleteAdmin = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      await deleteAdminService(parseInt(id));
+      await deleteAdminService(id);
   
       res.status(200).json({
         success: true,

@@ -1,6 +1,6 @@
 import prisma from "../prisma";
 
-export const getUserById = async (id: number) => {
+export const getUserById = async (id: string) => {
   const farmer = await prisma.farmer.findUnique({ where: { id } });
   if (farmer) return { ...farmer, userType: "FARMER" };
 

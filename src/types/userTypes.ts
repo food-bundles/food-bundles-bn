@@ -100,7 +100,7 @@ export interface IPaginationOptions {
 }
 
 export interface JwtPayload {
-  id: number;
+  id: string;
   role: Role; 
   iat?: number;
   exp?: number;
