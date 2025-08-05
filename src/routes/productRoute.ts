@@ -13,7 +13,7 @@ import { upload, validateImages } from "../utils/imageUpload";
 
 const productRoutes = Router();
 
-// Get all products (accessible by all authenticated users)
+// Get all products (accessible by all authenticated)
 productRoutes.get("/products",  getAllProducts);
 
 // Get product by ID (accessible by all authenticated users)
