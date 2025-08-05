@@ -64,9 +64,10 @@ model FarmerSubmission {
   farmer          Farmer    @relation(fields: [farmerId], references: [id])
   farmerId        String
   productName     String
-  submittedQty    Float?      
+  submittedQty    Float? 
+  wishedPrice     Float?     
   acceptedQty     Float?     
-  unitPrice       Float?    
+  acceptedPrice       Float?    
   totalAmount     Float?   
   status          SubmissionStatus @default(PENDING) 
 

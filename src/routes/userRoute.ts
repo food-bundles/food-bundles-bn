@@ -19,7 +19,7 @@ userRoutes.get("/restaurants/:id", UserController.getRestaurantById);
 userRoutes.put("/restaurants/:id", UserController.updateRestaurant);
 userRoutes.delete("/restaurants/:id", UserController.deleteRestaurant);
 
-userRoutes.post("/admins", isAuthenticated,checkPermission(Role.FOOD_BUNDLE), UserController.createAdmin);
+userRoutes.post("/admins",  UserController.createAdmin);
 userRoutes.get("/admins", UserController.getAllAdmins);
 userRoutes.get("/admins/:id", UserController.getAdminById);
 userRoutes.put("/admins/:id", UserController.updateAdmin);

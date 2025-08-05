@@ -56,7 +56,6 @@ export async function handleUssdLogic({
       if (parts.length === 3) {
         const password = parts[2];
 
-        // Validate PIN: must be exactly 4 digits
         if (!/^\d{4}$/.test(password)) {
           delete ussdSessions[sessionId];
           return "END Please enter a 4-digit numeric PIN only. Try again.";
@@ -69,7 +68,6 @@ export async function handleUssdLogic({
       if (parts.length === 4) {
         const confirmPassword = parts[3];
 
-        // Validate confirm password: must be exactly 4 digits
         if (!/^\d{4}$/.test(confirmPassword)) {
           delete ussdSessions[sessionId];
           return "END Please enter a 4-digit numeric PIN only. Try again.";
@@ -137,20 +135,29 @@ export async function handleUssdLogic({
       if (parts.length === 3) {
         const quantity = parts[2];
 
-        // Validate quantity is a positive number
         if (isNaN(parseFloat(quantity)) || parseFloat(quantity) <= 0) {
           delete ussdSessions[sessionId];
           return "END Please enter a valid quantity. Try again.";
         }
 
         session.quantity = quantity;
-        return "CON Enter your 4-digit PIN to confirm:";
+        return "CON Enter your wished price per kg (RWF):";
+      }
+      if (parts.length === 4) {
+        const wishedPrice = parts[3];
+
+        if(isNaN(parseFloat(wishedPrice)) || parseFloat(wishedPrice) <= 0) {
+          delete ussdSessions[sessionId];
+          return "END Please enter a valid wished price. Try again.";
+        }
+
+        session.wishedPrice = wishedPrice;
+        return "CON Enter your PIN to confirm:";
       }
 
-      if (parts.length === 4) {
-        const enteredPassword = parts[3];
+      if (parts.length === 5) {
+        const enteredPassword = parts[4];
 
-        // Validate PIN format before checking password
         if (!/^\d{4}$/.test(enteredPassword)) {
           delete ussdSessions[sessionId];
           return "END Please enter a 4-digit numeric PIN only. Try again.";
@@ -171,6 +178,7 @@ export async function handleUssdLogic({
               farmerId: farmer.id,
               productName: session.selectedProduct!,
               submittedQty: parseFloat(session.quantity!),
+              wishedPrice: parseFloat(session.wishedPrice!),
             },
           });
 

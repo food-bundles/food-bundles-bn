@@ -5,9 +5,14 @@ import {
   clearSubmissionService,
   getAllSubmissionsService,
   getSubmissionByIdService,
+  getSubmissionsByStatusService,
+  getSubmissionStatsService,
 } from "../services/ProductVerifyService";
+import { Role } from "@prisma/client";
 
-export const purchaseProduct = async (req: Request, res: Response) => {
+export default class ProductVerifyController { 
+  
+static purchaseProduct = async (req: Request, res: Response) => {
   try {
     const { submissionId } = req.params;
     const { acceptedQty, unitPrice } = req.body;
@@ -43,7 +48,7 @@ export const purchaseProduct = async (req: Request, res: Response) => {
   }
 };
 
-export const updateSubmission = async (req: Request, res: Response) => {
+static   updateSubmission = async (req: Request, res: Response) => {
   try {
     const { submissionId } = req.params;
     const { acceptedQty, unitPrice } = req.body;
@@ -51,7 +56,7 @@ export const updateSubmission = async (req: Request, res: Response) => {
 
     if (!acceptedQty || !unitPrice) {
       return res.status(400).json({
-        message: "acceptedQty and unitPrice are required",
+        message: "acceptedQty and accepted price are required",
       });
     }
 
@@ -79,7 +84,7 @@ export const updateSubmission = async (req: Request, res: Response) => {
   }
 };
 
-export const clearSubmission = async (req: Request, res: Response) => {
+static clearSubmission = async (req: Request, res: Response) => {
   try {
     const { submissionId } = req.params;
 
@@ -96,35 +101,221 @@ export const clearSubmission = async (req: Request, res: Response) => {
   }
 };
 
-export const getAllSubmissions = async (req: Request, res: Response) => {
+static getAllSubmissions = async (req: Request, res: Response) => {
   try {
-    const submissions = await getAllSubmissionsService();
+    const user = (req as any).user;
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = "submittedAt",
+      sortOrder = "desc",
+      status,
+      productName,
+    } = req.query;
+
+    // Validate pagination parameters
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(
+      100,
+      Math.max(1, parseInt(limit as string) || 10)
+    );
+
+    const result = await getAllSubmissionsService({
+      userId: user.id,
+      userRole: user.role as Role,
+      options: {
+        page: pageNum,
+        limit: limitNum,
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as "asc" | "desc",
+        status: status as string,
+        productName: productName as string,
+      },
+    });
 
     res.status(200).json({
+      success: true,
       message: "Submissions retrieved successfully",
-      data: submissions,
+      ...result,
     });
   } catch (error: any) {
     res.status(500).json({
+      success: false,
       message: error.message || "Failed to get submissions",
     });
   }
 };
 
 // Get submission by ID
-export const getSubmissionById = async (req: Request, res: Response) => {
+static getSubmissionById = async (req: Request, res: Response) => {
   try {
     const { submissionId } = req.params;
+    const user = (req as any).user;
 
-    const submission = await getSubmissionByIdService(submissionId);
+    if (!submissionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Submission ID is required",
+      });
+    }
+
+    const result = await getSubmissionByIdService(
+      submissionId,
+      user.id,
+      user.role as Role
+    );
 
     res.status(200).json({
+      success: true,
       message: "Submission retrieved successfully",
-      data: submission,
+      ...result,
     });
   } catch (error: any) {
-    res.status(500).json({
+    const statusCode = error.message.includes("not found")
+      ? 404
+      : error.message.includes("Access denied")
+      ? 403
+      : 500;
+
+    res.status(statusCode).json({
+      success: false,
       message: error.message || "Failed to get submission",
     });
   }
 };
+
+// Get submissions by status
+static getSubmissionsByStatus = async (req: Request, res: Response) => {
+  try {
+    const { status } = req.params;
+    const user = (req as any).user;
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = "submittedAt",
+      sortOrder = "desc",
+      productName,
+    } = req.query;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: "Status is required",
+      });
+    }
+
+    // Validate status
+    const validStatuses = ["PENDING", "VERIFIED", "APPROVED", "PAID"];
+    if (!validStatuses.includes(status.toUpperCase())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status. Must be one of: " + validStatuses.join(", "),
+      });
+    }
+
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(
+      100,
+      Math.max(1, parseInt(limit as string) || 10)
+    );
+
+    const result = await getSubmissionsByStatusService({
+      userId: user.id,
+      userRole: user.role as Role,
+      status: status.toUpperCase(),
+      options: {
+        page: pageNum,
+        limit: limitNum,
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as "asc" | "desc",
+        productName: productName as string,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Submissions with status ${status} retrieved successfully`,
+      ...result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to get submissions by status",
+    });
+  }
+};
+
+static getSubmissionStats = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+
+    const result = await getSubmissionStatsService(user.id, user.role as Role);
+
+    res.status(200).json({
+      success: true,
+      message: "Submission statistics retrieved successfully",
+      ...result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to get submission statistics",
+    });
+  }
+};
+
+// Get user's own submissions (for farmers)
+static getMySubmissions = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = "submittedAt",
+      sortOrder = "desc",
+      status,
+      productName,
+    } = req.query;
+
+    // This endpoint is mainly for farmers to get their own submissions
+    if (user.role !== Role.FARMER) {
+      return res.status(403).json({
+        success: false,
+        message: "This endpoint is for farmers only",
+      });
+    }
+
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(
+      100,
+      Math.max(1, parseInt(limit as string) || 10)
+    );
+
+    const result = await getAllSubmissionsService({
+      userId: user.id,
+      userRole: user.role as Role,
+      options: {
+        page: pageNum,
+        limit: limitNum,
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as "asc" | "desc",
+        status: status as string,
+        productName: productName as string,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Your submissions retrieved successfully",
+      ...result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to get your submissions",
+    });
+  }
+};
+
+
+}

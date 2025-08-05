@@ -15,6 +15,7 @@ export interface ISessionData {
   selectedProduct?: string;
   quantity?: string;
   mode?: "register" | "submit";
+  wishedPrice?: string;
 }
 
 export  interface ICreateFarmerData {
