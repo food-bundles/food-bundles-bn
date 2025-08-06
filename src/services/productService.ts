@@ -13,6 +13,7 @@ interface ProductData {
   createdBy: string;
 }
 
+
 // Create product from verified farmer submission and approve it
 export const createProductFromSubmissionService = async ({
   submissionId,
