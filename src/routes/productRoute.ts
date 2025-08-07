@@ -10,6 +10,7 @@ import {
 } from "../controllers/productController";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 import { upload, validateImages } from "../utils/imageUpload";
+import { Role } from "@prisma/client";
 
 const productRoutes = Router();
 
@@ -30,7 +31,7 @@ productRoutes.get(
 productRoutes.post(
   "/submissions/:submissionId/create-product",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  checkPermission(Role.ADMIN, Role.FOOD_BUNDLE),
   upload.array("images", 4),
   validateImages,
   createProductFromSubmission

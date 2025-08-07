@@ -1,7 +1,7 @@
 import prisma from "../prisma";
 import { Role } from "@prisma/client";
 import { IGetSubmissionsParams, IPaginationOptions } from "../types/productVerifyTypes";
-
+import { PaginationService } from "./paginationService";
 
 export const purchaseProductService = async (
   submissionId: string,
@@ -240,13 +240,18 @@ export const getAllSubmissionsService = async ({
   userRole,
   options = {},
 }: IGetSubmissionsParams) => {
+  const paginationParams = PaginationService.validatePaginationParams(
+    options.page?.toString(),
+    options.limit?.toString()
+  );
+
   const {
-    page = 1,
-    limit = 10,
+    page,
+    limit,
     sortBy = "submittedAt",
     sortOrder = "desc",
-  } = options;
-
+  } = { ...paginationParams, ...options };
+  
   const skip = (page - 1) * limit;
   const whereCondition = getFilterConditions(userId, userRole, options);
   const includeConfig = getIncludeConfig(userRole);

@@ -1,11 +1,8 @@
-import { PrismaClient } from "@prisma/client";
 import {
   IPaginationOptions,
   IPaginationQuery,
   IPaginationResult,
 } from "../types/userTypes";
-
-// Approach 1: All Static Methods (Recommended - Simplest)
 export class PaginationService {
   static async paginate<T>(
     model: any,

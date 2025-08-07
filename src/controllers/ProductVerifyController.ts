@@ -8,6 +8,7 @@ import {
   getSubmissionsByStatusService,
   getSubmissionStatsService,
 } from "../services/ProductVerifyService";
+import { PaginationService } from "../services/paginationService";
 import { Role } from "@prisma/client";
 
 export default class ProductVerifyController { 
@@ -104,28 +105,25 @@ static clearSubmission = async (req: Request, res: Response) => {
 static getAllSubmissions = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
-    const {
-      page = 1,
-      limit = 10,
-      sortBy = "submittedAt",
-      sortOrder = "desc",
-      status,
-      productName,
-    } = req.query;
-
-    // Validate pagination parameters
-    const pageNum = Math.max(1, parseInt(page as string) || 1);
-    const limitNum = Math.min(
-      100,
-      Math.max(1, parseInt(limit as string) || 10)
-    );
+      const {
+        page,
+        limit,
+        sortBy = "submittedAt",
+        sortOrder = "desc",
+        status,
+        productName,
+      } = req.query;
+      const paginationQuery = PaginationService.validatePaginationParams(
+        page as string,
+        limit as string
+      );
 
     const result = await getAllSubmissionsService({
       userId: user.id,
       userRole: user.role as Role,
       options: {
-        page: pageNum,
-        limit: limitNum,
+        page: paginationQuery.page,
+        limit: paginationQuery.limit,
         sortBy: sortBy as string,
         sortOrder: sortOrder as "asc" | "desc",
         status: status as string,
@@ -213,10 +211,9 @@ static getSubmissionsByStatus = async (req: Request, res: Response) => {
       });
     }
 
-    const pageNum = Math.max(1, parseInt(page as string) || 1);
-    const limitNum = Math.min(
-      100,
-      Math.max(1, parseInt(limit as string) || 10)
+  const paginationQuery = PaginationService.validatePaginationParams(
+      page as string,
+      limit as string
     );
 
     const result = await getSubmissionsByStatusService({
@@ -224,8 +221,8 @@ static getSubmissionsByStatus = async (req: Request, res: Response) => {
       userRole: user.role as Role,
       status: status.toUpperCase(),
       options: {
-        page: pageNum,
-        limit: limitNum,
+        page: paginationQuery.page,
+        limit: paginationQuery.limit,
         sortBy: sortBy as string,
         sortOrder: sortOrder as "asc" | "desc",
         productName: productName as string,
@@ -277,7 +274,7 @@ static getMySubmissions = async (req: Request, res: Response) => {
       productName,
     } = req.query;
 
-    // This endpoint is mainly for farmers to get their own submissions
+    // Farmer to get their own submissions
     if (user.role !== Role.FARMER) {
       return res.status(403).json({
         success: false,
@@ -285,18 +282,17 @@ static getMySubmissions = async (req: Request, res: Response) => {
       });
     }
 
-    const pageNum = Math.max(1, parseInt(page as string) || 1);
-    const limitNum = Math.min(
-      100,
-      Math.max(1, parseInt(limit as string) || 10)
+    const paginationQuery = PaginationService.validatePaginationParams(
+      page as string,
+      limit as string
     );
 
     const result = await getAllSubmissionsService({
       userId: user.id,
       userRole: user.role as Role,
       options: {
-        page: pageNum,
-        limit: limitNum,
+        page: paginationQuery.page,
+        limit: paginationQuery.limit,
         sortBy: sortBy as string,
         sortOrder: sortOrder as "asc" | "desc",
         status: status as string,
