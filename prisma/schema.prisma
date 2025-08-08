@@ -138,6 +138,7 @@ model OrderItem {
   unitPrice Float
 }
 
+// Point of Sale Schema
 model POSSale {
   id           String   @id @default(uuid())
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])

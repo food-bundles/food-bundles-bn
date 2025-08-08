@@ -1,0 +1,312 @@
+tags:
+  - name: Product Submission
+    description: Web-based product submission operations
+  - name: USSD Services
+    description: USSD-based farmer registration and product submission operations
+  - name: USSD System
+    description: System operations and health checks for USSD service
+
+components:
+  schemas:
+    ProductSubmissionInput:
+      type: object
+      required:
+        - productName
+        - quantity
+        - wishedPrice
+      properties:
+        productName:
+          type: string
+          enum:
+            - Tomatoes
+            - Onions
+            - Maize
+            - Potatoes
+            - Cassava
+            - Irish Potatoes
+            - Banana
+          description: Name of the product being submitted
+          example: "Tomatoes"
+        quantity:
+          type: number.01
+          description: Quantity in kilograms
+          example: 50.5
+        wishedPrice:
+          type: number.01
+          description: Desired price per kilogram in RWF
+          example: 500
+
+    ProductSubmissionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Product submitted successfully"
+        data:
+          $ref: "#/components/schemas/FarmerSubmission"
+
+    FarmerSubmission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        productName:
+          type: string
+          example: "Tomatoes"
+        submittedQty:
+          type: number
+          format: float
+          example: 50.5
+        wishedPrice:
+          type: number
+          format: float
+          example: 500
+        status:
+          type: string
+          enum: [PENDING, VERIFIED, APPROVED, PAID]
+          example: "PENDING"
+        submittedAt:
+          type: string
+          format: date-time
+          example: "2024-08-07T12:00:00Z"
+        farmer:
+          $ref: "#/components/schemas/FarmerProfile"
+
+    FarmerProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        phone:
+          type: string
+          example: "+250788123456"
+        location:
+          type: string
+          example: "Kigali"
+
+paths:
+  /farmer/web:
+    post:
+      tags:
+        - Product Submission
+      summary: Submit a new product
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductSubmissionInput"
+      responses:
+        201:
+          description: Product submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductSubmissionResponse"
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "quantity and wishedPrice must be positive numbers"
+        401:
+          description: Unauthorized - User not authenticated
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Failed to submit product"
+
+  /farmer/ussd:
+    post:
+      tags:
+        - USSD Services
+      summary: Handle USSD interactions
+      description: |
+        Main endpoint for processing USSD interactions from telecom providers.
+        Supports farmer registration and product submission through USSD interface.
+
+        ## USSD Flow Overview:
+
+        ### Main Menu (text = ""):
+        - **Option 1**: Register new farmer
+        - **Option 2**: Submit product (requires registration)
+        - **Option 3**: Exit system
+
+        ### Registration Flow (text starts with "1"):
+        1. **Step 1**: Enter location
+        2. **Step 2**: Create 4-digit PIN
+        3. **Step 3**: Confirm 4-digit PIN
+        4. **Step 4**: Complete registration
+
+        ### Product Submission Flow (text starts with "2"):
+        1. **Step 1**: Select product from list (1-7)
+        2. **Step 2**: Enter quantity in kg
+        3. **Step 3**: Enter desired price per kg (RWF)
+        4. **Step 4**: Enter PIN to confirm
+        5. **Step 5**: Complete submission
+      responses:
+        200:
+          description: USSD response sent successfully
+          headers:
+            Content-Type:
+              schema:
+                type: string
+                example: "text/plain"
+              description: Response content type for USSD
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/UssdResponse"
+              examples:
+                main_menu:
+                  summary: Welcome menu display
+                  value: "CON Welcome to SmartAgri!\n1. Register\n2. Submit Product\n3. Exit"
+                location_prompt:
+                  summary: Location input prompt
+                  value: "CON Enter your location:"
+                pin_prompt:
+                  summary: PIN creation prompt
+                  value: "CON Create a 4-digit PIN:"
+                pin_confirm_prompt:
+                  summary: PIN confirmation prompt
+                  value: "CON Confirm your 4-digit PIN:"
+                product_menu:
+                  summary: Product selection menu
+                  value: "CON Select a product:\n1. Tomatoes\n2. Onions\n3. Maize\n4. Potatoes\n5. Cassava\n6. Irish Potatoes\n7. Banana"
+                quantity_prompt:
+                  summary: Quantity input prompt
+                  value: "CON Enter quantity in kg:"
+                price_prompt:
+                  summary: Price input prompt
+                  value: "CON Enter your wished price per kg (RWF):"
+                pin_verification_prompt:
+                  summary: PIN verification prompt
+                  value: "CON Enter your PIN to confirm:"
+                registration_success:
+                  summary: Successful registration
+                  value: "END Registration successful. Thank you!"
+                submission_success:
+                  summary: Successful product submission
+                  value: "END Submission successful. Thank you!"
+                already_registered:
+                  summary: User already registered
+                  value: "END You are already registered."
+                not_registered:
+                  summary: User not registered
+                  value: "END Please register first before submitting a product."
+                invalid_pin_format:
+                  summary: Invalid PIN format
+                  value: "END Please enter a 4-digit numeric PIN only. Try again."
+                pin_mismatch:
+                  summary: PIN confirmation mismatch
+                  value: "END PINs do not match. Please try again."
+                incorrect_pin:
+                  summary: Incorrect PIN during verification
+                  value: "END Incorrect PIN. Please try again."
+                invalid_product:
+                  summary: Invalid product selection
+                  value: "END Invalid product selection. Please try again."
+                invalid_quantity:
+                  summary: Invalid quantity entered
+                  value: "END Please enter a valid quantity. Try again."
+                invalid_price:
+                  summary: Invalid price entered
+                  value: "END Please enter a valid wished price. Try again."
+                registration_failed:
+                  summary: Registration database error
+                  value: "END Registration failed. Please try again later."
+                submission_failed:
+                  summary: Submission database error
+                  value: "END Submission failed. Try again."
+                exit_message:
+                  summary: Exit system message
+                  value: "END Thank you for using SmartAgri!"
+                invalid_input:
+                  summary: Invalid input error
+                  value: "END Invalid input. Try again."
+        400:
+          description: Bad request - Missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UssdErrorResponse"
+              examples:
+                missing_session_id:
+                  value:
+                    error: "sessionId is required"
+                    sessionId: null
+                    timestamp: "2024-08-07T12:00:00Z"
+                missing_phone:
+                  value:
+                    error: "phoneNumber is required"
+                    sessionId: "ATUid_5f6ac5dcb949c96ad0665fb2d2ac56789123"
+                    timestamp: "2024-08-07T12:00:00Z"
+                invalid_phone_format:
+                  value:
+                    error: "Invalid phone number format"
+                    sessionId: "ATUid_5f6ac5dcb949c96ad0665fb2d2ac56789123"
+                    timestamp: "2024-08-07T12:00:00Z"
+        500:
+          description: Internal server error - Database or system error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UssdErrorResponse"
+              examples:
+                database_error:
+                  value:
+                    error: "Database connection failed"
+                    sessionId: "ATUid_5f6ac5dcb949c96ad0665fb2d2ac56789123"
+                    timestamp: "2024-08-07T12:00:00Z"
+                system_error:
+                  value:
+                    error: "Internal system error occurred"
+                    sessionId: "ATUid_5f6ac5dcb949c96ad0665fb2d2ac56789123"
+                    timestamp: "2024-08-07T12:00:00Z"
+
+  /farmers/ussd:
+    get:
+      tags:
+        - USSD System
+      summary: Health check for USSD service
+      description: Simple health check endpoint to verify USSD service availability
+      responses:
+        200:
+          description: USSD service is operational
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "USSD endpoint is working! Use POST method."
+        503:
+          description: Service unavailable
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "USSD service temporarily unavailable"

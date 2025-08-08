@@ -1,60 +1,42 @@
 import { Router } from "express";
 import {
-  createProductFromSubmission,
-  //   updateProduct,
+  updateProduct,
   deleteProduct,
   getAllProducts,
   getProductById,
-  getVerifiedSubmissions,
-  approveSubmission,
+  createProduct,
 } from "../controllers/productController";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
-import { upload, validateImages } from "../utils/imageUpload";
+import productImagesUpload from "../middleware/multer";
 
 const productRoutes = Router();
 
+// Create new product (Admin only)
+productRoutes.post(
+  "/",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  productImagesUpload,
+  createProduct
+);
+
 // Get all products (accessible by all authenticated)
-productRoutes.get("/products",  getAllProducts);
+productRoutes.get("/", getAllProducts);
 
 // Get product by ID (accessible by all authenticated users)
-productRoutes.get("/products/:productId", getProductById);
-
-// Get verified submissions ready for admin approval
-productRoutes.get(
-  "/submissions/verified",
-  isAuthenticated,
-  checkPermission("ADMIN"),
-  getVerifiedSubmissions
-);
-
-productRoutes.post(
-  "/submissions/:submissionId/create-product",
-  isAuthenticated,
-  checkPermission("ADMIN"),
-  upload.array("images", 4),
-  validateImages,
-  createProductFromSubmission
-);
-
-productRoutes.patch(
-  "/submissions/:submissionId/approve",
-  isAuthenticated,
-  checkPermission("ADMIN"),
-  approveSubmission
-);
+productRoutes.get("/:productId", getProductById);
 
 // Update product (Admin only)
-// productRoutes.put(
-//   "/admin/products/:productId",
-//   isAuthenticated,
-//   checkPermission("ADMIN"),
-//   upload.array("images", 4),
-//   validateImages,
-//   updateProduct
-// );
+productRoutes.patch(
+  "/:productId",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  productImagesUpload,
+  updateProduct
+);
 
 productRoutes.delete(
-  "/products/:productId",
+  "/:productId",
   isAuthenticated,
   checkPermission("ADMIN"),
   deleteProduct

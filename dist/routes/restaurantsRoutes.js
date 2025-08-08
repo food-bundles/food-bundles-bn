@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const userController_1 = require("../controllers/userController");
+const restaurantsRoutes = (0, express_1.Router)();
+restaurantsRoutes.post("/", userController_1.UserController.createRestaurant);
+restaurantsRoutes.get("/", userController_1.UserController.getAllRestaurants);
+restaurantsRoutes.get("/:id", userController_1.UserController.getRestaurantById);
+restaurantsRoutes.put("/:id", userController_1.UserController.updateRestaurant);
+restaurantsRoutes.delete("/:id", userController_1.UserController.deleteRestaurant);
+exports.default = restaurantsRoutes;
