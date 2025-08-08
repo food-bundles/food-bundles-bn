@@ -1,9 +1,5 @@
 tags:
-  - name: Product Verification
-    description: Operations related to product verification and purchase by food bundles
-  - name: Submission Management
-    description: Operations for managing farmer submissions and their lifecycle
-  - name: Submission Analytics
+  - name: Submission API Management
     description: Operations for retrieving submission statistics and analytics
 
 components:
@@ -291,7 +287,7 @@ paths:
   /submissions/{submissionId}/purchase:
     post:
       tags:
-        - Product Verification
+        - Submission API Management
       summary: Purchase product from farmer submission
       description: Verify and purchase a farmer's product submission by accepting quantity and setting price (Food Bundle/Admin only)
       security:
@@ -379,7 +375,7 @@ paths:
   /product/{submissionId}/update:
     put:
       tags:
-        - Product Verification
+        - Submission API Management
       summary: Update verified submission
       description: Update the accepted quantity and price for a previously verified submission (Food Bundle/Admin only)
       security:
@@ -463,7 +459,7 @@ paths:
   /submissions/{submissionId}/clear:
     put:
       tags:
-        - Submission Management
+        - Submission API Management
       summary: Clear submission verification
       description: Reset a submission back to PENDING status by clearing all verification data (Food Bundle/Admin only)
       security:
@@ -516,7 +512,7 @@ paths:
   /submissions:
     get:
       tags:
-        - Submission Management
+        - Submission API Management
       summary: Get all submissions (role-based)
       description: |
         Retrieve submissions based on user role with filtering and pagination:
@@ -586,7 +582,7 @@ paths:
   /submissions/{submissionId}:
     get:
       tags:
-        - Submission Management
+        - Submission API Management
       summary: Get submission by ID (role-based access)
       description: |
         Retrieve detailed information about a specific submission with role-based access control:
@@ -658,7 +654,7 @@ paths:
   /submissions/status/{status}:
     get:
       tags:
-        - Submission Management
+        - Submission API Management
       summary: Get submissions by status
       description: Retrieve submissions filtered by a specific status with role-based access control
       security:
@@ -755,7 +751,7 @@ paths:
   /submissions/my-submissions:
     get:
       tags:
-        - Submission Management
+        - Submission API Management
       summary: Get farmer's own submissions
       description: Retrieve all submissions belonging to the authenticated farmer (Farmer only)
       security:
@@ -845,7 +841,7 @@ paths:
   /submissions/stats:
     get:
       tags:
-        - Submission Analytics
+        - Submission API Management
       summary: Get submission statistics
       description: |
         Retrieve statistical data about submissions grouped by status with role-based filtering:

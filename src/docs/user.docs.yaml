@@ -1,11 +1,9 @@
 tags:
-  - name: Authentication
+  - name: Authentication API Management
     description: User authentication and login operations
-  - name: Farmers
-    description: Operations related to farmer management
-  - name: Restaurants
+  - name: Restaurants API Management
     description: Operations related to restaurant management
-  - name: Admins
+  - name: Admin API Management
     description: Operations related to admin and food bundle management
 
 components:
@@ -321,7 +319,7 @@ components:
           enum: [ADMIN, FOOD_BUNDLE]
           description: Admin role
 
-    # Authentication Schemas
+    # Authentication API Management Schemas
     LoginRequest:
       type: object
       required:
@@ -403,11 +401,11 @@ components:
           type: string
 
 paths:
-  # Authentication Endpoints
+  # Authentication API Management Endpoints
   /login:
     post:
       tags:
-        - Authentication
+        - Authentication API Management
       summary: User login
       description: Authenticate user and return JWT token. Supports farmers, restaurants, and admins.
       requestBody:
@@ -480,7 +478,7 @@ paths:
   /farmers:
     post:
       tags:
-        - Farmers
+        - Farmer API Management
       summary: Create new farmer
       description: Register a new farmer in the system
       requestBody:
@@ -527,7 +525,7 @@ paths:
 
     get:
       tags:
-        - Farmers
+        - Admin API Management
       summary: Get all farmers
       description: Retrieve all farmers with pagination and their recent submissions
       parameters:
@@ -576,7 +574,7 @@ paths:
   /farmers/{id}:
     get:
       tags:
-        - Farmers
+        - Farmer API Management
       summary: Get farmer by ID
       description: Retrieve detailed information about a specific farmer
       parameters:
@@ -617,7 +615,7 @@ paths:
 
     put:
       tags:
-        - Farmers
+        - Farmer API Management
       summary: Update farmer
       description: Update farmer information
       parameters:
@@ -664,7 +662,7 @@ paths:
 
     delete:
       tags:
-        - Farmers
+        - Admin API Management
       summary: Delete farmer
       description: Remove farmer from the system
       parameters:
@@ -705,7 +703,7 @@ paths:
   /restaurants:
     post:
       tags:
-        - Restaurants
+        - Restaurants API Management
       summary: Create new restaurant
       description: Register a new restaurant in the system
       requestBody:
@@ -748,7 +746,7 @@ paths:
 
     get:
       tags:
-        - Restaurants
+        - Restaurants API Management
       summary: Get all restaurants
       description: Retrieve all restaurants with pagination and their recent orders
       parameters:
@@ -797,7 +795,7 @@ paths:
   /restaurants/{id}:
     get:
       tags:
-        - Restaurants
+        - Restaurants API Management
       summary: Get restaurant by ID
       description: Retrieve detailed information about a specific restaurant including orders and POS sales
       parameters:
@@ -835,7 +833,7 @@ paths:
 
     put:
       tags:
-        - Restaurants
+        - Restaurants API Management
       summary: Update restaurant
       description: Update restaurant information
       parameters:
@@ -882,7 +880,7 @@ paths:
 
     delete:
       tags:
-        - Restaurants
+        - Restaurants API Management
       summary: Delete restaurant
       description: Remove restaurant from the system
       parameters:
@@ -923,7 +921,7 @@ paths:
   /admins:
     post:
       tags:
-        - Admins
+        - Admin API Management
       summary: Create new admin or food bundle
       description: Register a new admin or food bundle user in the system
       requestBody:
@@ -970,7 +968,7 @@ paths:
 
     get:
       tags:
-        - Admins
+        - Admin API Management
       summary: Get all admins
       description: Retrieve all admin and food bundle users with pagination
       parameters:
@@ -1019,7 +1017,7 @@ paths:
   /admins/{id}:
     get:
       tags:
-        - Admins
+        - Admin API Management
       summary: Get admin by ID
       description: Retrieve detailed information about a specific admin or food bundle user
       parameters:
@@ -1057,7 +1055,7 @@ paths:
 
     put:
       tags:
-        - Admins
+        - Admin API Management
       summary: Update admin
       description: Update admin or food bundle user information
       parameters:
@@ -1104,7 +1102,7 @@ paths:
 
     delete:
       tags:
-        - Admins
+        - Admin API Management
       summary: Delete admin
       description: Remove admin or food bundle user from the system
       parameters:

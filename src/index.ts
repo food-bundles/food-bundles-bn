@@ -6,7 +6,6 @@ import swaggerJSDoc from "swagger-jsdoc";
 import YAML from "yamljs";
 import routes from "./routes";
 import cookieParser from "cookie-parser";
-import { ENV } from "./config";
 
 const swaggerBaseDoc = YAML.load("./src/config/swagger.yaml");
 
@@ -29,12 +28,12 @@ const app = express();
 
 app.use(
   cors({
-    origin: "http://localhost:3000", 
-    credentials: true, 
+    origin: "http://localhost:3000",
+    credentials: true,
   })
 );
 app.use(express.json());
-app.use(express.urlencoded({ extended: false })); 
+app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 app.use("/", routes);

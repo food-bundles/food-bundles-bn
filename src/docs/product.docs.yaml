@@ -1,8 +1,6 @@
 tags:
-  - name: Products
+  - name: Products API Management
     description: Operations related to product management
-  - name: Farmer Submissions
-    description: Operations related to farmer submission approval and management
 
 components:
   schemas:
@@ -257,7 +255,7 @@ paths:
   /products:
     post:
       tags:
-        - Products
+        - Products API Management
       summary: Create a new product
       description: Create a new product (Admin only)
       security:
@@ -318,7 +316,7 @@ paths:
 
     get:
       tags:
-        - Products
+        - Products API Management
       summary: Get all products
       description: Retrieve all products with optional filtering and pagination
       parameters:
@@ -374,7 +372,7 @@ paths:
   /products/{productId}:
     get:
       tags:
-        - Products
+        - Products API Management
       summary: Get product by ID
       description: Retrieve a specific product by its ID with detailed information
       parameters:
@@ -414,7 +412,7 @@ paths:
 
     patch:
       tags:
-        - Products
+        - Products API Management
       summary: Update product
       description: Update an existing product (Admin only)
       security:
@@ -475,7 +473,7 @@ paths:
 
     delete:
       tags:
-        - Products
+        - Products API Management
       summary: Delete product
       description: Delete a product (Admin only). Cannot delete products that have been ordered.
       security:
@@ -534,7 +532,7 @@ paths:
   /submissions/verified:
     get:
       tags:
-        - Farmer Submissions
+        - Submission API Management
       summary: Get verified submissions
       description: Retrieve all verified farmer submissions ready for admin approval
       security:
@@ -576,7 +574,7 @@ paths:
   /submissions/{submissionId}/create-product:
     post:
       tags:
-        - Farmer Submissions
+        - Submission API Management
       summary: Create product from verified submission
       description: Create a product from a verified farmer submission and mark it as approved (Admin only)
       security:
@@ -668,7 +666,7 @@ paths:
   /submissions/{submissionId}/approve:
     patch:
       tags:
-        - Farmer Submissions
+        - Submission API Management
       summary: Approve submission without creating product
       description: Directly approve a verified farmer submission without creating a product (Admin only)
       security:
@@ -729,7 +727,7 @@ paths:
   /submissions/{submissionId}/products/{productId}/update-quantity:
     patch:
       tags:
-        - Farmer Submissions
+        - Submission API Management
       summary: Update product quantity from submission
       description: Update an existing product's quantity from a verified submission and approve it (Admin only)
       security:

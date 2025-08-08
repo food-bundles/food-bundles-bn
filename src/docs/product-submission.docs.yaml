@@ -1,10 +1,6 @@
 tags:
-  - name: Product Submission
-    description: Web-based product submission operations
-  - name: USSD Services
-    description: USSD-based farmer registration and product submission operations
-  - name: USSD System
-    description: System operations and health checks for USSD service
+  - name: Farmer API Management
+    description: Operations related to farmer API Management
 
 components:
   schemas:
@@ -95,7 +91,7 @@ paths:
   /farmer/web:
     post:
       tags:
-        - Product Submission
+        - Farmer API Management
       summary: Submit a new product
       security:
         - BearerAuth: []
@@ -144,7 +140,7 @@ paths:
   /farmer/ussd:
     post:
       tags:
-        - USSD Services
+        - Farmer API Management
       summary: Handle USSD interactions
       description: |
         Main endpoint for processing USSD interactions from telecom providers.
@@ -292,7 +288,7 @@ paths:
   /farmers/ussd:
     get:
       tags:
-        - USSD System
+        - Farmer API Management
       summary: Health check for USSD service
       description: Simple health check endpoint to verify USSD service availability
       responses:
