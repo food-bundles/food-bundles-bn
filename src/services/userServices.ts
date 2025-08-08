@@ -517,63 +517,32 @@ export const deleteAdminService = async (id: string) => {
 
  
 export const loginService = async (loginData: ILoginData) => {
-  const { phone, email, password, userType } = loginData;
+  const { phone, email, password } = loginData;
 
   let user: any = null;
   let foundUserType = "";
 
-   
-  if (userType) {
-    switch (userType) {
-      case "farmer":
-        user = await prisma.farmer.findFirst({
-          where: {
-            OR: [{ phone: phone || undefined }, { email: email || undefined }],
-          },
-        });
-        foundUserType = "farmer";
-        break;
+  user = await prisma.farmer.findFirst({
+    where: {
+      OR: [{ phone: phone || undefined }, { email: email || undefined }],
+    },
+  });
+  if (user) foundUserType = "farmer";
 
-      case "restaurant":
-        user = await prisma.restaurant.findFirst({
-          where: {
-            OR: [{ phone: phone || undefined }, { email: email || undefined }],
-          },
-        });
-        foundUserType = "restaurant";
-        break;
-
-      case "admin":
-        user = await prisma.admin.findFirst({
-          where: { email: email || undefined },
-        });
-        foundUserType = "admin";
-        break;
-    }
-  } else {
-     
-    user = await prisma.farmer.findFirst({
+  if (!user) {
+    user = await prisma.restaurant.findFirst({
       where: {
         OR: [{ phone: phone || undefined }, { email: email || undefined }],
       },
     });
-    if (user) foundUserType = "farmer";
+    if (user) foundUserType = "restaurant";
+  }
 
-    if (!user) {
-      user = await prisma.restaurant.findFirst({
-        where: {
-          OR: [{ phone: phone || undefined }, { email: email || undefined }],
-        },
-      });
-      if (user) foundUserType = "restaurant";
-    }
-
-    if (!user) {
-      user = await prisma.admin.findFirst({
-        where: { email: email || undefined },
-      });
-      if (user) foundUserType = "admin";
-    }
+  if (!user) {
+    user = await prisma.admin.findFirst({
+      where: { email: email || undefined },
+    });
+    if (user) foundUserType = "admin";
   }
 
   if (!user) {
@@ -585,7 +554,6 @@ export const loginService = async (loginData: ILoginData) => {
   }
 
   const isPasswordValid = await comparePassword(password, user.password);
-
   if (!isPasswordValid) {
     throw new Error("Invalid password");
   }

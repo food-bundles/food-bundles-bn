@@ -1,23 +1,28 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import routes from "./routes";
+import cookieParser from "cookie-parser";
+import { ENV } from "./config";
 
-dotenv.config();
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:3000", 
+    credentials: true, 
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false })); 
+app.use(cookieParser());
 
 app.use("/", routes);
-
-app.get("/", (_req, res) => {
-  res.send("API is working");
+app.get("/health", (_req, res) => {
+  res.status(200).json({ message: "Backend is healthy" });
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = ENV.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
