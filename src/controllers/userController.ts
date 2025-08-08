@@ -339,7 +339,7 @@ export class UserController {
   
   static login = async (req: Request, res: Response) => {
     try {
-      const { phone, email, password, userType } = req.body;
+      const { phone, email, password } = req.body;
   
       if (!password || (!phone && !email)) {
         return res.status(400).json({
@@ -348,7 +348,7 @@ export class UserController {
         });
       }
   
-      const result = await loginService({ phone, email, password, userType });
+      const result = await loginService({ phone, email, password });
       const user = result.user;
           const payload: JwtPayload = {
             id: user.id,
@@ -356,11 +356,16 @@ export class UserController {
           };
 
       const token = generateToken(payload);
-      res.status(200).json({
-        success: true,
-        message: "Login successful",
-        token,
-      });
+    res.cookie("auth_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+    });
     } catch (error: any) {
       res.status(401).json({
         success: false,

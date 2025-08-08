@@ -7,6 +7,112 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Farmer {
+  id          String             @id @default(uuid())
+  location    String
+  role        Role               @default(FARMER)
+  phone       String?            @unique
+  email       String?            @unique
+  password    String?
+  createdAt   DateTime           @default(now())
+  submissions FarmerSubmission[]
+}
+
+model Restaurant {
+  id        String    @id @default(uuid())
+  name      String
+  email     String    @unique
+  phone     String?   @unique
+  location  String
+  password  String
+  role      Role      @default(RESTAURANT)
+  createdAt DateTime  @default(now())
+  orders    Order[]
+  posSales  POSSale[]
+}
+
+model FarmerSubmission {
+  id                String           @id @default(uuid())
+  farmerId          String
+  productName       String
+  submittedQty      Float?
+  acceptedQty       Float?
+  totalAmount       Float?
+  status            SubmissionStatus @default(PENDING)
+  foodBundleId      String?
+  submittedAt       DateTime         @default(now())
+  verifiedAt        DateTime?
+  approvedAt        DateTime?
+  paidAt            DateTime?
+  acceptedPrice     Float?
+  approvedProductId String?
+  wishedPrice       Float?
+  approvedProduct   Product?         @relation(fields: [approvedProductId], references: [id])
+  farmer            Farmer           @relation(fields: [farmerId], references: [id])
+  foodBundle        Admin?           @relation("Foodbundle", fields: [foodBundleId], references: [id])
+}
+
+model Admin {
+  id                    String             @id @default(uuid())
+  username              String
+  email                 String             @unique
+  password              String
+  role                  Role
+  createdAt             DateTime           @default(now())
+  phone                 String?            @unique
+  foodbundleAssignments FarmerSubmission[] @relation("Foodbundle")
+  products              Product[]
+}
+
+model Product {
+  id                String             @id @default(uuid())
+  unitPrice         Float
+  unit              String
+  createdAt         DateTime           @default(now())
+  bonus             Int
+  createdBy         String
+  expiryDate        DateTime?
+  images            String[]
+  quantity          Float
+  sku               String             @unique
+  updatedAt         DateTime           @updatedAt
+  category          ProductCategory
+  productName       String
+  status            ProductStatus      @default(ACTIVE)
+  farmerSubmissions FarmerSubmission[]
+  orderItems        OrderItem[]
+  admin             Admin              @relation(fields: [createdBy], references: [id])
+}
+
+model Order {
+  id           String      @id @default(uuid())
+  restaurantId String
+  status       String
+  totalAmount  Float
+  createdAt    DateTime    @default(now())
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id])
+  orderItems   OrderItem[]
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Float
+  unitPrice Float
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model POSSale {
+  id            String     @id @default(uuid())
+  restaurantId  String
+  totalAmount   Float
+  paymentMethod String
+  createdAt     DateTime   @default(now())
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
 enum Role {
   FARMER
   RESTAURANT
@@ -15,10 +121,10 @@ enum Role {
 }
 
 enum SubmissionStatus {
-  PENDING    
-  VERIFIED    
-  APPROVED   
-  PAID       
+  PENDING
+  VERIFIED
+  APPROVED
+  PAID
 }
 
 enum ProductCategory {
@@ -29,121 +135,8 @@ enum ProductCategory {
   LEGUMES
   HERBS_SPICES
 }
+
 enum ProductStatus {
   ACTIVE
   INACTIVE
-}
-
-
-model Farmer {
-  id          String   @id @default(uuid())
-  location    String
-  role      Role @default(FARMER)
-  phone       String? @unique
-  email      String? @unique
-  password   String?
-  submissions FarmerSubmission[]
-  createdAt   DateTime @default(now())
-}
-
-model Restaurant {
-  id         String   @id @default(uuid())
-  name       String
-  email      String   @unique
-  phone     String?   @unique
-  location   String
-  password  String
-  role      Role @default(RESTAURANT)
-  orders     Order[]
-  posSales   POSSale[]
-  createdAt  DateTime   @default(now())
-}
-
-model FarmerSubmission {
-  id              String   @id @default(uuid())
-  farmer          Farmer    @relation(fields: [farmerId], references: [id])
-  farmerId        String
-  productName     String
-  submittedQty    Float? 
-  wishedPrice     Float?     
-  acceptedQty     Float?     
-  acceptedPrice       Float?    
-  totalAmount     Float?   
-  status          SubmissionStatus @default(PENDING) 
-
-  foodBundleId String?   
-  foodBundle   Admin? @relation("Foodbundle", fields: [foodBundleId], references: [id])
-
-  approvedProductId String?
-  approvedProduct   Product? @relation(fields: [approvedProductId], references: [id])
-
-  submittedAt     DateTime  @default(now())
-  verifiedAt      DateTime? 
-  approvedAt      DateTime? 
-  paidAt          DateTime? 
-}
-
-model Admin {
-  id           String   @id @default(uuid())
-  username  String
-  email     String   @unique
-  password  String
-  phone     String?  @unique
-  role      Role
-  foodbundleAssignments FarmerSubmission[] @relation("Foodbundle")
-  products   Product[]
-  createdAt DateTime @default(now())
-}
-
-model Product {
-  id            String   @id @default(uuid())
-  productName          String
-  unitPrice         Float
-  category      ProductCategory
-  bonus         Int    
-  sku           String     @unique
-  quantity      Float
-  images        String[]   
-  expiryDate    DateTime?
-  unit          String
-  status        ProductStatus @default(ACTIVE)     
-  
-  createdBy     String
-  admin         Admin      @relation(fields: [createdBy], references: [id])
-  
-  orderItems    OrderItem[]
-  farmerSubmissions FarmerSubmission[]
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
-
-model Order {
-  id            String   @id @default(uuid())
-  restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
-  restaurantId  String
-  status        String
-  totalAmount   Float
-  orderItems    OrderItem[]
-  createdAt     DateTime   @default(now())
-}
-
-model OrderItem {
-  id           String   @id @default(uuid())
-  order        Order   @relation(fields: [orderId], references: [id])
-  orderId      String
-  product      Product @relation(fields: [productId], references: [id])
-  productId    String
-  quantity     Float
-  unitPrice Float
-}
-
-// Point of Sale Schema
-model POSSale {
-  id           String   @id @default(uuid())
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
-  restaurantId String
-  totalAmount  Float
-  paymentMethod String
-  createdAt    DateTime   @default(now())
 }

@@ -5,6 +5,8 @@ import swaggerUi from "swagger-ui-express";
 import swaggerJSDoc from "swagger-jsdoc";
 import YAML from "yamljs";
 import routes from "./routes";
+import cookieParser from "cookie-parser";
+import { ENV } from "./config";
 
 const swaggerBaseDoc = YAML.load("./src/config/swagger.yaml");
 
@@ -25,14 +27,19 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:3000", 
+    credentials: true, 
+  })
+);
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false })); 
+app.use(cookieParser());
 
 app.use("/", routes);
-
-app.get("/", (_req, res) => {
-  res.send("API is working");
+app.get("/health", (_req, res) => {
+  res.status(200).json({ message: "Backend is healthy" });
 });
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));

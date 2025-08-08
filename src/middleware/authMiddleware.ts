@@ -7,15 +7,12 @@ export const isAuthenticated = (
   res: Response,
   next: NextFunction
 ) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const token = authHeader.split(" ")[1];
 
   try {
+    const token = req.cookies?.auth_token;
+     if (!token) {
+       return res.status(401).json({ message: "Unauthorized: No token found" });
+     }
     const decoded = verifyToken(token);
       const user = getUserById(decoded.id);
       if (!user) {

@@ -71,7 +71,6 @@ export interface ILoginData {
   phone?: string;
   email?: string;
   password: string;
-  userType?: "farmer" | "restaurant" | "admin";
 }
 
 export interface IPaginationQuery {
