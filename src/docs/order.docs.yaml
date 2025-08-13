@@ -1,0 +1,1023 @@
+tags:
+  - name: Order Management API
+    description: Comprehensive order management operations for restaurants and admins
+
+components:
+  schemas:
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique order identifier
+        checkoutId:
+          type: string
+          nullable: true
+          description: Associated checkout ID (if created from checkout)
+        restaurantId:
+          type: string
+          description: Restaurant ID that placed this order
+        orderNumber:
+          type: string
+          description: Unique human-readable order number
+        status:
+          type: string
+          enum:
+            [
+              PENDING,
+              CONFIRMED,
+              PREPARING,
+              READY,
+              IN_TRANSIT,
+              DELIVERED,
+              CANCELLED,
+              REFUNDED,
+            ]
+          description: Current order status
+        totalAmount:
+          type: number
+          format: float
+          description: Total order amount
+        notes:
+          type: string
+          nullable: true
+          description: Special instructions or notes
+        requestedDelivery:
+          type: string
+          format: date-time
+          nullable: true
+          description: Requested delivery date and time
+        estimatedDelivery:
+          type: string
+          format: date-time
+          nullable: true
+          description: Estimated delivery date and time
+        actualDelivery:
+          type: string
+          format: date-time
+          nullable: true
+          description: Actual delivery date and time
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          nullable: true
+          description: Payment method used
+        paymentStatus:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Current payment status
+        paymentReference:
+          type: string
+          nullable: true
+          description: Payment gateway reference
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        restaurant:
+          $ref: "#/components/schemas/RestaurantInfo"
+        orderItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        checkout:
+          $ref: "#/components/schemas/CheckoutInfo"
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+        orderId:
+          type: string
+        productId:
+          type: string
+        quantity:
+          type: number
+          format: float
+        unitPrice:
+          type: number
+          format: float
+        product:
+          $ref: "#/components/schemas/ProductInfo"
+
+    ProductInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        productName:
+          type: string
+        unitPrice:
+          type: number
+          format: float
+        unit:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+        category:
+          type: string
+        status:
+          type: string
+
+    RestaurantInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        location:
+          type: string
+
+    CheckoutInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        billingName:
+          type: string
+        billingEmail:
+          type: string
+        billingPhone:
+          type: string
+        billingAddress:
+          type: string
+
+    CreateOrderFromCheckoutRequest:
+      type: object
+      required:
+        - checkoutId
+      properties:
+        checkoutId:
+          type: string
+          description: ID of the completed checkout to convert to order
+        notes:
+          type: string
+          description: Additional notes or instructions for the order
+        requestedDelivery:
+          type: string
+          format: date-time
+          description: Requested delivery date and time
+
+    CreateDirectOrderRequest:
+      type: object
+      required:
+        - items
+      properties:
+        restaurantId:
+          type: string
+          description: Restaurant ID (required for admin users)
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - productId
+              - quantity
+            properties:
+              productId:
+                type: string
+                description: Product ID to order
+              quantity:
+                type: number
+                format: float
+                minimum: 0.01
+                description: Quantity to order
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          default: CASH
+          description: Payment method for the order
+        notes:
+          type: string
+          description: Special instructions or notes
+        requestedDelivery:
+          type: string
+          format: date-time
+          description: Requested delivery date and time
+
+    UpdateOrderRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            [
+              PENDING,
+              CONFIRMED,
+              PREPARING,
+              READY,
+              IN_TRANSIT,
+              DELIVERED,
+              CANCELLED,
+              REFUNDED,
+            ]
+          description: New order status
+        notes:
+          type: string
+          description: Updated notes or instructions
+        requestedDelivery:
+          type: string
+          format: date-time
+          description: Updated requested delivery time
+        estimatedDelivery:
+          type: string
+          format: date-time
+          description: Estimated delivery time
+        actualDelivery:
+          type: string
+          format: date-time
+          description: Actual delivery time
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Payment method
+        paymentStatus:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Payment status (Admin only)
+        paymentReference:
+          type: string
+          description: Payment reference (Admin only)
+
+    CancelOrderRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Reason for cancellation
+
+    OrderStatistics:
+      type: object
+      properties:
+        totalOrders:
+          type: integer
+          description: Total number of orders
+        ordersByStatus:
+          type: object
+          properties:
+            pending:
+              type: integer
+            confirmed:
+              type: integer
+            preparing:
+              type: integer
+            ready:
+              type: integer
+            inTransit:
+              type: integer
+            delivered:
+              type: integer
+            cancelled:
+              type: integer
+        revenue:
+          type: object
+          properties:
+            total:
+              type: number
+              format: float
+              description: Total revenue from delivered orders
+            average:
+              type: number
+              format: float
+              description: Average order value
+
+    OrderPaginationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    ApiResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+paths:
+  /orders/from-checkout:
+    post:
+      tags:
+        - Order Management API
+      summary: Create order from checkout
+      description: Convert a completed checkout into an order with inventory management
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderFromCheckoutRequest"
+      responses:
+        201:
+          description: Order created successfully from checkout
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Order created from checkout successfully"
+                  data:
+                    $ref: "#/components/schemas/Order"
+        400:
+          description: Bad request - Invalid checkout or business logic violation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_checkout:
+                  value:
+                    message: "Checkout ID is required"
+                payment_incomplete:
+                  value:
+                    message: "Payment must be completed before creating order"
+                order_exists:
+                  value:
+                    message: "Order already exists for this checkout"
+                insufficient_stock:
+                  value:
+                    message: "Insufficient stock for Product Name. Available: 5, Required: 10"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/direct:
+    post:
+      tags:
+        - Order Management API
+      summary: Create direct order
+      description: Create an order directly without going through checkout process
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDirectOrderRequest"
+            examples:
+              restaurant_order:
+                summary: Restaurant creating own order
+                value:
+                  items:
+                    - productId: "prod-123"
+                      quantity: 5
+                    - productId: "prod-456"
+                      quantity: 2.5
+                  paymentMethod: "CASH"
+                  notes: "Urgent order for tonight"
+                  requestedDelivery: "2024-01-20T18:00:00Z"
+              admin_order:
+                summary: Admin creating order for restaurant
+                value:
+                  restaurantId: "rest-789"
+                  items:
+                    - productId: "prod-123"
+                      quantity: 10
+                  paymentMethod: "MOBILE_MONEY"
+                  notes: "Phone order from customer"
+      responses:
+        201:
+          description: Direct order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Order created successfully"
+                  data:
+                    $ref: "#/components/schemas/Order"
+        400:
+          description: Bad request - Invalid items or business logic violation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                empty_items:
+                  value:
+                    message: "Items array is required and cannot be empty"
+                invalid_item:
+                  value:
+                    message: "Each item must have productId and quantity > 0"
+                missing_restaurant:
+                  value:
+                    message: "Restaurant ID is required"
+                product_unavailable:
+                  value:
+                    message: "Product Tomatoes is not available"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/my-orders:
+    get:
+      tags:
+        - Order Management API
+      summary: Get restaurant's orders
+      description: Retrieve orders for the authenticated restaurant with filtering options
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of orders per page
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              [
+                PENDING,
+                CONFIRMED,
+                PREPARING,
+                READY,
+                IN_TRANSIT,
+                DELIVERED,
+                CANCELLED,
+                REFUNDED,
+              ]
+          description: Filter by order status
+        - name: paymentStatus
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Filter by payment status
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter orders from this date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter orders until this date
+      responses:
+        200:
+          description: Restaurant orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderPaginationResponse"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/statistics:
+    get:
+      tags:
+        - Order Management API
+      summary: Get order statistics
+      description: Retrieve order statistics and analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurantId
+          in: query
+          schema:
+            type: string
+          description: Filter statistics for specific restaurant (Admin only)
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Statistics from this date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Statistics until this date
+      responses:
+        200:
+          description: Order statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Order statistics retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/OrderStatistics"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/number/{orderNumber}:
+    get:
+      tags:
+        - Order Management API
+      summary: Get order by order number
+      description: Retrieve order details using the human-readable order number
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderNumber
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique order number (e.g., ORD240120001)
+          example: "ORD240120001"
+      responses:
+        200:
+          description: Order retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Order retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Order"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Unauthorized access to order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/{orderId}/cancel:
+    post:
+      tags:
+        - Order Management API
+      summary: Cancel order
+      description: Cancel an order and restore product inventory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique order identifier
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelOrderRequest"
+      responses:
+        200:
+          description: Order cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Order cancelled successfully"
+        400:
+          description: Bad request - Cannot cancel order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_status:
+                  value:
+                    message: "Cannot cancel order with status: DELIVERED"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Unauthorized access to order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/{orderId}:
+    get:
+      tags:
+        - Order Management API
+      summary: Get order by ID
+      description: Retrieve detailed order information by order ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique order identifier
+      responses:
+        200:
+          description: Order retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Order retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Order"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Unauthorized access to order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      tags:
+        - Order Management API
+      summary: Update order
+      description: Update order details, status, and other information
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique order identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderRequest"
+            examples:
+              status_update:
+                summary: Update order status
+                value:
+                  status: "CONFIRMED"
+                  estimatedDelivery: "2024-01-20T18:00:00Z"
+              delivery_update:
+                summary: Update delivery information
+                value:
+                  status: "DELIVERED"
+                  actualDelivery: "2024-01-20T17:45:00Z"
+              admin_payment_update:
+                summary: Admin updating payment status
+                value:
+                  paymentStatus: "COMPLETED"
+                  paymentReference: "PAY123456789"
+      responses:
+        200:
+          description: Order updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Order updated successfully"
+                  data:
+                    $ref: "#/components/schemas/Order"
+        400:
+          description: Bad request - Invalid status transition or data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_status:
+                  value:
+                    message: "Invalid order status"
+                invalid_transition:
+                  value:
+                    message: "Invalid status transition from DELIVERED to PENDING"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Unauthorized access or admin-only fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Only admins can update payment information"
+        404:
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Order Management API
+      summary: Delete order (Admin only)
+      description: Permanently delete a cancelled order from the system
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique order identifier
+      responses:
+        200:
+          description: Order deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Order deleted successfully"
+        400:
+          description: Bad request - Only cancelled orders can be deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Only cancelled orders can be deleted"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders:
+    get:
+      tags:
+        - Order Management API
+      summary: Get all orders (Admin only)
+      description: Retrieve all orders with comprehensive filtering and pagination (Admin access required)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of orders per page
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              [
+                PENDING,
+                CONFIRMED,
+                PREPARING,
+                READY,
+                IN_TRANSIT,
+                DELIVERED,
+                CANCELLED,
+                REFUNDED,
+              ]
+          description: Filter by order status
+        - name: paymentStatus
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Filter by payment status
+        - name: restaurantId
+          in: query
+          schema:
+            type: string
+          description: Filter by specific restaurant
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter orders from this date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter orders until this date
+      responses:
+        200:
+          description: All orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderPaginationResponse"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

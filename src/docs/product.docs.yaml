@@ -1,0 +1,797 @@
+tags:
+  - name: Products API Management
+    description: Operations related to product management
+
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique product identifier
+        productName:
+          type: string
+          description: Name of the product
+        unitPrice:
+          type: number
+          format: float
+          description: Price per unit
+        category:
+          type: string
+          description: Product category
+        bonus:
+          type: number
+          format: float
+          description: Bonus amount (optional)
+          default: 0
+        sku:
+          type: string
+          description: Stock Keeping Unit (unique)
+        quantity:
+          type: integer
+          description: Available quantity
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: A gallery of images related to the product
+        expiryDate:
+          type: string
+          format: date
+          nullable: true
+          description: Product expiry date
+        unit:
+          type: string
+          description: Unit of measurement
+        createdBy:
+          type: string
+          description: ID of the admin who created the product
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        admin:
+          $ref: "#/components/schemas/AdminInfo"
+
+    AdminInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+
+    FarmerInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        phone:
+          type: string
+        location:
+          type: string
+
+    FoodBundleInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+
+    FarmerSubmission:
+      type: object
+      properties:
+        id:
+          type: string
+        productName:
+          type: string
+        acceptedQty:
+          type: integer
+        status:
+          type: string
+          enum: [PENDING, VERIFIED, APPROVED, REJECTED]
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        approvedProductId:
+          type: string
+          nullable: true
+        farmer:
+          $ref: "#/components/schemas/FarmerInfo"
+        foodBundle:
+          $ref: "#/components/schemas/FoodBundleInfo"
+        approvedProduct:
+          type: object
+          properties:
+            id:
+              type: string
+            productName:
+              type: string
+            sku:
+              type: string
+            unitPrice:
+              type: number
+
+    ProductWithDetails:
+      allOf:
+        - $ref: "#/components/schemas/Product"
+        - type: object
+          properties:
+            farmerSubmissions:
+              type: array
+              items:
+                type: object
+                properties:
+                  farmer:
+                    $ref: "#/components/schemas/FarmerInfo"
+
+    CreateProductRequest:
+      type: object
+      required:
+        - productName
+        - unitPrice
+        - category
+        - sku
+        - quantity
+        - unit
+      properties:
+        productName:
+          type: string
+          description: Name of the product
+        unitPrice:
+          type: number
+          description: Price per unit
+        category:
+          type: string
+          description: Product category
+        bonus:
+          type: number
+          description: Bonus amount (optional)
+        sku:
+          type: string
+          description: Stock Keeping Unit (must be unique)
+        quantity:
+          type: integer
+          minimum: 1
+          description: Available quantity
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: A gallery of images related to the product
+        expiryDate:
+          type: string
+          format: date
+          description: Product expiry date (optional)
+        unit:
+          type: string
+          description: Unit of measurement
+
+    UpdateProductRequest:
+      type: object
+      properties:
+        productName:
+          type: string
+          description: Name of the product
+        unitPrice:
+          type: number
+          description: Price per unit
+        category:
+          type: string
+          description: Product category
+        bonus:
+          type: number
+          description: Bonus amount (optional)
+        sku:
+          type: string
+          description: Stock Keeping Unit (must be unique)
+        quantity:
+          type: integer
+          minimum: 1
+          description: Available quantity
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: A gallery of images related to the product
+        expiryDate:
+          type: string
+          format: date
+          description: Product expiry date (optional)
+        unit:
+          type: string
+          description: Unit of measurement
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Number of items per page
+        total:
+          type: integer
+          description: Total number of items
+        totalPages:
+          type: integer
+          description: Total number of pages
+
+    ApiResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Response message
+        data:
+          type: object
+          description: Response data
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+
+paths:
+  /products:
+    post:
+      tags:
+        - Products API Management
+      summary: Create a new product
+      description: Create a new product (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+            encoding:
+              images:
+                contentType: image/jpeg, image/png, image/gif, image/webp
+      responses:
+        201:
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product created successfully"
+                  data:
+                    $ref: "#/components/schemas/Product"
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                max_images:
+                  value:
+                    message: "Maximum 4 images allowed"
+                duplicate_sku:
+                  value:
+                    message: "SKU already exists"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      tags:
+        - Products API Management
+      summary: Get all products
+      description: Retrieve all products with optional filtering and pagination
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by product category
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by product name or SKU
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of products per page
+      responses:
+        200:
+          description: Products retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Products retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /products/{productId}:
+    get:
+      tags:
+        - Products API Management
+      summary: Get product by ID
+      description: Retrieve a specific product by its ID with detailed information
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique product identifier
+      responses:
+        200:
+          description: Product retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/ProductWithDetails"
+        404:
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Product not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      tags:
+        - Products API Management
+      summary: Update product
+      description: Update an existing product (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique product identifier
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+            encoding:
+              images:
+                contentType: image/jpeg, image/png, image/gif, image/webp
+      responses:
+        200:
+          description: Product updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product updated successfully"
+                  data:
+                    $ref: "#/components/schemas/Product"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Products API Management
+      summary: Delete product
+      description: Delete a product (Admin only). Cannot delete products that have been ordered.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique product identifier
+      responses:
+        200:
+          description: Product deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product deleted successfully"
+        400:
+          description: Cannot delete product that has been ordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Cannot delete product that has been ordered"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions/verified:
+    get:
+      tags:
+        - Submission API Management
+      summary: Get verified submissions
+      description: Retrieve all verified farmer submissions ready for admin approval
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Verified submissions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Verified submissions retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FarmerSubmission"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions/{submissionId}/create-product:
+    post:
+      tags:
+        - Submission API Management
+      summary: Create product from verified submission
+      description: Create a product from a verified farmer submission and mark it as approved (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique farmer submission identifier
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/CreateProductRequest"
+                - type: object
+                  properties:
+                    images:
+                      type: array
+                      items:
+                        type: string
+                        format: binary
+                      description: Product images (max 4 files)
+            encoding:
+              images:
+                contentType: image/jpeg, image/png, image/gif, image/webp
+      responses:
+        201:
+          description: Product created and submission approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product created and submission approved successfully"
+                  data:
+                    type: object
+                    properties:
+                      product:
+                        $ref: "#/components/schemas/Product"
+                      submission:
+                        $ref: "#/components/schemas/FarmerSubmission"
+        400:
+          description: Bad request - Invalid input or submission status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                max_images:
+                  value:
+                    message: "Maximum 4 images allowed"
+                invalid_status:
+                  value:
+                    message: "Only VERIFIED submissions can be approved"
+                duplicate_sku:
+                  value:
+                    message: "SKU already exists"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Farmer submission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions/{submissionId}/approve:
+    patch:
+      tags:
+        - Submission API Management
+      summary: Approve submission without creating product
+      description: Directly approve a verified farmer submission without creating a product (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique farmer submission identifier
+      responses:
+        200:
+          description: Submission approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Submission approved successfully"
+                  data:
+                    $ref: "#/components/schemas/FarmerSubmission"
+        400:
+          description: Bad request - Invalid submission status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Only VERIFIED submissions can be approved"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions/{submissionId}/products/{productId}/update-quantity:
+    patch:
+      tags:
+        - Submission API Management
+      summary: Update product quantity from submission
+      description: Update an existing product's quantity from a verified submission and approve it (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique farmer submission identifier
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique product identifier to update
+      responses:
+        200:
+          description: Product quantity updated and submission approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product quantity updated and submission approved successfully"
+                  data:
+                    type: object
+                    properties:
+                      product:
+                        $ref: "#/components/schemas/Product"
+                      submission:
+                        $ref: "#/components/schemas/FarmerSubmission"
+        400:
+          description: Bad request - Invalid submission status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Only VERIFIED submissions can be approved"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Not found - Submission or product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

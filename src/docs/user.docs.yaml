@@ -1,0 +1,1140 @@
+tags:
+  - name: Authentication API Management
+    description: User authentication and login operations
+  - name: Restaurants API Management
+    description: Operations related to restaurant management
+  - name: Admin API Management
+    description: Operations related to admin and food bundle management
+
+components:
+  schemas:
+    Role:
+      type: string
+      enum: [FARMER, RESTAURANT, ADMIN, FOOD_BUNDLE]
+      description: User role in the system
+
+    # Farmer Schemas
+    Farmer:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique farmer identifier
+        location:
+          type: string
+          description: Farmer's location
+        phone:
+          type: string
+          nullable: true
+          description: Farmer's phone number
+        email:
+          type: string
+          nullable: true
+          description: Farmer's email address
+        role:
+          $ref: "#/components/schemas/Role"
+        createdAt:
+          type: string
+          format: date-time
+        submissions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              productName:
+                type: string
+              quantity:
+                type: integer
+              submittedAt:
+                type: string
+                format: date-time
+
+    FarmerDetailed:
+      allOf:
+        - $ref: "#/components/schemas/Farmer"
+        - type: object
+          properties:
+            submissions:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  productName:
+                    type: string
+                  submittedQty:
+                    type: integer
+                  submittedAt:
+                    type: string
+                    format: date-time
+
+    CreateFarmerRequest:
+      type: object
+      required:
+        - location
+      properties:
+        location:
+          type: string
+          description: Farmer's location (required)
+        phone:
+          type: string
+          description: Farmer's phone number
+        email:
+          type: string
+          format: email
+          description: Farmer's email address
+        password:
+          type: string
+          minLength: 6
+          description: Password for farmer account (optional)
+      oneOf:
+        - required: [phone]
+        - required: [email]
+
+    UpdateFarmerRequest:
+      type: object
+      properties:
+        location:
+          type: string
+          description: Farmer's location
+        phone:
+          type: string
+          description: Farmer's phone number
+        email:
+          type: string
+          format: email
+          description: Farmer's email address
+        password:
+          type: string
+          minLength: 6
+          description: New password for farmer account
+
+    # Restaurant Schemas
+    Restaurant:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique restaurant identifier
+        name:
+          type: string
+          description: Restaurant name
+        email:
+          type: string
+          format: email
+          description: Restaurant email
+        phone:
+          type: string
+          nullable: true
+          description: Restaurant phone number
+        location:
+          type: string
+          description: Restaurant location
+        role:
+          $ref: "#/components/schemas/Role"
+        createdAt:
+          type: string
+          format: date-time
+        orders:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              status:
+                type: string
+              totalAmount:
+                type: number
+                format: float
+              createdAt:
+                type: string
+                format: date-time
+
+    RestaurantDetailed:
+      allOf:
+        - $ref: "#/components/schemas/Restaurant"
+        - type: object
+          properties:
+            orders:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  totalAmount:
+                    type: number
+                    format: float
+                  createdAt:
+                    type: string
+                    format: date-time
+                  orderItems:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        quantity:
+                          type: integer
+                        unitPrice:
+                          type: number
+                          format: float
+                        product:
+                          type: object
+                          properties:
+                            productName:
+                              type: string
+                            category:
+                              type: string
+            posSales:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  totalAmount:
+                    type: number
+                    format: float
+                  paymentMethod:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+
+    CreateRestaurantRequest:
+      type: object
+      required:
+        - name
+        - email
+        - location
+        - password
+      properties:
+        name:
+          type: string
+          description: Restaurant name (required)
+        email:
+          type: string
+          format: email
+          description: Restaurant email (required)
+        phone:
+          type: string
+          description: Restaurant phone number
+        location:
+          type: string
+          description: Restaurant location (required)
+        password:
+          type: string
+          minLength: 6
+          description: Password for restaurant account (required)
+
+    UpdateRestaurantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Restaurant name
+        email:
+          type: string
+          format: email
+          description: Restaurant email
+        phone:
+          type: string
+          description: Restaurant phone number
+        location:
+          type: string
+          description: Restaurant location
+        password:
+          type: string
+          minLength: 6
+          description: New password for restaurant account
+
+    # Admin Schemas
+    Admin:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique admin identifier
+        username:
+          type: string
+          description: Admin username
+        email:
+          type: string
+          format: email
+          description: Admin email
+        role:
+          $ref: "#/components/schemas/Role"
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateAdminRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+        - role
+      properties:
+        username:
+          type: string
+          description: Admin username (required)
+        email:
+          type: string
+          format: email
+          description: Admin email (required)
+        password:
+          type: string
+          minLength: 6
+          description: Password for admin account (required)
+        role:
+          type: string
+          enum: [ADMIN, FOOD_BUNDLE]
+          description: Admin role (required)
+
+    UpdateAdminRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Admin username
+        email:
+          type: string
+          format: email
+          description: Admin email
+        password:
+          type: string
+          minLength: 6
+          description: New password for admin account
+        role:
+          type: string
+          enum: [ADMIN, FOOD_BUNDLE]
+          description: Admin role
+
+    # Authentication API Management Schemas
+    LoginRequest:
+      type: object
+      required:
+        - password
+      properties:
+        phone:
+          type: string
+          description: User's phone number
+        email:
+          type: string
+          format: email
+          description: User's email address
+        password:
+          type: string
+          description: User's password (required)
+        userType:
+          type: string
+          enum: [farmer, restaurant, admin]
+          description: Specific user type to search in (optional - will search all if not provided)
+      oneOf:
+        - required: [phone]
+        - required: [email]
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Login successful"
+        token:
+          type: string
+          description: JWT authentication token
+
+    # Pagination Schemas
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Number of items per page
+        total:
+          type: integer
+          description: Total number of items
+        totalPages:
+          type: integer
+          description: Total number of pages
+        hasNext:
+          type: boolean
+          description: Whether there is a next page
+        hasPrev:
+          type: boolean
+          description: Whether there is a previous page
+
+    # Response Schemas
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+
+paths:
+  # Authentication API Management Endpoints
+  /login:
+    post:
+      tags:
+        - Authentication API Management
+      summary: User login
+      description: Authenticate user and return JWT token. Supports farmers, restaurants, and admins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            examples:
+              farmer_login:
+                summary: Farmer login with phone
+                value:
+                  phone: "+1234567890"
+                  password: "farmer123"
+                  userType: "farmer"
+              restaurant_login:
+                summary: Restaurant login with email
+                value:
+                  email: "restaurant@example.com"
+                  password: "restaurant123"
+                  userType: "restaurant"
+              admin_login:
+                summary: Admin login
+                value:
+                  email: "admin@example.com"
+                  password: "admin123"
+                  userType: "admin"
+              auto_detect:
+                summary: Auto-detect user type
+                value:
+                  email: "user@example.com"
+                  password: "password123"
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        400:
+          description: Bad request - Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Phone/Email and password are required"
+        401:
+          description: Unauthorized - Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                user_not_found:
+                  value:
+                    success: false
+                    message: "User not found"
+                invalid_password:
+                  value:
+                    success: false
+                    message: "Invalid password"
+                no_password:
+                  value:
+                    success: false
+                    message: "Password not set for this user"
+
+  # Farmer Endpoints
+  /farmers:
+    post:
+      tags:
+        - Farmer API Management
+      summary: Create new farmer
+      description: Register a new farmer in the system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFarmerRequest"
+      responses:
+        201:
+          description: Farmer created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Farmer created successfully"
+                  data:
+                    $ref: "#/components/schemas/Farmer"
+        400:
+          description: Bad request - Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_location:
+                  value:
+                    success: false
+                    message: "Location is required for farmers"
+                missing_contact:
+                  value:
+                    success: false
+                    message: "Either phone or email is required"
+                duplicate_farmer:
+                  value:
+                    success: false
+                    message: "Farmer with this phone/email already exists"
+
+    get:
+      tags:
+        - Admin API Management
+      summary: Get all farmers
+      description: Retrieve all farmers with pagination and their recent submissions
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of farmers per page
+      responses:
+        200:
+          description: Farmers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      farmers:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Farmer"
+                      pagination:
+                        $ref: "#/components/schemas/PaginationMeta"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/{id}:
+    get:
+      tags:
+        - Farmer API Management
+      summary: Get farmer by ID
+      description: Retrieve detailed information about a specific farmer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique farmer identifier
+      responses:
+        200:
+          description: Farmer retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/FarmerDetailed"
+        404:
+          description: Farmer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Farmer not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      tags:
+        - Farmer API Management
+      summary: Update farmer
+      description: Update farmer information
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique farmer identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFarmerRequest"
+      responses:
+        200:
+          description: Farmer updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Farmer updated successfully"
+                  data:
+                    $ref: "#/components/schemas/Farmer"
+        400:
+          description: Bad request - Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Farmer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Admin API Management
+      summary: Delete farmer
+      description: Remove farmer from the system
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique farmer identifier
+      responses:
+        200:
+          description: Farmer deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Farmer deleted successfully"
+        400:
+          description: Bad request - Cannot delete farmer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Farmer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Restaurant Endpoints
+  /restaurants:
+    post:
+      tags:
+        - Restaurants API Management
+      summary: Create new restaurant
+      description: Register a new restaurant in the system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRestaurantRequest"
+      responses:
+        201:
+          description: Restaurant created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Restaurant created successfully"
+                  data:
+                    $ref: "#/components/schemas/Restaurant"
+        400:
+          description: Bad request - Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_fields:
+                  value:
+                    success: false
+                    message: "Name, email, location, and password are required for restaurants"
+                duplicate_restaurant:
+                  value:
+                    success: false
+                    message: "Restaurant with this email/phone already exists"
+
+    get:
+      tags:
+        - Restaurants API Management
+      summary: Get all restaurants
+      description: Retrieve all restaurants with pagination and their recent orders
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of restaurants per page
+      responses:
+        200:
+          description: Restaurants retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      restaurants:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Restaurant"
+                      pagination:
+                        $ref: "#/components/schemas/PaginationMeta"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /restaurants/{id}:
+    get:
+      tags:
+        - Restaurants API Management
+      summary: Get restaurant by ID
+      description: Retrieve detailed information about a specific restaurant including orders and POS sales
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique restaurant identifier
+      responses:
+        200:
+          description: Restaurant retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/RestaurantDetailed"
+        404:
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      tags:
+        - Restaurants API Management
+      summary: Update restaurant
+      description: Update restaurant information
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique restaurant identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRestaurantRequest"
+      responses:
+        200:
+          description: Restaurant updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Restaurant updated successfully"
+                  data:
+                    $ref: "#/components/schemas/Restaurant"
+        400:
+          description: Bad request - Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Restaurants API Management
+      summary: Delete restaurant
+      description: Remove restaurant from the system
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique restaurant identifier
+      responses:
+        200:
+          description: Restaurant deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Restaurant deleted successfully"
+        400:
+          description: Bad request - Cannot delete restaurant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Admin Endpoints
+  /admins:
+    post:
+      tags:
+        - Admin API Management
+      summary: Create new admin or food bundle
+      description: Register a new admin or food bundle user in the system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminRequest"
+      responses:
+        201:
+          description: Admin/Food bundle created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    examples:
+                      admin:
+                        value: "Admin created successfully"
+                      food_bundle:
+                        value: "Food bundle created successfully"
+                  data:
+                    $ref: "#/components/schemas/Admin"
+        400:
+          description: Bad request - Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_fields:
+                  value:
+                    success: false
+                    message: "Username, email, password, and role are required for admins"
+                duplicate_admin:
+                  value:
+                    success: false
+                    message: "Admin with this email already exists"
+
+    get:
+      tags:
+        - Admin API Management
+      summary: Get all admins
+      description: Retrieve all admin and food bundle users with pagination
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of admins per page
+      responses:
+        200:
+          description: Admins retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      admins:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Admin"
+                      pagination:
+                        $ref: "#/components/schemas/PaginationMeta"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admins/{id}:
+    get:
+      tags:
+        - Admin API Management
+      summary: Get admin by ID
+      description: Retrieve detailed information about a specific admin or food bundle user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique admin identifier
+      responses:
+        200:
+          description: Admin retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Admin"
+        404:
+          description: Admin not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      tags:
+        - Admin API Management
+      summary: Update admin
+      description: Update admin or food bundle user information
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique admin identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAdminRequest"
+      responses:
+        200:
+          description: Admin updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Admin updated successfully"
+                  data:
+                    $ref: "#/components/schemas/Admin"
+        400:
+          description: Bad request - Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Admin not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Admin API Management
+      summary: Delete admin
+      description: Remove admin or food bundle user from the system
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique admin identifier
+      responses:
+        200:
+          description: Admin deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Admin deleted successfully"
+        400:
+          description: Bad request - Cannot delete admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Admin not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

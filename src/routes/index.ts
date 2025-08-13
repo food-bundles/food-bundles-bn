@@ -1,14 +1,46 @@
-import { Router } from "express";
+import { NextFunction, Request, Response, Router } from "express";
 import ussdRoutes from "./ussdRoute";
 import userRoutes from "./userRoute";
 import ProductverifyRoutes from "./ProductVerifyRoute";
 import productRoutes from "./productRoute";
+import errorHandler from "../utils/errorhandler.utlity";
+import { globalErrorController } from "../controllers/error.controller";
+import submissionsRoutes from "./submissionsRoutes";
+import adminsRoutes from "./adminsRoutes";
+import restaurantsRoutes from "./restaurantsRoutes";
+import farmersRoutes from "./farmersRoutes";
+import cartRoutes from "./cart.routes";
+import checkoutRoutes from "./checkout.routes";
+import orderRoutes from "./order.routes";
 
 const routes = Router();
 
-routes.use("/", ussdRoutes);
-routes.use("/", userRoutes);
+// Order matters! Most specific routes should come first
+routes.use("/farmers", farmersRoutes);
+routes.use("/restaurants", restaurantsRoutes);
+routes.use("/admins", adminsRoutes);
+routes.use("/submissions", submissionsRoutes);
+routes.use("/products", productRoutes);
+routes.use("/carts", cartRoutes);
+routes.use("/checkouts", checkoutRoutes);
+routes.use("/orders", orderRoutes);
+
+// These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);
-routes.use("/", productRoutes);
+routes.use("/", userRoutes);
+routes.use("/", ussdRoutes); // This should probably be last since it has generic paths
+
+// 404 handler
+routes.all("/{0,}", (req: Request, res: Response, next: NextFunction) => {
+  next(
+    new errorHandler({
+      message: `Route ${req.originalUrl} not found`,
+      statusCode: 404,
+    })
+  );
+});
+
+// Global error handler
+routes.use(globalErrorController);
 
 export default routes;

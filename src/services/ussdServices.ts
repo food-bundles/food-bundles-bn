@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import { ProductSubmissionInput } from "../types/productTypes";
 import { ISessionData, IUssdRequest } from "../types/userTypes";
 import { comparePassword, hashPassword } from "../utils/password";
 
@@ -146,7 +147,7 @@ export async function handleUssdLogic({
       if (parts.length === 4) {
         const wishedPrice = parts[3];
 
-        if(isNaN(parseFloat(wishedPrice)) || parseFloat(wishedPrice) <= 0) {
+        if (isNaN(parseFloat(wishedPrice)) || parseFloat(wishedPrice) <= 0) {
           delete ussdSessions[sessionId];
           return "END Please enter a valid wished price. Try again.";
         }
@@ -199,4 +200,55 @@ export async function handleUssdLogic({
   }
 
   return "END Invalid input. Try again.";
+}
+
+export async function submitProductService(
+  submissionData: ProductSubmissionInput
+) {
+  // Validate product name
+  if (!products.includes(submissionData.productName)) {
+    throw new Error(
+      `Invalid product. Valid products are: ${products.join(", ")}`
+    );
+  }
+
+  // Validate quantity and price
+  if (submissionData.submittedQty <= 0) {
+    throw new Error("Quantity must be greater than 0");
+  }
+
+  if (submissionData.wishedPrice <= 0) {
+    throw new Error("Price must be greater than 0");
+  }
+
+  // Check if farmer exists
+  const farmerExists = await prisma.farmer.findUnique({
+    where: { id: submissionData.farmerId },
+  });
+
+  if (!farmerExists) {
+    throw new Error("Farmer not found");
+  }
+
+  // Create submission
+  const submission = await prisma.farmerSubmission.create({
+    data: {
+      farmerId: submissionData.farmerId,
+      productName: submissionData.productName,
+      submittedQty: submissionData.submittedQty,
+      wishedPrice: submissionData.wishedPrice,
+      status: "PENDING",
+    },
+    include: {
+      farmer: {
+        select: {
+          id: true,
+          phone: true,
+          location: true,
+        },
+      },
+    },
+  });
+
+  return submission;
 }

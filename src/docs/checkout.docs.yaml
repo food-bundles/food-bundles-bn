@@ -1,0 +1,706 @@
+tags:
+  - name: Checkout API Management
+    description: Operations related to checkout and payment processing for restaurants
+
+components:
+  schemas:
+    Checkout:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique checkout identifier
+        cartId:
+          type: string
+          description: Cart ID associated with this checkout
+        restaurantId:
+          type: string
+          description: Restaurant ID that owns this checkout
+        totalAmount:
+          type: number
+          format: float
+          description: Total amount for the checkout
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Selected payment method
+        paymentStatus:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Current payment status
+        billingName:
+          type: string
+          description: Billing name
+        billingEmail:
+          type: string
+          description: Billing email
+        billingPhone:
+          type: string
+          description: Billing phone number
+        billingAddress:
+          type: string
+          description: Billing address
+        notes:
+          type: string
+          description: Special notes or instructions
+        deliveryDate:
+          type: string
+          format: date-time
+          description: Requested delivery date
+        paymentReference:
+          type: string
+          description: Payment gateway reference
+        transactionId:
+          type: string
+          description: Transaction ID from payment provider
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        paidAt:
+          type: string
+          format: date-time
+          description: When payment was completed
+        cart:
+          $ref: "#/components/schemas/CartWithItems"
+        restaurant:
+          $ref: "#/components/schemas/RestaurantInfo"
+        order:
+          $ref: "#/components/schemas/OrderInfo"
+
+    CartWithItems:
+      type: object
+      properties:
+        id:
+          type: string
+        totalAmount:
+          type: number
+          format: float
+        status:
+          type: string
+        cartItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+
+    OrderInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        orderNumber:
+          type: string
+        status:
+          type: string
+
+    CreateCheckoutRequest:
+      type: object
+      required:
+        - cartId
+        - paymentMethod
+      properties:
+        cartId:
+          type: string
+          description: ID of the cart to checkout
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Selected payment method
+        billingName:
+          type: string
+          description: Billing name
+        billingEmail:
+          type: string
+          format: email
+          description: Billing email
+        billingPhone:
+          type: string
+          description: Billing phone number
+        billingAddress:
+          type: string
+          description: Billing address
+        notes:
+          type: string
+          description: Special notes or instructions
+        deliveryDate:
+          type: string
+          format: date-time
+          description: Requested delivery date
+
+    UpdateCheckoutRequest:
+      type: object
+      properties:
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Payment method
+        billingName:
+          type: string
+          description: Billing name
+        billingEmail:
+          type: string
+          format: email
+          description: Billing email
+        billingPhone:
+          type: string
+          description: Billing phone number
+        billingAddress:
+          type: string
+          description: Billing address
+        notes:
+          type: string
+          description: Special notes or instructions
+        deliveryDate:
+          type: string
+          format: date-time
+          description: Requested delivery date
+        paymentStatus:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Payment status (Admin only)
+        paymentReference:
+          type: string
+          description: Payment reference (Admin only)
+        transactionId:
+          type: string
+          description: Transaction ID (Admin only)
+
+    ProcessPaymentRequest:
+      type: object
+      required:
+        - paymentMethod
+      properties:
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Payment method to process
+        phoneNumber:
+          type: string
+          description: Phone number (required for MOBILE_MONEY)
+        cardToken:
+          type: string
+          description: Card token (required for CARD)
+        bankAccount:
+          type: string
+          description: Bank account number (required for BANK_TRANSFER)
+
+    PaymentResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            checkout:
+              $ref: "#/components/schemas/Checkout"
+            transactionId:
+              type: string
+
+    CheckoutPaginationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Checkout"
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    ApiResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+paths:
+  /checkouts:
+    post:
+      tags:
+        - Checkout API Management
+      summary: Create a new checkout
+      description: Create a new checkout from an active cart for payment processing
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCheckoutRequest"
+      responses:
+        201:
+          description: Checkout created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Checkout created successfully"
+                  data:
+                    $ref: "#/components/schemas/Checkout"
+        400:
+          description: Bad request - Invalid input or cart issues
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_fields:
+                  value:
+                    message: "Cart ID and payment method are required"
+                invalid_payment_method:
+                  value:
+                    message: "Invalid payment method"
+                empty_cart:
+                  value:
+                    message: "Cart is empty"
+                insufficient_stock:
+                  value:
+                    message: "Insufficient stock for Product Name. Available: 5, Required: 10"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      tags:
+        - Checkout API Management
+      summary: Get all checkouts (Admin only)
+      description: Retrieve all checkouts with filtering and pagination (Admin access required)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of checkouts per page
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Filter by payment status
+        - name: paymentMethod
+          in: query
+          schema:
+            type: string
+            enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Filter by payment method
+      responses:
+        200:
+          description: Checkouts retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutPaginationResponse"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /checkouts/my-checkouts:
+    get:
+      tags:
+        - Checkout API Management
+      summary: Get restaurant's checkouts
+      description: Retrieve checkouts for the authenticated restaurant with filtering
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of checkouts per page
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Filter by payment status
+        - name: paymentMethod
+          in: query
+          schema:
+            type: string
+            enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Filter by payment method
+      responses:
+        200:
+          description: Checkouts retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutPaginationResponse"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /checkouts/{checkoutId}:
+    get:
+      tags:
+        - Checkout API Management
+      summary: Get checkout by ID
+      description: Retrieve a specific checkout by ID with detailed information
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: checkoutId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique checkout identifier
+      responses:
+        200:
+          description: Checkout retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Checkout retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Checkout"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Unauthorized access to checkout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Unauthorized: Checkout does not belong to this restaurant"
+        404:
+          description: Checkout not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      tags:
+        - Checkout API Management
+      summary: Update checkout
+      description: Update checkout details before payment completion
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: checkoutId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique checkout identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCheckoutRequest"
+      responses:
+        200:
+          description: Checkout updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Checkout updated successfully"
+                  data:
+                    $ref: "#/components/schemas/Checkout"
+        400:
+          description: Bad request - Invalid input or checkout cannot be updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_payment_method:
+                  value:
+                    message: "Invalid payment method"
+                payment_completed:
+                  value:
+                    message: "Cannot update checkout after payment is completed"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Unauthorized access or admin-only fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                admin_only:
+                  value:
+                    message: "Only admins can update payment status"
+                unauthorized_checkout:
+                  value:
+                    message: "Unauthorized: Checkout does not belong to this restaurant"
+        404:
+          description: Checkout not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Checkout API Management
+      summary: Cancel checkout
+      description: Cancel checkout and revert cart to active status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: checkoutId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique checkout identifier
+      responses:
+        200:
+          description: Checkout cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Checkout cancelled successfully"
+        400:
+          description: Bad request - Cannot cancel checkout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                payment_completed:
+                  value:
+                    message: "Cannot cancel completed checkout"
+                order_exists:
+                  value:
+                    message: "Cannot cancel checkout that has been converted to order"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Unauthorized access to checkout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Checkout not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /checkouts/{checkoutId}/payment:
+    post:
+      tags:
+        - Checkout API Management
+      summary: Process payment for checkout
+      description: Process payment using various methods (Cash, Mobile Money, Bank Transfer, Card)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: checkoutId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique checkout identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessPaymentRequest"
+            examples:
+              mobile_money:
+                summary: Mobile Money Payment (PayPack)
+                value:
+                  paymentMethod: "MOBILE_MONEY"
+                  phoneNumber: "+250788123456"
+              cash_payment:
+                summary: Cash Payment
+                value:
+                  paymentMethod: "CASH"
+              card_payment:
+                summary: Card Payment
+                value:
+                  paymentMethod: "CARD"
+                  cardToken: "card_token_123"
+              bank_transfer:
+                summary: Bank Transfer
+                value:
+                  paymentMethod: "BANK_TRANSFER"
+                  bankAccount: "12345678901"
+      responses:
+        200:
+          description: Payment processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+        400:
+          description: Bad request - Invalid payment data or payment failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_payment_method:
+                  value:
+                    message: "Payment method is required"
+                missing_phone:
+                  value:
+                    message: "Phone number is required for mobile money payments"
+                payment_failed:
+                  value:
+                    message: "Payment failed"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Checkout not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

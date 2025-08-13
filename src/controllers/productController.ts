@@ -1,15 +1,108 @@
 import { Request, Response } from "express";
 import {
   createProductFromSubmissionService,
-  //   updateProductService,
+  updateProductService,
   deleteProductService,
   getAllProductsService,
   getProductByIdService,
   getVerifiedSubmissionsService,
   approveSubmissionService,
+  createProductService,
+  updateProductQuantityFromSubmissionService,
 } from "../services/productService";
 import { uploadImages } from "../utils/imageUpload";
 import prisma from "../prisma";
+import cloudinary from "../utils/cloudinary.utility";
+
+export const createProduct = async (req: Request, res: Response) => {
+  try {
+    const {
+      productName,
+      unitPrice,
+      category,
+      bonus,
+      sku,
+      quantity,
+      expiryDate,
+      unit,
+    } = req.body;
+    const adminId = (req as any).user.id;
+
+    // Handle image upload
+    let imageUrls: string[] = [];
+
+    // Type guard to check if req.files is a dictionary
+    if (req.files && !Array.isArray(req.files)) {
+      const filesDict = req.files as {
+        [fieldname: string]: Express.Multer.File[];
+      };
+
+      if (filesDict["images"]) {
+        for (let index = 0; index < filesDict["images"].length; index++) {
+          const uploadResult = await cloudinary.v2.uploader.upload(
+            filesDict["images"][index].path
+          );
+          imageUrls.push(uploadResult.secure_url);
+        }
+      }
+    }
+
+    const product = await createProductService({
+      productName,
+      unitPrice,
+      category,
+      bonus,
+      sku,
+      quantity,
+      images: imageUrls.length > 0 ? imageUrls : [],
+      expiryDate: expiryDate ? new Date(expiryDate) : null,
+      unit,
+      createdBy: adminId,
+    });
+
+    res.status(201).json({
+      message: "Product created successfully",
+      data: product,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to create product",
+    });
+  }
+};
+
+export const updateProductQuantityFromSubmission = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { submissionId, productId } = req.params;
+    const adminId = (req as any).user.id;
+
+    // Verify admin
+    const admin = await prisma.admin.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin || admin.role !== "ADMIN") {
+      throw new Error("Only ADMIN users can perform this action");
+    }
+
+    const result = await updateProductQuantityFromSubmissionService({
+      submissionId,
+      productId,
+    });
+
+    res.status(200).json({
+      message: "Product quantity updated and submission approved successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to update product quantity",
+    });
+  }
+};
 
 export const createProductFromSubmission = async (
   req: Request,
@@ -17,8 +110,16 @@ export const createProductFromSubmission = async (
 ) => {
   try {
     const { submissionId } = req.params;
-    const { productName, unitPrice, category, bonus, sku, quantity, expiryDate, unit } =
-      req.body;
+    const {
+      productName,
+      unitPrice,
+      category,
+      bonus,
+      sku,
+      quantity,
+      expiryDate,
+      unit,
+    } = req.body;
     const adminId = (req as any).user.id;
 
     // Handle image upload
@@ -32,13 +133,12 @@ export const createProductFromSubmission = async (
         });
       }
       imageUrls = await uploadImages(images);
-      }
-      
-      const existingQty = await prisma.farmerSubmission.findUnique({
-        where: { id: submissionId },
-        select: { acceptedQty: true, productName: true },
-      });
+    }
 
+    const existingQty = await prisma.farmerSubmission.findUnique({
+      where: { id: submissionId },
+      select: { acceptedQty: true, productName: true },
+    });
 
     const result = await createProductFromSubmissionService({
       submissionId,
@@ -68,41 +168,52 @@ export const createProductFromSubmission = async (
 };
 
 // Update existing product
-// export const updateProduct = async (req: Request, res: Response) => {
-//   try {
-//     const { productId } = req.params;
-//     const updateData = req.body;
-//     const adminId = (req as any).user.id;
+export const updateProduct = async (req: Request, res: Response) => {
+  try {
+    const { productId } = req.params;
+    const updateData = req.body;
+    const adminId = (req as any).user.id;
 
-//     // Handle image upload if new images provided
-//     const images = req.files as Express.Multer.File[];
-//     if (images && images.length > 0) {
-//       if (images.length > 4) {
-//         return res.status(400).json({
-//           message: "Maximum 4 images allowed",
-//         });
-//       }
-//       updateData.images = await uploadImages(images);
-//     }
+    // Handle image upload
+    let imageUrls: string[] = [];
 
-//     if (updateData.expiryDate) {
-//       updateData.expiryDate = new Date(updateData.expiryDate);
-//     }
+    // Type guard to check if req.files is a dictionary
+    if (req.files && !Array.isArray(req.files)) {
+      const filesDict = req.files as {
+        [fieldname: string]: Express.Multer.File[];
+      };
 
-//     const result = await updateProductService(productId, updateData, adminId);
+      if (filesDict["images"]) {
+        for (let index = 0; index < filesDict["images"].length; index++) {
+          const uploadResult = await cloudinary.v2.uploader.upload(
+            filesDict["images"][index].path
+          );
+          imageUrls.push(uploadResult.secure_url);
+        }
+      }
 
-//     res.status(200).json({
-//       message: "Product updated successfully",
-//       data: result,
-//     });
-//   } catch (error: any) {
-//     res.status(500).json({
-//       message: error.message || "Failed to update product",
-//     });
-//   }
-// };
+      updateData.images = imageUrls.length > 0 ? imageUrls : [];
+    }
+
+    if (updateData.expiryDate) {
+      updateData.expiryDate = new Date(updateData.expiryDate);
+    }
+
+    const result = await updateProductService(productId, updateData, adminId);
+
+    res.status(200).json({
+      message: "Product updated successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to update product",
+    });
+  }
+};
 
 // Delete product
+
 export const deleteProduct = async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;

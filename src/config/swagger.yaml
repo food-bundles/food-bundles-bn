@@ -1,0 +1,8 @@
+openapi: 3.0.0
+info:
+  title: FoodBundles Product Management API
+  description: API documentation for managing agricultural products in the FoodBundles platform.
+  version: 1.0.0
+servers:
+  - url: "http://localhost:4000"
+    description: Local development server

@@ -1,0 +1,609 @@
+tags:
+  - name: Cart API Management
+    description: Operations related to shopping cart management for restaurants
+
+components:
+  schemas:
+    Cart:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique cart identifier
+        restaurantId:
+          type: string
+          description: ID of the restaurant owning the cart
+        totalAmount:
+          type: number
+          format: float
+          description: Total amount of all items in cart
+        status:
+          type: string
+          enum: [ACTIVE, CHECKED_OUT, ABANDONED]
+          description: Current cart status
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        restaurant:
+          $ref: "#/components/schemas/RestaurantInfo"
+        cartItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+
+    CartItem:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique cart item identifier
+        cartId:
+          type: string
+          description: Cart ID this item belongs to
+        productId:
+          type: string
+          description: Product ID
+        quantity:
+          type: number
+          format: float
+          description: Quantity of the product
+        unitPrice:
+          type: number
+          format: float
+          description: Price per unit at time of adding to cart
+        subtotal:
+          type: number
+          format: float
+          description: quantity * unitPrice
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        product:
+          $ref: "#/components/schemas/ProductInfo"
+
+    ProductInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        productName:
+          type: string
+        unitPrice:
+          type: number
+          format: float
+        images:
+          type: array
+          items:
+            type: string
+        unit:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+        quantity:
+          type: number
+          format: float
+          description: Available stock
+
+    RestaurantInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+
+    AddToCartRequest:
+      type: object
+      required:
+        - productId
+        - quantity
+      properties:
+        productId:
+          type: string
+          description: ID of the product to add to cart
+        quantity:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Quantity of the product
+
+    UpdateCartItemRequest:
+      type: object
+      required:
+        - quantity
+      properties:
+        quantity:
+          type: number
+          format: float
+          minimum: 0.01
+          description: New quantity for the cart item
+
+    CartSummary:
+      type: object
+      properties:
+        itemCount:
+          type: number
+          format: float
+          description: Total quantity of all items in cart
+        totalAmount:
+          type: number
+          format: float
+          description: Total amount of all items
+        cartId:
+          type: string
+          description: Cart ID (null if empty)
+
+    CartPaginationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Cart"
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    ApiResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+paths:
+  /carts/add:
+    post:
+      tags:
+        - Cart API Management
+      summary: Add item to cart
+      description: Add a product to the restaurant's active cart or update quantity if already exists
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddToCartRequest"
+      responses:
+        200:
+          description: Item added to cart successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Item added to cart successfully"
+                  data:
+                    $ref: "#/components/schemas/CartItem"
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_fields:
+                  value:
+                    message: "Product ID and quantity are required"
+                invalid_quantity:
+                  value:
+                    message: "Quantity must be greater than 0"
+                insufficient_stock:
+                  value:
+                    message: "Insufficient stock. Available: 10"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /carts/my-cart:
+    get:
+      tags:
+        - Cart API Management
+      summary: Get current restaurant's cart
+      description: Retrieve the active cart for the authenticated restaurant
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Cart retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Cart retrieved successfully"
+                  data:
+                    anyOf:
+                      - $ref: "#/components/schemas/Cart"
+                      - type: "null"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /carts/summary:
+    get:
+      tags:
+        - Cart API Management
+      summary: Get cart summary
+      description: Get cart item count and total amount for the authenticated restaurant
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Cart summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Cart summary retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/CartSummary"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /carts/items/{cartItemId}:
+    patch:
+      tags:
+        - Cart API Management
+      summary: Update cart item quantity
+      description: Update the quantity of a specific item in the cart
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cartItemId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Cart item ID to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCartItemRequest"
+      responses:
+        200:
+          description: Cart item updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Cart item updated successfully"
+                  data:
+                    $ref: "#/components/schemas/CartItem"
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_quantity:
+                  value:
+                    message: "Quantity is required"
+                invalid_quantity:
+                  value:
+                    message: "Quantity must be greater than 0"
+                insufficient_stock:
+                  value:
+                    message: "Insufficient stock. Available: 5"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required or unauthorized access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Unauthorized: Cart item does not belong to this restaurant"
+        404:
+          description: Cart item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Cart API Management
+      summary: Remove item from cart
+      description: Remove a specific item from the cart
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cartItemId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Cart item ID to remove
+      responses:
+        200:
+          description: Item removed from cart successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Item removed from cart successfully"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required or unauthorized access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Unauthorized: Cart item does not belong to this restaurant"
+        404:
+          description: Cart item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /carts/clear:
+    delete:
+      tags:
+        - Cart API Management
+      summary: Clear entire cart
+      description: Remove all items from the restaurant's active cart
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Cart cleared successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Cart cleared successfully"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: No active cart found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /carts:
+    get:
+      tags:
+        - Cart API Management
+      summary: Get all carts (Admin only)
+      description: Retrieve all carts with filtering and pagination (Admin access required)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of carts per page
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, CHECKED_OUT, ABANDONED]
+          description: Filter by cart status
+      responses:
+        200:
+          description: Carts retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartPaginationResponse"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /carts/{cartId}:
+    get:
+      tags:
+        - Cart API Management
+      summary: Get cart by ID (Admin only)
+      description: Retrieve a specific cart by ID with detailed information (Admin access required)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique cart identifier
+      responses:
+        200:
+          description: Cart retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Cart retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Cart"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Cart not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

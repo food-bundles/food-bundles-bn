@@ -1,6 +1,6 @@
 import prisma from "../prisma";
 
-interface ProductData {
+export interface ProductData {
   productName: string;
   unitPrice: number;
   category: string;
@@ -13,6 +13,212 @@ interface ProductData {
   createdBy: string;
 }
 
+export const createProductService = async (productData: ProductData) => {
+  // Check if admin exists
+  const admin = await prisma.admin.findUnique({
+    where: { id: productData.createdBy },
+  });
+
+  if (!admin || admin.role !== "ADMIN") {
+    throw new Error("Only ADMIN users can create products");
+  }
+
+  // Check if SKU already exists
+  const existingSku = await prisma.product.findUnique({
+    where: { sku: productData.sku },
+  });
+
+  if (existingSku) {
+    throw new Error("SKU already exists");
+  }
+
+  // Create the product
+  const product = await prisma.product.create({
+    data: {
+      productName: productData.productName,
+      unitPrice: Number(productData.unitPrice),
+      category: productData.category as any,
+      bonus: Number(productData.bonus) ?? 0,
+      sku: productData.sku,
+      quantity: Number(productData.quantity),
+      images: productData.images,
+      expiryDate: productData.expiryDate,
+      unit: productData.unit,
+      createdBy: productData.createdBy,
+    },
+    include: {
+      admin: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return product;
+};
+
+// Update product quantity from submission
+export const updateProductQuantityFromSubmissionService = async ({
+  submissionId,
+  productId,
+}: {
+  submissionId: string;
+  productId: string;
+}) => {
+  // Check if submission exists and is VERIFIED
+  const submission = await prisma.farmerSubmission.findUnique({
+    where: { id: submissionId },
+  });
+
+  if (!submission) {
+    throw new Error("Farmer submission not found");
+  }
+
+  if (submission.status !== "VERIFIED") {
+    throw new Error("Only VERIFIED submissions can be approved");
+  }
+
+  // Check if product exists
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+  });
+
+  if (!product) {
+    throw new Error("Product not found");
+  }
+
+  // Update product quantity and submission status in a transaction
+  const result = await prisma.$transaction(async (tx) => {
+    // Update product quantity
+    const updatedProduct = await tx.product.update({
+      where: { id: productId },
+      data: {
+        quantity: {
+          increment: submission.acceptedQty || 0,
+        },
+      },
+    });
+
+    // Update submission status to APPROVED and link to product
+    const updatedSubmission = await tx.farmerSubmission.update({
+      where: { id: submissionId },
+      data: {
+        status: "APPROVED",
+        approvedAt: new Date(),
+        approvedProductId: product.id,
+      },
+      include: {
+        farmer: {
+          select: {
+            id: true,
+            phone: true,
+            location: true,
+          },
+        },
+        foodBundle: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+        approvedProduct: {
+          select: {
+            id: true,
+            productName: true,
+            sku: true,
+            unitPrice: true,
+          },
+        },
+      },
+    });
+
+    return {
+      product: updatedProduct,
+      submission: updatedSubmission,
+    };
+  });
+
+  return result;
+};
+
+// Update existing product
+export const updateProductService = async (
+  productId: string,
+  updateData: Partial<ProductData>,
+  adminId: string
+) => {
+  // Check if product exists
+  const existingProduct = await prisma.product.findUnique({
+    where: { id: productId },
+  });
+
+  if (!existingProduct) {
+    throw new Error("Product not found");
+  }
+
+  // Check if admin has permission
+  const admin = await prisma.admin.findUnique({
+    where: { id: adminId },
+  });
+
+  if (!admin || admin.role !== "ADMIN") {
+    throw new Error("Only ADMIN users can update products");
+  }
+
+  // Check SKU uniqueness if SKU is being updated
+  if (updateData.sku && updateData.sku !== existingProduct.sku) {
+    const existingSku = await prisma.product.findUnique({
+      where: { sku: updateData.sku },
+    });
+
+    if (existingSku) {
+      throw new Error("SKU already exists");
+    }
+  }
+
+  // Update product
+  const updatedProduct = await prisma.product.update({
+    where: { id: productId },
+    data: {
+      ...(updateData.productName !== undefined && {
+        productName: updateData.productName,
+      }),
+      ...(updateData.unitPrice !== undefined && {
+        unitPrice: Number(updateData.unitPrice),
+      }),
+      ...(updateData.category !== undefined && {
+        category: updateData.category as any,
+      }),
+      ...(updateData.bonus !== undefined && {
+        bonus: Number(updateData.bonus),
+      }),
+      ...(updateData.sku !== undefined && { sku: updateData.sku }),
+      ...(updateData.quantity !== undefined && {
+        quantity: Number(updateData.quantity),
+      }),
+      ...(updateData.images !== undefined && { images: updateData.images }),
+      ...(updateData.expiryDate !== undefined && {
+        expiryDate: updateData.expiryDate,
+      }),
+      ...(updateData.unit !== undefined && { unit: updateData.unit }),
+    },
+    include: {
+      admin: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return updatedProduct;
+};
 
 // Create product from verified farmer submission and approve it
 export const createProductFromSubmissionService = async ({
@@ -193,6 +399,7 @@ export const createProductFromSubmissionService = async ({
 // };
 
 // Delete product
+
 export const deleteProductService = async (productId: string) => {
   // Check if product has any orders
   const productWithOrders = await prisma.product.findUnique({

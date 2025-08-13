@@ -1,0 +1,926 @@
+tags:
+  - name: Submission API Management
+    description: Operations for retrieving submission statistics and analytics
+
+components:
+  schemas:
+    SubmissionStatus:
+      type: string
+      enum: [PENDING, VERIFIED, APPROVED, PAID]
+      description: Status of farmer submission
+
+    Role:
+      type: string
+      enum: [FARMER, RESTAURANT, ADMIN, FOOD_BUNDLE]
+      description: User role in the system
+
+    SortOrder:
+      type: string
+      enum: [asc, desc]
+      description: Sort order for pagination
+
+    # Core Schemas
+    FarmerInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique farmer identifier
+        phone:
+          type: string
+          nullable: true
+          description: Farmer's phone number
+        location:
+          type: string
+          description: Farmer's location
+        email:
+          type: string
+          nullable: true
+          description: Farmer's email address
+
+    FoodBundleInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique food bundle identifier
+        username:
+          type: string
+          description: Food bundle username
+        phone:
+          type: string
+          nullable: true
+          description: Food bundle phone number
+        email:
+          type: string
+          nullable: true
+          description: Food bundle email address
+
+    ApprovedProductInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique approved product identifier
+        productName:
+          type: string
+          description: Name of the approved product
+        unitPrice:
+          type: number
+          format: float
+          description: Unit price of the product
+        category:
+          type: string
+          description: Product category
+        sku:
+          type: string
+          description: Stock Keeping Unit
+
+    FarmerSubmission:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique submission identifier
+        productName:
+          type: string
+          description: Name of submitted product
+        submittedQty:
+          type: integer
+          nullable: true
+          description: Quantity submitted by farmer
+        acceptedQty:
+          type: integer
+          nullable: true
+          description: Quantity accepted by food bundle
+        acceptedPrice:
+          type: number
+          format: float
+          nullable: true
+          description: Price accepted per unit
+        totalAmount:
+          type: number
+          format: float
+          nullable: true
+          description: Total amount (acceptedQty * acceptedPrice)
+        status:
+          $ref: "#/components/schemas/SubmissionStatus"
+        farmerId:
+          type: string
+          description: ID of the farmer who made the submission
+        foodBundleId:
+          type: string
+          nullable: true
+          description: ID of the food bundle that verified the submission
+        submittedAt:
+          type: string
+          format: date-time
+          description: Timestamp when submission was made
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when submission was verified
+        farmer:
+          $ref: "#/components/schemas/FarmerInfo"
+        foodBundle:
+          $ref: "#/components/schemas/FoodBundleInfo"
+        approvedProduct:
+          $ref: "#/components/schemas/ApprovedProductInfo"
+
+    # Request Schemas
+    PurchaseProductRequest:
+      type: object
+      required:
+        - acceptedQty
+        - unitPrice
+      properties:
+        acceptedQty:
+          type: integer
+          minimum: 1
+          description: Quantity to accept and purchase
+        unitPrice:
+          type: number.01
+          description: Price per unit for the accepted quantity
+
+    UpdateSubmissionRequest:
+      type: object
+      required:
+        - acceptedQty
+        - unitPrice
+      properties:
+        acceptedQty:
+          type: integer
+          minimum: 1
+          description: Updated quantity to accept
+        unitPrice:
+          type: number.01
+          description: Updated price per unit
+
+    # Pagination and Response Schemas
+    PaginationInfo:
+      type: object
+      properties:
+        currentPage:
+          type: integer
+          description: Current page number
+        totalPages:
+          type: integer
+          description: Total number of pages
+        totalCount:
+          type: integer
+          description: Total number of items
+        hasNextPage:
+          type: boolean
+          description: Whether there is a next page
+        hasPrevPage:
+          type: boolean
+          description: Whether there is a previous page
+        limit:
+          type: integer
+          description: Number of items per page
+
+    UserContext:
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/Role"
+        canManage:
+          type: boolean
+          description: Whether user can manage submissions (Admin/Food Bundle)
+        isOwner:
+          type: boolean
+          description: Whether user owns the submission (Farmer only)
+        isAssigned:
+          type: boolean
+          description: Whether submission is assigned to this food bundle
+
+    SubmissionListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          description: Response message
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/FarmerSubmission"
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+        userContext:
+          $ref: "#/components/schemas/UserContext"
+
+    SubmissionDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          description: Response message
+        data:
+          $ref: "#/components/schemas/FarmerSubmission"
+        userContext:
+          $ref: "#/components/schemas/UserContext"
+
+    SubmissionStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          description: Response message
+        totalSubmissions:
+          type: integer
+          description: Total number of submissions
+        byStatus:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              count:
+                type: integer
+                description: Number of submissions with this status
+              totalSubmittedQty:
+                type: number
+                description: Total quantity submitted for this status
+              totalAcceptedQty:
+                type: number
+                description: Total quantity accepted for this status
+              totalAmount:
+                type: number
+                format: float
+                description: Total amount for this status
+        userContext:
+          type: object
+          properties:
+            role:
+              $ref: "#/components/schemas/Role"
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Success message
+        data:
+          type: object
+          description: Response data
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          description: Error message
+
+paths:
+  /submissions/{submissionId}/purchase:
+    post:
+      tags:
+        - Submission API Management
+      summary: Purchase product from farmer submission
+      description: Verify and purchase a farmer's product submission by accepting quantity and setting price (Food Bundle/Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique submission identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseProductRequest"
+            examples:
+              purchase_example:
+                summary: Purchase 50kg at $2.5 per kg
+                value:
+                  acceptedQty: 50
+                  unitPrice: 2.5
+      responses:
+        200:
+          description: Product purchased successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product purchased successfully"
+                  data:
+                    $ref: "#/components/schemas/FarmerSubmission"
+        400:
+          description: Bad request - Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_fields:
+                  value:
+                    message: "acceptedQty and unitPrice are required"
+                negative_values:
+                  value:
+                    message: "acceptedQty and unitPrice must be positive numbers"
+                quantity_exceeded:
+                  value:
+                    message: "Accepted quantity is greater than submitted quantity"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Food Bundle/Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Submission or Food bundle not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                submission_not_found:
+                  value:
+                    message: "Submission not found"
+                food_bundle_not_found:
+                  value:
+                    message: "Food bundle not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /product/{submissionId}/update:
+    put:
+      tags:
+        - Submission API Management
+      summary: Update verified submission
+      description: Update the accepted quantity and price for a previously verified submission (Food Bundle/Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique submission identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubmissionRequest"
+            examples:
+              update_example:
+                summary: Update to 45kg at $2.8 per kg
+                value:
+                  acceptedQty: 45
+                  unitPrice: 2.8
+      responses:
+        200:
+          description: Submission updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Submission updated successfully"
+                  data:
+                    $ref: "#/components/schemas/FarmerSubmission"
+        400:
+          description: Bad request - Invalid input or business logic error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_fields:
+                  value:
+                    message: "acceptedQty and accepted price are required"
+                invalid_values:
+                  value:
+                    message: "acceptedQty and unitPrice must be positive numbers"
+                invalid_status:
+                  value:
+                    message: "Can only update submissions with VERIFIED status"
+                unauthorized_update:
+                  value:
+                    message: "You can only update submissions you have verified"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Food Bundle/Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions/{submissionId}/clear:
+    put:
+      tags:
+        - Submission API Management
+      summary: Clear submission verification
+      description: Reset a submission back to PENDING status by clearing all verification data (Food Bundle/Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique submission identifier
+      responses:
+        200:
+          description: Submission cleared successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Submission cleared successfully"
+                  data:
+                    $ref: "#/components/schemas/FarmerSubmission"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Food Bundle/Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions:
+    get:
+      tags:
+        - Submission API Management
+      summary: Get all submissions (role-based)
+      description: |
+        Retrieve submissions based on user role with filtering and pagination:
+        - **Farmers**: Only their own submissions
+        - **Food Bundles**: Submissions assigned to them or unassigned ones
+        - **Admins**: All submissions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of submissions per page
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            default: "submittedAt"
+          description: Field to sort by
+        - name: sortOrder
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortOrder"
+            default: "desc"
+          description: Sort order
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/SubmissionStatus"
+          description: Filter by submission status
+        - name: productName
+          in: query
+          schema:
+            type: string
+          description: Filter by product name (case-insensitive partial match)
+      responses:
+        200:
+          description: Submissions retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionListResponse"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions/{submissionId}:
+    get:
+      tags:
+        - Submission API Management
+      summary: Get submission by ID (role-based access)
+      description: |
+        Retrieve detailed information about a specific submission with role-based access control:
+        - **Farmers**: Only their own submissions
+        - **Food Bundles**: Submissions assigned to them or unassigned ones
+        - **Admins**: Any submission
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique submission identifier
+      responses:
+        200:
+          description: Submission retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionDetailResponse"
+        400:
+          description: Bad request - Missing submission ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Submission ID is required"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                farmer_access_denied:
+                  value:
+                    success: false
+                    message: "Access denied: You can only view your own submissions"
+                food_bundle_access_denied:
+                  value:
+                    success: false
+                    message: "Access denied: You can only view submissions assigned to you"
+        404:
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Submission not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions/status/{status}:
+    get:
+      tags:
+        - Submission API Management
+      summary: Get submissions by status
+      description: Retrieve submissions filtered by a specific status with role-based access control
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/SubmissionStatus"
+          description: Submission status to filter by
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of submissions per page
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            default: "submittedAt"
+          description: Field to sort by
+        - name: sortOrder
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortOrder"
+            default: "desc"
+          description: Sort order
+        - name: productName
+          in: query
+          schema:
+            type: string
+          description: Filter by product name (case-insensitive partial match)
+      responses:
+        200:
+          description: Submissions with specified status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Submissions with status VERIFIED retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FarmerSubmission"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+                  userContext:
+                    $ref: "#/components/schemas/UserContext"
+        400:
+          description: Bad request - Invalid status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_status:
+                  value:
+                    success: false
+                    message: "Status is required"
+                invalid_status:
+                  value:
+                    success: false
+                    message: "Invalid status. Must be one of: PENDING, VERIFIED, APPROVED, PAID"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions/my-submissions:
+    get:
+      tags:
+        - Submission API Management
+      summary: Get farmer's own submissions
+      description: Retrieve all submissions belonging to the authenticated farmer (Farmer only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of submissions per page
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            default: "submittedAt"
+          description: Field to sort by
+        - name: sortOrder
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortOrder"
+            default: "desc"
+          description: Sort order
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/SubmissionStatus"
+          description: Filter by submission status
+        - name: productName
+          in: query
+          schema:
+            type: string
+          description: Filter by product name (case-insensitive partial match)
+      responses:
+        200:
+          description: Your submissions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Your submissions retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FarmerSubmission"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+                  userContext:
+                    $ref: "#/components/schemas/UserContext"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Farmer access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "This endpoint is for farmers only"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /submissions/stats:
+    get:
+      tags:
+        - Submission API Management
+      summary: Get submission statistics
+      description: |
+        Retrieve statistical data about submissions grouped by status with role-based filtering:
+        - **Farmers**: Statistics for their own submissions
+        - **Food Bundles**: Statistics for submissions assigned to them
+        - **Admins**: Statistics for all submissions
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Submission statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Submission statistics retrieved successfully"
+                  totalSubmissions:
+                    type: integer
+                    example: 150
+                    description: Total number of submissions
+                  byStatus:
+                    type: object
+                    example:
+                      PENDING:
+                        count: 45
+                        totalSubmittedQty: 2250
+                        totalAcceptedQty: 0
+                        totalAmount: 0
+                      VERIFIED:
+                        count: 80
+                        totalSubmittedQty: 4000
+                        totalAcceptedQty: 3800
+                        totalAmount: 9500
+                      APPROVED:
+                        count: 20
+                        totalSubmittedQty: 1000
+                        totalAcceptedQty: 950
+                        totalAmount: 2375
+                      PAID:
+                        count: 5
+                        totalSubmittedQty: 250
+                        totalAcceptedQty: 250
+                        totalAmount: 625
+                    additionalProperties:
+                      type: object
+                      properties:
+                        count:
+                          type: integer
+                          description: Number of submissions with this status
+                        totalSubmittedQty:
+                          type: number
+                          description: Total quantity submitted for this status
+                        totalAcceptedQty:
+                          type: number
+                          description: Total quantity accepted for this status
+                        totalAmount:
+                          type: number
+                          format: float
+                          description: Total amount for this status
+                  userContext:
+                    type: object
+                    properties:
+                      role:
+                        $ref: "#/components/schemas/Role"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
