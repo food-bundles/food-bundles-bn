@@ -19,16 +19,20 @@ model Farmer {
 }
 
 model Restaurant {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   name      String
-  email     String    @unique
-  phone     String?   @unique
+  email     String   @unique
+  phone     String?  @unique
   location  String
   password  String
-  role      Role      @default(RESTAURANT)
-  createdAt DateTime  @default(now())
+  role      Role     @default(RESTAURANT)
+  createdAt DateTime @default(now())
+
+  // Relations
   orders    Order[]
   posSales  POSSale[]
+  Cart      Cart[]
+  checkouts CHECKOUT[] // Restaurant can have multiple checkouts
 }
 
 model FarmerSubmission {
@@ -82,16 +86,113 @@ model Product {
   farmerSubmissions FarmerSubmission[]
   orderItems        OrderItem[]
   admin             Admin              @relation(fields: [createdBy], references: [id])
+  CartItem          CartItem[]
+}
+
+// Cart schema model - Prisma Schema for Cart Management
+model Cart {
+  id           String     @id @default(uuid())
+  restaurantId String // Foreign key to Restaurant model
+  totalAmount  Float      @default(0) // Total amount of all items in cart
+  status       CartStatus @default(ACTIVE) // Cart status (ACTIVE, CHECKED_OUT, ABANDONED)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[] // One cart can have many cart items
+  checkout   CHECKOUT? // One cart can have one checkout when proceeding to checkout
+
+  // Indexes for better performance
+  @@index([restaurantId])
+  @@index([status])
+}
+
+// Cart Item model to store individual items in the cart
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String // Foreign key to Cart model
+  productId String // Foreign key to Product model
+  quantity  Float // Quantity of the product
+  unitPrice Float // Price per unit at the time of adding to cart
+  subtotal  Float // quantity * unitPrice
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Ensure unique product per cart (restaurant can't add same product multiple times)
+  @@unique([cartId, productId])
+  @@index([cartId])
+  @@index([productId])
+}
+
+// CHECKOUT schema model
+model CHECKOUT {
+  id            String        @id @default(uuid())
+  cartId        String        @unique
+  restaurantId  String
+  totalAmount   Float
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(PENDING)
+
+  billingName    String?
+  billingEmail   String?
+  billingPhone   String?
+  billingAddress String?
+
+  paymentReference String?
+  transactionId    String?
+
+  notes        String?
+  deliveryDate DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  paidAt    DateTime?
+
+  cart       Cart       @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+
+  // Owning side of relation
+  orderId String? @unique
+  order   Order?  @relation(name: "CHECKOUTToOrder", fields: [orderId], references: [id])
+
+  @@index([restaurantId])
+  @@index([paymentStatus])
+  @@index([paymentMethod])
 }
 
 model Order {
   id           String      @id @default(uuid())
+  checkoutId   String?     @unique
   restaurantId String
-  status       String
+  orderNumber  String      @unique
+  status       OrderStatus @default(PENDING)
   totalAmount  Float
-  createdAt    DateTime    @default(now())
-  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id])
-  orderItems   OrderItem[]
+
+  notes             String?
+  requestedDelivery DateTime?
+  estimatedDelivery DateTime?
+  actualDelivery    DateTime?
+
+  paymentMethod    PaymentMethod?
+  paymentStatus    PaymentStatus  @default(PENDING)
+  paymentReference String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Non-owning side — only relation name
+  checkout   CHECKOUT?   @relation(name: "CHECKOUTToOrder")
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+  orderItems OrderItem[]
+
+  @@index([restaurantId])
+  @@index([status])
+  @@index([orderNumber])
 }
 
 model OrderItem {
@@ -139,4 +240,41 @@ enum ProductCategory {
 enum ProductStatus {
   ACTIVE
   INACTIVE
+}
+
+// Cart status enum
+enum CartStatus {
+  ACTIVE // Cart is active and can be modified
+  CHECKED_OUT // Cart has been converted to an order
+  ABANDONED // Cart has been abandoned (optional for cleanup)
+}
+
+// Payment method enum
+enum PaymentMethod {
+  CASH
+  MOBILE_MONEY // PayPack for Rwanda
+  BANK_TRANSFER
+  CARD
+}
+
+// Payment status enum
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+// Order status enum
+enum OrderStatus {
+  PENDING // Order created, waiting for confirmation
+  CONFIRMED // Order confirmed, being prepared
+  PREPARING // Order is being prepared
+  READY // Order ready for pickup/delivery
+  IN_TRANSIT // Order out for delivery
+  DELIVERED // Order successfully delivered
+  CANCELLED // Order cancelled
+  REFUNDED // Order refunded
 }

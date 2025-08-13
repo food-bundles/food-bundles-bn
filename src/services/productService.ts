@@ -1,6 +1,6 @@
 import prisma from "../prisma";
 
-interface ProductData {
+export interface ProductData {
   productName: string;
   unitPrice: number;
   category: string;
@@ -188,15 +188,17 @@ export const updateProductService = async (
         productName: updateData.productName,
       }),
       ...(updateData.unitPrice !== undefined && {
-        unitPrice: updateData.unitPrice,
+        unitPrice: Number(updateData.unitPrice),
       }),
       ...(updateData.category !== undefined && {
         category: updateData.category as any,
       }),
-      ...(updateData.bonus !== undefined && { bonus: updateData.bonus }),
+      ...(updateData.bonus !== undefined && {
+        bonus: Number(updateData.bonus),
+      }),
       ...(updateData.sku !== undefined && { sku: updateData.sku }),
       ...(updateData.quantity !== undefined && {
-        quantity: updateData.quantity,
+        quantity: Number(updateData.quantity),
       }),
       ...(updateData.images !== undefined && { images: updateData.images }),
       ...(updateData.expiryDate !== undefined && {
@@ -397,6 +399,7 @@ export const createProductFromSubmissionService = async ({
 // };
 
 // Delete product
+
 export const deleteProductService = async (productId: string) => {
   // Check if product has any orders
   const productWithOrders = await prisma.product.findUnique({

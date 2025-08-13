@@ -9,6 +9,9 @@ import submissionsRoutes from "./submissionsRoutes";
 import adminsRoutes from "./adminsRoutes";
 import restaurantsRoutes from "./restaurantsRoutes";
 import farmersRoutes from "./farmersRoutes";
+import cartRoutes from "./cart.routes";
+import checkoutRoutes from "./checkout.routes";
+import orderRoutes from "./order.routes";
 
 const routes = Router();
 
@@ -18,6 +21,9 @@ routes.use("/restaurants", restaurantsRoutes);
 routes.use("/admins", adminsRoutes);
 routes.use("/submissions", submissionsRoutes);
 routes.use("/products", productRoutes);
+routes.use("/carts", cartRoutes);
+routes.use("/checkouts", checkoutRoutes);
+routes.use("/orders", orderRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);
