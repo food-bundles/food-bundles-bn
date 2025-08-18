@@ -6,6 +6,7 @@ import swaggerJSDoc from "swagger-jsdoc";
 import YAML from "yamljs";
 import routes from "./routes";
 import cookieParser from "cookie-parser";
+import { ENV } from "./config";
 
 const swaggerBaseDoc = YAML.load("./src/config/swagger.yaml");
 
@@ -22,7 +23,6 @@ const options = {
 
 const specs = swaggerJSDoc(options);
 
-dotenv.config();
 
 const app = express();
 
@@ -43,7 +43,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
-const PORT = process.env.PORT || 4000;
+const PORT = ENV.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
