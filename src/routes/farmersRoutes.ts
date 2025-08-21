@@ -1,8 +1,50 @@
 import { Router } from "express";
 import { UserController } from "../controllers/userController";
 import { Role } from "@prisma/client";
+import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import FarmerController from "../controllers/farmer.controller";
 
 const farmersRoutes = Router();
+
+// Get pending feedback submissions (farmers only)
+farmersRoutes.get(
+  "/pending-feedback",
+  isAuthenticated,
+  checkPermission(Role.FARMER),
+  FarmerController.getPendingFeedbackSubmissions
+);
+
+// Get farmer's feedback history (farmers only)
+farmersRoutes.get(
+  "/feedback-history",
+  isAuthenticated,
+  checkPermission(Role.FARMER),
+  FarmerController.getFarmerFeedbackHistory
+);
+
+// Get submissions awaiting feedback (aggregators/admins)
+farmersRoutes.get(
+  "/awaiting-feedback",
+  isAuthenticated,
+  checkPermission(Role.AGGREGATOR, Role.ADMIN),
+  FarmerController.getSubmissionsAwaitingFeedback
+);
+
+// Submit farmer feedback on a specific submission
+farmersRoutes.post(
+  "/:submissionId/feedback",
+  isAuthenticated,
+  checkPermission(Role.FARMER),
+  FarmerController.submitFarmerFeedback
+);
+
+// Update farmer feedback (before deadline)
+farmersRoutes.patch(
+  "/:submissionId/feedback",
+  isAuthenticated,
+  checkPermission(Role.FARMER),
+  FarmerController.updateFarmerFeedback
+);
 
 farmersRoutes.post("/", UserController.createFarmer);
 farmersRoutes.get("/", UserController.getAllFarmers);

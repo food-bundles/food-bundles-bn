@@ -69,7 +69,7 @@ export class UserController {
       if (isAdmin) {
         sms = "Admin created successfully";
       } else {
-        sms = "Food bundle created successfully";
+        sms = "AGGREGATOR created successfully";
       }
 
       res.status(201).json({

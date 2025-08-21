@@ -1,0 +1,350 @@
+import { Request, Response } from "express";
+import {
+  submitFarmerFeedbackService,
+  getPendingFeedbackSubmissionsService,
+  getFarmerFeedbackHistoryService,
+  updateFarmerFeedbackService,
+  type IFarmerFeedbackRequest,
+} from "../services/farmer.service";
+import { FarmerFeedbackStatus, Role } from "@prisma/client";
+import { PaginationService } from "../services/paginationService";
+import prisma from "../prisma";
+
+export default class FarmerController {
+  static submitFarmerFeedback = async (req: Request, res: Response) => {
+    try {
+      const { submissionId } = req.params;
+      const { feedbackStatus, notes, counterOffer, counterQty } = req.body;
+      const farmerId = (req as any).user.id;
+      const userRole = (req as any).user.role;
+
+      // Ensure only farmers can submit feedback
+      if (userRole !== Role.FARMER) {
+        return res.status(403).json({
+          success: false,
+          message: "Only farmers can submit feedback",
+        });
+      }
+
+      if (!feedbackStatus) {
+        return res.status(400).json({
+          success: false,
+          message: "Feedback status is required",
+        });
+      }
+
+      // Validate feedback status
+      const validStatuses: FarmerFeedbackStatus[] = [
+        "ACCEPTED",
+        "REJECTED",
+        "EXTENDED",
+      ];
+      if (!validStatuses.includes(feedbackStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid feedback status. Must be one of: ${validStatuses.join(
+            ", "
+          )}`,
+        });
+      }
+
+      const feedbackData: IFarmerFeedbackRequest = {
+        feedbackStatus,
+        notes,
+        counterOffer,
+        counterQty,
+      };
+
+      const result = await submitFarmerFeedbackService(
+        submissionId,
+        farmerId,
+        feedbackData
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Farmer feedback submitted successfully",
+        data: result,
+      });
+    } catch (error: any) {
+      const statusCode = error.message.includes("not found")
+        ? 404
+        : error.message.includes("only provide feedback")
+        ? 403
+        : error.message.includes("deadline")
+        ? 400
+        : 400;
+
+      res.status(statusCode).json({
+        success: false,
+        message: error.message || "Failed to submit farmer feedback",
+      });
+    }
+  };
+
+  // Get pending feedback submissions for farmer
+  static getPendingFeedbackSubmissions = async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const farmerId = (req as any).user.id;
+      const userRole = (req as any).user.role;
+
+      if (userRole !== Role.FARMER) {
+        return res.status(403).json({
+          success: false,
+          message: "Only farmers can access this endpoint",
+        });
+      }
+
+      const {
+        page = 1,
+        limit = 10,
+        sortBy = "verifiedAt",
+        sortOrder = "desc",
+      } = req.query;
+
+      const paginationQuery = PaginationService.validatePaginationParams(
+        page as string,
+        limit as string
+      );
+
+      const result = await getPendingFeedbackSubmissionsService(farmerId, {
+        page: paginationQuery.page,
+        limit: paginationQuery.limit,
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as "asc" | "desc",
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Pending feedback submissions retrieved successfully",
+        ...result,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to get pending feedback submissions",
+      });
+    }
+  };
+
+  // Get farmer's feedback history
+  static getFarmerFeedbackHistory = async (req: Request, res: Response) => {
+    try {
+      const farmerId = (req as any).user.id;
+      const userRole = (req as any).user.role;
+
+      if (userRole !== Role.FARMER) {
+        return res.status(403).json({
+          success: false,
+          message: "Only farmers can access this endpoint",
+        });
+      }
+
+      const {
+        page = 1,
+        limit = 10,
+        sortBy = "farmerFeedbackAt",
+        sortOrder = "desc",
+        feedbackStatus,
+      } = req.query;
+
+      // Validate feedback status filter if provided
+      if (feedbackStatus) {
+        const validStatuses: FarmerFeedbackStatus[] = [
+          "ACCEPTED",
+          "REJECTED",
+          "EXTENDED",
+        ];
+        if (!validStatuses.includes(feedbackStatus as FarmerFeedbackStatus)) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid feedback status filter. Must be one of: ${validStatuses.join(
+              ", "
+            )}`,
+          });
+        }
+      }
+
+      const paginationQuery = PaginationService.validatePaginationParams(
+        page as string,
+        limit as string
+      );
+
+      const result = await getFarmerFeedbackHistoryService(farmerId, {
+        page: paginationQuery.page,
+        limit: paginationQuery.limit,
+        sortBy: sortBy as string,
+        sortOrder: sortOrder as "asc" | "desc",
+        feedbackStatus: feedbackStatus as FarmerFeedbackStatus,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Farmer feedback history retrieved successfully",
+        ...result,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to get farmer feedback history",
+      });
+    }
+  };
+
+  // Update farmer feedback (before deadline)
+  static updateFarmerFeedback = async (req: Request, res: Response) => {
+    try {
+      const { submissionId } = req.params;
+      const { feedbackStatus, notes, counterOffer, counterQty } = req.body;
+      const farmerId = (req as any).user.id;
+      const userRole = (req as any).user.role;
+
+      if (userRole !== Role.FARMER) {
+        return res.status(403).json({
+          success: false,
+          message: "Only farmers can update feedback",
+        });
+      }
+
+      // Validate feedback status if provided
+      if (feedbackStatus) {
+        const validStatuses: FarmerFeedbackStatus[] = [
+          "ACCEPTED",
+          "REJECTED",
+          "EXTENDED",
+        ];
+        if (!validStatuses.includes(feedbackStatus)) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid feedback status. Must be one of: ${validStatuses.join(
+              ", "
+            )}`,
+          });
+        }
+      }
+
+      const feedbackData = {
+        feedbackStatus,
+        notes,
+        counterOffer,
+        counterQty,
+      };
+
+      const result = await updateFarmerFeedbackService(
+        submissionId,
+        farmerId,
+        feedbackData
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Farmer feedback updated successfully",
+        data: result,
+      });
+    } catch (error: any) {
+      const statusCode = error.message.includes("not found")
+        ? 404
+        : error.message.includes("only update feedback")
+        ? 403
+        : error.message.includes("deadline")
+        ? 400
+        : 400;
+
+      res.status(statusCode).json({
+        success: false,
+        message: error.message || "Failed to update farmer feedback",
+      });
+    }
+  };
+
+  // Get submissions requiring farmer feedback (for aggregators to track)
+  static getSubmissionsAwaitingFeedback = async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const user = (req as any).user;
+      const { page = 1, limit = 10 } = req.query;
+
+      // Only aggregators and admins can see this
+      if (user.role !== Role.AGGREGATOR && user.role !== Role.ADMIN) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied",
+        });
+      }
+
+      const paginationQuery = PaginationService.validatePaginationParams(
+        page as string,
+        limit as string
+      );
+
+      const skip = (paginationQuery.page - 1) * paginationQuery.limit;
+
+      let whereCondition: any = {
+        status: "VERIFIED",
+        farmerFeedbackStatus: "PENDING",
+        // Only show non-expired submissions
+        OR: [
+          { feedbackDeadline: null },
+          { feedbackDeadline: { gt: new Date() } },
+        ],
+      };
+
+      // Aggregators only see their own submissions
+      if (user.role === Role.AGGREGATOR) {
+        whereCondition.aggregatorId = user.id;
+      }
+
+      const totalCount = await prisma.farmerSubmission.count({
+        where: whereCondition,
+      });
+
+      const submissions = await prisma.farmerSubmission.findMany({
+        where: whereCondition,
+        include: {
+          farmer: {
+            select: {
+              id: true,
+              phone: true,
+              location: true,
+            },
+          },
+          aggregator: {
+            select: {
+              id: true,
+              username: true,
+            },
+          },
+        },
+        skip,
+        take: paginationQuery.limit,
+        orderBy: { verifiedAt: "desc" },
+      });
+
+      const totalPages = Math.ceil(totalCount / paginationQuery.limit);
+
+      res.status(200).json({
+        success: true,
+        message: "Submissions awaiting farmer feedback retrieved successfully",
+        data: submissions,
+        pagination: {
+          currentPage: paginationQuery.page,
+          totalPages,
+          totalCount,
+          hasNextPage: paginationQuery.page < totalPages,
+          hasPrevPage: paginationQuery.page > 1,
+          limit: paginationQuery.limit,
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to get submissions awaiting feedback",
+      });
+    }
+  };
+}

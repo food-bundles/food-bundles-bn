@@ -118,7 +118,7 @@ export const updateProductQuantityFromSubmissionService = async ({
             location: true,
           },
         },
-        foodBundle: {
+        aggregator: {
           select: {
             id: true,
             username: true,
@@ -239,7 +239,7 @@ export const createProductFromSubmissionService = async ({
           location: true,
         },
       },
-      foodBundle: {
+      aggregator: {
         select: {
           id: true,
           username: true,
@@ -318,7 +318,7 @@ export const createProductFromSubmissionService = async ({
             location: true,
           },
         },
-        foodBundle: {
+        aggregator: {
           select: {
             id: true,
             username: true,
@@ -528,7 +528,7 @@ export const getVerifiedSubmissionsService = async () => {
           location: true,
         },
       },
-      foodBundle: {
+      aggregator: {
         select: {
           id: true,
           username: true,
@@ -572,7 +572,7 @@ export const approveSubmissionService = async (submissionId: string) => {
           location: true,
         },
       },
-      foodBundle: {
+      aggregator: {
         select: {
           id: true,
           username: true,

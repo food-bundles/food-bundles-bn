@@ -8,22 +8,36 @@ datasource db {
 }
 
 model Farmer {
-  id          String             @id @default(uuid())
-  location    String
+  id    String  @id @default(uuid())
+  phone String? @unique
+  email String? @unique
+
+  location String
+  province String?
+  district String?
+  sector   String?
+  cell     String?
+  village  String?
+
   role        Role               @default(FARMER)
-  phone       String?            @unique
-  email       String?            @unique
   password    String?
   createdAt   DateTime           @default(now())
   submissions FarmerSubmission[]
 }
 
 model Restaurant {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  phone     String?  @unique
-  location  String
+  id    String  @id @default(uuid())
+  name  String
+  email String  @unique
+  phone String? @unique
+
+  location String
+  province String?
+  district String?
+  sector   String?
+  cell     String?
+  village  String?
+
   password  String
   role      Role     @default(RESTAURANT)
   createdAt DateTime @default(now())
@@ -36,35 +50,56 @@ model Restaurant {
 }
 
 model FarmerSubmission {
-  id                String           @id @default(uuid())
-  farmerId          String
-  productName       String
-  submittedQty      Float?
-  acceptedQty       Float?
-  totalAmount       Float?
-  status            SubmissionStatus @default(PENDING)
-  foodBundleId      String?
-  submittedAt       DateTime         @default(now())
-  verifiedAt        DateTime?
-  approvedAt        DateTime?
-  paidAt            DateTime?
-  acceptedPrice     Float?
-  approvedProductId String?
-  wishedPrice       Float?
-  approvedProduct   Product?         @relation(fields: [approvedProductId], references: [id])
-  farmer            Farmer           @relation(fields: [farmerId], references: [id])
-  foodBundle        Admin?           @relation("Foodbundle", fields: [foodBundleId], references: [id])
+  id                   String                @id @default(uuid())
+  farmerId             String
+  productName          String
+  submittedQty         Float?
+  acceptedQty          Float?
+  totalAmount          Float?
+  category             ProductCategory       @default(OTHER)
+  status               SubmissionStatus      @default(PENDING)
+  farmerFeedbackStatus FarmerFeedbackStatus? @default(PENDING)
+  farmerFeedbackAt     DateTime?
+  farmerFeedbackNotes  String?
+  farmerCounterOffer   Float? // If farmer wants different price
+  farmerCounterQty     Float? // If farmer wants different quantity
+  feedbackDeadline     DateTime? // Deadline for farmer response
+  aggregatorId         String?
+  submittedAt          DateTime              @default(now())
+  verifiedAt           DateTime?
+  approvedAt           DateTime?
+  paidAt               DateTime?
+  acceptedPrice        Float?
+  approvedProductId    String?
+  wishedPrice          Float?
+
+  province String?
+  district String?
+  sector   String?
+  cell     String?
+  village  String?
+
+  approvedProduct Product? @relation(fields: [approvedProductId], references: [id])
+  farmer          Farmer   @relation(fields: [farmerId], references: [id])
+  aggregator      Admin?   @relation("Aggregator", fields: [aggregatorId], references: [id])
 }
 
 model Admin {
-  id                    String             @id @default(uuid())
-  username              String
-  email                 String             @unique
-  password              String
-  role                  Role
-  createdAt             DateTime           @default(now())
-  phone                 String?            @unique
-  foodbundleAssignments FarmerSubmission[] @relation("Foodbundle")
+  id        String   @id @default(uuid())
+  username  String
+  email     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+  phone     String?  @unique
+
+  province String?
+  district String?
+  sector   String?
+  cell     String?
+  village  String?
+
+  aggregatorAssignments FarmerSubmission[] @relation("Aggregator")
   products              Product[]
 }
 
@@ -83,6 +118,11 @@ model Product {
   category          ProductCategory
   productName       String
   status            ProductStatus      @default(ACTIVE)
+  province          String?
+  district          String?
+  sector            String?
+  cell              String?
+  village           String?
   farmerSubmissions FarmerSubmission[]
   orderItems        OrderItem[]
   admin             Admin              @relation(fields: [createdBy], references: [id])
@@ -143,6 +183,13 @@ model CHECKOUT {
   billingPhone   String?
   billingAddress String?
 
+  deliveryProvince String?
+  deliveryDistrict String?
+  deliverySector   String?
+  deliveryCell     String?
+  deliveryVillage  String?
+  deliveryLocation String?
+
   paymentReference String?
   transactionId    String?
 
@@ -177,6 +224,13 @@ model Order {
   requestedDelivery DateTime?
   estimatedDelivery DateTime?
   actualDelivery    DateTime?
+
+  deliveryProvince String?
+  deliveryDistrict String?
+  deliverySector   String?
+  deliveryCell     String?
+  deliveryVillage  String?
+  deliveryLocation String?
 
   paymentMethod    PaymentMethod?
   paymentStatus    PaymentStatus  @default(PENDING)
@@ -218,7 +272,7 @@ enum Role {
   FARMER
   RESTAURANT
   ADMIN
-  FOOD_BUNDLE
+  AGGREGATOR
 }
 
 enum SubmissionStatus {
@@ -228,6 +282,13 @@ enum SubmissionStatus {
   PAID
 }
 
+enum FarmerFeedbackStatus {
+  PENDING // Farmer hasn't provided feedback yet
+  ACCEPTED // Farmer accepted the purchase terms
+  REJECTED // Farmer rejected the purchase terms
+  EXTENDED // Farmer requested extension/negotiation
+}
+
 enum ProductCategory {
   VEGETABLES
   FRUITS
@@ -235,6 +296,7 @@ enum ProductCategory {
   TUBERS
   LEGUMES
   HERBS_SPICES
+  OTHER
 }
 
 enum ProductStatus {

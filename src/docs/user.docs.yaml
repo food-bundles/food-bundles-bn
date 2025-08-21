@@ -10,7 +10,7 @@ components:
   schemas:
     Role:
       type: string
-      enum: [FARMER, RESTAURANT, ADMIN, FOOD_BUNDLE]
+      enum: [FARMER, RESTAURANT, ADMIN, AGGREGATOR]
       description: User role in the system
 
     # Farmer Schemas
@@ -297,7 +297,7 @@ components:
           description: Password for admin account (required)
         role:
           type: string
-          enum: [ADMIN, FOOD_BUNDLE]
+          enum: [ADMIN, AGGREGATOR]
           description: Admin role (required)
 
     UpdateAdminRequest:
@@ -316,7 +316,7 @@ components:
           description: New password for admin account
         role:
           type: string
-          enum: [ADMIN, FOOD_BUNDLE]
+          enum: [ADMIN, AGGREGATOR]
           description: Admin role
 
     # Authentication API Management Schemas
@@ -424,19 +424,25 @@ paths:
               restaurant_login:
                 summary: Restaurant login with email
                 value:
-                  email: "restaurant@example.com"
+                  email: "restaurant@food.rw"
                   password: "restaurant123"
                   userType: "restaurant"
+              aggregator_login:
+                summary: Aggregator login with email
+                value:
+                  email: "aggregator@food.rw"
+                  password: "aggregator123"
+                  userType: "aggregator"
               admin_login:
                 summary: Admin login
                 value:
-                  email: "admin@example.com"
+                  email: "admin@food.rw"
                   password: "admin123"
                   userType: "admin"
               auto_detect:
                 summary: Auto-detect user type
                 value:
-                  email: "user@example.com"
+                  email: "user@food.rw"
                   password: "password123"
       responses:
         200:
@@ -932,7 +938,7 @@ paths:
               $ref: "#/components/schemas/CreateAdminRequest"
       responses:
         201:
-          description: Admin/Food bundle created successfully
+          description: Admin/AGGREGATOR created successfully
           content:
             application/json:
               schema:
@@ -947,7 +953,7 @@ paths:
                       admin:
                         value: "Admin created successfully"
                       food_bundle:
-                        value: "Food bundle created successfully"
+                        value: "AGGREGATOR created successfully"
                   data:
                     $ref: "#/components/schemas/Admin"
         400:

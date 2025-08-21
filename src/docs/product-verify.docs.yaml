@@ -11,7 +11,7 @@ components:
 
     Role:
       type: string
-      enum: [FARMER, RESTAURANT, ADMIN, FOOD_BUNDLE]
+      enum: [FARMER, RESTAURANT, ADMIN, AGGREGATOR]
       description: User role in the system
 
     SortOrder:
@@ -38,23 +38,23 @@ components:
           nullable: true
           description: Farmer's email address
 
-    FoodBundleInfo:
+    AGGREGATORInfo:
       type: object
       properties:
         id:
           type: string
-          description: Unique food bundle identifier
+          description: Unique aggregator identifier
         username:
           type: string
-          description: Food bundle username
+          description: AGGREGATOR username
         phone:
           type: string
           nullable: true
-          description: Food bundle phone number
+          description: AGGREGATOR phone number
         email:
           type: string
           nullable: true
-          description: Food bundle email address
+          description: AGGREGATOR email address
 
     ApprovedProductInfo:
       type: object
@@ -108,7 +108,7 @@ components:
         farmerId:
           type: string
           description: ID of the farmer who made the submission
-        foodBundleId:
+        aggregatorId:
           type: string
           nullable: true
           description: ID of the food bundle that verified the submission
@@ -123,8 +123,8 @@ components:
           description: Timestamp when submission was verified
         farmer:
           $ref: "#/components/schemas/FarmerInfo"
-        foodBundle:
-          $ref: "#/components/schemas/FoodBundleInfo"
+        aggregator:
+          $ref: "#/components/schemas/AGGREGATORInfo"
         approvedProduct:
           $ref: "#/components/schemas/ApprovedProductInfo"
 
@@ -353,7 +353,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         404:
-          description: Submission or Food bundle not found
+          description: Submission or AGGREGATOR not found
           content:
             application/json:
               schema:
@@ -364,7 +364,7 @@ paths:
                     message: "Submission not found"
                 food_bundle_not_found:
                   value:
-                    message: "Food bundle not found"
+                    message: "AGGREGATOR not found"
         500:
           description: Internal server error
           content:

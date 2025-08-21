@@ -101,7 +101,7 @@ export async function handleUssdLogic({
       return "END Invalid input during registration.";
     }
 
-    // 2. Submit Product
+    // 2. Submit ProductC
     case "2": {
       session.mode = "submit";
 
@@ -235,6 +235,7 @@ export async function submitProductService(
     data: {
       farmerId: submissionData.farmerId,
       productName: submissionData.productName,
+      category: submissionData.category,
       submittedQty: submissionData.submittedQty,
       wishedPrice: submissionData.wishedPrice,
       status: "PENDING",

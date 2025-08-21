@@ -22,7 +22,7 @@ export const ussdHandler = async (req: Request, res: Response) => {
 export const submitProductController = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
-    const { productName, quantity, wishedPrice } = req.body;
+    const { productName, category, quantity, wishedPrice } = req.body;
 
     if (!productName || !quantity || !wishedPrice) {
       return res.status(400).json({
@@ -41,6 +41,7 @@ export const submitProductController = async (req: Request, res: Response) => {
     const submissionData: ProductSubmissionInput = {
       farmerId: userId,
       productName,
+      category,
       submittedQty: quantity,
       wishedPrice,
     };

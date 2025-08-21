@@ -8,6 +8,7 @@ components:
       type: object
       required:
         - productName
+        - category
         - quantity
         - wishedPrice
       properties:
@@ -23,6 +24,18 @@ components:
             - Banana
           description: Name of the product being submitted
           example: "Tomatoes"
+        category:
+          type: string
+          enum:
+            - VEGETABLES
+            - FRUITS
+            - GRAINS
+            - TUBERS
+            - LEGUMES
+            - HERBS_SPICES
+            - OTHER
+          description: Category of the product being submitted
+          example: "VEGETABLES"
         quantity:
           type: number.01
           description: Quantity in kilograms

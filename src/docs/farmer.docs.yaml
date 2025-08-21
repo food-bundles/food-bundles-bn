@@ -1,0 +1,432 @@
+# Add to src/docs/farmer.docs.yaml
+
+components:
+  schemas:
+    FarmerFeedbackStatus:
+      type: string
+      enum: [PENDING, ACCEPTED, REJECTED, EXTENDED]
+      description: Status of farmer feedback on purchase offer
+
+    FarmerFeedbackRequest:
+      type: object
+      required:
+        - feedbackStatus
+      properties:
+        feedbackStatus:
+          $ref: "#/components/schemas/FarmerFeedbackStatus"
+        notes:
+          type: string
+          description: Optional notes/comments from farmer
+          maxLength: 500
+        counterOffer:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Farmer's counter offer price per unit (required if status is EXTENDED)
+        counterQty:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Farmer's counter offer quantity (required if status is EXTENDED)
+
+    FarmerFeedbackUpdateRequest:
+      type: object
+      properties:
+        feedbackStatus:
+          $ref: "#/components/schemas/FarmerFeedbackStatus"
+        notes:
+          type: string
+          description: Updated notes/comments from farmer
+          maxLength: 500
+        counterOffer:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Updated counter offer price per unit
+        counterQty:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Updated counter offer quantity
+
+    FarmerSubmissionWithFeedback:
+      allOf:
+        - $ref: "#/components/schemas/FarmerSubmission"
+        - type: object
+          properties:
+            farmerFeedbackStatus:
+              $ref: "#/components/schemas/FarmerFeedbackStatus"
+              nullable: true
+            farmerFeedbackAt:
+              type: string
+              format: date-time
+              nullable: true
+              description: Timestamp when farmer provided feedback
+            farmerFeedbackNotes:
+              type: string
+              nullable: true
+              description: Farmer's feedback notes
+            farmerCounterOffer:
+              type: number
+              format: float
+              nullable: true
+              description: Farmer's counter offer price per unit
+            farmerCounterQty:
+              type: number
+              format: float
+              nullable: true
+              description: Farmer's counter offer quantity
+            feedbackDeadline:
+              type: string
+              format: date-time
+              nullable: true
+              description: Deadline for farmer to provide feedback
+
+    PaginatedFarmerSubmissions:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/FarmerSubmissionWithFeedback"
+        pagination:
+          $ref: "#/components/schemas/PaginationResponse"
+
+    PaginationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+paths:
+  /farmers/pending-feedback:
+    get:
+      tags:
+        - Farmer API Management
+      summary: Get pending feedback submissions for authenticated farmer
+      description: Retrieve all submissions that require farmer feedback (verified submissions awaiting farmer response)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: sortBy
+          in: query
+          description: Field to sort by
+          schema:
+            type: string
+            enum: [verifiedAt, submittedAt, productName]
+            default: verifiedAt
+        - name: sortOrder
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        200:
+          description: Pending feedback submissions retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedFarmerSubmissions"
+        403:
+          description: Access denied - only farmers can access this endpoint
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/feedback-history:
+    get:
+      tags:
+        - Farmer API Management
+      summary: Get farmer's feedback history
+      description: Retrieve all submissions where the authenticated farmer has provided feedback
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: sortBy
+          in: query
+          description: Field to sort by
+          schema:
+            type: string
+            enum: [farmerFeedbackAt, verifiedAt, submittedAt]
+            default: farmerFeedbackAt
+        - name: sortOrder
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: feedbackStatus
+          in: query
+          description: Filter by feedback status
+          schema:
+            $ref: "#/components/schemas/FarmerFeedbackStatus"
+      responses:
+        200:
+          description: Farmer feedback history retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedFarmerSubmissions"
+        400:
+          description: Invalid feedback status filter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Access denied - only farmers can access this endpoint
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/awaiting-feedback:
+    get:
+      tags:
+        - Farmer API Management
+      summary: Get submissions awaiting farmer feedback (Aggregators/Admins only)
+      description: Retrieve all verified submissions that are waiting for farmer feedback
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        200:
+          description: Submissions awaiting farmer feedback retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedFarmerSubmissions"
+        403:
+          description: Access denied - only aggregators and admins can access this endpoint
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/{submissionId}/feedback:
+    post:
+      tags:
+        - Farmer API Management
+      summary: Submit farmer feedback on a verified submission
+      description: Allow farmers to provide feedback (accept, reject, or negotiate) on their verified submissions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          description: ID of the submission to provide feedback on
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FarmerFeedbackRequest"
+            examples:
+              accept_offer:
+                summary: Accept the purchase offer
+                value:
+                  feedbackStatus: "ACCEPTED"
+                  notes: "I accept the offer as presented"
+              reject_offer:
+                summary: Reject the purchase offer
+                value:
+                  feedbackStatus: "REJECTED"
+                  notes: "The price is too low for current market conditions"
+              counter_offer:
+                summary: Make a counter offer
+                value:
+                  feedbackStatus: "EXTENDED"
+                  notes: "I would like to negotiate the terms"
+                  counterOffer: 850.00
+                  counterQty: 80.5
+      responses:
+        200:
+          description: Farmer feedback submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/FarmerSubmissionWithFeedback"
+        400:
+          description: Bad request - invalid feedback status, deadline passed, or validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Access denied - only farmers can submit feedback or feedback already submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      tags:
+        - Farmer API Management
+      summary: Update farmer feedback before deadline
+      description: Allow farmers to update their feedback on a submission before the feedback deadline expires
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          description: ID of the submission to update feedback on
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FarmerFeedbackUpdateRequest"
+            examples:
+              update_counter_offer:
+                summary: Update counter offer
+                value:
+                  counterOffer: 900.00
+                  counterQty: 85.0
+                  notes: "Updated my counter offer after market research"
+              change_to_accept:
+                summary: Change decision to accept
+                value:
+                  feedbackStatus: "ACCEPTED"
+                  notes: "After consideration, I accept the original offer"
+      responses:
+        200:
+          description: Farmer feedback updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/FarmerSubmissionWithFeedback"
+        400:
+          description: Bad request - invalid feedback status, deadline passed, or no feedback submitted yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Access denied - only farmers can update feedback on their own submissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
