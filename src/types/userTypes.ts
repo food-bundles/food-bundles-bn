@@ -81,7 +81,7 @@ export interface IPaginationOptions {
 
 export interface JwtPayload {
   id: string;
-  role: Role;
+  // role: Role;
   iat?: number;
   exp?: number;
 }

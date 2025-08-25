@@ -346,7 +346,6 @@ export class UserController {
       const user = result.user;
       const payload: JwtPayload = {
         id: user.id,
-        role: user.role as Role,
       };
 
       const token = generateToken(payload);
@@ -359,7 +358,6 @@ export class UserController {
       res.status(200).json({
         success: true,
         message: "Login successful",
-        token: token,
       });
     } catch (error: any) {
       res.status(401).json({
