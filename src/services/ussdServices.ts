@@ -1,19 +1,85 @@
 import prisma from "../prisma";
-import { ProductSubmissionInput } from "../types/productTypes";
-import { ISessionData, IUssdRequest } from "../types/userTypes";
+import {
+  ProductSubmissionInput,
+  ISessionData,
+  IUssdRequest,
+} from "../types/productTypes";
 import { comparePassword, hashPassword } from "../utils/password";
+import { LocationValidationService } from "./location.service";
 
 let ussdSessions: Record<string, ISessionData> = {};
 
-const products = [
-  "Tomatoes",
-  "Onions",
-  "Maize",
-  "Potatoes",
-  "Cassava",
-  "Irish Potatoes",
-  "Banana",
-];
+// Get products from database
+async function getProductsFromDatabase(): Promise<string[]> {
+  try {
+    const products = await prisma.product.findMany({
+      where: { status: "ACTIVE" },
+      select: { productName: true },
+      distinct: ["productName"],
+    });
+    return products.map((p) => p.productName);
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    // Fallback to hardcoded list
+    return [
+      "Tomatoes",
+      "Onions",
+      "Maize",
+      "Potatoes",
+      "Cassava",
+      "Irish Potatoes",
+      "Banana",
+    ];
+  }
+}
+
+// Location pagination helper
+function paginateLocationList(
+  items: string[],
+  page: number,
+  limit: number = 8
+) {
+  const startIndex = (page - 1) * limit;
+  const endIndex = startIndex + limit;
+  const paginatedItems = items.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(items.length / limit);
+
+  return {
+    items: paginatedItems,
+    currentPage: page,
+    totalPages,
+    hasNext: page < totalPages,
+    hasPrev: page > 1,
+  };
+}
+
+// Build location menu with pagination
+function buildLocationMenu(
+  items: string[],
+  page: number,
+  title: string,
+  backOption?: string
+): string {
+  const paginated = paginateLocationList(items, page);
+  let menu = `CON ${title}:\n`;
+
+  paginated.items.forEach((item, index) => {
+    const itemNumber = (paginated.currentPage - 1) * 8 + index + 1;
+    menu += `${itemNumber}. ${item}\n`;
+  });
+
+  // Add navigation options
+  let navOptions: string[] = [];
+  if (paginated.hasPrev) navOptions.push("8. Previous");
+  if (paginated.hasNext) navOptions.push("9. Next");
+  if (backOption) navOptions.push("0. Back");
+
+  if (navOptions.length > 0) {
+    menu += navOptions.join("\n");
+  }
+
+  return menu;
+}
 
 export async function handleUssdLogic({
   sessionId,
@@ -21,7 +87,6 @@ export async function handleUssdLogic({
   text,
 }: IUssdRequest): Promise<string> {
   const parts = text.split("*");
-
   const session = ussdSessions[sessionId] || {};
   ussdSessions[sessionId] = session;
 
@@ -45,17 +110,305 @@ export async function handleUssdLogic({
         return "END You are already registered.";
       }
 
+      // Location selection flow
       if (parts.length === 1) {
-        return "CON Enter your location:";
+        session.locationStep = "province";
+        session.locationPage = 1;
+        const provinces = LocationValidationService.getAllProvinces();
+        return buildLocationMenu(provinces, 1, "Select your Province");
       }
 
-      if (parts.length === 2) {
-        session.location = parts[1];
-        return "CON Create a 4-digit PIN:";
+      // Handle location navigation and selection
+      if (session.locationStep === "province") {
+        const provinces = LocationValidationService.getAllProvinces();
+        const currentPage = session.locationPage || 1;
+
+        if (parts[1] === "9" && currentPage < Math.ceil(provinces.length / 8)) {
+          // Next page
+          session.locationPage = currentPage + 1;
+          return buildLocationMenu(
+            provinces,
+            session.locationPage,
+            "Select your Province"
+          );
+        }
+
+        if (parts[1] === "8" && currentPage > 1) {
+          // Previous page
+          session.locationPage = currentPage - 1;
+          return buildLocationMenu(
+            provinces,
+            session.locationPage,
+            "Select your Province"
+          );
+        }
+
+        // Province selection
+        const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
+        if (selectedIndex >= 0 && selectedIndex < provinces.length) {
+          session.selectedProvince = provinces[selectedIndex];
+          session.locationStep = "district";
+          session.locationPage = 1;
+
+          const districts = LocationValidationService.getDistrictsByProvince(
+            session.selectedProvince
+          );
+          return buildLocationMenu(
+            districts,
+            1,
+            "Select your District",
+            "Back to Province"
+          );
+        }
+
+        return "CON Invalid selection. Please try again.";
       }
 
-      if (parts.length === 3) {
-        const password = parts[2];
+      if (session.locationStep === "district") {
+        if (parts[1] === "0") {
+          // Back to province
+          session.locationStep = "province";
+          session.locationPage = 1;
+          const provinces = LocationValidationService.getAllProvinces();
+          return buildLocationMenu(provinces, 1, "Select your Province");
+        }
+
+        const districts = LocationValidationService.getDistrictsByProvince(
+          session.selectedProvince!
+        );
+        const currentPage = session.locationPage || 1;
+
+        if (parts[1] === "9" && currentPage < Math.ceil(districts.length / 8)) {
+          session.locationPage = currentPage + 1;
+          return buildLocationMenu(
+            districts,
+            session.locationPage,
+            "Select your District",
+            "Back to Province"
+          );
+        }
+
+        if (parts[1] === "8" && currentPage > 1) {
+          session.locationPage = currentPage - 1;
+          return buildLocationMenu(
+            districts,
+            session.locationPage,
+            "Select your District",
+            "Back to Province"
+          );
+        }
+
+        const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
+        if (selectedIndex >= 0 && selectedIndex < districts.length) {
+          session.selectedDistrict = districts[selectedIndex];
+          session.locationStep = "sector";
+          session.locationPage = 1;
+
+          const sectors = LocationValidationService.getSectorsByDistrict(
+            session.selectedProvince!,
+            session.selectedDistrict
+          );
+          return buildLocationMenu(
+            sectors,
+            1,
+            "Select your Sector",
+            "Back to District"
+          );
+        }
+
+        return "CON Invalid selection. Please try again.";
+      }
+
+      if (session.locationStep === "sector") {
+        if (parts[1] === "0") {
+          // Back to district
+          session.locationStep = "district";
+          session.locationPage = 1;
+          const districts = LocationValidationService.getDistrictsByProvince(
+            session.selectedProvince!
+          );
+          return buildLocationMenu(
+            districts,
+            1,
+            "Select your District",
+            "Back to Province"
+          );
+        }
+
+        const sectors = LocationValidationService.getSectorsByDistrict(
+          session.selectedProvince!,
+          session.selectedDistrict!
+        );
+        const currentPage = session.locationPage || 1;
+
+        if (parts[1] === "9" && currentPage < Math.ceil(sectors.length / 8)) {
+          session.locationPage = currentPage + 1;
+          return buildLocationMenu(
+            sectors,
+            session.locationPage,
+            "Select your Sector",
+            "Back to District"
+          );
+        }
+
+        if (parts[1] === "8" && currentPage > 1) {
+          session.locationPage = currentPage - 1;
+          return buildLocationMenu(
+            sectors,
+            session.locationPage,
+            "Select your Sector",
+            "Back to District"
+          );
+        }
+
+        const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
+        if (selectedIndex >= 0 && selectedIndex < sectors.length) {
+          session.selectedSector = sectors[selectedIndex];
+          session.locationStep = "cell";
+          session.locationPage = 1;
+
+          const cells = LocationValidationService.getCellsBySector(
+            session.selectedProvince!,
+            session.selectedDistrict!,
+            session.selectedSector
+          );
+          return buildLocationMenu(
+            cells,
+            1,
+            "Select your Cell",
+            "Back to Sector"
+          );
+        }
+
+        return "CON Invalid selection. Please try again.";
+      }
+
+      if (session.locationStep === "cell") {
+        if (parts[1] === "0") {
+          // Back to sector
+          session.locationStep = "sector";
+          session.locationPage = 1;
+          const sectors = LocationValidationService.getSectorsByDistrict(
+            session.selectedProvince!,
+            session.selectedDistrict!
+          );
+          return buildLocationMenu(
+            sectors,
+            1,
+            "Select your Sector",
+            "Back to District"
+          );
+        }
+
+        const cells = LocationValidationService.getCellsBySector(
+          session.selectedProvince!,
+          session.selectedDistrict!,
+          session.selectedSector!
+        );
+        const currentPage = session.locationPage || 1;
+
+        if (parts[1] === "9" && currentPage < Math.ceil(cells.length / 8)) {
+          session.locationPage = currentPage + 1;
+          return buildLocationMenu(
+            cells,
+            session.locationPage,
+            "Select your Cell",
+            "Back to Sector"
+          );
+        }
+
+        if (parts[1] === "8" && currentPage > 1) {
+          session.locationPage = currentPage - 1;
+          return buildLocationMenu(
+            cells,
+            session.locationPage,
+            "Select your Cell",
+            "Back to Sector"
+          );
+        }
+
+        const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
+        if (selectedIndex >= 0 && selectedIndex < cells.length) {
+          session.selectedCell = cells[selectedIndex];
+          session.locationStep = "village";
+          session.locationPage = 1;
+
+          const villages = LocationValidationService.getVillagesByCell(
+            session.selectedProvince!,
+            session.selectedDistrict!,
+            session.selectedSector!,
+            session.selectedCell
+          );
+          return buildLocationMenu(
+            villages,
+            1,
+            "Select your Village",
+            "Back to Cell"
+          );
+        }
+
+        return "CON Invalid selection. Please try again.";
+      }
+
+      if (session.locationStep === "village") {
+        if (parts[1] === "0") {
+          // Back to cell
+          session.locationStep = "cell";
+          session.locationPage = 1;
+          const cells = LocationValidationService.getCellsBySector(
+            session.selectedProvince!,
+            session.selectedDistrict!,
+            session.selectedSector!
+          );
+          return buildLocationMenu(
+            cells,
+            1,
+            "Select your Cell",
+            "Back to Sector"
+          );
+        }
+
+        const villages = LocationValidationService.getVillagesByCell(
+          session.selectedProvince!,
+          session.selectedDistrict!,
+          session.selectedSector!,
+          session.selectedCell!
+        );
+        const currentPage = session.locationPage || 1;
+
+        if (parts[1] === "9" && currentPage < Math.ceil(villages.length / 8)) {
+          session.locationPage = currentPage + 1;
+          return buildLocationMenu(
+            villages,
+            session.locationPage,
+            "Select your Village",
+            "Back to Cell"
+          );
+        }
+
+        if (parts[1] === "8" && currentPage > 1) {
+          session.locationPage = currentPage - 1;
+          return buildLocationMenu(
+            villages,
+            session.locationPage,
+            "Select your Village",
+            "Back to Cell"
+          );
+        }
+
+        const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
+        if (selectedIndex >= 0 && selectedIndex < villages.length) {
+          session.selectedVillage = villages[selectedIndex];
+          session.locationStep = "completed";
+          return "CON Create a 4-digit PIN:";
+        }
+
+        return "CON Invalid selection. Please try again.";
+      }
+
+      // PIN creation and confirmation
+      if (session.locationStep === "completed" && parts.length === 2) {
+        const password = parts[1];
 
         if (!/^\d{4}$/.test(password)) {
           delete ussdSessions[sessionId];
@@ -66,8 +419,8 @@ export async function handleUssdLogic({
         return "CON Confirm your 4-digit PIN:";
       }
 
-      if (parts.length === 4) {
-        const confirmPassword = parts[3];
+      if (session.locationStep === "completed" && parts.length === 3) {
+        const confirmPassword = parts[2];
 
         if (!/^\d{4}$/.test(confirmPassword)) {
           delete ussdSessions[sessionId];
@@ -80,12 +433,31 @@ export async function handleUssdLogic({
         }
 
         try {
+          // Validate complete location hierarchy
+          const locationValidation =
+            LocationValidationService.validateLocationHierarchy({
+              province: session.selectedProvince!,
+              district: session.selectedDistrict!,
+              sector: session.selectedSector!,
+              cell: session.selectedCell!,
+              village: session.selectedVillage!,
+            });
+
+          if (!locationValidation.isValid) {
+            delete ussdSessions[sessionId];
+            return "END Location validation failed. Please try again.";
+          }
+
           let hashedPassword = await hashPassword(session.password);
           await prisma.farmer.create({
             data: {
               phone: phoneNumber,
-              location: session.location || "UNKNOWN",
               password: hashedPassword,
+              province: session.selectedProvince!,
+              district: session.selectedDistrict!,
+              sector: session.selectedSector!,
+              cell: session.selectedCell!,
+              village: session.selectedVillage!,
             },
           });
 
@@ -101,7 +473,7 @@ export async function handleUssdLogic({
       return "END Invalid input during registration.";
     }
 
-    // 2. Submit ProductC
+    // 2. Submit Product
     case "2": {
       session.mode = "submit";
 
@@ -114,23 +486,58 @@ export async function handleUssdLogic({
       }
 
       if (parts.length === 1) {
-        return `CON Select a product:
-1. Tomatoes
-2. Onions
-3. Maize
-4. Potatoes
-5. Cassava
-6. Irish Potatoes
-7. Banana`;
+        session.productPage = 1;
+        const products = await getProductsFromDatabase();
+
+        if (products.length <= 8) {
+          // Show all products without pagination
+          let menu = "CON Select a product:\n";
+          products.forEach((product, index) => {
+            menu += `${index + 1}. ${product}\n`;
+          });
+          return menu;
+        } else {
+          // Use pagination
+          return buildLocationMenu(products, 1, "Select a product");
+        }
       }
 
       if (parts.length === 2) {
-        const index = parseInt(parts[1]) - 1;
-        if (index < 0 || index >= products.length) {
-          return "END Invalid product selection. Please try again.";
+        const products = await getProductsFromDatabase();
+        const currentPage = session.productPage || 1;
+
+        // Handle pagination for products
+        if (products.length > 8) {
+          if (
+            parts[1] === "9" &&
+            currentPage < Math.ceil(products.length / 8)
+          ) {
+            session.productPage = currentPage + 1;
+            return buildLocationMenu(
+              products,
+              session.productPage,
+              "Select a product"
+            );
+          }
+
+          if (parts[1] === "8" && currentPage > 1) {
+            session.productPage = currentPage - 1;
+            return buildLocationMenu(
+              products,
+              session.productPage,
+              "Select a product"
+            );
+          }
         }
-        session.selectedProduct = products[index];
-        return "CON Enter quantity in kg:";
+
+        // Product selection
+        const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
+        if (selectedIndex >= 0 && selectedIndex < products.length) {
+          session.selectedProduct = products[selectedIndex];
+          return "CON Enter quantity in kg:";
+        }
+
+        return "END Invalid product selection. Please try again.";
       }
 
       if (parts.length === 3) {
@@ -144,6 +551,7 @@ export async function handleUssdLogic({
         session.quantity = quantity;
         return "CON Enter your wished price per kg (RWF):";
       }
+
       if (parts.length === 4) {
         const wishedPrice = parts[3];
 
@@ -180,6 +588,11 @@ export async function handleUssdLogic({
               productName: session.selectedProduct!,
               submittedQty: parseFloat(session.quantity!),
               wishedPrice: parseFloat(session.wishedPrice!),
+              province: farmer.province,
+              district: farmer.district,
+              sector: farmer.sector,
+              cell: farmer.cell,
+              village: farmer.village,
             },
           });
 
@@ -205,10 +618,13 @@ export async function handleUssdLogic({
 export async function submitProductService(
   submissionData: ProductSubmissionInput
 ) {
+  // Get valid products from database
+  const validProducts = await getProductsFromDatabase();
+
   // Validate product name
-  if (!products.includes(submissionData.productName)) {
+  if (!validProducts.includes(submissionData.productName)) {
     throw new Error(
-      `Invalid product. Valid products are: ${products.join(", ")}`
+      `Invalid product. Valid products are: ${validProducts.join(", ")}`
     );
   }
 
@@ -221,16 +637,54 @@ export async function submitProductService(
     throw new Error("Price must be greater than 0");
   }
 
-  // Check if farmer exists
-  const farmerExists = await prisma.farmer.findUnique({
+  // Check if farmer exists and get their location data
+  const farmer = await prisma.farmer.findUnique({
     where: { id: submissionData.farmerId },
+    select: {
+      id: true,
+      province: true,
+      district: true,
+      sector: true,
+      cell: true,
+      village: true,
+    },
   });
 
-  if (!farmerExists) {
+  if (!farmer) {
     throw new Error("Farmer not found");
   }
 
-  // Create submission
+  // Validate farmer's location data
+  if (
+    !submissionData.province ||
+    !submissionData.district ||
+    !submissionData.sector ||
+    !submissionData.cell ||
+    !submissionData.village
+  ) {
+    throw new Error(
+      "submissionData location data is incomplete. Please update your profile."
+    );
+  }
+
+  const locationValidation =
+    LocationValidationService.validateLocationHierarchy({
+      province: submissionData.province,
+      district: submissionData.district,
+      sector: submissionData.sector,
+      cell: submissionData.cell,
+      village: submissionData.village,
+    });
+
+  if (!locationValidation.isValid) {
+    throw new Error(
+      `Farmer location validation failed: ${locationValidation.errors.join(
+        ", "
+      )}`
+    );
+  }
+
+  // Create submission with farmer's location data
   const submission = await prisma.farmerSubmission.create({
     data: {
       farmerId: submissionData.farmerId,
@@ -239,13 +693,22 @@ export async function submitProductService(
       submittedQty: submissionData.submittedQty,
       wishedPrice: submissionData.wishedPrice,
       status: "PENDING",
+      province: submissionData.province,
+      district: submissionData.district,
+      sector: submissionData.sector,
+      cell: submissionData.cell,
+      village: submissionData.village,
     },
     include: {
       farmer: {
         select: {
           id: true,
           phone: true,
-          location: true,
+          province: true,
+          district: true,
+          sector: true,
+          cell: true,
+          village: true,
         },
       },
     },

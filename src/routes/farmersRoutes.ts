@@ -22,14 +22,6 @@ farmersRoutes.get(
   FarmerController.getFarmerFeedbackHistory
 );
 
-// Get submissions awaiting feedback (aggregators/admins)
-farmersRoutes.get(
-  "/awaiting-feedback",
-  isAuthenticated,
-  checkPermission(Role.AGGREGATOR, Role.ADMIN),
-  FarmerController.getSubmissionsAwaitingFeedback
-);
-
 // Submit farmer feedback on a specific submission
 farmersRoutes.post(
   "/:submissionId/feedback",

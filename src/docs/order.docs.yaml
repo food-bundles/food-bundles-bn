@@ -135,8 +135,6 @@ components:
           type: string
         phone:
           type: string
-        location:
-          type: string
 
     CheckoutInfo:
       type: object

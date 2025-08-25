@@ -12,12 +12,11 @@ model Farmer {
   phone String? @unique
   email String? @unique
 
-  location String
-  province String?
-  district String?
-  sector   String?
-  cell     String?
-  village  String?
+  province String
+  district String
+  sector   String
+  cell     String
+  village  String
 
   role        Role               @default(FARMER)
   password    String?
@@ -31,12 +30,11 @@ model Restaurant {
   email String  @unique
   phone String? @unique
 
-  location String
-  province String?
-  district String?
-  sector   String?
-  cell     String?
-  village  String?
+  province String
+  district String
+  sector   String
+  cell     String
+  village  String
 
   password  String
   role      Role     @default(RESTAURANT)
@@ -73,11 +71,11 @@ model FarmerSubmission {
   approvedProductId    String?
   wishedPrice          Float?
 
-  province String?
-  district String?
-  sector   String?
-  cell     String?
-  village  String?
+  province String
+  district String
+  sector   String
+  cell     String
+  village  String
 
   approvedProduct Product? @relation(fields: [approvedProductId], references: [id])
   farmer          Farmer   @relation(fields: [farmerId], references: [id])
@@ -93,11 +91,11 @@ model Admin {
   createdAt DateTime @default(now())
   phone     String?  @unique
 
-  province String?
-  district String?
-  sector   String?
-  cell     String?
-  village  String?
+  province String
+  district String
+  sector   String
+  cell     String
+  village  String
 
   aggregatorAssignments FarmerSubmission[] @relation("Aggregator")
   products              Product[]
@@ -116,7 +114,7 @@ model Product {
   sku               String             @unique
   updatedAt         DateTime           @updatedAt
   category          ProductCategory
-  productName       String
+  productName       String             @unique
   status            ProductStatus      @default(ACTIVE)
   province          String?
   district          String?

@@ -5,13 +5,13 @@ import {
   IPaginationOptions,
 } from "../types/productVerifyTypes";
 import { PaginationService } from "./paginationService";
-import { sendMessage } from "../utils/sms.utility";
 
 export const purchaseProductService = async (
   submissionId: string,
   acceptedQty: number,
   acceptedPrice: number,
-  aggregatorId: string
+  aggregatorId: string,
+  feedbackDeadline?: Date
 ) => {
   const existingSubmission = await prisma.farmerSubmission.findUnique({
     where: { id: submissionId },
@@ -20,7 +20,6 @@ export const purchaseProductService = async (
         select: {
           id: true,
           phone: true,
-          location: true,
         },
       },
     },
@@ -52,6 +51,7 @@ export const purchaseProductService = async (
     data: {
       acceptedQty,
       acceptedPrice,
+      feedbackDeadline: feedbackDeadline ? feedbackDeadline : null,
       totalAmount,
       aggregatorId,
       status: "VERIFIED",
@@ -62,7 +62,6 @@ export const purchaseProductService = async (
         select: {
           id: true,
           phone: true,
-          location: true,
         },
       },
       aggregator: {
@@ -74,16 +73,6 @@ export const purchaseProductService = async (
     },
   });
 
-  // Send notification to farmer
-  //   sendMessage(
-  //     `🌾 ${existingSubmission.productName} verified!
-  // Accepted: ${acceptedQty}kg for ${acceptedPrice}RWF/kg
-  // Total: ${acceptedQty * acceptedPrice}RWF
-  // Reply: ACCEPT / REJECT / EXTEND
-  //   `.trim(),
-  //     existingSubmission.farmer.phone!
-  //   );
-
   return updatedSubmission;
 };
 
@@ -91,7 +80,8 @@ export const updateSubmissionService = async (
   submissionId: string,
   acceptedQty: number,
   acceptedPrice: number,
-  aggregatorId: string
+  aggregatorId: string,
+  feedbackDeadline?: Date
 ) => {
   const existingSubmission = await prisma.farmerSubmission.findUnique({
     where: { id: submissionId },
@@ -116,6 +106,7 @@ export const updateSubmissionService = async (
     data: {
       acceptedQty,
       acceptedPrice,
+      feedbackDeadline: feedbackDeadline ? feedbackDeadline : null,
       totalAmount,
       verifiedAt: new Date(),
     },
@@ -124,7 +115,6 @@ export const updateSubmissionService = async (
         select: {
           id: true,
           phone: true,
-          location: true,
         },
       },
       aggregator: {
@@ -163,7 +153,6 @@ export const clearSubmissionService = async (submissionId: string) => {
         select: {
           id: true,
           phone: true,
-          location: true,
         },
       },
     },
@@ -178,7 +167,6 @@ const getIncludeConfig = (userRole: Role) => {
       select: {
         id: true,
         phone: true,
-        location: true,
         email: true,
       },
     },
@@ -212,7 +200,7 @@ const getIncludeConfig = (userRole: Role) => {
 };
 
 // Get filter conditions based on user role
-const getFilterConditions = (
+const getFilterConditions = async (
   userId: string,
   userRole: Role,
   options?: IPaginationOptions
@@ -225,7 +213,30 @@ const getFilterConditions = (
       whereCondition.farmerId = userId;
       break;
     case Role.AGGREGATOR:
-      whereCondition.aggregatorId = userId;
+      // Get aggregator's location details
+      const aggregator = await prisma.admin.findUnique({
+        where: { id: userId },
+        select: {
+          province: true,
+          district: true,
+        },
+      });
+
+      if (!aggregator) {
+        throw new Error("Aggregator not found");
+      }
+
+      // Filter submissions by aggregator's province and district
+      whereCondition.AND = [
+        { province: aggregator.province },
+        { district: aggregator.district },
+        {
+          OR: [
+            { aggregatorId: userId }, // Submissions already assigned to this aggregator
+            { aggregatorId: null }, // Unassigned submissions in their location
+          ],
+        },
+      ];
       break;
     case Role.ADMIN:
       // Admin can see all submissions - no additional filter needed
@@ -267,7 +278,8 @@ export const getAllSubmissionsService = async ({
   } = { ...paginationParams, ...options };
 
   const skip = (page - 1) * limit;
-  const whereCondition = getFilterConditions(userId, userRole, options);
+  // FIXED: Added await here
+  const whereCondition = await getFilterConditions(userId, userRole, options);
   const includeConfig = getIncludeConfig(userRole);
 
   // Get total count for pagination
@@ -321,7 +333,7 @@ export const getSubmissionByIdService = async (
     throw new Error("Submission not found");
   }
 
-  // Role-based access control
+  // Role-based access control for AGGREGATOR - check location-based access
   switch (userRole) {
     case Role.FARMER:
       if (submission.farmerId !== userId) {
@@ -331,10 +343,29 @@ export const getSubmissionByIdService = async (
       }
       break;
     case Role.AGGREGATOR:
-      // AGGREGATOR can see submissions they're assigned to or unassigned ones
-      if (submission.aggregatorId && submission.aggregatorId !== userId) {
+      // Check if aggregator has location-based access to this submission
+      const aggregator = await prisma.admin.findUnique({
+        where: { id: userId },
+        select: {
+          province: true,
+          district: true,
+        },
+      });
+
+      if (!aggregator) {
+        throw new Error("Aggregator not found");
+      }
+
+      // Check if submission is in aggregator's location or assigned to them
+      const hasLocationAccess =
+        submission.province === aggregator.province &&
+        submission.district === aggregator.district;
+
+      const isAssigned = submission.aggregatorId === userId;
+
+      if (!hasLocationAccess && !isAssigned) {
         throw new Error(
-          "Access denied: You can only view submissions assigned to you"
+          "Access denied: You can only view submissions in your location or assigned to you"
         );
       }
       break;
@@ -376,7 +407,8 @@ export const getSubmissionStatsService = async (
   userId: string,
   userRole: Role
 ) => {
-  const whereCondition = getFilterConditions(userId, userRole);
+  // FIXED: Added await here
+  const whereCondition = await getFilterConditions(userId, userRole);
 
   const stats = await prisma.farmerSubmission.groupBy({
     by: ["status"],

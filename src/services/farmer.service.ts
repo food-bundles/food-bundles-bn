@@ -1,7 +1,6 @@
 import { FarmerFeedbackStatus, SubmissionStatus } from "@prisma/client";
 import { IPaginationOptions } from "../types/productVerifyTypes";
 import { PaginationService } from "./paginationService";
-import { sendMessage } from "../utils/sms.utility";
 import prisma from "../prisma";
 
 // Interface for farmer feedback request
@@ -25,7 +24,6 @@ export const submitFarmerFeedbackService = async (
         select: {
           id: true,
           phone: true,
-          location: true,
         },
       },
       aggregator: {
@@ -89,16 +87,16 @@ export const submitFarmerFeedbackService = async (
     data: {
       farmerFeedbackStatus: feedbackData.feedbackStatus,
       farmerFeedbackAt: new Date(),
-      farmerFeedbackNotes: feedbackData.notes,
-      farmerCounterOffer: feedbackData.counterOffer,
-      farmerCounterQty: feedbackData.counterQty,
-      // Update main status based on feedback
-      status:
+      farmerFeedbackNotes:
+        feedbackData.feedbackStatus === "ACCEPTED" ? null : feedbackData.notes,
+      farmerCounterOffer:
         feedbackData.feedbackStatus === "ACCEPTED"
-          ? "APPROVED"
-          : feedbackData.feedbackStatus === "REJECTED"
-          ? "PENDING"
-          : "VERIFIED", // EXTENDED keeps it VERIFIED for negotiation
+          ? existingSubmission.acceptedPrice
+          : feedbackData.counterOffer,
+      farmerCounterQty:
+        feedbackData.feedbackStatus === "ACCEPTED"
+          ? existingSubmission.acceptedQty
+          : feedbackData.counterQty,
       approvedAt:
         feedbackData.feedbackStatus === "ACCEPTED" ? new Date() : null,
     },
@@ -107,7 +105,6 @@ export const submitFarmerFeedbackService = async (
         select: {
           id: true,
           phone: true,
-          location: true,
         },
       },
       aggregator: {
@@ -142,9 +139,6 @@ export const submitFarmerFeedbackService = async (
         if (feedbackData.notes) message += `Notes: ${feedbackData.notes}`;
         break;
     }
-
-    // Uncomment to send SMS
-    // sendMessage(message.trim(), existingSubmission.aggregator.phone);
   }
 
   return updatedSubmission;
@@ -308,19 +302,43 @@ export const updateFarmerFeedbackService = async (
     throw new Error("Feedback deadline has passed, cannot update");
   }
 
+  // Validate feedback data for counter offer
+  if (
+    existingSubmission.submittedQty &&
+    feedbackData.counterQty &&
+    existingSubmission.submittedQty < feedbackData.counterQty
+  ) {
+    throw new Error(
+      `Counter offer quantity ${feedbackData.counterQty} cannot be greater than submitted quantity ${existingSubmission.submittedQty}`
+    );
+  }
+
   const updatedSubmission = await prisma.farmerSubmission.update({
     where: { id: submissionId },
     data: {
       ...(feedbackData.feedbackStatus && {
         farmerFeedbackStatus: feedbackData.feedbackStatus,
+        approvedAt:
+          feedbackData.feedbackStatus === "ACCEPTED" ? new Date() : null,
+        farmerCounterOffer:
+          feedbackData.feedbackStatus === "ACCEPTED"
+            ? existingSubmission.acceptedPrice
+            : existingSubmission.farmerCounterOffer,
+        farmerCounterQty:
+          feedbackData.feedbackStatus === "ACCEPTED"
+            ? existingSubmission.acceptedQty
+            : existingSubmission.farmerCounterQty,
       }),
       ...(feedbackData.notes && { farmerFeedbackNotes: feedbackData.notes }),
       ...(feedbackData.counterOffer && {
         farmerCounterOffer: feedbackData.counterOffer,
+        farmerFeedbackStatus: "EXTENDED",
       }),
       ...(feedbackData.counterQty && {
         farmerCounterQty: feedbackData.counterQty,
+        farmerFeedbackStatus: "EXTENDED",
       }),
+
       farmerFeedbackAt: new Date(),
     },
     include: {
@@ -328,7 +346,6 @@ export const updateFarmerFeedbackService = async (
         select: {
           id: true,
           phone: true,
-          location: true,
         },
       },
       aggregator: {

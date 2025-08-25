@@ -248,50 +248,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /farmers/awaiting-feedback:
-    get:
-      tags:
-        - Farmer API Management
-      summary: Get submissions awaiting farmer feedback (Aggregators/Admins only)
-      description: Retrieve all verified submissions that are waiting for farmer feedback
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: page
-          in: query
-          description: Page number for pagination
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: limit
-          in: query
-          description: Number of items per page
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 10
-      responses:
-        200:
-          description: Submissions awaiting farmer feedback retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedFarmerSubmissions"
-        403:
-          description: Access denied - only aggregators and admins can access this endpoint
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        500:
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
   /farmers/{submissionId}/feedback:
     post:
       tags:

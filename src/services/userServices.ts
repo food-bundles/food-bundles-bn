@@ -1,4 +1,4 @@
- 
+// src/services/userServices.ts
 import prisma from "../prisma";
 import {
   ICreateAdminData,
@@ -11,18 +11,32 @@ import {
   IUpdateRestaurantData,
 } from "../types/userTypes";
 import { comparePassword, hashPassword } from "../utils/password";
-import {PaginationService } from "./paginationService";
+import { PaginationService } from "./paginationService";
+import { LocationValidationService } from "./location.service";
 
- 
+// FARMER SERVICES
 export const createFarmerService = async (farmerData: ICreateFarmerData) => {
-  const { location, phone, email, password } = farmerData;
-
-  if (!location) {
-    throw new Error("Location is required for farmers");
-  }
+  const { phone, email, password, province, district, sector, cell, village } =
+    farmerData;
 
   if (!phone && !email) {
     throw new Error("Either phone or email is required");
+  }
+
+  // Validate location data if provided
+  const locationValidation =
+    LocationValidationService.validateLocationHierarchy({
+      province,
+      district,
+      sector,
+      cell,
+      village,
+    });
+
+  if (!locationValidation.isValid) {
+    throw new Error(
+      `Location validation failed: ${locationValidation.errors.join(", ")}`
+    );
   }
 
   const existingFarmer = await prisma.farmer.findFirst({
@@ -43,10 +57,14 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
 
     const farmer = await prisma.farmer.create({
       data: {
-        location,
         phone,
         email,
         password: hashedPassword,
+        province,
+        district,
+        sector,
+        cell,
+        village,
       },
     });
 
@@ -66,7 +84,11 @@ export const getAllFarmersService = async (query: IPaginationQuery) => {
   const options = {
     select: {
       id: true,
-      location: true,
+      province: true,
+      district: true,
+      sector: true,
+      cell: true,
+      village: true,
       role: true,
       phone: true,
       email: true,
@@ -75,13 +97,13 @@ export const getAllFarmersService = async (query: IPaginationQuery) => {
         select: {
           id: true,
           productName: true,
-          quantity: true,
+          submittedQty: true,
           submittedAt: true,
         },
         orderBy: {
           submittedAt: "desc",
         },
-        take: 5,  
+        take: 5,
       },
     },
     orderBy: {
@@ -106,7 +128,11 @@ export const getFarmerByIdService = async (id: string) => {
     where: { id },
     select: {
       id: true,
-      location: true,
+      province: true,
+      district: true,
+      sector: true,
+      cell: true,
+      village: true,
       role: true,
       phone: true,
       email: true,
@@ -132,7 +158,8 @@ export const updateFarmerService = async (
   id: string,
   updateData: IUpdateFarmerData
 ) => {
-  const { password, ...otherData } = updateData;
+  const { password, province, district, sector, cell, village, ...otherData } =
+    updateData;
 
   const existingFarmer = await prisma.farmer.findUnique({
     where: { id },
@@ -140,6 +167,24 @@ export const updateFarmerService = async (
 
   if (!existingFarmer) {
     throw new Error("Farmer not found");
+  }
+
+  // Validate location data if any location field is provided
+  if (province || district || sector || cell || village) {
+    const locationValidation =
+      LocationValidationService.validateLocationHierarchy({
+        province: province ? province : existingFarmer.province,
+        district: district ? district : existingFarmer.district,
+        sector: sector ? sector : existingFarmer.sector,
+        cell: cell ? cell : existingFarmer.cell,
+        village: village ? village : existingFarmer.village,
+      });
+
+    if (!locationValidation.isValid) {
+      throw new Error(
+        `Location validation failed: ${locationValidation.errors.join(", ")}`
+      );
+    }
   }
 
   try {
@@ -152,6 +197,11 @@ export const updateFarmerService = async (
       where: { id },
       data: {
         ...otherData,
+        province,
+        district,
+        sector,
+        cell,
+        village,
         ...(hashedPassword && { password: hashedPassword }),
       },
     });
@@ -183,15 +233,50 @@ export const deleteFarmerService = async (id: string) => {
   }
 };
 
- 
+// RESTAURANT SERVICES
 export const createRestaurantService = async (
   restaurantData: ICreateRestaurantData
 ) => {
-  const { name, email, phone, location, password } = restaurantData;
+  const {
+    name,
+    email,
+    phone,
+    password,
+    province,
+    district,
+    sector,
+    cell,
+    village,
+  } = restaurantData;
 
-  if (!name || !email || !location || !password) {
+  if (
+    !name ||
+    !email ||
+    !password ||
+    !province ||
+    !district ||
+    !sector ||
+    !cell ||
+    !village
+  ) {
     throw new Error(
-      "Name, email, location, and password are required for restaurants"
+      "Name, email, password, province, district, sector, cell, and village are required for restaurants"
+    );
+  }
+
+  // Validate location data if provided
+  const locationValidation =
+    LocationValidationService.validateLocationHierarchy({
+      province,
+      district,
+      sector,
+      cell,
+      village,
+    });
+
+  if (!locationValidation.isValid) {
+    throw new Error(
+      `Location validation failed: ${locationValidation.errors.join(", ")}`
     );
   }
 
@@ -213,8 +298,12 @@ export const createRestaurantService = async (
         name,
         email,
         phone,
-        location,
         password: hashedPassword,
+        province,
+        district,
+        sector,
+        cell,
+        village,
       },
     });
 
@@ -237,7 +326,11 @@ export const getAllRestaurantsService = async (query: IPaginationQuery) => {
       name: true,
       email: true,
       phone: true,
-      location: true,
+      province: true,
+      district: true,
+      sector: true,
+      cell: true,
+      village: true,
       role: true,
       createdAt: true,
       orders: {
@@ -278,7 +371,11 @@ export const getRestaurantByIdService = async (id: string) => {
       name: true,
       email: true,
       phone: true,
-      location: true,
+      province: true,
+      district: true,
+      sector: true,
+      cell: true,
+      village: true,
       role: true,
       createdAt: true,
       orders: {
@@ -326,7 +423,8 @@ export const updateRestaurantService = async (
   id: string,
   updateData: IUpdateRestaurantData
 ) => {
-  const { password, ...otherData } = updateData;
+  const { password, province, district, sector, cell, village, ...otherData } =
+    updateData;
 
   const existingRestaurant = await prisma.restaurant.findUnique({
     where: { id },
@@ -334,6 +432,24 @@ export const updateRestaurantService = async (
 
   if (!existingRestaurant) {
     throw new Error("Restaurant not found");
+  }
+
+  // Validate location data if any location field is provided
+  if (province || district || sector || cell || village) {
+    const locationValidation =
+      LocationValidationService.validateLocationHierarchy({
+        province: province ? province : existingRestaurant.province,
+        district: district ? district : existingRestaurant.district,
+        sector: sector ? sector : existingRestaurant.sector,
+        cell: cell ? cell : existingRestaurant.cell,
+        village: village ? village : existingRestaurant.village,
+      });
+
+    if (!locationValidation.isValid) {
+      throw new Error(
+        `Location validation failed: ${locationValidation.errors.join(", ")}`
+      );
+    }
   }
 
   try {
@@ -346,6 +462,11 @@ export const updateRestaurantService = async (
       where: { id },
       data: {
         ...otherData,
+        province,
+        district,
+        sector,
+        cell,
+        village,
         ...(hashedPassword && { password: hashedPassword }),
       },
     });
@@ -377,14 +498,53 @@ export const deleteRestaurantService = async (id: string) => {
   }
 };
 
- 
+// ADMIN SERVICES
 export const createAdminService = async (adminData: ICreateAdminData) => {
-  const { username, email, password, role } = adminData;
+  const {
+    username,
+    email,
+    phone,
+    password,
+    role,
+    province,
+    district,
+    sector,
+    cell,
+    village,
+  } = adminData;
 
-  if (!username || !email || !password || !role) {
+  if (
+    !username ||
+    !email ||
+    !password ||
+    !role ||
+    !province ||
+    !district ||
+    !sector ||
+    !cell ||
+    !village
+  ) {
     throw new Error(
-      "Username, email, password, and role are required for admins"
+      "Username, email, password, role, province, district, sector, cell, and village are required for admins"
     );
+  }
+
+  // Validate location data if provided
+  if (province || district || sector || cell || village) {
+    const locationValidation =
+      LocationValidationService.validateLocationHierarchy({
+        province,
+        district,
+        sector,
+        cell,
+        village,
+      });
+
+    if (!locationValidation.isValid) {
+      throw new Error(
+        `Location validation failed: ${locationValidation.errors.join(", ")}`
+      );
+    }
   }
 
   const existingAdmin = await prisma.admin.findFirst({
@@ -402,8 +562,14 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
       data: {
         username,
         email,
+        phone: phone || null,
         password: hashedPassword,
         role,
+        province,
+        district,
+        sector,
+        cell,
+        village,
       },
     });
 
@@ -426,6 +592,12 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
       username: true,
       email: true,
       role: true,
+      phone: true,
+      province: true,
+      district: true,
+      sector: true,
+      cell: true,
+      village: true,
       createdAt: true,
     },
     orderBy: {
@@ -453,6 +625,12 @@ export const getAdminByIdService = async (id: string) => {
       username: true,
       email: true,
       role: true,
+      phone: true,
+      province: true,
+      district: true,
+      sector: true,
+      cell: true,
+      village: true,
       createdAt: true,
     },
   });
@@ -464,7 +642,8 @@ export const updateAdminService = async (
   id: string,
   updateData: IUpdateAdminData
 ) => {
-  const { password, ...otherData } = updateData;
+  const { password, province, district, sector, cell, village, ...otherData } =
+    updateData;
 
   const existingAdmin = await prisma.admin.findUnique({
     where: { id },
@@ -472,6 +651,24 @@ export const updateAdminService = async (
 
   if (!existingAdmin) {
     throw new Error("Admin not found");
+  }
+
+  // Validate location data if any location field is provided
+  if (province || district || sector || cell || village) {
+    const locationValidation =
+      LocationValidationService.validateLocationHierarchy({
+        province: province ? province : existingAdmin.province,
+        district: district ? district : existingAdmin.district,
+        sector: sector ? sector : existingAdmin.sector,
+        cell: cell ? cell : existingAdmin.cell,
+        village: village ? village : existingAdmin.village,
+      });
+
+    if (!locationValidation.isValid) {
+      throw new Error(
+        `Location validation failed: ${locationValidation.errors.join(", ")}`
+      );
+    }
   }
 
   try {
@@ -484,6 +681,11 @@ export const updateAdminService = async (
       where: { id },
       data: {
         ...otherData,
+        province,
+        district,
+        sector,
+        cell,
+        village,
         ...(hashedPassword && { password: hashedPassword }),
       },
     });
@@ -515,7 +717,7 @@ export const deleteAdminService = async (id: string) => {
   }
 };
 
- 
+// LOGIN SERVICE
 export const loginService = async (loginData: ILoginData) => {
   const { phone, email, password } = loginData;
 

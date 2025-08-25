@@ -37,11 +37,16 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 app.use("/", routes);
+
 app.get("/health", (_req, res) => {
   res.status(200).json({ message: "Backend is healthy" });
 });
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+
+app.get("/", (_req, res) => {
+  res.status(200).json({ message: "FoodBundles Backend API is running!!!" });
+});
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

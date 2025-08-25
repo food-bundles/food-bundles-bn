@@ -10,12 +10,13 @@ import {
 } from "../services/ProductVerifyService";
 import { PaginationService } from "../services/paginationService";
 import { Role } from "@prisma/client";
+import prisma from "../prisma";
 
 export default class ProductVerifyController {
   static purchaseProduct = async (req: Request, res: Response) => {
     try {
       const { submissionId } = req.params;
-      const { acceptedQty, unitPrice } = req.body;
+      const { acceptedQty, unitPrice, feedbackDeadline } = req.body;
       const aggregatorId = (req as any).user.id;
 
       if (!acceptedQty || !unitPrice) {
@@ -34,7 +35,8 @@ export default class ProductVerifyController {
         submissionId,
         acceptedQty,
         unitPrice,
-        aggregatorId
+        aggregatorId,
+        feedbackDeadline
       );
 
       res.status(200).json({
@@ -51,7 +53,7 @@ export default class ProductVerifyController {
   static updateSubmission = async (req: Request, res: Response) => {
     try {
       const { submissionId } = req.params;
-      const { acceptedQty, unitPrice } = req.body;
+      const { acceptedQty, unitPrice, feedbackDeadline } = req.body;
       const aggregatorId = (req as any).user.id;
 
       if (!acceptedQty || !unitPrice) {
@@ -70,7 +72,9 @@ export default class ProductVerifyController {
         submissionId,
         acceptedQty,
         unitPrice,
-        aggregatorId
+
+        aggregatorId,
+        feedbackDeadline
       );
 
       res.status(200).json({
@@ -139,6 +143,93 @@ export default class ProductVerifyController {
       res.status(500).json({
         success: false,
         message: error.message || "Failed to get submissions",
+      });
+    }
+  };
+
+  // Get submissions requiring farmer feedback (for aggregators to track)
+  static getSubmissionsAwaitingFeedback = async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const user = (req as any).user;
+      const { page = 1, limit = 10 } = req.query;
+
+      // Only aggregators and admins can see this
+      if (user.role !== Role.AGGREGATOR && user.role !== Role.ADMIN) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied",
+        });
+      }
+
+      const paginationQuery = PaginationService.validatePaginationParams(
+        page as string,
+        limit as string
+      );
+
+      const skip = (paginationQuery.page - 1) * paginationQuery.limit;
+
+      let whereCondition: any = {
+        status: "VERIFIED",
+        farmerFeedbackStatus: "PENDING",
+        // Only show non-expired submissions
+        OR: [
+          { feedbackDeadline: null },
+          { feedbackDeadline: { gt: new Date() } },
+        ],
+      };
+
+      // Aggregators only see their own submissions
+      if (user.role === Role.AGGREGATOR) {
+        whereCondition.aggregatorId = user.id;
+      }
+
+      const totalCount = await prisma.farmerSubmission.count({
+        where: whereCondition,
+      });
+
+      const submissions = await prisma.farmerSubmission.findMany({
+        where: whereCondition,
+        include: {
+          farmer: {
+            select: {
+              id: true,
+              phone: true,
+            },
+          },
+          aggregator: {
+            select: {
+              id: true,
+              username: true,
+            },
+          },
+        },
+        skip,
+        take: paginationQuery.limit,
+        orderBy: { verifiedAt: "desc" },
+      });
+
+      const totalPages = Math.ceil(totalCount / paginationQuery.limit);
+
+      res.status(200).json({
+        success: true,
+        message: "Submissions awaiting farmer feedback retrieved successfully",
+        data: submissions,
+        pagination: {
+          currentPage: paginationQuery.page,
+          totalPages,
+          totalCount,
+          hasNextPage: paginationQuery.page < totalPages,
+          hasPrevPage: paginationQuery.page > 1,
+          limit: paginationQuery.limit,
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to get submissions awaiting feedback",
       });
     }
   };

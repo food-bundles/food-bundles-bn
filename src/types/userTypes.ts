@@ -1,61 +1,41 @@
 import { Role } from "@prisma/client";
+import { LocationData } from "./locationTypes";
 
-
-export interface IUssdRequest {
-  sessionId: string;
-  serviceCode: string;
-  phoneNumber: string;
-  text: string;
-}
-
-export interface ISessionData {
-  location?: string;
-  password?: string;
-  confirmPassword?: string;
-  selectedProduct?: string;
-  quantity?: string;
-  mode?: "register" | "submit";
-  wishedPrice?: string;
-}
-
-export  interface ICreateFarmerData {
-  location: string;
+export interface ICreateFarmerData extends LocationData {
   phone?: string;
   email?: string;
   password?: string;
 }
 
-export interface ICreateRestaurantData {
+export interface ICreateRestaurantData extends LocationData {
   name: string;
   email: string;
   phone?: string;
-  location: string;
   password: string;
 }
 
-export interface ICreateAdminData {
+export interface ICreateAdminData extends Partial<LocationData> {
   username: string;
   email: string;
+  phone?: string;
   password: string;
   role: Role;
 }
 
-export interface IUpdateFarmerData {
-  location?: string;
+export interface IUpdateFarmerData extends Partial<LocationData> {
   phone?: string;
   email?: string;
   password?: string;
 }
 
-export interface IUpdateRestaurantData {
+export interface IUpdateRestaurantData extends Partial<LocationData> {
   name?: string;
   email?: string;
   phone?: string;
-  location?: string;
   password?: string;
 }
 
-export interface IUpdateAdminData {
+export interface IUpdateAdminData extends Partial<LocationData> {
   username?: string;
   email?: string;
   password?: string;
@@ -101,8 +81,7 @@ export interface IPaginationOptions {
 
 export interface JwtPayload {
   id: string;
-  role: Role; 
+  role: Role;
   iat?: number;
   exp?: number;
 }
-  

@@ -441,7 +441,6 @@ export const getOrderByNumber = async (req: Request, res: Response) => {
             name: true,
             email: true,
             phone: true,
-            location: true,
           },
         },
         orderItems: {

@@ -6,18 +6,11 @@ import {
   Sector,
   Cell,
   Village,
+  LocationData,
 } from "../types/locationTypes";
 
 // Type the imported JSON data
 const typedLocations = Locations as LocationsData;
-
-export interface LocationData {
-  province?: string;
-  district?: string;
-  sector?: string;
-  cell?: string;
-  village?: string;
-}
 
 export class LocationValidationService {
   /**
@@ -144,7 +137,12 @@ export class LocationValidationService {
     // If any location field is provided, validate the hierarchy
     if (locationData.province) {
       if (!this.validateProvince(locationData.province)) {
-        errors.push(`Invalid province: ${locationData.province}`);
+        const validProvinces = this.getAllProvinces();
+        errors.push(
+          `Invalid province: ${
+            locationData.province
+          }. Valid provinces are: ${validProvinces.join(", ")}`
+        );
         return { isValid: false, errors };
       }
 
@@ -152,8 +150,13 @@ export class LocationValidationService {
         if (
           !this.validateDistrict(locationData.province, locationData.district)
         ) {
+          const validDistricts = this.getDistrictsByProvince(
+            locationData.province
+          );
           errors.push(
-            `Invalid district: ${locationData.district} in province ${locationData.province}`
+            `Invalid district: ${locationData.district} in province ${
+              locationData.province
+            }. Valid districts are: ${validDistricts.join(", ")}`
           );
           return { isValid: false, errors };
         }
@@ -166,8 +169,16 @@ export class LocationValidationService {
               locationData.sector
             )
           ) {
+            const validSectors = this.getSectorsByDistrict(
+              locationData.province,
+              locationData.district
+            );
             errors.push(
-              `Invalid sector: ${locationData.sector} in district ${locationData.district}, province ${locationData.province}`
+              `Invalid sector: ${locationData.sector} in district ${
+                locationData.district
+              }, province ${
+                locationData.province
+              }. Valid sectors are: ${validSectors.join(", ")}`
             );
             return { isValid: false, errors };
           }
@@ -181,8 +192,17 @@ export class LocationValidationService {
                 locationData.cell
               )
             ) {
+              const validCells = this.getCellsBySector(
+                locationData.province,
+                locationData.district,
+                locationData.sector
+              );
               errors.push(
-                `Invalid cell: ${locationData.cell} in sector ${locationData.sector}, district ${locationData.district}, province ${locationData.province}`
+                `Invalid cell: ${locationData.cell} in sector ${
+                  locationData.sector
+                }, district ${locationData.district}, province ${
+                  locationData.province
+                }. Valid cells are: ${validCells.join(", ")}`
               );
               return { isValid: false, errors };
             }
@@ -197,8 +217,20 @@ export class LocationValidationService {
                   locationData.village
                 )
               ) {
+                const validVillages = this.getVillagesByCell(
+                  locationData.province,
+                  locationData.district,
+                  locationData.sector,
+                  locationData.cell
+                );
                 errors.push(
-                  `Invalid village: ${locationData.village} in cell ${locationData.cell}, sector ${locationData.sector}, district ${locationData.district}, province ${locationData.province}`
+                  `Invalid village: ${locationData.village} in cell ${
+                    locationData.cell
+                  }, sector ${locationData.sector}, district ${
+                    locationData.district
+                  }, province ${
+                    locationData.province
+                  }. Valid villages are: ${validVillages.join(", ")}`
                 );
                 return { isValid: false, errors };
               }
@@ -210,21 +242,66 @@ export class LocationValidationService {
 
     // Check for incomplete hierarchy
     if (locationData.district && !locationData.province) {
-      errors.push("Province is required when district is provided");
+      const validProvinces = this.getAllProvinces();
+      errors.push(
+        `Province is required when district is provided. Valid provinces are: ${validProvinces.join(
+          ", "
+        )}`
+      );
     }
     if (
       locationData.sector &&
       (!locationData.province || !locationData.district)
     ) {
-      errors.push("Province and district are required when sector is provided");
+      if (!locationData.province) {
+        const validProvinces = this.getAllProvinces();
+        errors.push(
+          `Province is required when sector is provided. Valid provinces are: ${validProvinces.join(
+            ", "
+          )}`
+        );
+      } else if (!locationData.district) {
+        const validDistricts = this.getDistrictsByProvince(
+          locationData.province
+        );
+        errors.push(
+          `District is required when sector is provided. Valid districts for ${
+            locationData.province
+          } are: ${validDistricts.join(", ")}`
+        );
+      }
     }
     if (
       locationData.cell &&
       (!locationData.province || !locationData.district || !locationData.sector)
     ) {
-      errors.push(
-        "Province, district, and sector are required when cell is provided"
-      );
+      if (!locationData.province) {
+        const validProvinces = this.getAllProvinces();
+        errors.push(
+          `Province is required when cell is provided. Valid provinces are: ${validProvinces.join(
+            ", "
+          )}`
+        );
+      } else if (!locationData.district) {
+        const validDistricts = this.getDistrictsByProvince(
+          locationData.province
+        );
+        errors.push(
+          `District is required when cell is provided. Valid districts for ${
+            locationData.province
+          } are: ${validDistricts.join(", ")}`
+        );
+      } else if (!locationData.sector) {
+        const validSectors = this.getSectorsByDistrict(
+          locationData.province,
+          locationData.district
+        );
+        errors.push(
+          `Sector is required when cell is provided. Valid sectors for ${
+            locationData.district
+          }, ${locationData.province} are: ${validSectors.join(", ")}`
+        );
+      }
     }
     if (
       locationData.village &&
@@ -233,9 +310,46 @@ export class LocationValidationService {
         !locationData.sector ||
         !locationData.cell)
     ) {
-      errors.push(
-        "Province, district, sector, and cell are required when village is provided"
-      );
+      if (!locationData.province) {
+        const validProvinces = this.getAllProvinces();
+        errors.push(
+          `Province is required when village is provided. Valid provinces are: ${validProvinces.join(
+            ", "
+          )}`
+        );
+      } else if (!locationData.district) {
+        const validDistricts = this.getDistrictsByProvince(
+          locationData.province
+        );
+        errors.push(
+          `District is required when village is provided. Valid districts for ${
+            locationData.province
+          } are: ${validDistricts.join(", ")}`
+        );
+      } else if (!locationData.sector) {
+        const validSectors = this.getSectorsByDistrict(
+          locationData.province,
+          locationData.district
+        );
+        errors.push(
+          `Sector is required when village is provided. Valid sectors for ${
+            locationData.district
+          }, ${locationData.province} are: ${validSectors.join(", ")}`
+        );
+      } else if (!locationData.cell) {
+        const validCells = this.getCellsBySector(
+          locationData.province,
+          locationData.district,
+          locationData.sector
+        );
+        errors.push(
+          `Cell is required when village is provided. Valid cells for ${
+            locationData.sector
+          }, ${locationData.district}, ${
+            locationData.province
+          } are: ${validCells.join(", ")}`
+        );
+      }
     }
 
     return { isValid: errors.length === 0, errors };

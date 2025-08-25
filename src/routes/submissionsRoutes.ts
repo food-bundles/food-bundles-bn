@@ -20,6 +20,14 @@ submissionsRoutes.get(
   getVerifiedSubmissions
 );
 
+// Get submissions awaiting feedback (aggregators/admins)
+submissionsRoutes.get(
+  "/awaiting-feedback",
+  isAuthenticated,
+  checkPermission(Role.AGGREGATOR, Role.ADMIN),
+  ProductVerifyController.getSubmissionsAwaitingFeedback
+);
+
 // Get submissions by status (move this BEFORE parameterized routes)
 submissionsRoutes.get(
   "/status/:status",
