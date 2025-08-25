@@ -4,16 +4,27 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.loginService = exports.deleteAdminService = exports.updateAdminService = exports.getAdminByIdService = exports.getAllAdminsService = exports.createAdminService = exports.deleteRestaurantService = exports.updateRestaurantService = exports.getRestaurantByIdService = exports.getAllRestaurantsService = exports.createRestaurantService = exports.deleteFarmerService = exports.updateFarmerService = exports.getFarmerByIdService = exports.getAllFarmersService = exports.createFarmerService = void 0;
+// src/services/userServices.ts
 const prisma_1 = __importDefault(require("../prisma"));
 const password_1 = require("../utils/password");
 const paginationService_1 = require("./paginationService");
+const location_service_1 = require("./location.service");
+// FARMER SERVICES
 const createFarmerService = async (farmerData) => {
-    const { location, phone, email, password } = farmerData;
-    if (!location) {
-        throw new Error("Location is required for farmers");
-    }
+    const { phone, email, password, province, district, sector, cell, village } = farmerData;
     if (!phone && !email) {
         throw new Error("Either phone or email is required");
+    }
+    // Validate location data if provided
+    const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
+        province,
+        district,
+        sector,
+        cell,
+        village,
+    });
+    if (!locationValidation.isValid) {
+        throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
     }
     const existingFarmer = await prisma_1.default.farmer.findFirst({
         where: {
@@ -30,10 +41,14 @@ const createFarmerService = async (farmerData) => {
         }
         const farmer = await prisma_1.default.farmer.create({
             data: {
-                location,
                 phone,
                 email,
                 password: hashedPassword,
+                province,
+                district,
+                sector,
+                cell,
+                village,
             },
         });
         const { password: _, ...farmerWithoutPassword } = farmer;
@@ -49,7 +64,11 @@ const getAllFarmersService = async (query) => {
     const options = {
         select: {
             id: true,
-            location: true,
+            province: true,
+            district: true,
+            sector: true,
+            cell: true,
+            village: true,
             role: true,
             phone: true,
             email: true,
@@ -58,7 +77,7 @@ const getAllFarmersService = async (query) => {
                 select: {
                     id: true,
                     productName: true,
-                    quantity: true,
+                    submittedQty: true,
                     submittedAt: true,
                 },
                 orderBy: {
@@ -83,7 +102,11 @@ const getFarmerByIdService = async (id) => {
         where: { id },
         select: {
             id: true,
-            location: true,
+            province: true,
+            district: true,
+            sector: true,
+            cell: true,
+            village: true,
             role: true,
             phone: true,
             email: true,
@@ -105,12 +128,25 @@ const getFarmerByIdService = async (id) => {
 };
 exports.getFarmerByIdService = getFarmerByIdService;
 const updateFarmerService = async (id, updateData) => {
-    const { password, ...otherData } = updateData;
+    const { password, province, district, sector, cell, village, ...otherData } = updateData;
     const existingFarmer = await prisma_1.default.farmer.findUnique({
         where: { id },
     });
     if (!existingFarmer) {
         throw new Error("Farmer not found");
+    }
+    // Validate location data if any location field is provided
+    if (province || district || sector || cell || village) {
+        const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
+            province: province ? province : existingFarmer.province,
+            district: district ? district : existingFarmer.district,
+            sector: sector ? sector : existingFarmer.sector,
+            cell: cell ? cell : existingFarmer.cell,
+            village: village ? village : existingFarmer.village,
+        });
+        if (!locationValidation.isValid) {
+            throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
+        }
     }
     try {
         let hashedPassword;
@@ -121,6 +157,11 @@ const updateFarmerService = async (id, updateData) => {
             where: { id },
             data: {
                 ...otherData,
+                province,
+                district,
+                sector,
+                cell,
+                village,
                 ...(hashedPassword && { password: hashedPassword }),
             },
         });
@@ -150,10 +191,29 @@ const deleteFarmerService = async (id) => {
     }
 };
 exports.deleteFarmerService = deleteFarmerService;
+// RESTAURANT SERVICES
 const createRestaurantService = async (restaurantData) => {
-    const { name, email, phone, location, password } = restaurantData;
-    if (!name || !email || !location || !password) {
-        throw new Error("Name, email, location, and password are required for restaurants");
+    const { name, email, phone, password, province, district, sector, cell, village, } = restaurantData;
+    if (!name ||
+        !email ||
+        !password ||
+        !province ||
+        !district ||
+        !sector ||
+        !cell ||
+        !village) {
+        throw new Error("Name, email, password, province, district, sector, cell, and village are required for restaurants");
+    }
+    // Validate location data if provided
+    const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
+        province,
+        district,
+        sector,
+        cell,
+        village,
+    });
+    if (!locationValidation.isValid) {
+        throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
     }
     const existingRestaurant = await prisma_1.default.restaurant.findFirst({
         where: {
@@ -170,8 +230,12 @@ const createRestaurantService = async (restaurantData) => {
                 name,
                 email,
                 phone,
-                location,
                 password: hashedPassword,
+                province,
+                district,
+                sector,
+                cell,
+                village,
             },
         });
         const { password: _, ...restaurantWithoutPassword } = restaurant;
@@ -190,7 +254,11 @@ const getAllRestaurantsService = async (query) => {
             name: true,
             email: true,
             phone: true,
-            location: true,
+            province: true,
+            district: true,
+            sector: true,
+            cell: true,
+            village: true,
             role: true,
             createdAt: true,
             orders: {
@@ -225,7 +293,11 @@ const getRestaurantByIdService = async (id) => {
             name: true,
             email: true,
             phone: true,
-            location: true,
+            province: true,
+            district: true,
+            sector: true,
+            cell: true,
+            village: true,
             role: true,
             createdAt: true,
             orders: {
@@ -269,12 +341,25 @@ const getRestaurantByIdService = async (id) => {
 };
 exports.getRestaurantByIdService = getRestaurantByIdService;
 const updateRestaurantService = async (id, updateData) => {
-    const { password, ...otherData } = updateData;
+    const { password, province, district, sector, cell, village, ...otherData } = updateData;
     const existingRestaurant = await prisma_1.default.restaurant.findUnique({
         where: { id },
     });
     if (!existingRestaurant) {
         throw new Error("Restaurant not found");
+    }
+    // Validate location data if any location field is provided
+    if (province || district || sector || cell || village) {
+        const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
+            province: province ? province : existingRestaurant.province,
+            district: district ? district : existingRestaurant.district,
+            sector: sector ? sector : existingRestaurant.sector,
+            cell: cell ? cell : existingRestaurant.cell,
+            village: village ? village : existingRestaurant.village,
+        });
+        if (!locationValidation.isValid) {
+            throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
+        }
     }
     try {
         let hashedPassword;
@@ -285,6 +370,11 @@ const updateRestaurantService = async (id, updateData) => {
             where: { id },
             data: {
                 ...otherData,
+                province,
+                district,
+                sector,
+                cell,
+                village,
                 ...(hashedPassword && { password: hashedPassword }),
             },
         });
@@ -314,10 +404,32 @@ const deleteRestaurantService = async (id) => {
     }
 };
 exports.deleteRestaurantService = deleteRestaurantService;
+// ADMIN SERVICES
 const createAdminService = async (adminData) => {
-    const { username, email, password, role } = adminData;
-    if (!username || !email || !password || !role) {
-        throw new Error("Username, email, password, and role are required for admins");
+    const { username, email, phone, password, role, province, district, sector, cell, village, } = adminData;
+    if (!username ||
+        !email ||
+        !password ||
+        !role ||
+        !province ||
+        !district ||
+        !sector ||
+        !cell ||
+        !village) {
+        throw new Error("Username, email, password, role, province, district, sector, cell, and village are required for admins");
+    }
+    // Validate location data if provided
+    if (province || district || sector || cell || village) {
+        const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
+            province,
+            district,
+            sector,
+            cell,
+            village,
+        });
+        if (!locationValidation.isValid) {
+            throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
+        }
     }
     const existingAdmin = await prisma_1.default.admin.findFirst({
         where: { email },
@@ -331,8 +443,14 @@ const createAdminService = async (adminData) => {
             data: {
                 username,
                 email,
+                phone: phone || null,
                 password: hashedPassword,
                 role,
+                province,
+                district,
+                sector,
+                cell,
+                village,
             },
         });
         const { password: _, ...adminWithoutPassword } = admin;
@@ -351,6 +469,12 @@ const getAllAdminsService = async (query) => {
             username: true,
             email: true,
             role: true,
+            phone: true,
+            province: true,
+            district: true,
+            sector: true,
+            cell: true,
+            village: true,
             createdAt: true,
         },
         orderBy: {
@@ -372,6 +496,12 @@ const getAdminByIdService = async (id) => {
             username: true,
             email: true,
             role: true,
+            phone: true,
+            province: true,
+            district: true,
+            sector: true,
+            cell: true,
+            village: true,
             createdAt: true,
         },
     });
@@ -379,12 +509,25 @@ const getAdminByIdService = async (id) => {
 };
 exports.getAdminByIdService = getAdminByIdService;
 const updateAdminService = async (id, updateData) => {
-    const { password, ...otherData } = updateData;
+    const { password, province, district, sector, cell, village, ...otherData } = updateData;
     const existingAdmin = await prisma_1.default.admin.findUnique({
         where: { id },
     });
     if (!existingAdmin) {
         throw new Error("Admin not found");
+    }
+    // Validate location data if any location field is provided
+    if (province || district || sector || cell || village) {
+        const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
+            province: province ? province : existingAdmin.province,
+            district: district ? district : existingAdmin.district,
+            sector: sector ? sector : existingAdmin.sector,
+            cell: cell ? cell : existingAdmin.cell,
+            village: village ? village : existingAdmin.village,
+        });
+        if (!locationValidation.isValid) {
+            throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
+        }
     }
     try {
         let hashedPassword;
@@ -395,6 +538,11 @@ const updateAdminService = async (id, updateData) => {
             where: { id },
             data: {
                 ...otherData,
+                province,
+                district,
+                sector,
+                cell,
+                village,
                 ...(hashedPassword && { password: hashedPassword }),
             },
         });
@@ -424,6 +572,7 @@ const deleteAdminService = async (id) => {
     }
 };
 exports.deleteAdminService = deleteAdminService;
+// LOGIN SERVICE
 const loginService = async (loginData) => {
     const { phone, email, password } = loginData;
     let user = null;
