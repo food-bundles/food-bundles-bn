@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "public"."Role" AS ENUM ('FARMER', 'RESTAURANT', 'ADMIN', 'FOOD_BUNDLE');
+CREATE TYPE "public"."Role" AS ENUM ('FARMER', 'RESTAURANT', 'ADMIN', 'AGGREGATOR');
 
 -- CreateEnum
 CREATE TYPE "public"."SubmissionStatus" AS ENUM ('PENDING', 'VERIFIED', 'APPROVED', 'PAID');
@@ -41,7 +41,7 @@ CREATE TABLE "public"."FarmerSubmission" (
     "unitPrice" DOUBLE PRECISION,
     "totalAmount" DOUBLE PRECISION,
     "status" "public"."SubmissionStatus" NOT NULL DEFAULT 'PENDING',
-    "foodBundleId" TEXT,
+    "aggregatorId" TEXT,
     "submittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "verifiedAt" TIMESTAMP(3),
     "approvedAt" TIMESTAMP(3),
@@ -127,7 +127,7 @@ CREATE UNIQUE INDEX "Admin_email_key" ON "public"."Admin"("email");
 ALTER TABLE "public"."FarmerSubmission" ADD CONSTRAINT "FarmerSubmission_farmerId_fkey" FOREIGN KEY ("farmerId") REFERENCES "public"."Farmer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."FarmerSubmission" ADD CONSTRAINT "FarmerSubmission_foodBundleId_fkey" FOREIGN KEY ("foodBundleId") REFERENCES "public"."Admin"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "public"."FarmerSubmission" ADD CONSTRAINT "FarmerSubmission_aggregatorId_fkey" FOREIGN KEY ("aggregatorId") REFERENCES "public"."Admin"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Order" ADD CONSTRAINT "Order_restaurantId_fkey" FOREIGN KEY ("restaurantId") REFERENCES "public"."Restaurant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

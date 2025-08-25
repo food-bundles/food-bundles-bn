@@ -425,59 +425,31 @@ const deleteAdminService = async (id) => {
 };
 exports.deleteAdminService = deleteAdminService;
 const loginService = async (loginData) => {
-    const { phone, email, password, userType } = loginData;
+    const { phone, email, password } = loginData;
     let user = null;
     let foundUserType = "";
-    if (userType) {
-        switch (userType) {
-            case "farmer":
-                user = await prisma_1.default.farmer.findFirst({
-                    where: {
-                        OR: [{ phone: phone || undefined }, { email: email || undefined }],
-                    },
-                });
-                foundUserType = "farmer";
-                break;
-            case "restaurant":
-                user = await prisma_1.default.restaurant.findFirst({
-                    where: {
-                        OR: [{ phone: phone || undefined }, { email: email || undefined }],
-                    },
-                });
-                foundUserType = "restaurant";
-                break;
-            case "admin":
-                user = await prisma_1.default.admin.findFirst({
-                    where: { email: email || undefined },
-                });
-                foundUserType = "admin";
-                break;
-        }
-    }
-    else {
-        user = await prisma_1.default.farmer.findFirst({
+    user = await prisma_1.default.farmer.findFirst({
+        where: {
+            OR: [{ phone: phone || undefined }, { email: email || undefined }],
+        },
+    });
+    if (user)
+        foundUserType = "farmer";
+    if (!user) {
+        user = await prisma_1.default.restaurant.findFirst({
             where: {
                 OR: [{ phone: phone || undefined }, { email: email || undefined }],
             },
         });
         if (user)
-            foundUserType = "farmer";
-        if (!user) {
-            user = await prisma_1.default.restaurant.findFirst({
-                where: {
-                    OR: [{ phone: phone || undefined }, { email: email || undefined }],
-                },
-            });
-            if (user)
-                foundUserType = "restaurant";
-        }
-        if (!user) {
-            user = await prisma_1.default.admin.findFirst({
-                where: { email: email || undefined },
-            });
-            if (user)
-                foundUserType = "admin";
-        }
+            foundUserType = "restaurant";
+    }
+    if (!user) {
+        user = await prisma_1.default.admin.findFirst({
+            where: { email: email || undefined },
+        });
+        if (user)
+            foundUserType = "admin";
     }
     if (!user) {
         throw new Error("User not found");

@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaginationService = void 0;
-// Approach 1: All Static Methods (Recommended - Simplest)
 class PaginationService {
     static async paginate(model, query, options = {}) {
         const { page, limit } = query;

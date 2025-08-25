@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getSubmissionStatsService = exports.getSubmissionsByStatusService = exports.getSubmissionByIdService = exports.getAllSubmissionsService = exports.clearSubmissionService = exports.updateSubmissionService = exports.purchaseProductService = void 0;
 const prisma_1 = __importDefault(require("../prisma"));
 const client_1 = require("@prisma/client");
+const paginationService_1 = require("./paginationService");
 const purchaseProductService = async (submissionId, acceptedQty, acceptedPrice, foodBundleId) => {
     const existingSubmission = await prisma_1.default.farmerSubmission.findUnique({
         where: { id: submissionId },
@@ -199,7 +200,8 @@ const getFilterConditions = (userId, userRole, options) => {
     return whereCondition;
 };
 const getAllSubmissionsService = async ({ userId, userRole, options = {}, }) => {
-    const { page = 1, limit = 10, sortBy = "submittedAt", sortOrder = "desc", } = options;
+    const paginationParams = paginationService_1.PaginationService.validatePaginationParams(options.page?.toString(), options.limit?.toString());
+    const { page, limit, sortBy = "submittedAt", sortOrder = "desc", } = { ...paginationParams, ...options };
     const skip = (page - 1) * limit;
     const whereCondition = getFilterConditions(userId, userRole, options);
     const includeConfig = getIncludeConfig(userRole);

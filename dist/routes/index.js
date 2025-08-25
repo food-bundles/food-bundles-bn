@@ -14,6 +14,9 @@ const submissionsRoutes_1 = __importDefault(require("./submissionsRoutes"));
 const adminsRoutes_1 = __importDefault(require("./adminsRoutes"));
 const restaurantsRoutes_1 = __importDefault(require("./restaurantsRoutes"));
 const farmersRoutes_1 = __importDefault(require("./farmersRoutes"));
+const cart_routes_1 = __importDefault(require("./cart.routes"));
+const checkout_routes_1 = __importDefault(require("./checkout.routes"));
+const order_routes_1 = __importDefault(require("./order.routes"));
 const routes = (0, express_1.Router)();
 // Order matters! Most specific routes should come first
 routes.use("/farmers", farmersRoutes_1.default);
@@ -21,6 +24,9 @@ routes.use("/restaurants", restaurantsRoutes_1.default);
 routes.use("/admins", adminsRoutes_1.default);
 routes.use("/submissions", submissionsRoutes_1.default);
 routes.use("/products", productRoute_1.default);
+routes.use("/carts", cart_routes_1.default);
+routes.use("/checkouts", checkout_routes_1.default);
+routes.use("/orders", order_routes_1.default);
 // These should come after the specific routes above
 routes.use("/", ProductVerifyRoute_1.default);
 routes.use("/", userRoute_1.default);

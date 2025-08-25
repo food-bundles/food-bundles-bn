@@ -10,8 +10,33 @@ components:
   schemas:
     Role:
       type: string
-      enum: [FARMER, RESTAURANT, ADMIN, FOOD_BUNDLE]
+      enum: [FARMER, RESTAURANT, ADMIN, AGGREGATOR]
       description: User role in the system
+
+    # Location Schemas
+    LocationData:
+      type: object
+      properties:
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Nyarugenge"
+        sector:
+          type: string
+          description: Sector name
+          example: "Gitega"
+        cell:
+          type: string
+          description: Cell name
+          example: "Akabahizi"
+        village:
+          type: string
+          description: Village name
+          example: "Umucyo"
 
     # Farmer Schemas
     Farmer:
@@ -20,9 +45,6 @@ components:
         id:
           type: string
           description: Unique farmer identifier
-        location:
-          type: string
-          description: Farmer's location
         phone:
           type: string
           nullable: true
@@ -31,6 +53,26 @@ components:
           type: string
           nullable: true
           description: Farmer's email address
+        province:
+          type: string
+          nullable: true
+          description: Province name
+        district:
+          type: string
+          nullable: true
+          description: District name
+        sector:
+          type: string
+          nullable: true
+          description: Sector name
+        cell:
+          type: string
+          nullable: true
+          description: Cell name
+        village:
+          type: string
+          nullable: true
+          description: Village name
         role:
           $ref: "#/components/schemas/Role"
         createdAt:
@@ -45,8 +87,9 @@ components:
                 type: string
               productName:
                 type: string
-              quantity:
-                type: integer
+              submittedQty:
+                type: number
+                format: float
               submittedAt:
                 type: string
                 format: date-time
@@ -72,45 +115,65 @@ components:
                     format: date-time
 
     CreateFarmerRequest:
-      type: object
-      required:
-        - location
-      properties:
-        location:
-          type: string
-          description: Farmer's location (required)
-        phone:
-          type: string
-          description: Farmer's phone number
-        email:
-          type: string
-          format: email
-          description: Farmer's email address
-        password:
-          type: string
-          minLength: 6
-          description: Password for farmer account (optional)
-      oneOf:
-        - required: [phone]
-        - required: [email]
+      allOf:
+        - $ref: "#/components/schemas/LocationData"
+        - type: object
+          properties:
+            phone:
+              type: string
+              description: Farmer's phone number
+              example: "+250788123456"
+            email:
+              type: string
+              format: email
+              description: Farmer's email address
+              example: "farmer@food.rw"
+            password:
+              type: string
+              minLength: 6
+              description: Password for farmer account (optional)
+              example: "Password123"
+          oneOf:
+            - required: [phone]
+            - required: [email]
 
     UpdateFarmerRequest:
       type: object
       properties:
-        location:
-          type: string
-          description: Farmer's location
         phone:
           type: string
           description: Farmer's phone number
+          example: "+250788123456"
         email:
           type: string
           format: email
           description: Farmer's email address
+          example: "farmer@food.rw"
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Nyarugenge"
+        sector:
+          type: string
+          description: Sector name
+          example: "Gitega"
+        cell:
+          type: string
+          description: Cell name
+          example: "Akabahizi"
+        village:
+          type: string
+          description: Village name
+          example: "Umucyo"
         password:
           type: string
           minLength: 6
           description: New password for farmer account
+          example: "NewPassword123"
 
     # Restaurant Schemas
     Restaurant:
@@ -130,9 +193,26 @@ components:
           type: string
           nullable: true
           description: Restaurant phone number
-        location:
+        province:
           type: string
-          description: Restaurant location
+          nullable: true
+          description: Province name
+        district:
+          type: string
+          nullable: true
+          description: District name
+        sector:
+          type: string
+          nullable: true
+          description: Sector name
+        cell:
+          type: string
+          nullable: true
+          description: Cell name
+        village:
+          type: string
+          nullable: true
+          description: Village name
         role:
           $ref: "#/components/schemas/Role"
         createdAt:
@@ -210,30 +290,32 @@ components:
                     format: date-time
 
     CreateRestaurantRequest:
-      type: object
-      required:
-        - name
-        - email
-        - location
-        - password
-      properties:
-        name:
-          type: string
-          description: Restaurant name (required)
-        email:
-          type: string
-          format: email
-          description: Restaurant email (required)
-        phone:
-          type: string
-          description: Restaurant phone number
-        location:
-          type: string
-          description: Restaurant location (required)
-        password:
-          type: string
-          minLength: 6
-          description: Password for restaurant account (required)
+      allOf:
+        - $ref: "#/components/schemas/LocationData"
+        - type: object
+          required:
+            - name
+            - email
+            - password
+          properties:
+            name:
+              type: string
+              description: Restaurant name (required)
+              example: "FoodBundles"
+            email:
+              type: string
+              format: email
+              description: Restaurant email (required)
+              example: "restaurant@food.rw"
+            phone:
+              type: string
+              description: Restaurant phone number
+              example: "+250788123456"
+            password:
+              type: string
+              minLength: 6
+              description: Password for restaurant account (required)
+              example: "Password123"
 
     UpdateRestaurantRequest:
       type: object
@@ -241,20 +323,41 @@ components:
         name:
           type: string
           description: Restaurant name
+          example: "FoodBundles"
         email:
           type: string
           format: email
           description: Restaurant email
+          example: "restaurant@food.rw"
         phone:
           type: string
           description: Restaurant phone number
-        location:
+          example: "+250788123456"
+        province:
           type: string
-          description: Restaurant location
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Nyarugenge"
+        sector:
+          type: string
+          description: Sector name
+          example: "Gitega"
+        cell:
+          type: string
+          description: Cell name
+          example: "Akabahizi"
+        village:
+          type: string
+          description: Village name
+          example: "Umucyo"
         password:
           type: string
           minLength: 6
           description: New password for restaurant account
+          example: "NewPassword123"
 
     # Admin Schemas
     Admin:
@@ -270,6 +373,30 @@ components:
           type: string
           format: email
           description: Admin email
+        phone:
+          type: string
+          nullable: true
+          description: Admin phone number
+        province:
+          type: string
+          nullable: true
+          description: Province name
+        district:
+          type: string
+          nullable: true
+          description: District name
+        sector:
+          type: string
+          nullable: true
+          description: Sector name
+        cell:
+          type: string
+          nullable: true
+          description: Cell name
+        village:
+          type: string
+          nullable: true
+          description: Village name
         role:
           $ref: "#/components/schemas/Role"
         createdAt:
@@ -287,18 +414,45 @@ components:
         username:
           type: string
           description: Admin username (required)
+          example: "foodBundlesAdmin"
         email:
           type: string
           format: email
           description: Admin email (required)
+          example: "admin@food.rw"
+        phone:
+          type: string
+          description: Admin phone number
+          example: "+250788123456"
         password:
           type: string
           minLength: 6
           description: Password for admin account (required)
+          example: "Password123"
         role:
           type: string
-          enum: [ADMIN, FOOD_BUNDLE]
+          enum: [ADMIN, AGGREGATOR]
           description: Admin role (required)
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Nyarugenge"
+        sector:
+          type: string
+          description: Sector name
+          example: "Gitega"
+        cell:
+          type: string
+          description: Cell name
+          example: "Akabahizi"
+        village:
+          type: string
+          description: Village name
+          example: "Umucyo"
 
     UpdateAdminRequest:
       type: object
@@ -306,18 +460,45 @@ components:
         username:
           type: string
           description: Admin username
+          example: "foodBundlesAdmin"
         email:
           type: string
           format: email
           description: Admin email
+          example: "admin@food.rw"
+        phone:
+          type: string
+          description: Admin phone number
+          example: "+250788123456"
         password:
           type: string
           minLength: 6
           description: New password for admin account
+          example: "NewPassword123"
         role:
           type: string
-          enum: [ADMIN, FOOD_BUNDLE]
+          enum: [ADMIN, AGGREGATOR]
           description: Admin role
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Nyarugenge"
+        sector:
+          type: string
+          description: Sector name
+          example: "Gitega"
+        cell:
+          type: string
+          description: Cell name
+          example: "Akabahizi"
+        village:
+          type: string
+          description: Village name
+          example: "Umucyo"
 
     # Authentication API Management Schemas
     LoginRequest:
@@ -328,13 +509,16 @@ components:
         phone:
           type: string
           description: User's phone number
+          example: "+250788123456"
         email:
           type: string
           format: email
           description: User's email address
+          example: "farmer@food.rw"
         password:
           type: string
           description: User's password (required)
+          example: "Password123"
         userType:
           type: string
           enum: [farmer, restaurant, admin]
@@ -418,26 +602,32 @@ paths:
               farmer_login:
                 summary: Farmer login with phone
                 value:
-                  phone: "+1234567890"
-                  password: "farmer123"
+                  phone: "+250788123456"
+                  password: "Password123"
                   userType: "farmer"
               restaurant_login:
                 summary: Restaurant login with email
                 value:
-                  email: "restaurant@example.com"
-                  password: "restaurant123"
+                  email: "restaurant@food.rw"
+                  password: "Password123"
                   userType: "restaurant"
+              aggregator_login:
+                summary: Aggregator login with email
+                value:
+                  email: "aggregator@food.rw"
+                  password: "Password123"
+                  userType: "aggregator"
               admin_login:
                 summary: Admin login
                 value:
-                  email: "admin@example.com"
-                  password: "admin123"
+                  email: "admin@food.rw"
+                  password: "Password123"
                   userType: "admin"
               auto_detect:
                 summary: Auto-detect user type
                 value:
-                  email: "user@example.com"
-                  password: "password123"
+                  email: "user@food.rw"
+                  password: "Password123"
       responses:
         200:
           description: Login successful
@@ -510,10 +700,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples:
-                missing_location:
-                  value:
-                    success: false
-                    message: "Location is required for farmers"
                 missing_contact:
                   value:
                     success: false
@@ -738,7 +924,7 @@ paths:
                 missing_fields:
                   value:
                     success: false
-                    message: "Name, email, location, and password are required for restaurants"
+                    message: "Name, email, and password are required for restaurants"
                 duplicate_restaurant:
                   value:
                     success: false
@@ -930,9 +1116,36 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateAdminRequest"
+            examples:
+              admin_reggister:
+                summary: Admin registration
+                value:
+                  username: "foodBundlesAdmin"
+                  email: "admin@food.rw"
+                  phone: "+250788123456"
+                  province: "Umujyi wa Kigali"
+                  district: "Nyarugenge"
+                  sector: "Gitega"
+                  cell: "Akabahizi"
+                  village: "Umucyo"
+                  password: "Password123"
+                  role: "ADMIN"
+              aggregator_register:
+                summary: Aggregator registration
+                value:
+                  username: "FoodBundlesAggregator"
+                  email: "aggregator@food.rw"
+                  phone: "+250788123456"
+                  province: "Umujyi wa Kigali"
+                  district: "Nyarugenge"
+                  sector: "Gitega"
+                  cell: "Akabahizi"
+                  village: "Umucyo"
+                  password: "Password123"
+                  role: "AGGREGATOR"
       responses:
         201:
-          description: Admin/Food bundle created successfully
+          description: Admin/AGGREGATOR created successfully
           content:
             application/json:
               schema:
@@ -947,7 +1160,7 @@ paths:
                       admin:
                         value: "Admin created successfully"
                       food_bundle:
-                        value: "Food bundle created successfully"
+                        value: "AGGREGATOR created successfully"
                   data:
                     $ref: "#/components/schemas/Admin"
         400:

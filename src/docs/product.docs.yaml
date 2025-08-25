@@ -74,8 +74,6 @@ components:
           type: string
         phone:
           type: string
-        location:
-          type: string
 
     FoodBundleInfo:
       type: object
@@ -112,7 +110,7 @@ components:
           nullable: true
         farmer:
           $ref: "#/components/schemas/FarmerInfo"
-        foodBundle:
+        aggregator:
           $ref: "#/components/schemas/FoodBundleInfo"
         approvedProduct:
           type: object

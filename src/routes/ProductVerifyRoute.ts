@@ -8,7 +8,7 @@ const ProductverifyRoutes = Router();
 ProductverifyRoutes.put(
   "/product/:submissionId/update",
   isAuthenticated,
-  checkPermission(Role.FOOD_BUNDLE, Role.ADMIN),
+  checkPermission(Role.AGGREGATOR, Role.ADMIN),
   ProductVerifyController.updateSubmission
 );
 

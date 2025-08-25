@@ -8,6 +8,7 @@ components:
       type: object
       required:
         - productName
+        - category
         - quantity
         - wishedPrice
       properties:
@@ -23,6 +24,18 @@ components:
             - Banana
           description: Name of the product being submitted
           example: "Tomatoes"
+        category:
+          type: string
+          enum:
+            - VEGETABLES
+            - FRUITS
+            - GRAINS
+            - TUBERS
+            - LEGUMES
+            - HERBS_SPICES
+            - OTHER
+          description: Category of the product being submitted
+          example: "VEGETABLES"
         quantity:
           type: number.01
           description: Quantity in kilograms
@@ -31,6 +44,26 @@ components:
           type: number.01
           description: Desired price per kilogram in RWF
           example: 500
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Nyarugenge"
+        sector:
+          type: string
+          description: Sector name
+          example: "Gitega"
+        cell:
+          type: string
+          description: Cell name
+          example: "Akabahizi"
+        village:
+          type: string
+          description: Village name
+          example: "Umucyo"
 
     ProductSubmissionResponse:
       type: object
@@ -62,6 +95,26 @@ components:
           type: number
           format: float
           example: 500
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Nyarugenge"
+        sector:
+          type: string
+          description: Sector name
+          example: "Gitega"
+        cell:
+          type: string
+          description: Cell name
+          example: "Akabahizi"
+        village:
+          type: string
+          description: Village name
+          example: "Umucyo"
         status:
           type: string
           enum: [PENDING, VERIFIED, APPROVED, PAID]
@@ -83,9 +136,6 @@ components:
         phone:
           type: string
           example: "+250788123456"
-        location:
-          type: string
-          example: "Kigali"
 
 paths:
   /farmer/web:
@@ -182,9 +232,6 @@ paths:
                 main_menu:
                   summary: Welcome menu display
                   value: "CON Welcome to SmartAgri!\n1. Register\n2. Submit Product\n3. Exit"
-                location_prompt:
-                  summary: Location input prompt
-                  value: "CON Enter your location:"
                 pin_prompt:
                   summary: PIN creation prompt
                   value: "CON Create a 4-digit PIN:"

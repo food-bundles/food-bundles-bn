@@ -276,7 +276,6 @@ export const getOrderByIdService = async (
           name: true,
           email: true,
           phone: true,
-          location: true,
         },
       },
       orderItems: {

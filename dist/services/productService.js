@@ -151,15 +151,17 @@ const updateProductService = async (productId, updateData, adminId) => {
                 productName: updateData.productName,
             }),
             ...(updateData.unitPrice !== undefined && {
-                unitPrice: updateData.unitPrice,
+                unitPrice: Number(updateData.unitPrice),
             }),
             ...(updateData.category !== undefined && {
                 category: updateData.category,
             }),
-            ...(updateData.bonus !== undefined && { bonus: updateData.bonus }),
+            ...(updateData.bonus !== undefined && {
+                bonus: Number(updateData.bonus),
+            }),
             ...(updateData.sku !== undefined && { sku: updateData.sku }),
             ...(updateData.quantity !== undefined && {
-                quantity: updateData.quantity,
+                quantity: Number(updateData.quantity),
             }),
             ...(updateData.images !== undefined && { images: updateData.images }),
             ...(updateData.expiryDate !== undefined && {

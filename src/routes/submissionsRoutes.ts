@@ -20,6 +20,14 @@ submissionsRoutes.get(
   getVerifiedSubmissions
 );
 
+// Get submissions awaiting feedback (aggregators/admins)
+submissionsRoutes.get(
+  "/awaiting-feedback",
+  isAuthenticated,
+  checkPermission(Role.AGGREGATOR, Role.ADMIN),
+  ProductVerifyController.getSubmissionsAwaitingFeedback
+);
+
 // Get submissions by status (move this BEFORE parameterized routes)
 submissionsRoutes.get(
   "/status/:status",
@@ -79,7 +87,7 @@ submissionsRoutes.patch(
 submissionsRoutes.post(
   "/:submissionId/purchase",
   isAuthenticated,
-  checkPermission(Role.FOOD_BUNDLE, Role.ADMIN),
+  checkPermission(Role.AGGREGATOR, Role.ADMIN),
   ProductVerifyController.purchaseProduct
 );
 
@@ -87,7 +95,7 @@ submissionsRoutes.post(
 submissionsRoutes.put(
   "/:submissionId/clear",
   isAuthenticated,
-  checkPermission(Role.FOOD_BUNDLE, Role.ADMIN),
+  checkPermission(Role.AGGREGATOR, Role.ADMIN),
   ProductVerifyController.clearSubmission
 );
 

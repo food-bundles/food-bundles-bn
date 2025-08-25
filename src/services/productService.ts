@@ -32,19 +32,23 @@ export const createProductService = async (productData: ProductData) => {
     throw new Error("SKU already exists");
   }
 
-  // Create the product
+  // Create the product with proper admin connection
   const product = await prisma.product.create({
     data: {
       productName: productData.productName,
       unitPrice: Number(productData.unitPrice),
       category: productData.category as any,
-      bonus: Number(productData.bonus) ?? 0,
+      bonus: Number(productData.bonus) || 0, // Use || instead of ?? for NaN handling
       sku: productData.sku,
       quantity: Number(productData.quantity),
       images: productData.images,
       expiryDate: productData.expiryDate,
       unit: productData.unit,
-      createdBy: productData.createdBy,
+      admin: {
+        connect: {
+          id: productData.createdBy,
+        },
+      },
     },
     include: {
       admin: {
@@ -115,10 +119,9 @@ export const updateProductQuantityFromSubmissionService = async ({
           select: {
             id: true,
             phone: true,
-            location: true,
           },
         },
-        foodBundle: {
+        aggregator: {
           select: {
             id: true,
             username: true,
@@ -236,10 +239,9 @@ export const createProductFromSubmissionService = async ({
         select: {
           id: true,
           phone: true,
-          location: true,
         },
       },
-      foodBundle: {
+      aggregator: {
         select: {
           id: true,
           username: true,
@@ -315,10 +317,9 @@ export const createProductFromSubmissionService = async ({
           select: {
             id: true,
             phone: true,
-            location: true,
           },
         },
-        foodBundle: {
+        aggregator: {
           select: {
             id: true,
             username: true,
@@ -447,6 +448,7 @@ export const getAllProductsService = async ({
     where.OR = [
       { name: { contains: search, mode: "insensitive" } },
       { sku: { contains: search, mode: "insensitive" } },
+      { quantity: { gt: 0 }, status: "ACTIVE" },
     ];
   }
 
@@ -456,13 +458,10 @@ export const getAllProductsService = async ({
       skip,
       take: limit,
       include: {
-        admin: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-          },
-        },
+        farmerSubmissions: false,
+        admin: false,
+        orderItems: false,
+        CartItem: false,
       },
       orderBy: {
         createdAt: "desc",
@@ -498,7 +497,6 @@ export const getProductByIdService = async (productId: string) => {
             select: {
               id: true,
               phone: true,
-              location: true,
             },
           },
         },
@@ -525,10 +523,9 @@ export const getVerifiedSubmissionsService = async () => {
         select: {
           id: true,
           phone: true,
-          location: true,
         },
       },
-      foodBundle: {
+      aggregator: {
         select: {
           id: true,
           username: true,
@@ -558,6 +555,12 @@ export const approveSubmissionService = async (submissionId: string) => {
     throw new Error("Only VERIFIED submissions can be approved");
   }
 
+  if (submission.farmerFeedbackStatus !== "ACCEPTED") {
+    throw new Error(
+      "Only submissions with ACCEPTED feedback from farmer can be approved"
+    );
+  }
+
   const updatedSubmission = await prisma.farmerSubmission.update({
     where: { id: submissionId },
     data: {
@@ -569,15 +572,30 @@ export const approveSubmissionService = async (submissionId: string) => {
         select: {
           id: true,
           phone: true,
-          location: true,
         },
       },
-      foodBundle: {
+      aggregator: {
         select: {
           id: true,
           username: true,
           email: true,
         },
+      },
+    },
+  });
+
+  if (!updatedSubmission) {
+    throw new Error("Submission not found");
+  }
+
+  // Update product quantity of same name of farmer submission
+  await prisma.product.update({
+    where: {
+      productName: submission.productName,
+    },
+    data: {
+      quantity: {
+        increment: submission.acceptedQty ?? 0,
       },
     },
   });
