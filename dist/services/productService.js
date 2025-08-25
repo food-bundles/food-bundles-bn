@@ -20,19 +20,23 @@ const createProductService = async (productData) => {
     if (existingSku) {
         throw new Error("SKU already exists");
     }
-    // Create the product
+    // Create the product with proper admin connection
     const product = await prisma_1.default.product.create({
         data: {
             productName: productData.productName,
             unitPrice: Number(productData.unitPrice),
             category: productData.category,
-            bonus: Number(productData.bonus) ?? 0,
+            bonus: Number(productData.bonus) || 0, // Use || instead of ?? for NaN handling
             sku: productData.sku,
             quantity: Number(productData.quantity),
             images: productData.images,
             expiryDate: productData.expiryDate,
             unit: productData.unit,
-            createdBy: productData.createdBy,
+            admin: {
+                connect: {
+                    id: productData.createdBy,
+                },
+            },
         },
         include: {
             admin: {
@@ -90,10 +94,9 @@ const updateProductQuantityFromSubmissionService = async ({ submissionId, produc
                     select: {
                         id: true,
                         phone: true,
-                        location: true,
                     },
                 },
-                foodBundle: {
+                aggregator: {
                     select: {
                         id: true,
                         username: true,
@@ -192,10 +195,9 @@ const createProductFromSubmissionService = async ({ submissionId, productData, }
                 select: {
                     id: true,
                     phone: true,
-                    location: true,
                 },
             },
-            foodBundle: {
+            aggregator: {
                 select: {
                     id: true,
                     username: true,
@@ -263,10 +265,9 @@ const createProductFromSubmissionService = async ({ submissionId, productData, }
                     select: {
                         id: true,
                         phone: true,
-                        location: true,
                     },
                 },
-                foodBundle: {
+                aggregator: {
                     select: {
                         id: true,
                         username: true,
@@ -368,6 +369,7 @@ const getAllProductsService = async ({ category, search, page = 1, limit = 10, }
         where.OR = [
             { name: { contains: search, mode: "insensitive" } },
             { sku: { contains: search, mode: "insensitive" } },
+            { quantity: { gt: 0 }, status: "ACTIVE" },
         ];
     }
     const [products, total] = await Promise.all([
@@ -376,13 +378,10 @@ const getAllProductsService = async ({ category, search, page = 1, limit = 10, }
             skip,
             take: limit,
             include: {
-                admin: {
-                    select: {
-                        id: true,
-                        username: true,
-                        email: true,
-                    },
-                },
+                farmerSubmissions: false,
+                admin: false,
+                orderItems: false,
+                CartItem: false,
             },
             orderBy: {
                 createdAt: "desc",
@@ -417,7 +416,6 @@ const getProductByIdService = async (productId) => {
                         select: {
                             id: true,
                             phone: true,
-                            location: true,
                         },
                     },
                 },
@@ -442,10 +440,9 @@ const getVerifiedSubmissionsService = async () => {
                 select: {
                     id: true,
                     phone: true,
-                    location: true,
                 },
             },
-            foodBundle: {
+            aggregator: {
                 select: {
                     id: true,
                     username: true,
@@ -471,6 +468,9 @@ const approveSubmissionService = async (submissionId) => {
     if (submission.status !== "VERIFIED") {
         throw new Error("Only VERIFIED submissions can be approved");
     }
+    if (submission.farmerFeedbackStatus !== "ACCEPTED") {
+        throw new Error("Only submissions with ACCEPTED feedback from farmer can be approved");
+    }
     const updatedSubmission = await prisma_1.default.farmerSubmission.update({
         where: { id: submissionId },
         data: {
@@ -482,15 +482,28 @@ const approveSubmissionService = async (submissionId) => {
                 select: {
                     id: true,
                     phone: true,
-                    location: true,
                 },
             },
-            foodBundle: {
+            aggregator: {
                 select: {
                     id: true,
                     username: true,
                     email: true,
                 },
+            },
+        },
+    });
+    if (!updatedSubmission) {
+        throw new Error("Submission not found");
+    }
+    // Update product quantity of same name of farmer submission
+    await prisma_1.default.product.update({
+        where: {
+            productName: submission.productName,
+        },
+        data: {
+            quantity: {
+                increment: submission.acceptedQty ?? 0,
             },
         },
     });

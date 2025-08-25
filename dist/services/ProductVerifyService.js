@@ -7,7 +7,7 @@ exports.getSubmissionStatsService = exports.getSubmissionsByStatusService = expo
 const prisma_1 = __importDefault(require("../prisma"));
 const client_1 = require("@prisma/client");
 const paginationService_1 = require("./paginationService");
-const purchaseProductService = async (submissionId, acceptedQty, acceptedPrice, foodBundleId) => {
+const purchaseProductService = async (submissionId, acceptedQty, acceptedPrice, aggregatorId, feedbackDeadline) => {
     const existingSubmission = await prisma_1.default.farmerSubmission.findUnique({
         where: { id: submissionId },
         include: {
@@ -15,7 +15,6 @@ const purchaseProductService = async (submissionId, acceptedQty, acceptedPrice, 
                 select: {
                     id: true,
                     phone: true,
-                    location: true,
                 },
             },
         },
@@ -23,11 +22,11 @@ const purchaseProductService = async (submissionId, acceptedQty, acceptedPrice, 
     if (!existingSubmission) {
         throw new Error("Submission not found");
     }
-    const foodBundle = await prisma_1.default.admin.findUnique({
-        where: { id: foodBundleId },
+    const aggregator = await prisma_1.default.admin.findUnique({
+        where: { id: aggregatorId },
     });
-    if (!foodBundle) {
-        throw new Error("Food bundle not found");
+    if (!aggregator) {
+        throw new Error("AGGREGATOR not found");
     }
     if (existingSubmission.submittedQty === null ||
         acceptedQty > existingSubmission.submittedQty) {
@@ -39,8 +38,9 @@ const purchaseProductService = async (submissionId, acceptedQty, acceptedPrice, 
         data: {
             acceptedQty,
             acceptedPrice,
+            feedbackDeadline: feedbackDeadline ? feedbackDeadline : null,
             totalAmount,
-            foodBundleId,
+            aggregatorId,
             status: "VERIFIED",
             verifiedAt: new Date(),
         },
@@ -49,10 +49,9 @@ const purchaseProductService = async (submissionId, acceptedQty, acceptedPrice, 
                 select: {
                     id: true,
                     phone: true,
-                    location: true,
                 },
             },
-            foodBundle: {
+            aggregator: {
                 select: {
                     id: true,
                     phone: true,
@@ -63,7 +62,7 @@ const purchaseProductService = async (submissionId, acceptedQty, acceptedPrice, 
     return updatedSubmission;
 };
 exports.purchaseProductService = purchaseProductService;
-const updateSubmissionService = async (submissionId, acceptedQty, acceptedPrice, foodBundleId) => {
+const updateSubmissionService = async (submissionId, acceptedQty, acceptedPrice, aggregatorId, feedbackDeadline) => {
     const existingSubmission = await prisma_1.default.farmerSubmission.findUnique({
         where: { id: submissionId },
     });
@@ -73,7 +72,7 @@ const updateSubmissionService = async (submissionId, acceptedQty, acceptedPrice,
     if (existingSubmission.status !== "VERIFIED") {
         throw new Error("Can only update submissions with VERIFIED status");
     }
-    if (existingSubmission.foodBundleId !== foodBundleId) {
+    if (existingSubmission.aggregatorId !== aggregatorId) {
         throw new Error("You can only update submissions you have verified");
     }
     const totalAmount = acceptedQty * acceptedPrice;
@@ -82,6 +81,7 @@ const updateSubmissionService = async (submissionId, acceptedQty, acceptedPrice,
         data: {
             acceptedQty,
             acceptedPrice,
+            feedbackDeadline: feedbackDeadline ? feedbackDeadline : null,
             totalAmount,
             verifiedAt: new Date(),
         },
@@ -90,10 +90,9 @@ const updateSubmissionService = async (submissionId, acceptedQty, acceptedPrice,
                 select: {
                     id: true,
                     phone: true,
-                    location: true,
                 },
             },
-            foodBundle: {
+            aggregator: {
                 select: {
                     id: true,
                     phone: true,
@@ -117,7 +116,7 @@ const clearSubmissionService = async (submissionId) => {
             acceptedQty: null,
             acceptedPrice: null,
             totalAmount: null,
-            foodBundleId: null,
+            aggregatorId: null,
             status: "PENDING",
             verifiedAt: null,
         },
@@ -126,7 +125,6 @@ const clearSubmissionService = async (submissionId) => {
                 select: {
                     id: true,
                     phone: true,
-                    location: true,
                 },
             },
         },
@@ -140,16 +138,15 @@ const getIncludeConfig = (userRole) => {
             select: {
                 id: true,
                 phone: true,
-                location: true,
                 email: true,
             },
         },
     };
-    // Add foodBundle and approvedProduct for ADMIN and FOOD_BUNDLE roles
-    if (userRole === client_1.Role.ADMIN || userRole === client_1.Role.FOOD_BUNDLE) {
+    // Add aggregator and approvedProduct for ADMIN and AGGREGATOR roles
+    if (userRole === client_1.Role.ADMIN || userRole === client_1.Role.AGGREGATOR) {
         return {
             ...baseInclude,
-            foodBundle: {
+            aggregator: {
                 select: {
                     id: true,
                     username: true,
@@ -171,15 +168,36 @@ const getIncludeConfig = (userRole) => {
     return baseInclude;
 };
 // Get filter conditions based on user role
-const getFilterConditions = (userId, userRole, options) => {
+const getFilterConditions = async (userId, userRole, options) => {
     let whereCondition = {};
     // Role-based filtering
     switch (userRole) {
         case client_1.Role.FARMER:
             whereCondition.farmerId = userId;
             break;
-        case client_1.Role.FOOD_BUNDLE:
-            whereCondition.foodBundleId = userId;
+        case client_1.Role.AGGREGATOR:
+            // Get aggregator's location details
+            const aggregator = await prisma_1.default.admin.findUnique({
+                where: { id: userId },
+                select: {
+                    province: true,
+                    district: true,
+                },
+            });
+            if (!aggregator) {
+                throw new Error("Aggregator not found");
+            }
+            // Filter submissions by aggregator's province and district
+            whereCondition.AND = [
+                { province: aggregator.province },
+                { district: aggregator.district },
+                {
+                    OR: [
+                        { aggregatorId: userId }, // Submissions already assigned to this aggregator
+                        { aggregatorId: null }, // Unassigned submissions in their location
+                    ],
+                },
+            ];
             break;
         case client_1.Role.ADMIN:
             // Admin can see all submissions - no additional filter needed
@@ -203,7 +221,8 @@ const getAllSubmissionsService = async ({ userId, userRole, options = {}, }) => 
     const paginationParams = paginationService_1.PaginationService.validatePaginationParams(options.page?.toString(), options.limit?.toString());
     const { page, limit, sortBy = "submittedAt", sortOrder = "desc", } = { ...paginationParams, ...options };
     const skip = (page - 1) * limit;
-    const whereCondition = getFilterConditions(userId, userRole, options);
+    // FIXED: Added await here
+    const whereCondition = await getFilterConditions(userId, userRole, options);
     const includeConfig = getIncludeConfig(userRole);
     // Get total count for pagination
     const totalCount = await prisma_1.default.farmerSubmission.count({
@@ -232,7 +251,7 @@ const getAllSubmissionsService = async ({ userId, userRole, options = {}, }) => 
         },
         userContext: {
             role: userRole,
-            canManage: userRole === client_1.Role.ADMIN || userRole === client_1.Role.FOOD_BUNDLE,
+            canManage: userRole === client_1.Role.ADMIN || userRole === client_1.Role.AGGREGATOR,
         },
     };
 };
@@ -246,17 +265,31 @@ const getSubmissionByIdService = async (submissionId, userId, userRole) => {
     if (!submission) {
         throw new Error("Submission not found");
     }
-    // Role-based access control
+    // Role-based access control for AGGREGATOR - check location-based access
     switch (userRole) {
         case client_1.Role.FARMER:
             if (submission.farmerId !== userId) {
                 throw new Error("Access denied: You can only view your own submissions");
             }
             break;
-        case client_1.Role.FOOD_BUNDLE:
-            // Food bundle can see submissions they're assigned to or unassigned ones
-            if (submission.foodBundleId && submission.foodBundleId !== userId) {
-                throw new Error("Access denied: You can only view submissions assigned to you");
+        case client_1.Role.AGGREGATOR:
+            // Check if aggregator has location-based access to this submission
+            const aggregator = await prisma_1.default.admin.findUnique({
+                where: { id: userId },
+                select: {
+                    province: true,
+                    district: true,
+                },
+            });
+            if (!aggregator) {
+                throw new Error("Aggregator not found");
+            }
+            // Check if submission is in aggregator's location or assigned to them
+            const hasLocationAccess = submission.province === aggregator.province &&
+                submission.district === aggregator.district;
+            const isAssigned = submission.aggregatorId === userId;
+            if (!hasLocationAccess && !isAssigned) {
+                throw new Error("Access denied: You can only view submissions in your location or assigned to you");
             }
             break;
         case client_1.Role.ADMIN:
@@ -269,9 +302,9 @@ const getSubmissionByIdService = async (submissionId, userId, userRole) => {
         data: submission,
         userContext: {
             role: userRole,
-            canManage: userRole === client_1.Role.ADMIN || userRole === client_1.Role.FOOD_BUNDLE,
+            canManage: userRole === client_1.Role.ADMIN || userRole === client_1.Role.AGGREGATOR,
             isOwner: userRole === client_1.Role.FARMER && submission.farmerId === userId,
-            isAssigned: userRole === client_1.Role.FOOD_BUNDLE && submission.foodBundleId === userId,
+            isAssigned: userRole === client_1.Role.AGGREGATOR && submission.aggregatorId === userId,
         },
     };
 };
@@ -287,7 +320,8 @@ const getSubmissionsByStatusService = async ({ userId, userRole, status, options
 exports.getSubmissionsByStatusService = getSubmissionsByStatusService;
 // Service to get submission statistics (for dashboards)
 const getSubmissionStatsService = async (userId, userRole) => {
-    const whereCondition = getFilterConditions(userId, userRole);
+    // FIXED: Added await here
+    const whereCondition = await getFilterConditions(userId, userRole);
     const stats = await prisma_1.default.farmerSubmission.groupBy({
         by: ["status"],
         where: whereCondition,

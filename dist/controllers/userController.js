@@ -54,7 +54,7 @@ UserController.createAdmin = async (req, res) => {
             sms = "Admin created successfully";
         }
         else {
-            sms = "Food bundle created successfully";
+            sms = "AGGREGATOR created successfully";
         }
         res.status(201).json({
             success: true,
@@ -301,7 +301,6 @@ UserController.login = async (req, res) => {
         const user = result.user;
         const payload = {
             id: user.id,
-            role: user.role,
         };
         const token = (0, jwt_1.generateToken)(payload);
         res.cookie("auth_token", token, {
@@ -313,7 +312,6 @@ UserController.login = async (req, res) => {
         res.status(200).json({
             success: true,
             message: "Login successful",
-            token: token,
         });
     }
     catch (error) {

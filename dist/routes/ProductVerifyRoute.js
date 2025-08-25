@@ -8,5 +8,5 @@ const ProductVerifyController_1 = __importDefault(require("../controllers/Produc
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const client_1 = require("@prisma/client");
 const ProductverifyRoutes = (0, express_1.Router)();
-ProductverifyRoutes.put("/product/:submissionId/update", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)(client_1.Role.FOOD_BUNDLE, client_1.Role.ADMIN), ProductVerifyController_1.default.updateSubmission);
+ProductverifyRoutes.put("/product/:submissionId/update", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)(client_1.Role.AGGREGATOR, client_1.Role.ADMIN), ProductVerifyController_1.default.updateSubmission);
 exports.default = ProductverifyRoutes;
