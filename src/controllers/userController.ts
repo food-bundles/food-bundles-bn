@@ -20,7 +20,8 @@ import {
 import { PaginationService } from "../services/paginationService";
 import { JwtPayload } from "../types/userTypes";
 import { Role } from "@prisma/client";
-import { generateToken } from "../utils/jwt";
+import { generateToken, verifyToken } from "../utils/jwt";
+import prisma from "../prisma";
 
 export class UserController {
   static createFarmer = async (req: Request, res: Response) => {
@@ -358,11 +359,80 @@ export class UserController {
       res.status(200).json({
         success: true,
         message: "Login successful",
+        token,
+        data: result,
       });
     } catch (error: any) {
       res.status(401).json({
         success: false,
         message: error.message,
+      });
+    }
+  };
+
+  static me = async (req: Request, res: Response) => {
+    try {
+      const token = req.cookies["auth_token"];
+      if (!token) {
+        return res.status(401).json({ message: "No token provided" });
+      }
+
+      const payload = verifyToken(token);
+      if (!payload) {
+        return res.status(401).json({ message: "Invalid token" });
+      }
+
+      let user: any = null;
+      let userRole = "";
+
+      user = await prisma.farmer.findUnique({ where: { id: payload.id } });
+      if (user) userRole = "farmer";
+
+      if (!user) {
+        user = await prisma.restaurant.findUnique({
+          where: { id: payload.id },
+        });
+        if (user) userRole = "restaurant";
+      }
+
+      if (!user) {
+        user = await prisma.admin.findUnique({ where: { id: payload.id } });
+        if (user) userRole = "admin";
+      }
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const { password, ...userWithoutPassword } = user;
+
+      return res.json({
+        success: true,
+        user: userWithoutPassword,
+        userRole,
+      });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  };
+
+  static logout = async (req: Request, res: Response) => {
+    try {
+      res.clearCookie("auth_token", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Logged out successfully",
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || "Logout failed",
       });
     }
   };
