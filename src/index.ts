@@ -27,7 +27,12 @@ const app = express();
 
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "https://food-bundles-fn.vercel.app",
+      "https://food-bundle-bn.onrender.com",
+    ],
     credentials: true,
   })
 );
