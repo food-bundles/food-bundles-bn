@@ -25,7 +25,12 @@ const options = {
 const specs = (0, swagger_jsdoc_1.default)(options);
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
-    origin: "http://localhost:3000",
+    origin: [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://food-bundles-fn.vercel.app",
+        "https://food-bundle-bn.onrender.com",
+    ],
     credentials: true,
 }));
 app.use(express_1.default.json());

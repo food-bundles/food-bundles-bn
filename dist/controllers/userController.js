@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserController = void 0;
@@ -6,6 +9,7 @@ const userServices_1 = require("../services/userServices");
 const paginationService_1 = require("../services/paginationService");
 const client_1 = require("@prisma/client");
 const jwt_1 = require("../utils/jwt");
+const prisma_1 = __importDefault(require("../prisma"));
 class UserController {
 }
 exports.UserController = UserController;
@@ -312,12 +316,75 @@ UserController.login = async (req, res) => {
         res.status(200).json({
             success: true,
             message: "Login successful",
+            token,
+            data: result,
         });
     }
     catch (error) {
         res.status(401).json({
             success: false,
             message: error.message,
+        });
+    }
+};
+UserController.me = async (req, res) => {
+    try {
+        const token = req.cookies["auth_token"];
+        if (!token) {
+            return res.status(401).json({ message: "No token provided" });
+        }
+        const payload = (0, jwt_1.verifyToken)(token);
+        if (!payload) {
+            return res.status(401).json({ message: "Invalid token" });
+        }
+        let user = null;
+        let userRole = "";
+        user = await prisma_1.default.farmer.findUnique({ where: { id: payload.id } });
+        if (user)
+            userRole = "farmer";
+        if (!user) {
+            user = await prisma_1.default.restaurant.findUnique({
+                where: { id: payload.id },
+            });
+            if (user)
+                userRole = "restaurant";
+        }
+        if (!user) {
+            user = await prisma_1.default.admin.findUnique({ where: { id: payload.id } });
+            if (user)
+                userRole = "admin";
+        }
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        const { password, ...userWithoutPassword } = user;
+        return res.json({
+            success: true,
+            user: userWithoutPassword,
+            userRole,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ message: error.message });
+    }
+};
+UserController.logout = async (req, res) => {
+    try {
+        res.clearCookie("auth_token", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            path: "/",
+        });
+        res.status(200).json({
+            success: true,
+            message: "Logged out successfully",
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message || "Logout failed",
         });
     }
 };
