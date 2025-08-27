@@ -4,9 +4,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateFarmerFeedbackService = exports.getFarmerFeedbackHistoryService = exports.getPendingFeedbackSubmissionsService = exports.submitFarmerFeedbackService = void 0;
+exports.submitProductService = submitProductService;
 const client_1 = require("@prisma/client");
 const paginationService_1 = require("./paginationService");
 const prisma_1 = __importDefault(require("../prisma"));
+const location_service_1 = require("./location.service");
+const ussdServices_1 = require("./ussdServices");
 // Service to handle farmer feedback on verified submissions
 const submitFarmerFeedbackService = async (submissionId, farmerId, feedbackData) => {
     const existingSubmission = await prisma_1.default.farmerSubmission.findUnique({
@@ -272,3 +275,81 @@ const updateFarmerFeedbackService = async (submissionId, farmerId, feedbackData)
     return updatedSubmission;
 };
 exports.updateFarmerFeedbackService = updateFarmerFeedbackService;
+async function submitProductService(submissionData) {
+    // Get valid products from database
+    const validProducts = await (0, ussdServices_1.getProductsFromDatabase)();
+    // Validate product name
+    if (!validProducts.includes(submissionData.productName)) {
+        throw new Error(`Invalid product. Valid products are: ${validProducts.join(", ")}`);
+    }
+    // Validate quantity and price
+    if (submissionData.submittedQty <= 0) {
+        throw new Error("Quantity must be greater than 0");
+    }
+    if (submissionData.wishedPrice <= 0) {
+        throw new Error("Price must be greater than 0");
+    }
+    // Check if farmer exists and get their location data
+    const farmer = await prisma_1.default.farmer.findUnique({
+        where: { id: submissionData.farmerId },
+        select: {
+            id: true,
+            province: true,
+            district: true,
+            sector: true,
+            cell: true,
+            village: true,
+        },
+    });
+    if (!farmer) {
+        throw new Error("Farmer not found");
+    }
+    // Validate farmer's location data
+    if (!submissionData.province ||
+        !submissionData.district ||
+        !submissionData.sector ||
+        !submissionData.cell ||
+        !submissionData.village) {
+        throw new Error("submissionData location data is incomplete. Please update your profile.");
+    }
+    const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
+        province: submissionData.province,
+        district: submissionData.district,
+        sector: submissionData.sector,
+        cell: submissionData.cell,
+        village: submissionData.village,
+    });
+    if (!locationValidation.isValid) {
+        throw new Error(`Farmer location validation failed: ${locationValidation.errors.join(", ")}`);
+    }
+    // Create submission with farmer's location data
+    const submission = await prisma_1.default.farmerSubmission.create({
+        data: {
+            farmerId: submissionData.farmerId,
+            productName: submissionData.productName,
+            category: submissionData.category,
+            submittedQty: submissionData.submittedQty,
+            wishedPrice: submissionData.wishedPrice,
+            status: "PENDING",
+            province: submissionData.province,
+            district: submissionData.district,
+            sector: submissionData.sector,
+            cell: submissionData.cell,
+            village: submissionData.village,
+        },
+        include: {
+            farmer: {
+                select: {
+                    id: true,
+                    phone: true,
+                    province: true,
+                    district: true,
+                    sector: true,
+                    cell: true,
+                    village: true,
+                },
+            },
+        },
+    });
+    return submission;
+}

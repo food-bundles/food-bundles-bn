@@ -133,13 +133,14 @@ export type TranslationKey =
   | "selectDistrict"
   | "selectSector"
   | "selectCell"
-  | "selectVillage";
+  | "selectVillage"
+  | "mainMenu";
 
 // Translation object with support for Kinyarwanda, English, and French
 
 export const translations = {
   KINY: {
-    welcome: "Murakaza neza kuri SmartAgri!",
+    welcome: "Murakaza neza kuri FoodBundles!",
     register: "Kwiyandikisha",
     submitProduct: "Ohereza umusaruro",
     myAccount: "Konti yanjye",
@@ -192,7 +193,7 @@ export const translations = {
     tubers: "Ibiribwa by'imizi",
     legumes: "Ibinyamisogwe",
     herbsSpices: "Ibiyunguranoma",
-    exitMessage: "Murakoze gukoresha SmartAgri!",
+    exitMessage: "Murakoze gukoresha FoodBundles!",
     back: "Subira inyuma",
     next: "Ibikurikira",
     previous: "Ibyahise",
@@ -201,9 +202,10 @@ export const translations = {
     selectSector: "Hitamo umurenge:",
     selectCell: "Hitamo akagari:",
     selectVillage: "Hitamo umudugudu:",
+    mainMenu: "Ahabanza",
   },
   ENG: {
-    welcome: "Welcome to SmartAgri!",
+    welcome: "Welcome to FoodBundles!",
     register: "Register",
     submitProduct: "Submit Product",
     myAccount: "My Account",
@@ -253,7 +255,7 @@ export const translations = {
     tubers: "Tubers",
     legumes: "Legumes",
     herbsSpices: "Herbs & Spices",
-    exitMessage: "Thank you for using SmartAgri!",
+    exitMessage: "Thank you for using FoodBundles!",
     back: "Back",
     next: "Next",
     previous: "Previous",
@@ -262,9 +264,10 @@ export const translations = {
     selectSector: "Select your Sector:",
     selectCell: "Select your Cell:",
     selectVillage: "Select your Village:",
+    mainMenu: "Main Menu",
   },
   FRE: {
-    welcome: "Bienvenue à SmartAgri!",
+    welcome: "Bienvenue à FoodBundles!",
     register: "S'inscrire",
     submitProduct: "Soumettre un produit",
     myAccount: "Mon compte",
@@ -317,7 +320,7 @@ export const translations = {
     tubers: "Tubercules",
     legumes: "Légumineuses",
     herbsSpices: "Herbes et épices",
-    exitMessage: "Merci d'utiliser SmartAgri!",
+    exitMessage: "Merci d'utiliser FoodBundles!",
     back: "Retour",
     next: "Suivant",
     previous: "Précédent",
@@ -326,6 +329,7 @@ export const translations = {
     selectSector: "Sélectionnez votre Secteur:",
     selectCell: "Sélectionnez votre Cellule:",
     selectVillage: "Sélectionnez votre Village:",
+    mainMenu: "Menu Principal",
   },
 };
 

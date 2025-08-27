@@ -231,7 +231,7 @@ paths:
               examples:
                 main_menu:
                   summary: Welcome menu display
-                  value: "CON Welcome to SmartAgri!\n1. Register\n2. Submit Product\n3. Exit"
+                  value: "CON Welcome to FoodBundles!\n1. Register\n2. Submit Product\n3. Exit"
                 pin_prompt:
                   summary: PIN creation prompt
                   value: "CON Create a 4-digit PIN:"
@@ -288,7 +288,7 @@ paths:
                   value: "END Submission failed. Try again."
                 exit_message:
                   summary: Exit system message
-                  value: "END Thank you for using SmartAgri!"
+                  value: "END Thank you for using FoodBundles!"
                 invalid_input:
                   summary: Invalid input error
                   value: "END Invalid input. Try again."
