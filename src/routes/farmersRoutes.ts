@@ -2,9 +2,13 @@ import { Router } from "express";
 import { UserController } from "../controllers/userController";
 import { Role } from "@prisma/client";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
-import FarmerController from "../controllers/farmer.controller";
+import FarmerController, {
+  submitProductController,
+} from "../controllers/farmer.controller";
 
 const farmersRoutes = Router();
+
+farmersRoutes.post("/submit-product", isAuthenticated, submitProductController);
 
 // Get pending feedback submissions (farmers only)
 farmersRoutes.get(

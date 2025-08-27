@@ -2,6 +2,9 @@ import { FarmerFeedbackStatus, SubmissionStatus } from "@prisma/client";
 import { IPaginationOptions } from "../types/productVerifyTypes";
 import { PaginationService } from "./paginationService";
 import prisma from "../prisma";
+import { LocationValidationService } from "./location.service";
+import { ProductSubmissionInput } from "../types/productTypes";
+import { getProductsFromDatabase } from "./ussdServices";
 
 // Interface for farmer feedback request
 export interface IFarmerFeedbackRequest {
@@ -360,3 +363,105 @@ export const updateFarmerFeedbackService = async (
 
   return updatedSubmission;
 };
+
+export async function submitProductService(
+  submissionData: ProductSubmissionInput
+) {
+  // Get valid products from database
+  const validProducts = await getProductsFromDatabase();
+
+  // Validate product name
+  if (!validProducts.includes(submissionData.productName)) {
+    throw new Error(
+      `Invalid product. Valid products are: ${validProducts.join(", ")}`
+    );
+  }
+
+  // Validate quantity and price
+  if (submissionData.submittedQty <= 0) {
+    throw new Error("Quantity must be greater than 0");
+  }
+
+  if (submissionData.wishedPrice <= 0) {
+    throw new Error("Price must be greater than 0");
+  }
+
+  // Check if farmer exists and get their location data
+  const farmer = await prisma.farmer.findUnique({
+    where: { id: submissionData.farmerId },
+    select: {
+      id: true,
+      province: true,
+      district: true,
+      sector: true,
+      cell: true,
+      village: true,
+    },
+  });
+
+  if (!farmer) {
+    throw new Error("Farmer not found");
+  }
+
+  // Validate farmer's location data
+  if (
+    !submissionData.province ||
+    !submissionData.district ||
+    !submissionData.sector ||
+    !submissionData.cell ||
+    !submissionData.village
+  ) {
+    throw new Error(
+      "submissionData location data is incomplete. Please update your profile."
+    );
+  }
+
+  const locationValidation =
+    LocationValidationService.validateLocationHierarchy({
+      province: submissionData.province,
+      district: submissionData.district,
+      sector: submissionData.sector,
+      cell: submissionData.cell,
+      village: submissionData.village,
+    });
+
+  if (!locationValidation.isValid) {
+    throw new Error(
+      `Farmer location validation failed: ${locationValidation.errors.join(
+        ", "
+      )}`
+    );
+  }
+
+  // Create submission with farmer's location data
+  const submission = await prisma.farmerSubmission.create({
+    data: {
+      farmerId: submissionData.farmerId,
+      productName: submissionData.productName,
+      category: submissionData.category,
+      submittedQty: submissionData.submittedQty,
+      wishedPrice: submissionData.wishedPrice,
+      status: "PENDING",
+      province: submissionData.province,
+      district: submissionData.district,
+      sector: submissionData.sector,
+      cell: submissionData.cell,
+      village: submissionData.village,
+    },
+    include: {
+      farmer: {
+        select: {
+          id: true,
+          phone: true,
+          province: true,
+          district: true,
+          sector: true,
+          cell: true,
+          village: true,
+        },
+      },
+    },
+  });
+
+  return submission;
+}

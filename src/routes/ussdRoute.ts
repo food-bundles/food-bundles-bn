@@ -1,14 +1,9 @@
 import { Router } from "express";
-import {
-  submitProductController,
-  ussdHandler,
-} from "../controllers/ussdControllers";
-import { isAuthenticated } from "../middleware/authMiddleware";
+import { ussdHandler } from "../controllers/ussdControllers";
 
 const ussdRoutes = Router();
 
 ussdRoutes.post("/farmer/ussd", ussdHandler);
-ussdRoutes.post("/farmer/web", isAuthenticated, submitProductController);
 ussdRoutes.get("/farmers/ussd", (req, res) => {
   res.send("USSD endpoint is working! Use POST method.");
 });

@@ -25,6 +25,7 @@ const createProductService = async (productData) => {
         data: {
             productName: productData.productName,
             unitPrice: Number(productData.unitPrice),
+            purchasePrice: Number(productData.purchasePrice),
             category: productData.category,
             bonus: Number(productData.bonus) || 0, // Use || instead of ?? for NaN handling
             sku: productData.sku,
@@ -233,6 +234,7 @@ const createProductFromSubmissionService = async ({ submissionId, productData, }
             data: {
                 productName: productData.productName,
                 unitPrice: productData.unitPrice,
+                purchasePrice: productData.purchasePrice,
                 category: productData.category,
                 bonus: productData.bonus ?? 0,
                 sku: productData.sku,

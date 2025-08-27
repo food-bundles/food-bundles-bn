@@ -138,7 +138,7 @@ components:
           example: "+250788123456"
 
 paths:
-  /farmer/web:
+  /farmers/submit-product:
     post:
       tags:
         - Farmer API Management

@@ -19,6 +19,7 @@ export const createProduct = async (req: Request, res: Response) => {
     const {
       productName,
       unitPrice,
+      purchasePrice,
       category,
       bonus,
       sku,
@@ -50,6 +51,7 @@ export const createProduct = async (req: Request, res: Response) => {
     const product = await createProductService({
       productName,
       unitPrice,
+      purchasePrice,
       category,
       bonus,
       sku,
@@ -113,6 +115,7 @@ export const createProductFromSubmission = async (
     const {
       productName,
       unitPrice,
+      purchasePrice,
       category,
       bonus,
       sku,
@@ -145,6 +148,7 @@ export const createProductFromSubmission = async (
       productData: {
         productName: existingQty?.productName || productName,
         unitPrice,
+        purchasePrice,
         category,
         bonus,
         sku,

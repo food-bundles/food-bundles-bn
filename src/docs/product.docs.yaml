@@ -17,6 +17,10 @@ components:
           type: number
           format: float
           description: Price per unit
+        purchasePrice:
+          type: number
+          format: float
+          description: Purchase price per unit
         category:
           type: string
           description: Product category

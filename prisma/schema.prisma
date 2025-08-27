@@ -18,10 +18,11 @@ model Farmer {
   cell     String
   village  String
 
-  role        Role               @default(FARMER)
-  password    String?
-  createdAt   DateTime           @default(now())
-  submissions FarmerSubmission[]
+  role              Role               @default(FARMER)
+  preferredLanguage String?            @default("KINY")
+  password          String?
+  createdAt         DateTime           @default(now())
+  submissions       FarmerSubmission[]
 }
 
 model Restaurant {
@@ -104,6 +105,7 @@ model Admin {
 model Product {
   id                String             @id @default(uuid())
   unitPrice         Float
+  purchasePrice     Float
   unit              String
   createdAt         DateTime           @default(now())
   bonus             Int
@@ -288,6 +290,7 @@ enum FarmerFeedbackStatus {
 }
 
 enum ProductCategory {
+  ANIMAL_PRODUCTS
   VEGETABLES
   FRUITS
   GRAINS

@@ -3,6 +3,7 @@ import prisma from "../prisma";
 export interface ProductData {
   productName: string;
   unitPrice: number;
+  purchasePrice: number;
   category: string;
   bonus?: number;
   sku: string;
@@ -37,6 +38,7 @@ export const createProductService = async (productData: ProductData) => {
     data: {
       productName: productData.productName,
       unitPrice: Number(productData.unitPrice),
+      purchasePrice: Number(productData.purchasePrice),
       category: productData.category as any,
       bonus: Number(productData.bonus) || 0, // Use || instead of ?? for NaN handling
       sku: productData.sku,
@@ -284,6 +286,7 @@ export const createProductFromSubmissionService = async ({
       data: {
         productName: productData.productName,
         unitPrice: productData.unitPrice,
+        purchasePrice: productData.purchasePrice,
         category: productData.category as any,
         bonus: productData.bonus ?? 0,
         sku: productData.sku,

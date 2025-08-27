@@ -10,7 +10,7 @@ const prisma_1 = __importDefault(require("../prisma"));
 const cloudinary_utility_1 = __importDefault(require("../utils/cloudinary.utility"));
 const createProduct = async (req, res) => {
     try {
-        const { productName, unitPrice, category, bonus, sku, quantity, expiryDate, unit, } = req.body;
+        const { productName, unitPrice, purchasePrice, category, bonus, sku, quantity, expiryDate, unit, } = req.body;
         const adminId = req.user.id;
         // Handle image upload
         let imageUrls = [];
@@ -27,6 +27,7 @@ const createProduct = async (req, res) => {
         const product = await (0, productService_1.createProductService)({
             productName,
             unitPrice,
+            purchasePrice,
             category,
             bonus,
             sku,
@@ -78,7 +79,7 @@ exports.updateProductQuantityFromSubmission = updateProductQuantityFromSubmissio
 const createProductFromSubmission = async (req, res) => {
     try {
         const { submissionId } = req.params;
-        const { productName, unitPrice, category, bonus, sku, quantity, expiryDate, unit, } = req.body;
+        const { productName, unitPrice, purchasePrice, category, bonus, sku, quantity, expiryDate, unit, } = req.body;
         const adminId = req.user.id;
         // Handle image upload
         const images = req.files;
@@ -100,6 +101,7 @@ const createProductFromSubmission = async (req, res) => {
             productData: {
                 productName: existingQty?.productName || productName,
                 unitPrice,
+                purchasePrice,
                 category,
                 bonus,
                 sku,
