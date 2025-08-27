@@ -21,11 +21,12 @@ async function getUserLanguage(phoneNumber) {
             where: { phone: phoneNumber },
             select: { preferredLanguage: true },
         });
+        // Return saved language or default to KINY
         return farmer?.preferredLanguage || "KINY";
     }
     catch (error) {
         console.error("Error fetching user language:", error);
-        return "KINY";
+        return "KINY"; // Default fallback
     }
 }
 // Helper function to update user's language preference in database
@@ -53,6 +54,7 @@ async function getProductsFromDatabase() {
     }
     catch (error) {
         console.error("Error fetching products:", error);
+        // Fallback to hardcoded list
         return [
             "Tomatoes",
             "Onions",
@@ -64,9 +66,8 @@ async function getProductsFromDatabase() {
         ];
     }
 }
-// Location pagination helper - Fixed to use proper page size
-function paginateLocationList(items, page, limit = 6 // Changed from 8 to 6 to leave room for navigation options
-) {
+// Location pagination helper
+function paginateLocationList(items, page, limit = 8) {
     const startIndex = (page - 1) * limit;
     const endIndex = startIndex + limit;
     const paginatedItems = items.slice(startIndex, endIndex);
@@ -79,28 +80,47 @@ function paginateLocationList(items, page, limit = 6 // Changed from 8 to 6 to l
         hasPrev: page > 1,
     };
 }
-// Build location menu with pagination and navigation options - FIXED
+// Build location menu with pagination and back option
 function buildLocationMenu(items, page, titleKey, lang = "KINY", backOption = true) {
-    const paginated = paginateLocationList(items, page, 6); // Use 6 items per page
+    const paginated = paginateLocationList(items, page);
     let menu = `CON ${getTranslation(lang, titleKey)}\n`;
-    // Add paginated items (1-6)
+    // Add items with proper numbering
     paginated.items.forEach((item, index) => {
-        const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
+        const itemNumber = (paginated.currentPage - 1) * 8 + index + 1;
         menu += `${itemNumber}. ${item}\n`;
     });
-    // Add navigation options - FIXED logic
+    // Add navigation options with special handling
+    let navOptions = [];
+    // Add pagination options only if needed
     if (paginated.hasPrev) {
-        menu += `7. ${getTranslation(lang, "previous")}\n`;
+        navOptions.push(`98. ${getTranslation(lang, "previous")}`);
     }
     if (paginated.hasNext) {
-        menu += `8. ${getTranslation(lang, "next")}\n`;
+        navOptions.push(`99. ${getTranslation(lang, "next")}`);
     }
-    // Add navigation options
+    // Add back option
     if (backOption) {
-        menu += `9. ${getTranslation(lang, "back")}\n`;
+        navOptions.push(`0. ${getTranslation(lang, "back")}`);
     }
-    menu += `00. Main Menu`; // Always add main menu option
+    // Add main menu option (00)
+    navOptions.push(`00. ${getTranslation(lang, "mainMenu")}`);
+    if (navOptions.length > 0) {
+        menu += navOptions.join("\n");
+    }
     return menu;
+}
+// Build product category menu
+function buildCategoryMenu(lang = "KINY") {
+    return `CON ${getTranslation(lang, "selectCategory")}
+1. ${getTranslation(lang, "animalProducts")}
+2. ${getTranslation(lang, "vegetables")}
+3. ${getTranslation(lang, "fruits")}
+4. ${getTranslation(lang, "grains")}
+5. ${getTranslation(lang, "tubers")}
+6. ${getTranslation(lang, "legumes")}
+7. ${getTranslation(lang, "herbsSpices")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
 }
 // Add step to navigation history
 function addToHistory(session, step, data) {
@@ -142,33 +162,83 @@ async function getCurrentProductPrices(lang) {
         return getTranslation(lang, "noPricesAvailable");
     }
 }
-// Helper function to return to main menu
-function returnToMainMenu(lang) {
-    return `CON ${getTranslation(lang, "welcome")}
+// Helper function to handle pagination navigation
+function handlePaginationNavigation(parts, session, items, currentStep) {
+    const currentInput = parts[parts.length - 1];
+    const currentPage = session.locationPage || 1;
+    // Handle pagination navigation
+    if (currentInput === "99") {
+        return { action: "next" };
+    }
+    if (currentInput === "98") {
+        return { action: "prev" };
+    }
+    if (currentInput === "0") {
+        return { action: "back" };
+    }
+    if (currentInput === "00") {
+        return { action: "mainMenu" };
+    }
+    // Handle item selection
+    const selectedIndex = parseInt(currentInput) - 1;
+    const totalItems = items.length;
+    const itemsPerPage = 8;
+    if (!isNaN(selectedIndex) &&
+        selectedIndex >= 0 &&
+        selectedIndex < totalItems) {
+        return { action: "select", selectedIndex };
+    }
+    return { action: null };
+}
+// Helper function to verify user PIN
+async function verifyUserPin(phoneNumber, pin) {
+    try {
+        const farmer = await prisma_1.default.farmer.findUnique({
+            where: { phone: phoneNumber },
+            select: { password: true },
+        });
+        if (!farmer)
+            return false;
+        // Use your password verification function
+        const bcrypt = require("bcrypt");
+        return await bcrypt.compare(pin, farmer.password);
+    }
+    catch (error) {
+        console.error("Error verifying PIN:", error);
+        return false;
+    }
+}
+async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
+    const parts = text.split("*");
+    console.log(`USSD Request - Session: ${sessionId}, Phone: ${phoneNumber}, Text: ${text}, Parts: ${JSON.stringify(parts)}`);
+    // Initialize session with user's preferred language from database
+    let session = ussdSessions[sessionId];
+    if (!session) {
+        const userLanguage = await getUserLanguage(phoneNumber);
+        session = {
+            language: userLanguage,
+            previousSteps: [],
+        };
+        ussdSessions[sessionId] = session;
+    }
+    const lang = session.language || "KINY";
+    if (text === "") {
+        return `CON ${getTranslation(lang, "welcome")}
 1. ${getTranslation(lang, "register")}
 2. ${getTranslation(lang, "submitProduct")}
 3. ${getTranslation(lang, "myAccount")}
 4. ${getTranslation(lang, "help")}
 5. ${getTranslation(lang, "exit")}`;
-}
-async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
-    const parts = text.split("*");
-    console.log(`USSD Debug - SessionId: ${sessionId}, Phone: ${phoneNumber}, Text: "${text}", Parts:`, parts);
-    // Initialize session with user's preferred language from database
-    let session = ussdSessions[sessionId];
-    if (!session) {
-        const userLanguage = await getUserLanguage(phoneNumber);
-        session = { language: userLanguage };
-        ussdSessions[sessionId] = session;
     }
-    const lang = session.language || "KINY";
-    // Handle main menu return (00)
-    if (text === "00" || (parts.length > 1 && parts[parts.length - 1] === "00")) {
+    // Handle main menu navigation (00)
+    if (parts[parts.length - 1] === "00") {
         delete ussdSessions[sessionId];
-        return returnToMainMenu(lang);
-    }
-    if (text === "") {
-        return returnToMainMenu(lang);
+        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
     }
     switch (parts[0]) {
         // 1. Register
@@ -188,108 +258,230 @@ async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
                 const provinces = location_service_1.LocationValidationService.getAllProvinces();
                 return buildLocationMenu(provinces, 1, "selectProvince", lang);
             }
-            // Handle location navigation and selection - FIXED
+            // Handle location navigation and selection
             if (session.locationStep === "province") {
                 const provinces = location_service_1.LocationValidationService.getAllProvinces();
                 const currentPage = session.locationPage || 1;
-                console.log(`Province step - Input: ${parts[1]}, Current page: ${currentPage}`);
-                // Handle back option (9)
-                if (parts[1] === "9") {
-                    const prevStep = getPreviousStep(session);
-                    if (prevStep && prevStep.step === "mainMenu") {
-                        delete ussdSessions[sessionId];
-                        return returnToMainMenu(lang);
-                    }
-                }
-                // Handle navigation - FIXED
-                if (parts[1] === "8") {
-                    // Next page
-                    const totalPages = Math.ceil(provinces.length / 6);
-                    if (currentPage < totalPages) {
+                const navigation = handlePaginationNavigation(parts, session, provinces, "province");
+                switch (navigation.action) {
+                    case "next":
                         session.locationPage = currentPage + 1;
                         return buildLocationMenu(provinces, session.locationPage, "selectProvince", lang);
-                    }
-                    else {
-                        return `CON ${getTranslation(lang, "invalidCategory")}`;
-                    }
-                }
-                if (parts[1] === "7") {
-                    // Previous page
-                    if (currentPage > 1) {
+                    case "prev":
                         session.locationPage = currentPage - 1;
                         return buildLocationMenu(provinces, session.locationPage, "selectProvince", lang);
-                    }
-                    else {
-                        return `CON ${getTranslation(lang, "invalidCategory")}`;
-                    }
-                }
-                // Province selection - FIXED calculation
-                const selectedNumber = parseInt(parts[1]);
-                if (selectedNumber >= 1 && selectedNumber <= 6) {
-                    const selectedIndex = selectedNumber - 1 + (currentPage - 1) * 6;
-                    console.log(`Province selection - Number: ${selectedNumber}, Index: ${selectedIndex}, Total provinces: ${provinces.length}`);
-                    if (selectedIndex >= 0 && selectedIndex < provinces.length) {
-                        session.selectedProvince = provinces[selectedIndex];
-                        session.locationStep = "district";
-                        session.locationPage = 1;
-                        addToHistory(session, "province", { page: currentPage });
-                        const districts = location_service_1.LocationValidationService.getDistrictsByProvince(session.selectedProvince);
-                        return buildLocationMenu(districts, 1, "selectDistrict", lang);
-                    }
+                    case "back":
+                        const prevStep = getPreviousStep(session);
+                        if (prevStep && prevStep.step === "mainMenu") {
+                            delete ussdSessions[sessionId];
+                            return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                        }
+                        break;
+                    case "mainMenu":
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    case "select":
+                        if (navigation.selectedIndex !== undefined &&
+                            navigation.selectedIndex >= 0 &&
+                            navigation.selectedIndex < provinces.length) {
+                            session.selectedProvince = provinces[navigation.selectedIndex];
+                            session.locationStep = "district";
+                            session.locationPage = 1;
+                            addToHistory(session, "province", { page: currentPage });
+                            const districts = location_service_1.LocationValidationService.getDistrictsByProvince(session.selectedProvince);
+                            return buildLocationMenu(districts, 1, "selectDistrict", lang);
+                        }
+                        break;
                 }
                 return `CON ${getTranslation(lang, "invalidCategory")}`;
             }
-            // Similar fixes for district, sector, cell, and village steps...
             if (session.locationStep === "district") {
                 const districts = location_service_1.LocationValidationService.getDistrictsByProvince(session.selectedProvince);
                 const currentPage = session.locationPage || 1;
-                if (parts[1] === "9") {
-                    const prevStep = getPreviousStep(session);
-                    if (prevStep && prevStep.step === "province") {
-                        session.locationStep = "province";
-                        session.locationPage = prevStep.data.page || 1;
-                        const provinces = location_service_1.LocationValidationService.getAllProvinces();
-                        return buildLocationMenu(provinces, session.locationPage ?? 1, "selectProvince", lang);
-                    }
-                }
-                if (parts[1] === "8") {
-                    const totalPages = Math.ceil(districts.length / 6);
-                    if (currentPage < totalPages) {
+                const navigation = handlePaginationNavigation(parts, session, districts, "district");
+                switch (navigation.action) {
+                    case "next":
                         session.locationPage = currentPage + 1;
                         return buildLocationMenu(districts, session.locationPage, "selectDistrict", lang);
-                    }
-                    else {
-                        return `CON ${getTranslation(lang, "invalidCategory")}`;
-                    }
-                }
-                if (parts[1] === "7") {
-                    if (currentPage > 1) {
+                    case "prev":
                         session.locationPage = currentPage - 1;
                         return buildLocationMenu(districts, session.locationPage, "selectDistrict", lang);
-                    }
-                    else {
-                        return `CON ${getTranslation(lang, "invalidCategory")}`;
-                    }
-                }
-                const selectedNumber = parseInt(parts[1]);
-                if (selectedNumber >= 1 && selectedNumber <= 6) {
-                    const selectedIndex = selectedNumber - 1 + (currentPage - 1) * 6;
-                    if (selectedIndex >= 0 && selectedIndex < districts.length) {
-                        session.selectedDistrict = districts[selectedIndex];
-                        session.locationStep = "sector";
-                        session.locationPage = 1;
-                        addToHistory(session, "district", { page: currentPage });
-                        const sectors = location_service_1.LocationValidationService.getSectorsByDistrict(session.selectedProvince, session.selectedDistrict);
-                        return buildLocationMenu(sectors, 1, "selectSector", lang);
-                    }
+                    case "back":
+                        const prevStep = getPreviousStep(session);
+                        if (prevStep && prevStep.step === "province") {
+                            session.locationStep = "province";
+                            session.locationPage = prevStep.data.page || 1;
+                            const provinces = location_service_1.LocationValidationService.getAllProvinces();
+                            return buildLocationMenu(provinces, session.locationPage ?? 1, "selectProvince", lang);
+                        }
+                        break;
+                    case "mainMenu":
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    case "select":
+                        if (navigation.selectedIndex !== undefined &&
+                            navigation.selectedIndex >= 0 &&
+                            navigation.selectedIndex < districts.length) {
+                            session.selectedDistrict = districts[navigation.selectedIndex];
+                            session.locationStep = "sector";
+                            session.locationPage = 1;
+                            addToHistory(session, "district", { page: currentPage });
+                            const sectors = location_service_1.LocationValidationService.getSectorsByDistrict(session.selectedProvince, session.selectedDistrict);
+                            return buildLocationMenu(sectors, 1, "selectSector", lang);
+                        }
+                        break;
                 }
                 return `CON ${getTranslation(lang, "invalidCategory")}`;
             }
-            // Continue with sector, cell, village steps following the same pattern...
-            // [Similar fixes applied to sector, cell, and village steps]
+            if (session.locationStep === "sector") {
+                const sectors = location_service_1.LocationValidationService.getSectorsByDistrict(session.selectedProvince, session.selectedDistrict);
+                const currentPage = session.locationPage || 1;
+                const navigation = handlePaginationNavigation(parts, session, sectors, "sector");
+                switch (navigation.action) {
+                    case "next":
+                        session.locationPage = currentPage + 1;
+                        return buildLocationMenu(sectors, session.locationPage, "selectSector", lang);
+                    case "prev":
+                        session.locationPage = currentPage - 1;
+                        return buildLocationMenu(sectors, session.locationPage, "selectSector", lang);
+                    case "back":
+                        const prevStep = getPreviousStep(session);
+                        if (prevStep && prevStep.step === "district") {
+                            session.locationStep = "district";
+                            session.locationPage = prevStep.data.page || 1;
+                            const districts = location_service_1.LocationValidationService.getDistrictsByProvince(session.selectedProvince);
+                            return buildLocationMenu(districts, session.locationPage ?? 1, "selectDistrict", lang);
+                        }
+                        break;
+                    case "mainMenu":
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    case "select":
+                        if (navigation.selectedIndex !== undefined &&
+                            navigation.selectedIndex >= 0 &&
+                            navigation.selectedIndex < sectors.length) {
+                            session.selectedSector = sectors[navigation.selectedIndex];
+                            session.locationStep = "cell";
+                            session.locationPage = 1;
+                            addToHistory(session, "sector", { page: currentPage });
+                            const cells = location_service_1.LocationValidationService.getCellsBySector(session.selectedProvince, session.selectedDistrict, session.selectedSector);
+                            return buildLocationMenu(cells, 1, "selectCell", lang);
+                        }
+                        break;
+                }
+                return `CON ${getTranslation(lang, "invalidCategory")}`;
+            }
+            if (session.locationStep === "cell") {
+                const cells = location_service_1.LocationValidationService.getCellsBySector(session.selectedProvince, session.selectedDistrict, session.selectedSector);
+                const currentPage = session.locationPage || 1;
+                const navigation = handlePaginationNavigation(parts, session, cells, "cell");
+                switch (navigation.action) {
+                    case "next":
+                        session.locationPage = currentPage + 1;
+                        return buildLocationMenu(cells, session.locationPage, "selectCell", lang);
+                    case "prev":
+                        session.locationPage = currentPage - 1;
+                        return buildLocationMenu(cells, session.locationPage, "selectCell", lang);
+                    case "back":
+                        const prevStep = getPreviousStep(session);
+                        if (prevStep && prevStep.step === "sector") {
+                            session.locationStep = "sector";
+                            session.locationPage = prevStep.data.page || 1;
+                            const sectors = location_service_1.LocationValidationService.getSectorsByDistrict(session.selectedProvince, session.selectedDistrict);
+                            return buildLocationMenu(sectors, session.locationPage ?? 1, "selectSector", lang);
+                        }
+                        break;
+                    case "mainMenu":
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    case "select":
+                        if (navigation.selectedIndex !== undefined &&
+                            navigation.selectedIndex >= 0 &&
+                            navigation.selectedIndex < cells.length) {
+                            session.selectedCell = cells[navigation.selectedIndex];
+                            session.locationStep = "village";
+                            session.locationPage = 1;
+                            addToHistory(session, "cell", { page: currentPage });
+                            const villages = location_service_1.LocationValidationService.getVillagesByCell(session.selectedProvince, session.selectedDistrict, session.selectedSector, session.selectedCell);
+                            return buildLocationMenu(villages, 1, "selectVillage", lang);
+                        }
+                        break;
+                }
+                return `CON ${getTranslation(lang, "invalidCategory")}`;
+            }
+            if (session.locationStep === "village") {
+                const villages = location_service_1.LocationValidationService.getVillagesByCell(session.selectedProvince, session.selectedDistrict, session.selectedSector, session.selectedCell);
+                const currentPage = session.locationPage || 1;
+                const navigation = handlePaginationNavigation(parts, session, villages, "village");
+                switch (navigation.action) {
+                    case "next":
+                        session.locationPage = currentPage + 1;
+                        return buildLocationMenu(villages, session.locationPage, "selectVillage", lang);
+                    case "prev":
+                        session.locationPage = currentPage - 1;
+                        return buildLocationMenu(villages, session.locationPage, "selectVillage", lang);
+                    case "back":
+                        const prevStep = getPreviousStep(session);
+                        if (prevStep && prevStep.step === "cell") {
+                            session.locationStep = "cell";
+                            session.locationPage = prevStep.data.page || 1;
+                            const cells = location_service_1.LocationValidationService.getCellsBySector(session.selectedProvince, session.selectedDistrict, session.selectedSector);
+                            return buildLocationMenu(cells, session.locationPage ?? 1, "selectCell", lang);
+                        }
+                        break;
+                    case "mainMenu":
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    case "select":
+                        if (navigation.selectedIndex !== undefined &&
+                            navigation.selectedIndex >= 0 &&
+                            navigation.selectedIndex < villages.length) {
+                            session.selectedVillage = villages[navigation.selectedIndex];
+                            session.locationStep = "completed";
+                            addToHistory(session, "village", { page: currentPage });
+                            return `CON ${getTranslation(lang, "createPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                        }
+                        break;
+                }
+                return `CON ${getTranslation(lang, "invalidCategory")}`;
+            }
             // PIN creation and confirmation
-            if (session.locationStep === "completed" && parts.length === 2) {
-                if (parts[1] === "9") {
+            if (session.locationStep === "completed") {
+                const currentInput = parts[parts.length - 1]; // Get the last input
+                if (currentInput === "0") {
+                    // Back to village selection
                     const prevStep = getPreviousStep(session);
                     if (prevStep && prevStep.step === "village") {
                         session.locationStep = "village";
@@ -297,31 +489,74 @@ async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
                         const villages = location_service_1.LocationValidationService.getVillagesByCell(session.selectedProvince, session.selectedDistrict, session.selectedSector, session.selectedCell);
                         return buildLocationMenu(villages, session.locationPage ?? 1, "selectVillage", lang);
                     }
-                }
-                const password = parts[1];
-                if (!/^\d{4}$/.test(password)) {
-                    return `END ${getTranslation(lang, "invalidPin")}`;
-                }
-                session.password = password;
-                return `CON ${getTranslation(lang, "confirmPin")}
-9. ${getTranslation(lang, "back")}
-00. Main Menu`;
-            }
-            if (session.locationStep === "completed" && parts.length === 3) {
-                if (parts[2] === "9") {
-                    session.locationStep = "completed";
                     return `CON ${getTranslation(lang, "createPin")}
-9. ${getTranslation(lang, "back")}
-00. Main Menu`;
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
                 }
-                const confirmPassword = parts[2];
-                if (!/^\d{4}$/.test(confirmPassword)) {
-                    return `END ${getTranslation(lang, "invalidPin")}`;
+                if (currentInput === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
                 }
-                if (session.password !== confirmPassword) {
-                    return `END ${getTranslation(lang, "pinMismatch")}`;
+                // Validate PIN format
+                if (!/^\d{4}$/.test(currentInput)) {
+                    return `CON ${getTranslation(lang, "invalidPin")}
+
+${getTranslation(lang, "createPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
                 }
+                // Store the PIN and move to confirmation step
+                session.password = currentInput;
+                session.locationStep = "confirm_pin";
+                addToHistory(session, "completed"); // Track where we came from
+                return `CON ${getTranslation(lang, "confirmPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+            }
+            // PIN confirmation step
+            if (session.locationStep === "confirm_pin") {
+                const confirmInput = parts[parts.length - 1]; // Get the last input
+                if (confirmInput === "0") {
+                    // Back to PIN creation
+                    session.locationStep = "completed";
+                    delete session.password; // Clear stored PIN
+                    return `CON ${getTranslation(lang, "createPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                if (confirmInput === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                // Validate confirmation PIN format
+                if (!/^\d{4}$/.test(confirmInput)) {
+                    return `CON ${getTranslation(lang, "invalidPin")}
+
+${getTranslation(lang, "confirmPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                // Check if PINs match
+                if (session.password !== confirmInput) {
+                    return `CON ${getTranslation(lang, "pinMismatch")}
+
+${getTranslation(lang, "confirmPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                // PINs match - proceed with registration
                 try {
+                    // Validate complete location hierarchy
                     const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
                         province: session.selectedProvince,
                         district: session.selectedDistrict,
@@ -333,7 +568,7 @@ async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
                         delete ussdSessions[sessionId];
                         return `END Location validation failed: ${locationValidation.errors.join(", ")}`;
                     }
-                    let hashedPassword = await (0, password_1.hashPassword)(session.password);
+                    const hashedPassword = await (0, password_1.hashPassword)(session.password);
                     await prisma_1.default.farmer.create({
                         data: {
                             phone: phoneNumber,
@@ -357,12 +592,436 @@ async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
             }
             return `END ${getTranslation(lang, "invalidCategory")}`;
         }
-        // 2. Submit Product - Apply similar fixes
+        // 2. Submit Product
         case "2": {
-            // ... (Apply similar pagination fixes to product submission)
-            return `END Product submission - Apply similar fixes`;
+            session.mode = "submit";
+            // Check if user is registered
+            const farmer = await prisma_1.default.farmer.findUnique({
+                where: { phone: phoneNumber },
+            });
+            if (!farmer) {
+                return `END ${getTranslation(lang, "pleaseRegister")}`;
+            }
+            // Category selection
+            if (parts.length === 1) {
+                addToHistory(session, "mainMenu");
+                return buildCategoryMenu(lang);
+            }
+            // Handle category selection
+            if (parts.length === 2) {
+                const categoryChoice = parts[1];
+                if (categoryChoice === "0") {
+                    // Back to main menu
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                if (categoryChoice === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                const categoryMap = {
+                    "1": "ANIMAL_PRODUCTS",
+                    "2": "VEGETABLES",
+                    "3": "FRUITS",
+                    "4": "GRAINS",
+                    "5": "TUBERS",
+                    "6": "LEGUMES",
+                    "7": "HERBS_SPICES",
+                };
+                const selectedCategory = categoryMap[categoryChoice];
+                if (!selectedCategory) {
+                    return `CON ${getTranslation(lang, "invalidCategory")}
+
+${buildCategoryMenu(lang).substring(4)}`;
+                }
+                session.selectedCategory = selectedCategory;
+                addToHistory(session, "categoryMenu");
+                // Get products for selected category
+                const products = productTypes_1.productsByCategory[selectedCategory];
+                let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
+                products.forEach((product, index) => {
+                    productMenu += `${index + 1}. ${product}\n`;
+                });
+                productMenu += `0. ${getTranslation(lang, "back")}\n`;
+                productMenu += `00. ${getTranslation(lang, "mainMenu")}`;
+                return productMenu;
+            }
+            // Handle product selection
+            if (parts.length === 3) {
+                const productChoice = parts[2];
+                if (productChoice === "0") {
+                    // Back to category menu
+                    return buildCategoryMenu(lang);
+                }
+                if (productChoice === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                const products = productTypes_1.productsByCategory[session.selectedCategory];
+                const productIndex = parseInt(productChoice) - 1;
+                if (productIndex >= 0 && productIndex < products.length) {
+                    session.selectedProduct = products[productIndex];
+                    addToHistory(session, "productMenu");
+                    return `CON ${getTranslation(lang, "enterQuantity")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                else {
+                    return `CON ${getTranslation(lang, "invalidProduct")}
+
+${getTranslation(lang, "selectProduct")}
+${productTypes_1.productsByCategory[session.selectedCategory]
+                        .map((product, index) => `${index + 1}. ${product}`)
+                        .join("\n")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+            }
+            // Handle quantity input
+            if (parts.length === 4) {
+                const quantityInput = parts[3];
+                if (quantityInput === "0") {
+                    // Back to product selection
+                    const products = productTypes_1.productsByCategory[session.selectedCategory];
+                    let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
+                    products.forEach((product, index) => {
+                        productMenu += `${index + 1}. ${product}\n`;
+                    });
+                    productMenu += `0. ${getTranslation(lang, "back")}\n`;
+                    productMenu += `00. ${getTranslation(lang, "mainMenu")}`;
+                    return productMenu;
+                }
+                if (quantityInput === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                const quantity = parseFloat(quantityInput);
+                if (isNaN(quantity) || quantity <= 0) {
+                    return `CON ${getTranslation(lang, "invalidQuantity")}
+
+${getTranslation(lang, "enterQuantity")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                session.quantity = quantityInput;
+                addToHistory(session, "quantityInput");
+                return `CON ${getTranslation(lang, "enterPrice")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+            }
+            // Handle price input
+            if (parts.length === 5) {
+                const priceInput = parts[4];
+                if (priceInput === "0") {
+                    // Back to quantity input
+                    return `CON ${getTranslation(lang, "enterQuantity")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                if (priceInput === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                const price = parseFloat(priceInput);
+                if (isNaN(price) || price <= 0) {
+                    return `CON ${getTranslation(lang, "invalidPrice")}
+
+${getTranslation(lang, "enterPrice")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                session.wishedPrice = priceInput;
+                addToHistory(session, "priceInput");
+                return `CON ${getTranslation(lang, "enterPinConfirm")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+            }
+            // Handle PIN confirmation for submission
+            if (parts.length === 6) {
+                const pinInput = parts[5];
+                if (pinInput === "0") {
+                    // Back to price input
+                    return `CON ${getTranslation(lang, "enterPrice")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                if (pinInput === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                // Validate PIN format
+                if (!/^\d{4}$/.test(pinInput)) {
+                    return `CON ${getTranslation(lang, "invalidPin")}
+
+${getTranslation(lang, "enterPinConfirm")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                // Verify PIN
+                const pinValid = await verifyUserPin(phoneNumber, pinInput);
+                if (!pinValid) {
+                    return `CON ${getTranslation(lang, "incorrectPin")}
+
+${getTranslation(lang, "enterPinConfirm")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                // Submit product
+                try {
+                    await prisma_1.default.farmerSubmission.create({
+                        data: {
+                            farmerId: farmer.id,
+                            productName: session.selectedProduct,
+                            category: session.selectedCategory,
+                            submittedQty: parseFloat(session.quantity),
+                            wishedPrice: parseFloat(session.wishedPrice),
+                            province: farmer.province,
+                            district: farmer.district,
+                            sector: farmer.sector,
+                            cell: farmer.cell,
+                            village: farmer.village,
+                        },
+                    });
+                    delete ussdSessions[sessionId];
+                    return `END ${getTranslation(lang, "submissionSuccessful")}`;
+                }
+                catch (error) {
+                    console.error("Product submission error:", error);
+                    delete ussdSessions[sessionId];
+                    return `END ${getTranslation(lang, "submissionFailed")}`;
+                }
+            }
+            return `END ${getTranslation(lang, "invalidCategory")}`;
         }
-        // Other cases remain similar...
+        // 3. My Account
+        case "3": {
+            session.mode = "account";
+            const farmer = await prisma_1.default.farmer.findUnique({
+                where: { phone: phoneNumber },
+            });
+            if (!farmer) {
+                return `END ${getTranslation(lang, "pleaseRegister")}`;
+            }
+            if (parts.length === 1) {
+                addToHistory(session, "mainMenu");
+                return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+            }
+            // Check submissions
+            if (parts[1] === "1") {
+                if (parts.length === 2) {
+                    return `CON ${getTranslation(lang, "enterPasswordForSubmissions")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                if (parts.length === 3) {
+                    const pinInput = parts[2];
+                    if (pinInput === "0") {
+                        return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                    }
+                    if (pinInput === "00") {
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    }
+                    const pinValid = await verifyUserPin(phoneNumber, pinInput);
+                    if (!pinValid) {
+                        return `END ${getTranslation(lang, "incorrectPasswordSubmissions")}`;
+                    }
+                    try {
+                        const submissions = await prisma_1.default.farmerSubmission.findMany({
+                            where: { farmerId: farmer.id },
+                            take: 3,
+                        });
+                        if (submissions.length === 0) {
+                            return `END ${getTranslation(lang, "noOrders")}`;
+                        }
+                        let response = `END ${getTranslation(lang, "lastThreeOrders")}\n\n`;
+                        submissions.forEach((submission, index) => {
+                            response += `${index + 1}. ${submission.productName}\n`;
+                            response += `   ${submission.submittedQty}kg @ ${submission.wishedPrice} RWF/kg\n`;
+                            response += `   Status: ${submission.status}\n\n`;
+                        });
+                        return response.trim();
+                    }
+                    catch (error) {
+                        console.error("Error fetching submissions:", error);
+                        return `END ${getTranslation(lang, "submissionFailed")}`;
+                    }
+                }
+            }
+            // Change language
+            if (parts[1] === "2") {
+                if (parts.length === 2) {
+                    return `CON ${getTranslation(lang, "enterPasswordForLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                if (parts.length === 3) {
+                    const pinInput = parts[2];
+                    if (pinInput === "0") {
+                        return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                    }
+                    if (pinInput === "00") {
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    }
+                    const pinValid = await verifyUserPin(phoneNumber, pinInput);
+                    if (!pinValid) {
+                        return `END ${getTranslation(lang, "incorrectPasswordLanguage")}`;
+                    }
+                    return `CON ${getTranslation(lang, "selectLanguage")}
+1. Kinyarwanda
+2. English
+3. Français
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                if (parts.length === 4) {
+                    const langChoice = parts[3];
+                    if (langChoice === "0") {
+                        return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                    }
+                    if (langChoice === "00") {
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    }
+                    const languageMap = {
+                        "1": "KINY",
+                        "2": "ENG",
+                        "3": "FRE",
+                    };
+                    const newLanguage = languageMap[langChoice];
+                    if (newLanguage) {
+                        try {
+                            await updateUserLanguage(phoneNumber, newLanguage);
+                            session.language = newLanguage;
+                            delete ussdSessions[sessionId];
+                            return `END ${getTranslation(newLanguage, "languageChanged")}`;
+                        }
+                        catch (error) {
+                            console.error("Error updating language:", error);
+                            return `END ${getTranslation(lang, "registrationFailed")}`;
+                        }
+                    }
+                    else {
+                        return `CON ${getTranslation(lang, "selectLanguage")}
+1. Kinyarwanda
+2. English
+3. Français
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                    }
+                }
+            }
+            if (parts[1] === "0") {
+                delete ussdSessions[sessionId];
+                return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+            }
+            return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+        }
+        // 4. Help
+        case "4": {
+            session.mode = "help";
+            if (parts.length === 1) {
+                addToHistory(session, "mainMenu");
+                return `CON ${getTranslation(lang, "helpMenu")}
+1. ${getTranslation(lang, "supportContact")}
+2. ${getTranslation(lang, "productPrices")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+            }
+            if (parts[1] === "1") {
+                return `END ${getTranslation(lang, "supportNumber")}`;
+            }
+            if (parts[1] === "2") {
+                const prices = await getCurrentProductPrices(lang);
+                return `END ${prices}`;
+            }
+            if (parts[1] === "0") {
+                delete ussdSessions[sessionId];
+                return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+            }
+            return `CON ${getTranslation(lang, "helpMenu")}
+1. ${getTranslation(lang, "supportContact")}
+2. ${getTranslation(lang, "productPrices")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+        }
+        // 5. Exit
         case "5":
             delete ussdSessions[sessionId];
             return `END ${getTranslation(lang, "exitMessage")}`;

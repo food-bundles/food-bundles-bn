@@ -26,7 +26,8 @@ export interface ISessionData {
     | "sector"
     | "cell"
     | "village"
-    | "completed";
+    | "completed"
+    | "confirm_pin";
   locationPage?: number;
   selectedProvince?: string;
   selectedDistrict?: string;
@@ -158,19 +159,19 @@ export const translations = {
     pleaseRegister: "Banza wiyandikishe mbere yo kwoherereza umusaruro.",
     selectCategory: "Hitamo icyiciro cy'umusaruro:",
     selectProduct: "Hitamo umusaruro:",
-    enterQuantity: "Andika ubunini mu kg:",
+    enterQuantity: "Andika ibiro mu kg:",
     enterPrice: "Andika igiciro ukeneye kuri kg (RWF):",
     enterPinConfirm: "Andika PIN yawe kugirango wemeze:",
     invalidCategory: "Icyiciro wahisemo ntaricyo. Ongera ugerageze.",
     invalidProduct: "Umusaruro wahisemo ntawo ari. Ongera ugerageze.",
-    invalidQuantity: "Andika ubunini bwemewe. Ongera ugerageze.",
+    invalidQuantity: "Andika ibiro byemewe. Ongera ugerageze.",
     invalidPrice: "Andika igiciro cyemewe. Ongera ugerageze.",
     incorrectPin: "PIN y'imibare itari yo. Ongera ugerageze.",
     submissionSuccessful: "Kwohererza byagenze neza. Urakoze!",
     submissionFailed: "Kwohererza byanze. Ongera ugerageze.",
     checkSubmissions: "Reba ibyohererejwe",
     lastThreeOrders: "Amateka 3 y'ubucuruzi:",
-    noOrders: "Nta mateka y'ubucuruzi ufite.",
+    noOrders: "Nta makuru y'ubucuruzi ufite.",
     enterPasswordForLanguage: "Andika PIN kugirango uhindure ururimi:",
     enterPasswordForSubmissions:
       "Andika PIN yawe kugirango urebe ibyohererejwe:",
