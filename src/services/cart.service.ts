@@ -194,7 +194,22 @@ export const getCartByRestaurantIdService = async (restaurantId: string) => {
     },
   });
 
-  return cart;
+  if (!cart) {
+    return null;
+  }
+  const totalItems = cart.cartItems.length;
+  const totalQuantity = cart.cartItems.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
+
+  const cartWithStats = {
+    totalItems,
+    totalQuantity,
+    ...cart,
+  };
+
+  return cartWithStats;
 };
 
 /**

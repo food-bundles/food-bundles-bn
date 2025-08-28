@@ -166,7 +166,18 @@ const getCartByRestaurantIdService = async (restaurantId) => {
             },
         },
     });
-    return cart;
+    // Associate total items and total quantity to cart and cart items and return cart with total items and total count
+    if (!cart) {
+        return null;
+    }
+    const totalItems = cart.cartItems.length;
+    const totalQuantity = cart.cartItems.reduce((total, item) => total + item.quantity, 0);
+    const cartWithStats = {
+        ...cart,
+        totalItems,
+        totalQuantity,
+    };
+    return cartWithStats;
 };
 exports.getCartByRestaurantIdService = getCartByRestaurantIdService;
 /**
