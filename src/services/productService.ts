@@ -3,7 +3,8 @@ import prisma from "../prisma";
 export interface ProductData {
   productName: string;
   unitPrice: number;
-  category: string;
+  purchasePrice: number;
+  categoryId: string;
   bonus?: number;
   sku: string;
   quantity: number;
@@ -37,18 +38,15 @@ export const createProductService = async (productData: ProductData) => {
     data: {
       productName: productData.productName,
       unitPrice: Number(productData.unitPrice),
-      category: productData.category as any,
+      purchasePrice: Number(productData.purchasePrice),
+      categoryId: productData.categoryId,
       bonus: Number(productData.bonus) || 0, // Use || instead of ?? for NaN handling
       sku: productData.sku,
       quantity: Number(productData.quantity),
       images: productData.images,
       expiryDate: productData.expiryDate,
       unit: productData.unit,
-      admin: {
-        connect: {
-          id: productData.createdBy,
-        },
-      },
+      createdBy: productData.createdBy,
     },
     include: {
       admin: {
@@ -56,6 +54,14 @@ export const createProductService = async (productData: ProductData) => {
           id: true,
           username: true,
           email: true,
+        },
+      },
+
+      category: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
         },
       },
     },
@@ -193,8 +199,8 @@ export const updateProductService = async (
       ...(updateData.unitPrice !== undefined && {
         unitPrice: Number(updateData.unitPrice),
       }),
-      ...(updateData.category !== undefined && {
-        category: updateData.category as any,
+      ...(updateData.categoryId !== undefined && {
+        categoryId: updateData.categoryId,
       }),
       ...(updateData.bonus !== undefined && {
         bonus: Number(updateData.bonus),
@@ -215,6 +221,13 @@ export const updateProductService = async (
           id: true,
           username: true,
           email: true,
+        },
+      },
+      category: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
         },
       },
     },
@@ -284,7 +297,8 @@ export const createProductFromSubmissionService = async ({
       data: {
         productName: productData.productName,
         unitPrice: productData.unitPrice,
-        category: productData.category as any,
+        purchasePrice: productData.purchasePrice,
+        categoryId: productData.categoryId,
         bonus: productData.bonus ?? 0,
         sku: productData.sku,
         quantity: productData.quantity,
@@ -438,7 +452,10 @@ export const getAllProductsService = async ({
 }) => {
   const skip = (page - 1) * limit;
 
-  const where: any = {};
+  const where: any = {
+    status: "ACTIVE", // Only active products
+    quantity: { gt: 0 }, // Only products with quantity > 0
+  };
 
   if (category) {
     where.category = category;
@@ -446,9 +463,8 @@ export const getAllProductsService = async ({
 
   if (search) {
     where.OR = [
-      { name: { contains: search, mode: "insensitive" } },
+      { productName: { contains: search, mode: "insensitive" } },
       { sku: { contains: search, mode: "insensitive" } },
-      { quantity: { gt: 0 }, status: "ACTIVE" },
     ];
   }
 
@@ -457,11 +473,16 @@ export const getAllProductsService = async ({
       where,
       skip,
       take: limit,
-      include: {
-        farmerSubmissions: false,
-        admin: false,
-        orderItems: false,
-        CartItem: false,
+      select: {
+        id: true,
+        productName: true,
+        unitPrice: true,
+        category: true,
+        bonus: true,
+        sku: true,
+        quantity: true,
+        images: true,
+        unit: true,
       },
       orderBy: {
         createdAt: "desc",
@@ -470,8 +491,160 @@ export const getAllProductsService = async ({
     prisma.product.count({ where }),
   ]);
 
+  // Calculate discounted price for products with bonus
+  const productsWithDiscount = products.map((product) => ({
+    ...product,
+    discountedPrice:
+      Number(product.bonus) > 0
+        ? product.unitPrice * (1 - Number(product.bonus) / 100)
+        : null,
+  }));
+
   return {
-    products,
+    products: productsWithDiscount,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+};
+
+// Get products by user role with appropriate filters and data
+export const getProductsByRoleService = async ({
+  role,
+  category,
+  search,
+  page = 1,
+  limit = 10,
+}: {
+  role: "ADMIN" | "AGGREGATOR" | "LOGISTICS";
+  category?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const skip = (page - 1) * limit;
+
+  const baseWhere: any = {
+    status: "ACTIVE",
+  };
+
+  if (category) {
+    baseWhere.category = category;
+  }
+
+  if (search) {
+    baseWhere.OR = [
+      { productName: { contains: search, mode: "insensitive" } },
+      { sku: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  // Role-specific filters and data selection
+  let selectFields: any;
+  let additionalWhere: any = {};
+
+  switch (role) {
+    case "ADMIN":
+      selectFields = {
+        id: true,
+        productName: true,
+        unitPrice: true,
+        purchasePrice: true,
+        category: true,
+        bonus: true,
+        sku: true,
+        quantity: true,
+        images: true,
+        unit: true,
+        status: true,
+        expiryDate: true,
+        createdAt: true,
+        updatedAt: true,
+        createdBy: true,
+        admin: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+      };
+      break;
+
+    case "AGGREGATOR":
+      selectFields = {
+        id: true,
+        productName: true,
+        unitPrice: true,
+        purchasePrice: true,
+        category: true,
+        bonus: true,
+        sku: true,
+        quantity: true,
+        images: true,
+        unit: true,
+        expiryDate: true,
+      };
+      additionalWhere.quantity = { gt: 0 }; // Only products with quantity
+      break;
+
+    case "LOGISTICS":
+      selectFields = {
+        id: true,
+        productName: true,
+        unitPrice: true,
+        category: true,
+        bonus: true,
+        sku: true,
+        quantity: true,
+        images: true,
+        unit: true,
+      };
+      additionalWhere.quantity = { gt: 0 }; // Only products with quantity
+      break;
+
+    default:
+      selectFields = {
+        id: true,
+        productName: true,
+        unitPrice: true,
+        category: true,
+        bonus: true,
+        sku: true,
+        quantity: true,
+        images: true,
+        unit: true,
+      };
+      additionalWhere.quantity = { gt: 0 }; // Only products with quantity
+  }
+
+  const where = { ...baseWhere, ...additionalWhere };
+
+  const [products, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      skip,
+      take: limit,
+      select: selectFields,
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+    prisma.product.count({ where }),
+  ]);
+
+  // Calculate discounted price for products with bonus
+  const productsWithDiscount = products.map((product) => ({
+    ...product,
+    discountedPrice:
+      Number(product.bonus) > 0
+        ? Number(product.unitPrice) * (1 - Number(product.bonus) / 100)
+        : null,
+  }));
+
+  return {
+    products: productsWithDiscount,
     total,
     page,
     limit,

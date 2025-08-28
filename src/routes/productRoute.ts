@@ -5,11 +5,19 @@ import {
   getAllProducts,
   getProductById,
   createProduct,
+  getProductsByRole,
 } from "../controllers/productController";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 import productImagesUpload from "../middleware/multer";
 
 const productRoutes = Router();
+
+productRoutes.get(
+  "/role-based",
+  isAuthenticated,
+  checkPermission("ADMIN", "AGGREGATOR", "LOGISTICS"), // Allow these roles
+  getProductsByRole
+);
 
 // Create new product (Admin only)
 productRoutes.post(

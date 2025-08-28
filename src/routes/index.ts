@@ -12,6 +12,7 @@ import farmersRoutes from "./farmersRoutes";
 import cartRoutes from "./cart.routes";
 import checkoutRoutes from "./checkout.routes";
 import orderRoutes from "./order.routes";
+import productCategoryRoutes from "./product_category.routes";
 
 const routes = Router();
 
@@ -22,6 +23,7 @@ routes.use("/admins", adminsRoutes);
 routes.use("/submissions", submissionsRoutes);
 routes.use("/products", productRoutes);
 routes.use("/carts", cartRoutes);
+routes.use("/category", productCategoryRoutes);
 routes.use("/checkouts", checkoutRoutes);
 routes.use("/orders", orderRoutes);
 

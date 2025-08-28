@@ -1,0 +1,574 @@
+tags:
+  - name: ProductCategory Management
+    description: Operations related to product category management
+
+components:
+  schemas:
+    ProductCategory:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique category identifier
+        name:
+          type: string
+          description: Category name (unique)
+        description:
+          type: string
+          nullable: true
+          description: Category description
+        isActive:
+          type: boolean
+          description: Whether the category is active
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Category creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        createdBy:
+          type: string
+          description: ID of the admin who created the category
+        admin:
+          $ref: "#/components/schemas/AdminInfo"
+        _count:
+          type: object
+          properties:
+            products:
+              type: integer
+              description: Number of products in this category
+            farmerSubmissions:
+              type: integer
+              description: Number of farmer submissions in this category
+
+    ProductCategoryWithDetails:
+      allOf:
+        - $ref: "#/components/schemas/ProductCategory"
+        - type: object
+          properties:
+            products:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  productName:
+                    type: string
+                  sku:
+                    type: string
+                  quantity:
+                    type: number
+                  status:
+                    type: string
+
+    ActiveProductCategory:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique category identifier
+        name:
+          type: string
+          description: Category name
+        description:
+          type: string
+          nullable: true
+          description: Category description
+
+    CreateProductCategoryRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Category name (must be unique)
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          description: Category description (optional)
+          maxLength: 500
+        isActive:
+          type: boolean
+          description: Whether the category should be active
+          default: true
+
+    UpdateProductCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Category name (must be unique)
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          description: Category description
+          maxLength: 500
+        isActive:
+          type: boolean
+          description: Whether the category is active
+
+    BulkUpdateStatusRequest:
+      type: object
+      required:
+        - categoryIds
+        - isActive
+      properties:
+        categoryIds:
+          type: array
+          items:
+            type: string
+          description: Array of category IDs to update
+          minItems: 1
+        isActive:
+          type: boolean
+          description: New active status for the categories
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Number of items per page
+        total:
+          type: integer
+          description: Total number of items
+        totalPages:
+          type: integer
+          description: Total number of pages
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Success message
+        data:
+          type: object
+          description: Response data
+
+paths:
+  /category:
+    post:
+      tags:
+        - ProductCategory Management
+      summary: Create a new product category
+      description: Create a new product category (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductCategoryRequest"
+      responses:
+        201:
+          description: Product category created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product category created successfully"
+                  data:
+                    $ref: "#/components/schemas/ProductCategory"
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_name:
+                  value:
+                    message: "Category name is required"
+                duplicate_name:
+                  value:
+                    message: "Product category name already exists"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      tags:
+        - ProductCategory Management
+      summary: Get all product categories
+      description: Retrieve all product categories with optional filtering and pagination
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by category name or description
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of categories per page
+      responses:
+        200:
+          description: Product categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product categories retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProductCategory"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /category/{categoryId}:
+    get:
+      tags:
+        - ProductCategory Management
+      summary: Get product category by ID
+      description: Retrieve a specific product category by its ID with detailed information
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique category identifier
+      responses:
+        200:
+          description: Product category retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product category retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/ProductCategoryWithDetails"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Product category not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Product category not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      tags:
+        - ProductCategory Management
+      summary: Update product category
+      description: Update an existing product category (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique category identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductCategoryRequest"
+      responses:
+        200:
+          description: Product category updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product category updated successfully"
+                  data:
+                    $ref: "#/components/schemas/ProductCategory"
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Product category name already exists"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Product category not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - ProductCategory Management
+      summary: Delete product category
+      description: Delete a product category (Admin only). Cannot delete categories that have associated products or submissions.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique category identifier
+      responses:
+        200:
+          description: Product category deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product category deleted successfully"
+        400:
+          description: Cannot delete category with associated data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                has_products:
+                  value:
+                    message: "Cannot delete category that has associated products. Please reassign or delete products first."
+                has_submissions:
+                  value:
+                    message: "Cannot delete category that has associated farmer submissions. Please reassign or delete submissions first."
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Product category not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /category/active:
+    get:
+      tags:
+        - ProductCategory Management
+      summary: Get active product categories
+      description: Retrieve all active product categories for dropdown/selection purposes
+      responses:
+        200:
+          description: Active product categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Active product categories retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActiveProductCategory"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /category/bulk-status:
+    patch:
+      tags:
+        - ProductCategory Management
+      summary: Bulk update category status
+      description: Update the active status of multiple categories at once (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkUpdateStatusRequest"
+      responses:
+        200:
+          description: Categories updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "3 categories updated successfully"
+                  data:
+                    type: object
+                    properties:
+                      updatedCount:
+                        type: integer
+                        example: 3
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_category_ids:
+                  value:
+                    message: "Category IDs array is required"
+                missing_status:
+                  value:
+                    message: "isActive boolean value is required"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

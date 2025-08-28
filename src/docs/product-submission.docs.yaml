@@ -8,34 +8,13 @@ components:
       type: object
       required:
         - productName
-        - category
         - quantity
         - wishedPrice
       properties:
         productName:
           type: string
-          enum:
-            - Tomatoes
-            - Onions
-            - Maize
-            - Potatoes
-            - Cassava
-            - Irish Potatoes
-            - Banana
           description: Name of the product being submitted
           example: "Tomatoes"
-        category:
-          type: string
-          enum:
-            - VEGETABLES
-            - FRUITS
-            - GRAINS
-            - TUBERS
-            - LEGUMES
-            - HERBS_SPICES
-            - OTHER
-          description: Category of the product being submitted
-          example: "VEGETABLES"
         quantity:
           type: number.01
           description: Quantity in kilograms
@@ -138,7 +117,7 @@ components:
           example: "+250788123456"
 
 paths:
-  /farmer/web:
+  /farmers/submit-product:
     post:
       tags:
         - Farmer API Management
@@ -231,7 +210,7 @@ paths:
               examples:
                 main_menu:
                   summary: Welcome menu display
-                  value: "CON Welcome to SmartAgri!\n1. Register\n2. Submit Product\n3. Exit"
+                  value: "CON Welcome to FoodBundles!\n1. Register\n2. Submit Product\n3. Exit"
                 pin_prompt:
                   summary: PIN creation prompt
                   value: "CON Create a 4-digit PIN:"
@@ -288,7 +267,7 @@ paths:
                   value: "END Submission failed. Try again."
                 exit_message:
                   summary: Exit system message
-                  value: "END Thank you for using SmartAgri!"
+                  value: "END Thank you for using FoodBundles!"
                 invalid_input:
                   summary: Invalid input error
                   value: "END Invalid input. Try again."

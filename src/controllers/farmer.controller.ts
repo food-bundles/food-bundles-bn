@@ -1,14 +1,17 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import {
   submitFarmerFeedbackService,
   getPendingFeedbackSubmissionsService,
   getFarmerFeedbackHistoryService,
   updateFarmerFeedbackService,
   type IFarmerFeedbackRequest,
+  submitProductService,
 } from "../services/farmer.service";
 import { FarmerFeedbackStatus, Role } from "@prisma/client";
 import { PaginationService } from "../services/paginationService";
 import prisma from "../prisma";
+import { ProductSubmissionInput } from "../types/productTypes";
+import errorHandler, { catchAsyncError } from "../utils/errorhandler.utlity";
 
 export default class FarmerController {
   static submitFarmerFeedback = async (req: Request, res: Response) => {
@@ -260,3 +263,88 @@ export default class FarmerController {
     }
   };
 }
+
+export const submitProductController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const userId = (req as any).user?.id;
+    const {
+      productName,
+      quantity,
+      wishedPrice,
+      province,
+      district,
+      sector,
+      cell,
+      village,
+    } = req.body;
+
+    // Validate required fields
+    if (
+      !productName ||
+      !quantity ||
+      !wishedPrice ||
+      !province ||
+      !district ||
+      !sector ||
+      !cell ||
+      !village
+    ) {
+      return next(
+        new errorHandler({
+          message:
+            "productName, quantity, wishedPrice, province, district, sector, cell, and village are required",
+          statusCode: 400,
+        })
+      );
+    }
+
+    // Validate numeric fields
+    if (isNaN(parseFloat(quantity)) || parseFloat(quantity) <= 0) {
+      return next(
+        new errorHandler({
+          message: "quantity must be a positive number",
+          statusCode: 400,
+        })
+      );
+    }
+
+    if (isNaN(parseFloat(wishedPrice)) || parseFloat(wishedPrice) <= 0) {
+      return next(
+        new errorHandler({
+          message: "wishedPrice must be a positive number",
+          statusCode: 400,
+        })
+      );
+    }
+
+    // Validate user authentication
+    if (!userId) {
+      return next(
+        new errorHandler({
+          message: "User authentication required",
+          statusCode: 401,
+        })
+      );
+    }
+
+    const submissionData: ProductSubmissionInput = {
+      farmerId: userId,
+      productName: productName.trim(),
+      submittedQty: parseFloat(quantity),
+      wishedPrice: parseFloat(wishedPrice),
+      province,
+      district,
+      sector,
+      cell,
+      village,
+    };
+
+    const result = await submitProductService(submissionData);
+
+    res.status(201).json({
+      success: true,
+      message: "Product submitted successfully",
+      data: result,
+    });
+  }
+);

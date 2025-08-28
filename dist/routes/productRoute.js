@@ -8,6 +8,8 @@ const productController_1 = require("../controllers/productController");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const multer_1 = __importDefault(require("../middleware/multer"));
 const productRoutes = (0, express_1.Router)();
+productRoutes.get("/role-based", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)("ADMIN", "AGGREGATOR", "LOGISTICS"), // Allow these roles
+productController_1.getProductsByRole);
 // Create new product (Admin only)
 productRoutes.post("/", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)("ADMIN"), multer_1.default, productController_1.createProduct);
 // Get all products (accessible by all authenticated)

@@ -4,6 +4,7 @@ import {
   updateProductService,
   deleteProductService,
   getAllProductsService,
+  getProductsByRoleService,
   getProductByIdService,
   getVerifiedSubmissionsService,
   approveSubmissionService,
@@ -19,7 +20,8 @@ export const createProduct = async (req: Request, res: Response) => {
     const {
       productName,
       unitPrice,
-      category,
+      purchasePrice,
+      categoryId,
       bonus,
       sku,
       quantity,
@@ -50,7 +52,8 @@ export const createProduct = async (req: Request, res: Response) => {
     const product = await createProductService({
       productName,
       unitPrice,
-      category,
+      purchasePrice,
+      categoryId,
       bonus,
       sku,
       quantity,
@@ -113,7 +116,8 @@ export const createProductFromSubmission = async (
     const {
       productName,
       unitPrice,
-      category,
+      purchasePrice,
+      categoryId,
       bonus,
       sku,
       quantity,
@@ -145,7 +149,8 @@ export const createProductFromSubmission = async (
       productData: {
         productName: existingQty?.productName || productName,
         unitPrice,
-        category,
+        purchasePrice,
+        categoryId,
         bonus,
         sku,
         quantity: existingQty?.acceptedQty || quantity,
@@ -236,6 +241,45 @@ export const getAllProducts = async (req: Request, res: Response) => {
     const { category, search, page = 1, limit = 10 } = req.query;
 
     const result = await getAllProductsService({
+      category: category as string,
+      search: search as string,
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+    });
+
+    res.status(200).json({
+      message: "Products retrieved successfully",
+      data: result.products,
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get products",
+    });
+  }
+};
+
+// Get products by user role
+export const getProductsByRole = async (req: Request, res: Response) => {
+  try {
+    const { category, search, page = 1, limit = 10 } = req.query;
+    const userRole = (req as any).user.role as string;
+
+    // Validate role
+    const validRoles = ["ADMIN", "AGGREGATOR", "LOGISTICS"];
+    if (!validRoles.includes(userRole)) {
+      return res.status(403).json({
+        message: "Access denied. Invalid user role.",
+      });
+    }
+
+    const result = await getProductsByRoleService({
+      role: userRole as "ADMIN" | "AGGREGATOR" | "LOGISTICS",
       category: category as string,
       search: search as string,
       page: parseInt(page as string),

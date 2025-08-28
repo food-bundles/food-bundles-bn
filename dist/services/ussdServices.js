@@ -3,12 +3,81 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getActiveProductCategories = getActiveProductCategories;
+exports.getProductsByCategory = getProductsByCategory;
+exports.getProductsFromDatabase = getProductsFromDatabase;
 exports.handleUssdLogic = handleUssdLogic;
-exports.submitProductService = submitProductService;
 const prisma_1 = __importDefault(require("../prisma"));
+const productTypes_1 = require("../types/productTypes");
 const password_1 = require("../utils/password");
 const location_service_1 = require("./location.service");
 let ussdSessions = {};
+// Helper function to get translation
+function getTranslation(lang = "KINY", key) {
+    return productTypes_1.translations[lang][key] || productTypes_1.translations.ENG[key];
+}
+// Helper function to get user's preferred language from database
+async function getUserLanguage(phoneNumber) {
+    try {
+        const farmer = await prisma_1.default.farmer.findUnique({
+            where: { phone: phoneNumber },
+            select: { preferredLanguage: true },
+        });
+        // Return saved language or default to KINY
+        return farmer?.preferredLanguage || "KINY";
+    }
+    catch (error) {
+        console.error("Error fetching user language:", error);
+        return "KINY"; // Default fallback
+    }
+}
+// Helper function to update user's language preference in database
+async function updateUserLanguage(phoneNumber, language) {
+    try {
+        await prisma_1.default.farmer.update({
+            where: { phone: phoneNumber },
+            data: { preferredLanguage: language },
+        });
+    }
+    catch (error) {
+        console.error("Error updating user language:", error);
+        throw new Error("Failed to update language preference");
+    }
+}
+// Get active product categories from database
+async function getActiveProductCategories() {
+    try {
+        const categories = await prisma_1.default.productCategory.findMany({
+            where: { isActive: true },
+            select: { id: true, name: true },
+            orderBy: { name: "asc" },
+        });
+        return categories;
+    }
+    catch (error) {
+        console.error("Error fetching categories:", error);
+        // Fallback to empty array - you might want to handle this differently
+        return [];
+    }
+}
+// Get products by category from database
+async function getProductsByCategory(categoryId) {
+    try {
+        const products = await prisma_1.default.product.findMany({
+            where: {
+                categoryId: categoryId,
+                status: "ACTIVE",
+            },
+            select: { productName: true },
+            orderBy: { productName: "asc" },
+        });
+        return products.map((p) => p.productName);
+    }
+    catch (error) {
+        console.error("Error fetching products by category:", error);
+        return [];
+    }
+}
 // Get products from database
 async function getProductsFromDatabase() {
     try {
@@ -47,36 +116,163 @@ function paginateLocationList(items, page, limit = 8) {
         hasPrev: page > 1,
     };
 }
-// Build location menu with pagination
-function buildLocationMenu(items, page, title, backOption) {
+// Build location menu with pagination and back option
+function buildLocationMenu(items, page, titleKey, lang = "KINY", backOption = true) {
     const paginated = paginateLocationList(items, page);
-    let menu = `CON ${title}:\n`;
+    let menu = `CON ${getTranslation(lang, titleKey)}\n`;
+    // Add items with proper numbering
     paginated.items.forEach((item, index) => {
         const itemNumber = (paginated.currentPage - 1) * 8 + index + 1;
         menu += `${itemNumber}. ${item}\n`;
     });
-    // Add navigation options
+    // Add navigation options with special handling
     let navOptions = [];
-    if (paginated.hasPrev)
-        navOptions.push("8. Previous");
-    if (paginated.hasNext)
-        navOptions.push("9. Next");
-    if (backOption)
-        navOptions.push("0. Back");
+    // Add pagination options only if needed
+    if (paginated.hasPrev) {
+        navOptions.push(`98. ${getTranslation(lang, "previous")}`);
+    }
+    if (paginated.hasNext) {
+        navOptions.push(`99. ${getTranslation(lang, "next")}`);
+    }
+    // Add back option
+    if (backOption) {
+        navOptions.push(`0. ${getTranslation(lang, "back")}`);
+    }
+    // Add main menu option (00)
+    navOptions.push(`00. ${getTranslation(lang, "mainMenu")}`);
     if (navOptions.length > 0) {
         menu += navOptions.join("\n");
     }
     return menu;
 }
+// Build product category menu
+async function buildCategoryMenu(lang = "KINY") {
+    const categories = await getActiveProductCategories();
+    let menu = `CON ${getTranslation(lang, "selectCategory")}\n`;
+    categories.forEach((category, index) => {
+        menu += `${index + 1}. ${category.name}\n`;
+    });
+    menu += `0. ${getTranslation(lang, "back")}\n`;
+    menu += `00. ${getTranslation(lang, "mainMenu")}`;
+    return menu;
+}
+// Add step to navigation history
+function addToHistory(session, step, data) {
+    if (!session.previousSteps) {
+        session.previousSteps = [];
+    }
+    session.previousSteps.push({ step, data });
+}
+// Get previous step from navigation history
+function getPreviousStep(session) {
+    if (!session.previousSteps || session.previousSteps.length === 0) {
+        return null;
+    }
+    return session.previousSteps.pop() || null;
+}
+// Helper function to get current product prices
+async function getCurrentProductPrices(lang) {
+    try {
+        const products = await prisma_1.default.product.findMany({
+            where: { status: "ACTIVE" },
+            select: {
+                productName: true,
+                purchasePrice: true,
+                unit: true,
+            },
+            orderBy: { productName: "asc" },
+        });
+        if (products.length === 0) {
+            return getTranslation(lang, "noPricesAvailable");
+        }
+        let response = `${getTranslation(lang, "currentPrices")}\n\n`;
+        products.forEach((product) => {
+            response += `${product.productName}: ${product.purchasePrice} RWF/${product.unit}\n`;
+        });
+        return response.trim();
+    }
+    catch (error) {
+        console.error("Error fetching product prices:", error);
+        return getTranslation(lang, "noPricesAvailable");
+    }
+}
+// Helper function to handle pagination navigation
+function handlePaginationNavigation(parts, session, items, currentStep) {
+    const currentInput = parts[parts.length - 1];
+    const currentPage = session.locationPage || 1;
+    // Handle pagination navigation
+    if (currentInput === "99") {
+        return { action: "next" };
+    }
+    if (currentInput === "98") {
+        return { action: "prev" };
+    }
+    if (currentInput === "0") {
+        return { action: "back" };
+    }
+    if (currentInput === "00") {
+        return { action: "mainMenu" };
+    }
+    // Handle item selection
+    const selectedIndex = parseInt(currentInput) - 1;
+    const totalItems = items.length;
+    const itemsPerPage = 8;
+    if (!isNaN(selectedIndex) &&
+        selectedIndex >= 0 &&
+        selectedIndex < totalItems) {
+        return { action: "select", selectedIndex };
+    }
+    return { action: null };
+}
+// Helper function to verify user PIN
+async function verifyUserPin(phoneNumber, pin) {
+    try {
+        const farmer = await prisma_1.default.farmer.findUnique({
+            where: { phone: phoneNumber },
+            select: { password: true },
+        });
+        if (!farmer)
+            return false;
+        // Use your password verification function
+        const bcrypt = require("bcrypt");
+        return await bcrypt.compare(pin, farmer.password);
+    }
+    catch (error) {
+        console.error("Error verifying PIN:", error);
+        return false;
+    }
+}
 async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
     const parts = text.split("*");
-    const session = ussdSessions[sessionId] || {};
-    ussdSessions[sessionId] = session;
+    console.log(`USSD Request - Session: ${sessionId}, Phone: ${phoneNumber}, Text: ${text}, Parts: ${JSON.stringify(parts)}`);
+    // Initialize session with user's preferred language from database
+    let session = ussdSessions[sessionId];
+    if (!session) {
+        const userLanguage = await getUserLanguage(phoneNumber);
+        session = {
+            language: userLanguage,
+            previousSteps: [],
+        };
+        ussdSessions[sessionId] = session;
+    }
+    const lang = session.language || "KINY";
     if (text === "") {
-        return `CON Welcome to SmartAgri!
-1. Register
-2. Submit Product
-3. Exit`;
+        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+    }
+    // Handle main menu navigation (00)
+    if (parts[parts.length - 1] === "00") {
+        delete ussdSessions[sessionId];
+        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
     }
     switch (parts[0]) {
         // 1. Register
@@ -86,170 +282,313 @@ async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
                 where: { phone: phoneNumber },
             });
             if (existingUser) {
-                return "END You are already registered.";
+                return `END ${getTranslation(lang, "alreadyRegistered")}`;
             }
             // Location selection flow
             if (parts.length === 1) {
                 session.locationStep = "province";
                 session.locationPage = 1;
+                addToHistory(session, "mainMenu");
                 const provinces = location_service_1.LocationValidationService.getAllProvinces();
-                return buildLocationMenu(provinces, 1, "Select your Province");
+                return buildLocationMenu(provinces, 1, "selectProvince", lang);
             }
             // Handle location navigation and selection
             if (session.locationStep === "province") {
                 const provinces = location_service_1.LocationValidationService.getAllProvinces();
                 const currentPage = session.locationPage || 1;
-                if (parts[1] === "9" && currentPage < Math.ceil(provinces.length / 8)) {
-                    // Next page
-                    session.locationPage = currentPage + 1;
-                    return buildLocationMenu(provinces, session.locationPage, "Select your Province");
+                const navigation = handlePaginationNavigation(parts, session, provinces, "province");
+                switch (navigation.action) {
+                    case "next":
+                        session.locationPage = currentPage + 1;
+                        return buildLocationMenu(provinces, session.locationPage, "selectProvince", lang);
+                    case "prev":
+                        session.locationPage = currentPage - 1;
+                        return buildLocationMenu(provinces, session.locationPage, "selectProvince", lang);
+                    case "back":
+                        const prevStep = getPreviousStep(session);
+                        if (prevStep && prevStep.step === "mainMenu") {
+                            delete ussdSessions[sessionId];
+                            return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                        }
+                        break;
+                    case "mainMenu":
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    case "select":
+                        if (navigation.selectedIndex !== undefined &&
+                            navigation.selectedIndex >= 0 &&
+                            navigation.selectedIndex < provinces.length) {
+                            session.selectedProvince = provinces[navigation.selectedIndex];
+                            session.locationStep = "district";
+                            session.locationPage = 1;
+                            addToHistory(session, "province", { page: currentPage });
+                            const districts = location_service_1.LocationValidationService.getDistrictsByProvince(session.selectedProvince);
+                            return buildLocationMenu(districts, 1, "selectDistrict", lang);
+                        }
+                        break;
                 }
-                if (parts[1] === "8" && currentPage > 1) {
-                    // Previous page
-                    session.locationPage = currentPage - 1;
-                    return buildLocationMenu(provinces, session.locationPage, "Select your Province");
-                }
-                // Province selection
-                const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
-                if (selectedIndex >= 0 && selectedIndex < provinces.length) {
-                    session.selectedProvince = provinces[selectedIndex];
-                    session.locationStep = "district";
-                    session.locationPage = 1;
-                    const districts = location_service_1.LocationValidationService.getDistrictsByProvince(session.selectedProvince);
-                    return buildLocationMenu(districts, 1, "Select your District", "Back to Province");
-                }
-                return "CON Invalid selection. Please try again.";
+                return `CON ${getTranslation(lang, "invalidCategory")}`;
             }
             if (session.locationStep === "district") {
-                if (parts[1] === "0") {
-                    // Back to province
-                    session.locationStep = "province";
-                    session.locationPage = 1;
-                    const provinces = location_service_1.LocationValidationService.getAllProvinces();
-                    return buildLocationMenu(provinces, 1, "Select your Province");
-                }
                 const districts = location_service_1.LocationValidationService.getDistrictsByProvince(session.selectedProvince);
                 const currentPage = session.locationPage || 1;
-                if (parts[1] === "9" && currentPage < Math.ceil(districts.length / 8)) {
-                    session.locationPage = currentPage + 1;
-                    return buildLocationMenu(districts, session.locationPage, "Select your District", "Back to Province");
+                const navigation = handlePaginationNavigation(parts, session, districts, "district");
+                switch (navigation.action) {
+                    case "next":
+                        session.locationPage = currentPage + 1;
+                        return buildLocationMenu(districts, session.locationPage, "selectDistrict", lang);
+                    case "prev":
+                        session.locationPage = currentPage - 1;
+                        return buildLocationMenu(districts, session.locationPage, "selectDistrict", lang);
+                    case "back":
+                        const prevStep = getPreviousStep(session);
+                        if (prevStep && prevStep.step === "province") {
+                            session.locationStep = "province";
+                            session.locationPage = prevStep.data.page || 1;
+                            const provinces = location_service_1.LocationValidationService.getAllProvinces();
+                            return buildLocationMenu(provinces, session.locationPage ?? 1, "selectProvince", lang);
+                        }
+                        break;
+                    case "mainMenu":
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    case "select":
+                        if (navigation.selectedIndex !== undefined &&
+                            navigation.selectedIndex >= 0 &&
+                            navigation.selectedIndex < districts.length) {
+                            session.selectedDistrict = districts[navigation.selectedIndex];
+                            session.locationStep = "sector";
+                            session.locationPage = 1;
+                            addToHistory(session, "district", { page: currentPage });
+                            const sectors = location_service_1.LocationValidationService.getSectorsByDistrict(session.selectedProvince, session.selectedDistrict);
+                            return buildLocationMenu(sectors, 1, "selectSector", lang);
+                        }
+                        break;
                 }
-                if (parts[1] === "8" && currentPage > 1) {
-                    session.locationPage = currentPage - 1;
-                    return buildLocationMenu(districts, session.locationPage, "Select your District", "Back to Province");
-                }
-                const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
-                if (selectedIndex >= 0 && selectedIndex < districts.length) {
-                    session.selectedDistrict = districts[selectedIndex];
-                    session.locationStep = "sector";
-                    session.locationPage = 1;
-                    const sectors = location_service_1.LocationValidationService.getSectorsByDistrict(session.selectedProvince, session.selectedDistrict);
-                    return buildLocationMenu(sectors, 1, "Select your Sector", "Back to District");
-                }
-                return "CON Invalid selection. Please try again.";
+                return `CON ${getTranslation(lang, "invalidCategory")}`;
             }
             if (session.locationStep === "sector") {
-                if (parts[1] === "0") {
-                    // Back to district
-                    session.locationStep = "district";
-                    session.locationPage = 1;
-                    const districts = location_service_1.LocationValidationService.getDistrictsByProvince(session.selectedProvince);
-                    return buildLocationMenu(districts, 1, "Select your District", "Back to Province");
-                }
                 const sectors = location_service_1.LocationValidationService.getSectorsByDistrict(session.selectedProvince, session.selectedDistrict);
                 const currentPage = session.locationPage || 1;
-                if (parts[1] === "9" && currentPage < Math.ceil(sectors.length / 8)) {
-                    session.locationPage = currentPage + 1;
-                    return buildLocationMenu(sectors, session.locationPage, "Select your Sector", "Back to District");
+                const navigation = handlePaginationNavigation(parts, session, sectors, "sector");
+                switch (navigation.action) {
+                    case "next":
+                        session.locationPage = currentPage + 1;
+                        return buildLocationMenu(sectors, session.locationPage, "selectSector", lang);
+                    case "prev":
+                        session.locationPage = currentPage - 1;
+                        return buildLocationMenu(sectors, session.locationPage, "selectSector", lang);
+                    case "back":
+                        const prevStep = getPreviousStep(session);
+                        if (prevStep && prevStep.step === "district") {
+                            session.locationStep = "district";
+                            session.locationPage = prevStep.data.page || 1;
+                            const districts = location_service_1.LocationValidationService.getDistrictsByProvince(session.selectedProvince);
+                            return buildLocationMenu(districts, session.locationPage ?? 1, "selectDistrict", lang);
+                        }
+                        break;
+                    case "mainMenu":
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    case "select":
+                        if (navigation.selectedIndex !== undefined &&
+                            navigation.selectedIndex >= 0 &&
+                            navigation.selectedIndex < sectors.length) {
+                            session.selectedSector = sectors[navigation.selectedIndex];
+                            session.locationStep = "cell";
+                            session.locationPage = 1;
+                            addToHistory(session, "sector", { page: currentPage });
+                            const cells = location_service_1.LocationValidationService.getCellsBySector(session.selectedProvince, session.selectedDistrict, session.selectedSector);
+                            return buildLocationMenu(cells, 1, "selectCell", lang);
+                        }
+                        break;
                 }
-                if (parts[1] === "8" && currentPage > 1) {
-                    session.locationPage = currentPage - 1;
-                    return buildLocationMenu(sectors, session.locationPage, "Select your Sector", "Back to District");
-                }
-                const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
-                if (selectedIndex >= 0 && selectedIndex < sectors.length) {
-                    session.selectedSector = sectors[selectedIndex];
-                    session.locationStep = "cell";
-                    session.locationPage = 1;
-                    const cells = location_service_1.LocationValidationService.getCellsBySector(session.selectedProvince, session.selectedDistrict, session.selectedSector);
-                    return buildLocationMenu(cells, 1, "Select your Cell", "Back to Sector");
-                }
-                return "CON Invalid selection. Please try again.";
+                return `CON ${getTranslation(lang, "invalidCategory")}`;
             }
             if (session.locationStep === "cell") {
-                if (parts[1] === "0") {
-                    // Back to sector
-                    session.locationStep = "sector";
-                    session.locationPage = 1;
-                    const sectors = location_service_1.LocationValidationService.getSectorsByDistrict(session.selectedProvince, session.selectedDistrict);
-                    return buildLocationMenu(sectors, 1, "Select your Sector", "Back to District");
-                }
                 const cells = location_service_1.LocationValidationService.getCellsBySector(session.selectedProvince, session.selectedDistrict, session.selectedSector);
                 const currentPage = session.locationPage || 1;
-                if (parts[1] === "9" && currentPage < Math.ceil(cells.length / 8)) {
-                    session.locationPage = currentPage + 1;
-                    return buildLocationMenu(cells, session.locationPage, "Select your Cell", "Back to Sector");
+                const navigation = handlePaginationNavigation(parts, session, cells, "cell");
+                switch (navigation.action) {
+                    case "next":
+                        session.locationPage = currentPage + 1;
+                        return buildLocationMenu(cells, session.locationPage, "selectCell", lang);
+                    case "prev":
+                        session.locationPage = currentPage - 1;
+                        return buildLocationMenu(cells, session.locationPage, "selectCell", lang);
+                    case "back":
+                        const prevStep = getPreviousStep(session);
+                        if (prevStep && prevStep.step === "sector") {
+                            session.locationStep = "sector";
+                            session.locationPage = prevStep.data.page || 1;
+                            const sectors = location_service_1.LocationValidationService.getSectorsByDistrict(session.selectedProvince, session.selectedDistrict);
+                            return buildLocationMenu(sectors, session.locationPage ?? 1, "selectSector", lang);
+                        }
+                        break;
+                    case "mainMenu":
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    case "select":
+                        if (navigation.selectedIndex !== undefined &&
+                            navigation.selectedIndex >= 0 &&
+                            navigation.selectedIndex < cells.length) {
+                            session.selectedCell = cells[navigation.selectedIndex];
+                            session.locationStep = "village";
+                            session.locationPage = 1;
+                            addToHistory(session, "cell", { page: currentPage });
+                            const villages = location_service_1.LocationValidationService.getVillagesByCell(session.selectedProvince, session.selectedDistrict, session.selectedSector, session.selectedCell);
+                            return buildLocationMenu(villages, 1, "selectVillage", lang);
+                        }
+                        break;
                 }
-                if (parts[1] === "8" && currentPage > 1) {
-                    session.locationPage = currentPage - 1;
-                    return buildLocationMenu(cells, session.locationPage, "Select your Cell", "Back to Sector");
-                }
-                const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
-                if (selectedIndex >= 0 && selectedIndex < cells.length) {
-                    session.selectedCell = cells[selectedIndex];
-                    session.locationStep = "village";
-                    session.locationPage = 1;
-                    const villages = location_service_1.LocationValidationService.getVillagesByCell(session.selectedProvince, session.selectedDistrict, session.selectedSector, session.selectedCell);
-                    return buildLocationMenu(villages, 1, "Select your Village", "Back to Cell");
-                }
-                return "CON Invalid selection. Please try again.";
+                return `CON ${getTranslation(lang, "invalidCategory")}`;
             }
             if (session.locationStep === "village") {
-                if (parts[1] === "0") {
-                    // Back to cell
-                    session.locationStep = "cell";
-                    session.locationPage = 1;
-                    const cells = location_service_1.LocationValidationService.getCellsBySector(session.selectedProvince, session.selectedDistrict, session.selectedSector);
-                    return buildLocationMenu(cells, 1, "Select your Cell", "Back to Sector");
-                }
                 const villages = location_service_1.LocationValidationService.getVillagesByCell(session.selectedProvince, session.selectedDistrict, session.selectedSector, session.selectedCell);
                 const currentPage = session.locationPage || 1;
-                if (parts[1] === "9" && currentPage < Math.ceil(villages.length / 8)) {
-                    session.locationPage = currentPage + 1;
-                    return buildLocationMenu(villages, session.locationPage, "Select your Village", "Back to Cell");
+                const navigation = handlePaginationNavigation(parts, session, villages, "village");
+                switch (navigation.action) {
+                    case "next":
+                        session.locationPage = currentPage + 1;
+                        return buildLocationMenu(villages, session.locationPage, "selectVillage", lang);
+                    case "prev":
+                        session.locationPage = currentPage - 1;
+                        return buildLocationMenu(villages, session.locationPage, "selectVillage", lang);
+                    case "back":
+                        const prevStep = getPreviousStep(session);
+                        if (prevStep && prevStep.step === "cell") {
+                            session.locationStep = "cell";
+                            session.locationPage = prevStep.data.page || 1;
+                            const cells = location_service_1.LocationValidationService.getCellsBySector(session.selectedProvince, session.selectedDistrict, session.selectedSector);
+                            return buildLocationMenu(cells, session.locationPage ?? 1, "selectCell", lang);
+                        }
+                        break;
+                    case "mainMenu":
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    case "select":
+                        if (navigation.selectedIndex !== undefined &&
+                            navigation.selectedIndex >= 0 &&
+                            navigation.selectedIndex < villages.length) {
+                            session.selectedVillage = villages[navigation.selectedIndex];
+                            session.locationStep = "completed";
+                            addToHistory(session, "village", { page: currentPage });
+                            return `CON ${getTranslation(lang, "createPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                        }
+                        break;
                 }
-                if (parts[1] === "8" && currentPage > 1) {
-                    session.locationPage = currentPage - 1;
-                    return buildLocationMenu(villages, session.locationPage, "Select your Village", "Back to Cell");
-                }
-                const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
-                if (selectedIndex >= 0 && selectedIndex < villages.length) {
-                    session.selectedVillage = villages[selectedIndex];
-                    session.locationStep = "completed";
-                    return "CON Create a 4-digit PIN:";
-                }
-                return "CON Invalid selection. Please try again.";
+                return `CON ${getTranslation(lang, "invalidCategory")}`;
             }
             // PIN creation and confirmation
-            if (session.locationStep === "completed" && parts.length === 2) {
-                const password = parts[1];
-                if (!/^\d{4}$/.test(password)) {
-                    delete ussdSessions[sessionId];
-                    return "END Please enter a 4-digit numeric PIN only. Try again.";
+            if (session.locationStep === "completed") {
+                const currentInput = parts[parts.length - 1]; // Get the last input
+                if (currentInput === "0") {
+                    // Back to village selection
+                    const prevStep = getPreviousStep(session);
+                    if (prevStep && prevStep.step === "village") {
+                        session.locationStep = "village";
+                        session.locationPage = prevStep.data.page || 1;
+                        const villages = location_service_1.LocationValidationService.getVillagesByCell(session.selectedProvince, session.selectedDistrict, session.selectedSector, session.selectedCell);
+                        return buildLocationMenu(villages, session.locationPage ?? 1, "selectVillage", lang);
+                    }
+                    return `CON ${getTranslation(lang, "createPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
                 }
-                session.password = password;
-                return "CON Confirm your 4-digit PIN:";
+                if (currentInput === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                // Validate PIN format
+                if (!/^\d{4}$/.test(currentInput)) {
+                    return `CON ${getTranslation(lang, "invalidPin")}
+
+${getTranslation(lang, "createPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                // Store the PIN and move to confirmation step
+                session.password = currentInput;
+                session.locationStep = "confirm_pin";
+                addToHistory(session, "completed"); // Track where we came from
+                return `CON ${getTranslation(lang, "confirmPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
             }
-            if (session.locationStep === "completed" && parts.length === 3) {
-                const confirmPassword = parts[2];
-                if (!/^\d{4}$/.test(confirmPassword)) {
-                    delete ussdSessions[sessionId];
-                    return "END Please enter a 4-digit numeric PIN only. Try again.";
+            // PIN confirmation step
+            if (session.locationStep === "confirm_pin") {
+                const confirmInput = parts[parts.length - 1]; // Get the last input
+                if (confirmInput === "0") {
+                    // Back to PIN creation
+                    session.locationStep = "completed";
+                    delete session.password; // Clear stored PIN
+                    return `CON ${getTranslation(lang, "createPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
                 }
-                if (session.password !== confirmPassword) {
+                if (confirmInput === "00") {
                     delete ussdSessions[sessionId];
-                    return "END PINs do not match. Please try again.";
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
                 }
+                // Validate confirmation PIN format
+                if (!/^\d{4}$/.test(confirmInput)) {
+                    return `CON ${getTranslation(lang, "invalidPin")}
+
+${getTranslation(lang, "confirmPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                // Check if PINs match
+                if (session.password !== confirmInput) {
+                    return `CON ${getTranslation(lang, "pinMismatch")}
+
+${getTranslation(lang, "confirmPin")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                // PINs match - proceed with registration
                 try {
                     // Validate complete location hierarchy
                     const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
@@ -261,9 +600,9 @@ async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
                     });
                     if (!locationValidation.isValid) {
                         delete ussdSessions[sessionId];
-                        return "END Location validation failed. Please try again.";
+                        return `END Location validation failed: ${locationValidation.errors.join(", ")}`;
                     }
-                    let hashedPassword = await (0, password_1.hashPassword)(session.password);
+                    const hashedPassword = await (0, password_1.hashPassword)(session.password);
                     await prisma_1.default.farmer.create({
                         data: {
                             phone: phoneNumber,
@@ -273,18 +612,19 @@ async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
                             sector: session.selectedSector,
                             cell: session.selectedCell,
                             village: session.selectedVillage,
+                            preferredLanguage: lang,
                         },
                     });
                     delete ussdSessions[sessionId];
-                    return "END Registration successful. Thank you!";
+                    return `END ${getTranslation(lang, "registrationSuccessful")}`;
                 }
                 catch (err) {
                     console.error("DB Error:", err);
                     delete ussdSessions[sessionId];
-                    return "END Registration failed. Please try again later.";
+                    return `END ${getTranslation(lang, "registrationFailed")}`;
                 }
             }
-            return "END Invalid input during registration.";
+            return `END ${getTranslation(lang, "invalidCategory")}`;
         }
         // 2. Submit Product
         case "2": {
@@ -293,81 +633,205 @@ async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
                 where: { phone: phoneNumber },
             });
             if (!farmer) {
-                return "END Please register first before submitting a product.";
+                return `END ${getTranslation(lang, "pleaseRegister")}`;
             }
+            // Category selection
             if (parts.length === 1) {
-                session.productPage = 1;
-                const products = await getProductsFromDatabase();
-                if (products.length <= 8) {
-                    // Show all products without pagination
-                    let menu = "CON Select a product:\n";
+                addToHistory(session, "mainMenu");
+                return await buildCategoryMenu(lang);
+            }
+            // Handle category selection
+            if (parts.length === 2) {
+                const categoryChoice = parts[1];
+                if (categoryChoice === "0") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                if (categoryChoice === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                // Get categories from database
+                const categories = await getActiveProductCategories();
+                const categoryIndex = parseInt(categoryChoice) - 1;
+                if (categoryIndex >= 0 && categoryIndex < categories.length) {
+                    const selectedCategory = categories[categoryIndex];
+                    // Store both ID and name for easy access
+                    session.selectedCategoryId = selectedCategory.id;
+                    session.selectedCategoryName = selectedCategory.name;
+                    addToHistory(session, "categoryMenu");
+                    // Get products for selected category from database
+                    const products = await getProductsByCategory(selectedCategory.id);
+                    if (products.length === 0) {
+                        return `CON ${getTranslation(lang, "noCategoryProducts")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                    }
+                    let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
                     products.forEach((product, index) => {
-                        menu += `${index + 1}. ${product}\n`;
+                        productMenu += `${index + 1}. ${product}\n`;
                     });
-                    return menu;
+                    productMenu += `0. ${getTranslation(lang, "back")}\n`;
+                    productMenu += `00. ${getTranslation(lang, "mainMenu")}`;
+                    return productMenu;
                 }
                 else {
-                    // Use pagination
-                    return buildLocationMenu(products, 1, "Select a product");
+                    return `CON ${getTranslation(lang, "invalidCategory")}
+
+${await buildCategoryMenu(lang)}`.replace("CON ", "");
                 }
             }
-            if (parts.length === 2) {
-                const products = await getProductsFromDatabase();
-                const currentPage = session.productPage || 1;
-                // Handle pagination for products
-                if (products.length > 8) {
-                    if (parts[1] === "9" &&
-                        currentPage < Math.ceil(products.length / 8)) {
-                        session.productPage = currentPage + 1;
-                        return buildLocationMenu(products, session.productPage, "Select a product");
-                    }
-                    if (parts[1] === "8" && currentPage > 1) {
-                        session.productPage = currentPage - 1;
-                        return buildLocationMenu(products, session.productPage, "Select a product");
-                    }
-                }
-                // Product selection
-                const selectedIndex = parseInt(parts[1]) - 1 + (currentPage - 1) * 8;
-                if (selectedIndex >= 0 && selectedIndex < products.length) {
-                    session.selectedProduct = products[selectedIndex];
-                    return "CON Enter quantity in kg:";
-                }
-                return "END Invalid product selection. Please try again.";
-            }
+            // Handle product selection
             if (parts.length === 3) {
-                const quantity = parts[2];
-                if (isNaN(parseFloat(quantity)) || parseFloat(quantity) <= 0) {
-                    delete ussdSessions[sessionId];
-                    return "END Please enter a valid quantity. Try again.";
+                const productChoice = parts[2];
+                if (productChoice === "0") {
+                    return await buildCategoryMenu(lang);
                 }
-                session.quantity = quantity;
-                return "CON Enter your wished price per kg (RWF):";
+                if (productChoice === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                // Get products for the selected category
+                const products = await getProductsByCategory(session.selectedCategoryId);
+                const productIndex = parseInt(productChoice) - 1;
+                if (productIndex >= 0 && productIndex < products.length) {
+                    session.selectedProduct = products[productIndex];
+                    addToHistory(session, "productMenu");
+                    return `CON ${getTranslation(lang, "enterQuantity")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                else {
+                    return `CON ${getTranslation(lang, "invalidProduct")}
+
+${getTranslation(lang, "selectProduct")}
+${products.map((product, index) => `${index + 1}. ${product}`).join("\n")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
             }
+            // Handle quantity input
             if (parts.length === 4) {
-                const wishedPrice = parts[3];
-                if (isNaN(parseFloat(wishedPrice)) || parseFloat(wishedPrice) <= 0) {
-                    delete ussdSessions[sessionId];
-                    return "END Please enter a valid wished price. Try again.";
+                const quantityInput = parts[3];
+                if (quantityInput === "0") {
+                    // Back to product selection
+                    const products = await getProductsByCategory(session.selectedCategoryId);
+                    let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
+                    products.forEach((product, index) => {
+                        productMenu += `${index + 1}. ${product}\n`;
+                    });
+                    productMenu += `0. ${getTranslation(lang, "back")}\n`;
+                    productMenu += `00. ${getTranslation(lang, "mainMenu")}`;
+                    return productMenu;
                 }
-                session.wishedPrice = wishedPrice;
-                return "CON Enter your PIN to confirm:";
+                if (quantityInput === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                const quantity = parseFloat(quantityInput);
+                if (isNaN(quantity) || quantity <= 0) {
+                    return `CON ${getTranslation(lang, "invalidQuantity")}
+
+${getTranslation(lang, "enterQuantity")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                session.quantity = quantityInput;
+                addToHistory(session, "quantityInput");
+                return `CON ${getTranslation(lang, "enterPrice")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
             }
+            // Handle price input
             if (parts.length === 5) {
-                const enteredPassword = parts[4];
-                if (!/^\d{4}$/.test(enteredPassword)) {
-                    delete ussdSessions[sessionId];
-                    return "END Please enter a 4-digit numeric PIN only. Try again.";
+                const priceInput = parts[4];
+                if (priceInput === "0") {
+                    return `CON ${getTranslation(lang, "enterQuantity")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
                 }
-                const isMatch = await (0, password_1.comparePassword)(enteredPassword, farmer.password ?? "");
-                if (!isMatch) {
+                if (priceInput === "00") {
                     delete ussdSessions[sessionId];
-                    return "END Incorrect PIN. Please try again.";
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
                 }
+                const price = parseFloat(priceInput);
+                if (isNaN(price) || price <= 0) {
+                    return `CON ${getTranslation(lang, "invalidPrice")}
+
+${getTranslation(lang, "enterPrice")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                session.wishedPrice = priceInput;
+                addToHistory(session, "priceInput");
+                return `CON ${getTranslation(lang, "enterPinConfirm")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+            }
+            // Handle PIN confirmation for submission
+            if (parts.length === 6) {
+                const pinInput = parts[5];
+                if (pinInput === "0") {
+                    return `CON ${getTranslation(lang, "enterPrice")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                if (pinInput === "00") {
+                    delete ussdSessions[sessionId];
+                    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                }
+                if (!/^\d{4}$/.test(pinInput)) {
+                    return `CON ${getTranslation(lang, "invalidPin")}
+
+${getTranslation(lang, "enterPinConfirm")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                const pinValid = await verifyUserPin(phoneNumber, pinInput);
+                if (!pinValid) {
+                    return `CON ${getTranslation(lang, "incorrectPin")}
+
+${getTranslation(lang, "enterPinConfirm")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                // Submit product with category ID instead of enum
                 try {
                     await prisma_1.default.farmerSubmission.create({
                         data: {
                             farmerId: farmer.id,
                             productName: session.selectedProduct,
+                            categoryId: session.selectedCategoryId, // Use categoryId instead of category
                             submittedQty: parseFloat(session.quantity),
                             wishedPrice: parseFloat(session.wishedPrice),
                             province: farmer.province,
@@ -378,96 +842,218 @@ async function handleUssdLogic({ sessionId, phoneNumber, text, }) {
                         },
                     });
                     delete ussdSessions[sessionId];
-                    return "END Submission successful. Thank you!";
+                    return `END ${getTranslation(lang, "submissionSuccessful")}`;
                 }
-                catch (err) {
-                    console.error("DB Error:", err);
+                catch (error) {
+                    console.error("Product submission error:", error);
                     delete ussdSessions[sessionId];
-                    return "END Submission failed. Try again.";
+                    return `END ${getTranslation(lang, "submissionFailed")}`;
                 }
             }
-            return "END Invalid input during product submission.";
+            return `END ${getTranslation(lang, "invalidCategory")}`;
         }
-        case "3":
-            return "END Thank you for using SmartAgri!";
+        // 3. My Account
+        case "3": {
+            session.mode = "account";
+            const farmer = await prisma_1.default.farmer.findUnique({
+                where: { phone: phoneNumber },
+            });
+            if (!farmer) {
+                return `END ${getTranslation(lang, "pleaseRegister")}`;
+            }
+            if (parts.length === 1) {
+                addToHistory(session, "mainMenu");
+                return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+            }
+            // Check submissions
+            if (parts[1] === "1") {
+                if (parts.length === 2) {
+                    return `CON ${getTranslation(lang, "enterPasswordForSubmissions")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                if (parts.length === 3) {
+                    const pinInput = parts[2];
+                    if (pinInput === "0") {
+                        return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                    }
+                    if (pinInput === "00") {
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    }
+                    const pinValid = await verifyUserPin(phoneNumber, pinInput);
+                    if (!pinValid) {
+                        return `END ${getTranslation(lang, "incorrectPasswordSubmissions")}`;
+                    }
+                    try {
+                        const submissions = await prisma_1.default.farmerSubmission.findMany({
+                            where: { farmerId: farmer.id },
+                            take: 3,
+                        });
+                        if (submissions.length === 0) {
+                            return `END ${getTranslation(lang, "noOrders")}`;
+                        }
+                        let response = `END ${getTranslation(lang, "lastThreeOrders")}\n\n`;
+                        submissions.forEach((submission, index) => {
+                            response += `${index + 1}. ${submission.productName}\n`;
+                            response += `   ${submission.submittedQty}kg @ ${submission.wishedPrice} RWF/kg\n`;
+                            response += `   Status: ${submission.status}\n\n`;
+                        });
+                        return response.trim();
+                    }
+                    catch (error) {
+                        console.error("Error fetching submissions:", error);
+                        return `END ${getTranslation(lang, "submissionFailed")}`;
+                    }
+                }
+            }
+            // Change language
+            if (parts[1] === "2") {
+                if (parts.length === 2) {
+                    return `CON ${getTranslation(lang, "enterPasswordForLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                if (parts.length === 3) {
+                    const pinInput = parts[2];
+                    if (pinInput === "0") {
+                        return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                    }
+                    if (pinInput === "00") {
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    }
+                    const pinValid = await verifyUserPin(phoneNumber, pinInput);
+                    if (!pinValid) {
+                        return `END ${getTranslation(lang, "incorrectPasswordLanguage")}`;
+                    }
+                    return `CON ${getTranslation(lang, "selectLanguage")}
+1. Kinyarwanda
+2. English
+3. Français
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                }
+                if (parts.length === 4) {
+                    const langChoice = parts[3];
+                    if (langChoice === "0") {
+                        return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                    }
+                    if (langChoice === "00") {
+                        delete ussdSessions[sessionId];
+                        return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+                    }
+                    const languageMap = {
+                        "1": "KINY",
+                        "2": "ENG",
+                        "3": "FRE",
+                    };
+                    const newLanguage = languageMap[langChoice];
+                    if (newLanguage) {
+                        try {
+                            await updateUserLanguage(phoneNumber, newLanguage);
+                            session.language = newLanguage;
+                            delete ussdSessions[sessionId];
+                            return `END ${getTranslation(newLanguage, "languageChanged")}`;
+                        }
+                        catch (error) {
+                            console.error("Error updating language:", error);
+                            return `END ${getTranslation(lang, "registrationFailed")}`;
+                        }
+                    }
+                    else {
+                        return `CON ${getTranslation(lang, "selectLanguage")}
+1. Kinyarwanda
+2. English
+3. Français
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                    }
+                }
+            }
+            if (parts[1] === "0") {
+                delete ussdSessions[sessionId];
+                return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+            }
+            return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+        }
+        // 4. Help
+        case "4": {
+            session.mode = "help";
+            if (parts.length === 1) {
+                addToHistory(session, "mainMenu");
+                return `CON ${getTranslation(lang, "helpMenu")}
+1. ${getTranslation(lang, "supportContact")}
+2. ${getTranslation(lang, "productPrices")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+            }
+            if (parts[1] === "1") {
+                return `END ${getTranslation(lang, "supportNumber")}`;
+            }
+            if (parts[1] === "2") {
+                const prices = await getCurrentProductPrices(lang);
+                return `END ${prices}`;
+            }
+            if (parts[1] === "0") {
+                delete ussdSessions[sessionId];
+                return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "register")}
+2. ${getTranslation(lang, "submitProduct")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "help")}
+5. ${getTranslation(lang, "exit")}`;
+            }
+            return `CON ${getTranslation(lang, "helpMenu")}
+1. ${getTranslation(lang, "supportContact")}
+2. ${getTranslation(lang, "productPrices")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+        }
+        // 5. Exit
+        case "5":
+            delete ussdSessions[sessionId];
+            return `END ${getTranslation(lang, "exitMessage")}`;
     }
     return "END Invalid input. Try again.";
-}
-async function submitProductService(submissionData) {
-    // Get valid products from database
-    const validProducts = await getProductsFromDatabase();
-    // Validate product name
-    if (!validProducts.includes(submissionData.productName)) {
-        throw new Error(`Invalid product. Valid products are: ${validProducts.join(", ")}`);
-    }
-    // Validate quantity and price
-    if (submissionData.submittedQty <= 0) {
-        throw new Error("Quantity must be greater than 0");
-    }
-    if (submissionData.wishedPrice <= 0) {
-        throw new Error("Price must be greater than 0");
-    }
-    // Check if farmer exists and get their location data
-    const farmer = await prisma_1.default.farmer.findUnique({
-        where: { id: submissionData.farmerId },
-        select: {
-            id: true,
-            province: true,
-            district: true,
-            sector: true,
-            cell: true,
-            village: true,
-        },
-    });
-    if (!farmer) {
-        throw new Error("Farmer not found");
-    }
-    // Validate farmer's location data
-    if (!submissionData.province ||
-        !submissionData.district ||
-        !submissionData.sector ||
-        !submissionData.cell ||
-        !submissionData.village) {
-        throw new Error("submissionData location data is incomplete. Please update your profile.");
-    }
-    const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
-        province: submissionData.province,
-        district: submissionData.district,
-        sector: submissionData.sector,
-        cell: submissionData.cell,
-        village: submissionData.village,
-    });
-    if (!locationValidation.isValid) {
-        throw new Error(`Farmer location validation failed: ${locationValidation.errors.join(", ")}`);
-    }
-    // Create submission with farmer's location data
-    const submission = await prisma_1.default.farmerSubmission.create({
-        data: {
-            farmerId: submissionData.farmerId,
-            productName: submissionData.productName,
-            category: submissionData.category,
-            submittedQty: submissionData.submittedQty,
-            wishedPrice: submissionData.wishedPrice,
-            status: "PENDING",
-            province: submissionData.province,
-            district: submissionData.district,
-            sector: submissionData.sector,
-            cell: submissionData.cell,
-            village: submissionData.village,
-        },
-        include: {
-            farmer: {
-                select: {
-                    id: true,
-                    phone: true,
-                    province: true,
-                    district: true,
-                    sector: true,
-                    cell: true,
-                    village: true,
-                },
-            },
-        },
-    });
-    return submission;
 }
