@@ -9,11 +9,30 @@ const prisma_1 = __importDefault(require("../prisma"));
 const password_1 = require("../utils/password");
 const paginationService_1 = require("./paginationService");
 const location_service_1 = require("./location.service");
+// Helper function to check for existing phone/email across all user types
+const checkExistingUser = async (phone, email) => {
+    if (!phone && !email)
+        return null;
+    const conditions = [];
+    if (phone) {
+        conditions.push(prisma_1.default.farmer.findFirst({ where: { phone } }), prisma_1.default.restaurant.findFirst({ where: { phone } }), prisma_1.default.admin.findFirst({ where: { phone } }));
+    }
+    if (email) {
+        conditions.push(prisma_1.default.farmer.findFirst({ where: { email } }), prisma_1.default.restaurant.findFirst({ where: { email } }), prisma_1.default.admin.findFirst({ where: { email } }));
+    }
+    const results = await Promise.all(conditions);
+    return results.find((result) => result !== null) || null;
+};
 // FARMER SERVICES
 const createFarmerService = async (farmerData) => {
     const { phone, email, password, province, district, sector, cell, village } = farmerData;
     if (!phone && !email) {
         throw new Error("Either phone or email is required");
+    }
+    // Check if phone/email exists in any user table
+    const existingUser = await checkExistingUser(phone || undefined, email || undefined);
+    if (existingUser) {
+        throw new Error("User with this phone/email already exists");
     }
     // Validate location data if provided
     const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
@@ -26,14 +45,7 @@ const createFarmerService = async (farmerData) => {
     if (!locationValidation.isValid) {
         throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
     }
-    const existingFarmer = await prisma_1.default.farmer.findFirst({
-        where: {
-            OR: [{ phone: phone || undefined }, { email: email || undefined }],
-        },
-    });
-    if (existingFarmer) {
-        throw new Error("Farmer with this phone/email already exists");
-    }
+    // Remove the old farmer-specific check since we already checked globally
     try {
         let hashedPassword;
         if (password) {
@@ -128,12 +140,19 @@ const getFarmerByIdService = async (id) => {
 };
 exports.getFarmerByIdService = getFarmerByIdService;
 const updateFarmerService = async (id, updateData) => {
-    const { password, province, district, sector, cell, village, ...otherData } = updateData;
+    const { password, province, district, sector, cell, village, phone, email, ...otherData } = updateData;
     const existingFarmer = await prisma_1.default.farmer.findUnique({
         where: { id },
     });
     if (!existingFarmer) {
         throw new Error("Farmer not found");
+    }
+    // Check if new phone/email already exists in any user table (excluding current farmer)
+    if (phone || email) {
+        const existingUser = await checkExistingUser(phone || undefined, email || undefined);
+        if (existingUser && existingUser.id !== id) {
+            throw new Error("User with this phone/email already exists");
+        }
     }
     // Validate location data if any location field is provided
     if (province || district || sector || cell || village) {
@@ -204,6 +223,11 @@ const createRestaurantService = async (restaurantData) => {
         !village) {
         throw new Error("Name, email, password, province, district, sector, cell, and village are required for restaurants");
     }
+    // Check if phone/email exists in any user table
+    const existingUser = await checkExistingUser(phone || undefined, email);
+    if (existingUser) {
+        throw new Error("User with this phone/email already exists");
+    }
     // Validate location data if provided
     const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
         province,
@@ -214,14 +238,6 @@ const createRestaurantService = async (restaurantData) => {
     });
     if (!locationValidation.isValid) {
         throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
-    }
-    const existingRestaurant = await prisma_1.default.restaurant.findFirst({
-        where: {
-            OR: [{ email }, { phone: phone || undefined }],
-        },
-    });
-    if (existingRestaurant) {
-        throw new Error("Restaurant with this email/phone already exists");
     }
     try {
         const hashedPassword = await (0, password_1.hashPassword)(password);
@@ -341,12 +357,19 @@ const getRestaurantByIdService = async (id) => {
 };
 exports.getRestaurantByIdService = getRestaurantByIdService;
 const updateRestaurantService = async (id, updateData) => {
-    const { password, province, district, sector, cell, village, ...otherData } = updateData;
+    const { password, province, district, sector, cell, village, phone, email, ...otherData } = updateData;
     const existingRestaurant = await prisma_1.default.restaurant.findUnique({
         where: { id },
     });
     if (!existingRestaurant) {
         throw new Error("Restaurant not found");
+    }
+    // Check if new phone/email already exists in any user table (excluding current restaurant)
+    if (phone || email) {
+        const existingUser = await checkExistingUser(phone || undefined, email || undefined);
+        if (existingUser && existingUser.id !== id) {
+            throw new Error("User with this phone/email already exists");
+        }
     }
     // Validate location data if any location field is provided
     if (province || district || sector || cell || village) {
@@ -418,6 +441,11 @@ const createAdminService = async (adminData) => {
         !village) {
         throw new Error("Username, email, password, role, province, district, sector, cell, and village are required for admins");
     }
+    // Check if phone/email exists in any user table
+    const existingUser = await checkExistingUser(phone || undefined, email);
+    if (existingUser) {
+        throw new Error("User with this phone/email already exists");
+    }
     // Validate location data if provided
     if (province || district || sector || cell || village) {
         const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
@@ -430,12 +458,6 @@ const createAdminService = async (adminData) => {
         if (!locationValidation.isValid) {
             throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
         }
-    }
-    const existingAdmin = await prisma_1.default.admin.findFirst({
-        where: { email },
-    });
-    if (existingAdmin) {
-        throw new Error("Admin with this email already exists");
     }
     try {
         const hashedPassword = await (0, password_1.hashPassword)(password);
@@ -509,12 +531,19 @@ const getAdminByIdService = async (id) => {
 };
 exports.getAdminByIdService = getAdminByIdService;
 const updateAdminService = async (id, updateData) => {
-    const { password, province, district, sector, cell, village, ...otherData } = updateData;
+    const { password, province, district, sector, cell, village, email, ...otherData } = updateData;
     const existingAdmin = await prisma_1.default.admin.findUnique({
         where: { id },
     });
     if (!existingAdmin) {
         throw new Error("Admin not found");
+    }
+    // Check if new phone/email already exists in any user table (excluding current admin)
+    if (email) {
+        const existingUser = await checkExistingUser(email || undefined);
+        if (existingUser && existingUser.id !== id) {
+            throw new Error("User with this phone/email already exists");
+        }
     }
     // Validate location data if any location field is provided
     if (province || district || sector || cell || village) {

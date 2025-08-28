@@ -236,7 +236,7 @@ FarmerController.updateFarmerFeedback = async (req, res) => {
 exports.default = FarmerController;
 exports.submitProductController = (0, errorhandler_utlity_1.catchAsyncError)(async (req, res, next) => {
     const userId = req.user?.id;
-    const { productName, category, quantity, wishedPrice, province, district, sector, cell, village, } = req.body;
+    const { productName, quantity, wishedPrice, province, district, sector, cell, village, } = req.body;
     // Validate required fields
     if (!productName ||
         !quantity ||
@@ -274,7 +274,6 @@ exports.submitProductController = (0, errorhandler_utlity_1.catchAsyncError)(asy
     const submissionData = {
         farmerId: userId,
         productName: productName.trim(),
-        category: category || "OTHER",
         submittedQty: parseFloat(quantity),
         wishedPrice: parseFloat(wishedPrice),
         province,

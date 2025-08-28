@@ -269,7 +269,6 @@ export const submitProductController = catchAsyncError(
     const userId = (req as any).user?.id;
     const {
       productName,
-      category,
       quantity,
       wishedPrice,
       province,
@@ -331,7 +330,6 @@ export const submitProductController = catchAsyncError(
     const submissionData: ProductSubmissionInput = {
       farmerId: userId,
       productName: productName.trim(),
-      category: category || "OTHER",
       submittedQty: parseFloat(quantity),
       wishedPrice: parseFloat(wishedPrice),
       province,

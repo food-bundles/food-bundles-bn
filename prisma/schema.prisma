@@ -55,7 +55,7 @@ model FarmerSubmission {
   submittedQty         Float?
   acceptedQty          Float?
   totalAmount          Float?
-  category             ProductCategory       @default(OTHER)
+  categoryId           String?
   status               SubmissionStatus      @default(PENDING)
   farmerFeedbackStatus FarmerFeedbackStatus? @default(PENDING)
   farmerFeedbackAt     DateTime?
@@ -78,9 +78,10 @@ model FarmerSubmission {
   cell     String
   village  String
 
-  approvedProduct Product? @relation(fields: [approvedProductId], references: [id])
-  farmer          Farmer   @relation(fields: [farmerId], references: [id])
-  aggregator      Admin?   @relation("Aggregator", fields: [aggregatorId], references: [id])
+  approvedProduct Product?         @relation(fields: [approvedProductId], references: [id])
+  farmer          Farmer           @relation(fields: [farmerId], references: [id])
+  aggregator      Admin?           @relation("Aggregator", fields: [aggregatorId], references: [id])
+  category        ProductCategory? @relation(fields: [categoryId], references: [id])
 }
 
 model Admin {
@@ -99,7 +100,9 @@ model Admin {
   village  String
 
   aggregatorAssignments FarmerSubmission[] @relation("Aggregator")
+  logisticsAssignments  Order[]            @relation("LOGISTICS")
   products              Product[]
+  productCategories     ProductCategory[]
 }
 
 model Product {
@@ -115,7 +118,7 @@ model Product {
   quantity          Float
   sku               String             @unique
   updatedAt         DateTime           @updatedAt
-  category          ProductCategory
+  categoryId        String
   productName       String             @unique
   status            ProductStatus      @default(ACTIVE)
   province          String?
@@ -127,6 +130,25 @@ model Product {
   orderItems        OrderItem[]
   admin             Admin              @relation(fields: [createdBy], references: [id])
   CartItem          CartItem[]
+  category          ProductCategory    @relation(fields: [categoryId], references: [id])
+}
+
+model ProductCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String
+
+  // Relations
+  admin             Admin              @relation(fields: [createdBy], references: [id])
+  products          Product[]
+  farmerSubmissions FarmerSubmission[]
+
+  @@index([name])
+  @@index([isActive])
 }
 
 // Cart schema model - Prisma Schema for Cart Management
@@ -216,6 +238,7 @@ model Order {
   id           String      @id @default(uuid())
   checkoutId   String?     @unique
   restaurantId String
+  logisticsId  String?
   orderNumber  String      @unique
   status       OrderStatus @default(PENDING)
   totalAmount  Float
@@ -243,6 +266,8 @@ model Order {
   checkout   CHECKOUT?   @relation(name: "CHECKOUTToOrder")
   restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
   orderItems OrderItem[]
+
+  logistics Admin? @relation("LOGISTICS", fields: [logisticsId], references: [id])
 
   @@index([restaurantId])
   @@index([status])
@@ -273,6 +298,7 @@ enum Role {
   RESTAURANT
   ADMIN
   AGGREGATOR
+  LOGISTICS
 }
 
 enum SubmissionStatus {
@@ -287,17 +313,6 @@ enum FarmerFeedbackStatus {
   ACCEPTED // Farmer accepted the purchase terms
   REJECTED // Farmer rejected the purchase terms
   EXTENDED // Farmer requested extension/negotiation
-}
-
-enum ProductCategory {
-  ANIMAL_PRODUCTS
-  VEGETABLES
-  FRUITS
-  GRAINS
-  TUBERS
-  LEGUMES
-  HERBS_SPICES
-  OTHER
 }
 
 enum ProductStatus {

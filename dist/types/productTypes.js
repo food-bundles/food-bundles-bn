@@ -64,6 +64,7 @@ exports.translations = {
         selectCell: "Hitamo akagari:",
         selectVillage: "Hitamo umudugudu:",
         mainMenu: "Ahabanza",
+        noCategoryProducts: "Nta musaruro uri muri iki cyiciro.",
     },
     ENG: {
         welcome: "Welcome to FoodBundles!",
@@ -126,6 +127,7 @@ exports.translations = {
         selectCell: "Select your Cell:",
         selectVillage: "Select your Village:",
         mainMenu: "Main Menu",
+        noCategoryProducts: "No products in this category.",
     },
     FRE: {
         welcome: "Bienvenue à FoodBundles!",
@@ -188,6 +190,7 @@ exports.translations = {
         selectCell: "Sélectionnez votre Cellule:",
         selectVillage: "Sélectionnez votre Village:",
         mainMenu: "Menu Principal",
+        noCategoryProducts: "Aucun produit dans cette catégorie.",
     },
 };
 exports.productsByCategory = {

@@ -21,7 +21,7 @@ components:
           type: number
           format: float
           description: Purchase price per unit
-        category:
+        categoryId:
           type: string
           description: Product category
         bonus:
@@ -146,7 +146,7 @@ components:
       required:
         - productName
         - unitPrice
-        - category
+        - categoryId
         - sku
         - quantity
         - unit
@@ -157,7 +157,10 @@ components:
         unitPrice:
           type: number
           description: Price per unit
-        category:
+        purchasePrice:
+          type: number
+          description: Purchase price per unit
+        categoryId:
           type: string
           description: Product category
         bonus:
@@ -176,10 +179,6 @@ components:
             type: string
             format: binary
           description: A gallery of images related to the product
-        expiryDate:
-          type: string
-          format: date
-          description: Product expiry date (optional)
         unit:
           type: string
           description: Unit of measurement
@@ -193,7 +192,10 @@ components:
         unitPrice:
           type: number
           description: Price per unit
-        category:
+        purchasePrice:
+          type: number
+          description: Purchase price per unit
+        categoryId:
           type: string
           description: Product category
         bonus:
@@ -212,10 +214,6 @@ components:
             type: string
             format: binary
           description: A gallery of images related to the product
-        expiryDate:
-          type: string
-          format: date
-          description: Product expiry date (optional)
         unit:
           type: string
           description: Unit of measurement
@@ -321,6 +319,62 @@ paths:
         - Products API Management
       summary: Get all products
       description: Retrieve all products with optional filtering and pagination
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by product category
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by product name or SKU
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of products per page
+      responses:
+        200:
+          description: Products retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Products retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /products/role-based:
+    get:
+      tags:
+        - Products API Management
+      summary: Get all products by user role
+      description: Retrieve all products based on user role with optional filtering and pagination
       parameters:
         - name: category
           in: query

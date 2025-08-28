@@ -3,6 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getActiveProductCategories = getActiveProductCategories;
+exports.getProductsByCategory = getProductsByCategory;
 exports.getProductsFromDatabase = getProductsFromDatabase;
 exports.handleUssdLogic = handleUssdLogic;
 const prisma_1 = __importDefault(require("../prisma"));
@@ -40,6 +42,40 @@ async function updateUserLanguage(phoneNumber, language) {
     catch (error) {
         console.error("Error updating user language:", error);
         throw new Error("Failed to update language preference");
+    }
+}
+// Get active product categories from database
+async function getActiveProductCategories() {
+    try {
+        const categories = await prisma_1.default.productCategory.findMany({
+            where: { isActive: true },
+            select: { id: true, name: true },
+            orderBy: { name: "asc" },
+        });
+        return categories;
+    }
+    catch (error) {
+        console.error("Error fetching categories:", error);
+        // Fallback to empty array - you might want to handle this differently
+        return [];
+    }
+}
+// Get products by category from database
+async function getProductsByCategory(categoryId) {
+    try {
+        const products = await prisma_1.default.product.findMany({
+            where: {
+                categoryId: categoryId,
+                status: "ACTIVE",
+            },
+            select: { productName: true },
+            orderBy: { productName: "asc" },
+        });
+        return products.map((p) => p.productName);
+    }
+    catch (error) {
+        console.error("Error fetching products by category:", error);
+        return [];
     }
 }
 // Get products from database
@@ -110,17 +146,15 @@ function buildLocationMenu(items, page, titleKey, lang = "KINY", backOption = tr
     return menu;
 }
 // Build product category menu
-function buildCategoryMenu(lang = "KINY") {
-    return `CON ${getTranslation(lang, "selectCategory")}
-1. ${getTranslation(lang, "animalProducts")}
-2. ${getTranslation(lang, "vegetables")}
-3. ${getTranslation(lang, "fruits")}
-4. ${getTranslation(lang, "grains")}
-5. ${getTranslation(lang, "tubers")}
-6. ${getTranslation(lang, "legumes")}
-7. ${getTranslation(lang, "herbsSpices")}
-0. ${getTranslation(lang, "back")}
-00. ${getTranslation(lang, "mainMenu")}`;
+async function buildCategoryMenu(lang = "KINY") {
+    const categories = await getActiveProductCategories();
+    let menu = `CON ${getTranslation(lang, "selectCategory")}\n`;
+    categories.forEach((category, index) => {
+        menu += `${index + 1}. ${category.name}\n`;
+    });
+    menu += `0. ${getTranslation(lang, "back")}\n`;
+    menu += `00. ${getTranslation(lang, "mainMenu")}`;
+    return menu;
 }
 // Add step to navigation history
 function addToHistory(session, step, data) {
@@ -595,7 +629,6 @@ ${getTranslation(lang, "confirmPin")}
         // 2. Submit Product
         case "2": {
             session.mode = "submit";
-            // Check if user is registered
             const farmer = await prisma_1.default.farmer.findUnique({
                 where: { phone: phoneNumber },
             });
@@ -605,13 +638,12 @@ ${getTranslation(lang, "confirmPin")}
             // Category selection
             if (parts.length === 1) {
                 addToHistory(session, "mainMenu");
-                return buildCategoryMenu(lang);
+                return await buildCategoryMenu(lang);
             }
             // Handle category selection
             if (parts.length === 2) {
                 const categoryChoice = parts[1];
                 if (categoryChoice === "0") {
-                    // Back to main menu
                     delete ussdSessions[sessionId];
                     return `CON ${getTranslation(lang, "welcome")}
 1. ${getTranslation(lang, "register")}
@@ -629,39 +661,41 @@ ${getTranslation(lang, "confirmPin")}
 4. ${getTranslation(lang, "help")}
 5. ${getTranslation(lang, "exit")}`;
                 }
-                const categoryMap = {
-                    "1": "ANIMAL_PRODUCTS",
-                    "2": "VEGETABLES",
-                    "3": "FRUITS",
-                    "4": "GRAINS",
-                    "5": "TUBERS",
-                    "6": "LEGUMES",
-                    "7": "HERBS_SPICES",
-                };
-                const selectedCategory = categoryMap[categoryChoice];
-                if (!selectedCategory) {
+                // Get categories from database
+                const categories = await getActiveProductCategories();
+                const categoryIndex = parseInt(categoryChoice) - 1;
+                if (categoryIndex >= 0 && categoryIndex < categories.length) {
+                    const selectedCategory = categories[categoryIndex];
+                    // Store both ID and name for easy access
+                    session.selectedCategoryId = selectedCategory.id;
+                    session.selectedCategoryName = selectedCategory.name;
+                    addToHistory(session, "categoryMenu");
+                    // Get products for selected category from database
+                    const products = await getProductsByCategory(selectedCategory.id);
+                    if (products.length === 0) {
+                        return `CON ${getTranslation(lang, "noCategoryProducts")}
+0. ${getTranslation(lang, "back")}
+00. ${getTranslation(lang, "mainMenu")}`;
+                    }
+                    let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
+                    products.forEach((product, index) => {
+                        productMenu += `${index + 1}. ${product}\n`;
+                    });
+                    productMenu += `0. ${getTranslation(lang, "back")}\n`;
+                    productMenu += `00. ${getTranslation(lang, "mainMenu")}`;
+                    return productMenu;
+                }
+                else {
                     return `CON ${getTranslation(lang, "invalidCategory")}
 
-${buildCategoryMenu(lang).substring(4)}`;
+${await buildCategoryMenu(lang)}`.replace("CON ", "");
                 }
-                session.selectedCategory = selectedCategory;
-                addToHistory(session, "categoryMenu");
-                // Get products for selected category
-                const products = productTypes_1.productsByCategory[selectedCategory];
-                let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
-                products.forEach((product, index) => {
-                    productMenu += `${index + 1}. ${product}\n`;
-                });
-                productMenu += `0. ${getTranslation(lang, "back")}\n`;
-                productMenu += `00. ${getTranslation(lang, "mainMenu")}`;
-                return productMenu;
             }
             // Handle product selection
             if (parts.length === 3) {
                 const productChoice = parts[2];
                 if (productChoice === "0") {
-                    // Back to category menu
-                    return buildCategoryMenu(lang);
+                    return await buildCategoryMenu(lang);
                 }
                 if (productChoice === "00") {
                     delete ussdSessions[sessionId];
@@ -672,7 +706,8 @@ ${buildCategoryMenu(lang).substring(4)}`;
 4. ${getTranslation(lang, "help")}
 5. ${getTranslation(lang, "exit")}`;
                 }
-                const products = productTypes_1.productsByCategory[session.selectedCategory];
+                // Get products for the selected category
+                const products = await getProductsByCategory(session.selectedCategoryId);
                 const productIndex = parseInt(productChoice) - 1;
                 if (productIndex >= 0 && productIndex < products.length) {
                     session.selectedProduct = products[productIndex];
@@ -685,9 +720,7 @@ ${buildCategoryMenu(lang).substring(4)}`;
                     return `CON ${getTranslation(lang, "invalidProduct")}
 
 ${getTranslation(lang, "selectProduct")}
-${productTypes_1.productsByCategory[session.selectedCategory]
-                        .map((product, index) => `${index + 1}. ${product}`)
-                        .join("\n")}
+${products.map((product, index) => `${index + 1}. ${product}`).join("\n")}
 0. ${getTranslation(lang, "back")}
 00. ${getTranslation(lang, "mainMenu")}`;
                 }
@@ -697,7 +730,7 @@ ${productTypes_1.productsByCategory[session.selectedCategory]
                 const quantityInput = parts[3];
                 if (quantityInput === "0") {
                     // Back to product selection
-                    const products = productTypes_1.productsByCategory[session.selectedCategory];
+                    const products = await getProductsByCategory(session.selectedCategoryId);
                     let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
                     products.forEach((product, index) => {
                         productMenu += `${index + 1}. ${product}\n`;
@@ -733,7 +766,6 @@ ${getTranslation(lang, "enterQuantity")}
             if (parts.length === 5) {
                 const priceInput = parts[4];
                 if (priceInput === "0") {
-                    // Back to quantity input
                     return `CON ${getTranslation(lang, "enterQuantity")}
 0. ${getTranslation(lang, "back")}
 00. ${getTranslation(lang, "mainMenu")}`;
@@ -765,7 +797,6 @@ ${getTranslation(lang, "enterPrice")}
             if (parts.length === 6) {
                 const pinInput = parts[5];
                 if (pinInput === "0") {
-                    // Back to price input
                     return `CON ${getTranslation(lang, "enterPrice")}
 0. ${getTranslation(lang, "back")}
 00. ${getTranslation(lang, "mainMenu")}`;
@@ -779,7 +810,6 @@ ${getTranslation(lang, "enterPrice")}
 4. ${getTranslation(lang, "help")}
 5. ${getTranslation(lang, "exit")}`;
                 }
-                // Validate PIN format
                 if (!/^\d{4}$/.test(pinInput)) {
                     return `CON ${getTranslation(lang, "invalidPin")}
 
@@ -787,7 +817,6 @@ ${getTranslation(lang, "enterPinConfirm")}
 0. ${getTranslation(lang, "back")}
 00. ${getTranslation(lang, "mainMenu")}`;
                 }
-                // Verify PIN
                 const pinValid = await verifyUserPin(phoneNumber, pinInput);
                 if (!pinValid) {
                     return `CON ${getTranslation(lang, "incorrectPin")}
@@ -796,13 +825,13 @@ ${getTranslation(lang, "enterPinConfirm")}
 0. ${getTranslation(lang, "back")}
 00. ${getTranslation(lang, "mainMenu")}`;
                 }
-                // Submit product
+                // Submit product with category ID instead of enum
                 try {
                     await prisma_1.default.farmerSubmission.create({
                         data: {
                             farmerId: farmer.id,
                             productName: session.selectedProduct,
-                            category: session.selectedCategory,
+                            categoryId: session.selectedCategoryId, // Use categoryId instead of category
                             submittedQty: parseFloat(session.quantity),
                             wishedPrice: parseFloat(session.wishedPrice),
                             province: farmer.province,

@@ -3,7 +3,6 @@ import { ProductCategory } from "@prisma/client";
 export interface ProductSubmissionInput {
   farmerId: string;
   productName: string;
-  category: ProductCategory;
   submittedQty: number;
   wishedPrice: number;
   province: string;
@@ -40,7 +39,8 @@ export interface ISessionData {
 
   // Product submission flow
   productPage?: number;
-  selectedCategory?: ProductCategory;
+  selectedCategoryId?: string;
+  selectedCategoryName?: string;
   selectedProduct?: string;
   quantity?: string;
   wishedPrice?: string;
@@ -135,7 +135,8 @@ export type TranslationKey =
   | "selectSector"
   | "selectCell"
   | "selectVillage"
-  | "mainMenu";
+  | "mainMenu"
+  | "noCategoryProducts";
 
 // Translation object with support for Kinyarwanda, English, and French
 
@@ -204,6 +205,7 @@ export const translations = {
     selectCell: "Hitamo akagari:",
     selectVillage: "Hitamo umudugudu:",
     mainMenu: "Ahabanza",
+    noCategoryProducts: "Nta musaruro uri muri iki cyiciro.",
   },
   ENG: {
     welcome: "Welcome to FoodBundles!",
@@ -266,6 +268,7 @@ export const translations = {
     selectCell: "Select your Cell:",
     selectVillage: "Select your Village:",
     mainMenu: "Main Menu",
+    noCategoryProducts: "No products in this category.",
   },
   FRE: {
     welcome: "Bienvenue à FoodBundles!",
@@ -331,11 +334,11 @@ export const translations = {
     selectCell: "Sélectionnez votre Cellule:",
     selectVillage: "Sélectionnez votre Village:",
     mainMenu: "Menu Principal",
+    noCategoryProducts: "Aucun produit dans cette catégorie.",
   },
 };
 
-export // Products organized by category
-const productsByCategory = {
+export const productsByCategory = {
   ANIMAL_PRODUCTS: [
     "Inyama (Meat)",
     "Amata (Milk)",

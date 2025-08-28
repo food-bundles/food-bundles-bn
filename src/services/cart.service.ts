@@ -133,7 +133,16 @@ export const addToCartService = async (data: AddToCartData) => {
   // Update cart total amount
   await updateCartTotalService(cart.id);
 
-  return cartItem;
+  const totalItems = await prisma.cartItem.count({
+    where: { cartId: cart.id },
+  });
+
+  const cartItemWithTotalItems = {
+    ...cartItem,
+    totalItems,
+  };
+
+  return cartItemWithTotalItems;
 };
 
 /**

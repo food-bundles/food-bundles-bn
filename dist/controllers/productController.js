@@ -3,14 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.approveSubmission = exports.getVerifiedSubmissions = exports.getProductById = exports.getAllProducts = exports.deleteProduct = exports.updateProduct = exports.createProductFromSubmission = exports.updateProductQuantityFromSubmission = exports.createProduct = void 0;
+exports.approveSubmission = exports.getVerifiedSubmissions = exports.getProductById = exports.getProductsByRole = exports.getAllProducts = exports.deleteProduct = exports.updateProduct = exports.createProductFromSubmission = exports.updateProductQuantityFromSubmission = exports.createProduct = void 0;
 const productService_1 = require("../services/productService");
 const imageUpload_1 = require("../utils/imageUpload");
 const prisma_1 = __importDefault(require("../prisma"));
 const cloudinary_utility_1 = __importDefault(require("../utils/cloudinary.utility"));
 const createProduct = async (req, res) => {
     try {
-        const { productName, unitPrice, purchasePrice, category, bonus, sku, quantity, expiryDate, unit, } = req.body;
+        const { productName, unitPrice, purchasePrice, categoryId, bonus, sku, quantity, expiryDate, unit, } = req.body;
         const adminId = req.user.id;
         // Handle image upload
         let imageUrls = [];
@@ -28,7 +28,7 @@ const createProduct = async (req, res) => {
             productName,
             unitPrice,
             purchasePrice,
-            category,
+            categoryId,
             bonus,
             sku,
             quantity,
@@ -79,7 +79,7 @@ exports.updateProductQuantityFromSubmission = updateProductQuantityFromSubmissio
 const createProductFromSubmission = async (req, res) => {
     try {
         const { submissionId } = req.params;
-        const { productName, unitPrice, purchasePrice, category, bonus, sku, quantity, expiryDate, unit, } = req.body;
+        const { productName, unitPrice, purchasePrice, categoryId, bonus, sku, quantity, expiryDate, unit, } = req.body;
         const adminId = req.user.id;
         // Handle image upload
         const images = req.files;
@@ -102,7 +102,7 @@ const createProductFromSubmission = async (req, res) => {
                 productName: existingQty?.productName || productName,
                 unitPrice,
                 purchasePrice,
-                category,
+                categoryId,
                 bonus,
                 sku,
                 quantity: existingQty?.acceptedQty || quantity,
@@ -203,6 +203,43 @@ const getAllProducts = async (req, res) => {
     }
 };
 exports.getAllProducts = getAllProducts;
+// Get products by user role
+const getProductsByRole = async (req, res) => {
+    try {
+        const { category, search, page = 1, limit = 10 } = req.query;
+        const userRole = req.user.role;
+        // Validate role
+        const validRoles = ["ADMIN", "AGGREGATOR", "LOGISTICS"];
+        if (!validRoles.includes(userRole)) {
+            return res.status(403).json({
+                message: "Access denied. Invalid user role.",
+            });
+        }
+        const result = await (0, productService_1.getProductsByRoleService)({
+            role: userRole,
+            category: category,
+            search: search,
+            page: parseInt(page),
+            limit: parseInt(limit),
+        });
+        res.status(200).json({
+            message: "Products retrieved successfully",
+            data: result.products,
+            pagination: {
+                page: result.page,
+                limit: result.limit,
+                total: result.total,
+                totalPages: result.totalPages,
+            },
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            message: error.message || "Failed to get products",
+        });
+    }
+};
+exports.getProductsByRole = getProductsByRole;
 // Get product by ID
 const getProductById = async (req, res) => {
     try {

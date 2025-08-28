@@ -433,12 +433,22 @@ export async function submitProductService(
     );
   }
 
+  // Find product by product name
+  const product = await prisma.product.findFirst({
+    where: { productName: submissionData.productName },
+    select: { id: true, categoryId: true },
+  });
+
+  if (!product) {
+    throw new Error("Product not found in the system");
+  }
+
   // Create submission with farmer's location data
   const submission = await prisma.farmerSubmission.create({
     data: {
       farmerId: submissionData.farmerId,
       productName: submissionData.productName,
-      category: submissionData.category,
+      categoryId: product.categoryId,
       submittedQty: submissionData.submittedQty,
       wishedPrice: submissionData.wishedPrice,
       status: "PENDING",

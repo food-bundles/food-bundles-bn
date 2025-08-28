@@ -322,12 +322,20 @@ async function submitProductService(submissionData) {
     if (!locationValidation.isValid) {
         throw new Error(`Farmer location validation failed: ${locationValidation.errors.join(", ")}`);
     }
+    // Find product by product name
+    const product = await prisma_1.default.product.findFirst({
+        where: { productName: submissionData.productName },
+        select: { id: true, categoryId: true },
+    });
+    if (!product) {
+        throw new Error("Product not found in the system");
+    }
     // Create submission with farmer's location data
     const submission = await prisma_1.default.farmerSubmission.create({
         data: {
             farmerId: submissionData.farmerId,
             productName: submissionData.productName,
-            category: submissionData.category,
+            categoryId: product.categoryId,
             submittedQty: submissionData.submittedQty,
             wishedPrice: submissionData.wishedPrice,
             status: "PENDING",
