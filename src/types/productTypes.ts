@@ -16,6 +16,7 @@ export interface ProductSubmissionInput {
 export interface ISessionData {
   mode?: "register" | "submit" | "account" | "help";
   language?: "KINY" | "ENG" | "FRE";
+  languageSelected?: boolean;
   selectedNewLanguage?: "KINY" | "ENG" | "FRE";
 
   // Registration location flow
@@ -41,7 +42,9 @@ export interface ISessionData {
   productPage?: number;
   selectedCategoryId?: string;
   selectedCategoryName?: string;
+  categoryPage?: number;
   selectedProduct?: string;
+  selectedProductUnit?: string;
   quantity?: string;
   wishedPrice?: string;
 
@@ -115,6 +118,9 @@ export type TranslationKey =
   | "incorrectPasswordSubmissions"
   | "helpMenu"
   | "supportContact"
+  | "callUs"
+  | "whatsapp"
+  | "email"
   | "productPrices"
   | "supportNumber"
   | "noPricesAvailable"
@@ -184,6 +190,9 @@ export const translations = {
       "PIN y'imibare itari yo. Ntushobora kureba ibyohererejwe.",
     helpMenu: "Ubufasha - Hitamo:",
     supportContact: "Telefoni y'ubufasha",
+    callUs: "Duhamagare",
+    whatsapp: "Twandikire kuri WhatsApp",
+    email: "Twandikire kuri Email",
     productPrices: "Ibiciro by'ibicuruzwa",
     supportNumber: "Kugirango ubone ubufasha, hamagara: 911",
     noPricesAvailable: "Nta biciro bihari kuri ubu.",
@@ -247,6 +256,9 @@ export const translations = {
     incorrectPasswordSubmissions: "Incorrect PIN. Cannot view submissions.",
     helpMenu: "Help - Select:",
     supportContact: "Support Contact",
+    callUs: "Call Us",
+    whatsapp: "WhatsApp Us",
+    email: "Email Us",
     productPrices: "Product Prices",
     supportNumber: "For support, call: 911",
     noPricesAvailable: "No prices available at the moment.",
@@ -313,6 +325,9 @@ export const translations = {
       "PIN incorrect. Impossible de voir les soumissions.",
     helpMenu: "Aide - Sélectionnez:",
     supportContact: "Contact de support",
+    callUs: "Appelez-nous",
+    whatsapp: "WhatsApp Nous",
+    email: "Email Nous",
     productPrices: "Prix des produits",
     supportNumber: "Pour le support, appelez: 911",
     noPricesAvailable: "Aucun prix disponible pour le moment.",

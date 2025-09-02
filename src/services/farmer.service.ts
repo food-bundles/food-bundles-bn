@@ -4,7 +4,6 @@ import { PaginationService } from "./paginationService";
 import prisma from "../prisma";
 import { LocationValidationService } from "./location.service";
 import { ProductSubmissionInput } from "../types/productTypes";
-import { getProductsFromDatabase } from "./ussdServices";
 
 // Interface for farmer feedback request
 export interface IFarmerFeedbackRequest {
@@ -474,4 +473,28 @@ export async function submitProductService(
   });
 
   return submission;
+}
+
+// Get products from database
+export async function getProductsFromDatabase(): Promise<string[]> {
+  try {
+    const products = await prisma.product.findMany({
+      where: { status: "ACTIVE" },
+      select: { productName: true },
+      distinct: ["productName"],
+    });
+    return products.map((p) => p.productName);
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    // Fallback to hardcoded list
+    return [
+      "Tomatoes",
+      "Onions",
+      "Maize",
+      "Potatoes",
+      "Cassava",
+      "Irish Potatoes",
+      "Banana",
+    ];
+  }
 }
