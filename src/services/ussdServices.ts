@@ -1323,9 +1323,9 @@ ${getTranslation(lang, "enterPinConfirm")}
       if (parts.length === 1) {
         addToHistory(session, "mainMenu");
         return `CON ${getTranslation(lang, "helpMenu")}
-${getTranslation(lang, "callUs")}: *SHORT_CODE*
-${getTranslation(lang, "whatsapp")}: +250XXXXXXXXX
-${getTranslation(lang, "email")}: support@agrichain.com
+${getTranslation(lang, "callUs")}: +250788963267
+${getTranslation(lang, "whatsapp")}: +250788963267
+${getTranslation(lang, "email")}: info@food.rw
 
 0. ${getTranslation(lang, "back")}
 00. ${getTranslation(lang, "mainMenu")}`;
@@ -1341,9 +1341,9 @@ ${getTranslation(lang, "email")}: support@agrichain.com
       }
 
       return `CON ${getTranslation(lang, "helpMenu")}
-${getTranslation(lang, "callUs")}: *SHORT_CODE*
-${getTranslation(lang, "whatsapp")}: +250XXXXXXXXX
-${getTranslation(lang, "email")}: support@agrichain.com
+${getTranslation(lang, "callUs")}: +250788963267
+${getTranslation(lang, "whatsapp")}: +250788963267
+${getTranslation(lang, "email")}: info@food.rw
 
 0. ${getTranslation(lang, "back")}
 00. ${getTranslation(lang, "mainMenu")}`;

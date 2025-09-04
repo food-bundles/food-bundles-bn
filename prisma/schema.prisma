@@ -50,6 +50,7 @@ model Restaurant {
   posSales  POSSale[]
   Cart      Cart[]
   checkouts CHECKOUT[] // Restaurant can have multiple checkouts
+  Wallet    Wallet?
 }
 
 model FarmerSubmission {
@@ -200,7 +201,7 @@ model CartItem {
   @@index([productId])
 }
 
-// CHECKOUT schema model
+// Enhanced CHECKOUT schema model with fields
 model CHECKOUT {
   id            String        @id @default(uuid())
   cartId        String        @unique
@@ -209,11 +210,13 @@ model CHECKOUT {
   paymentMethod PaymentMethod
   paymentStatus PaymentStatus @default(PENDING)
 
+  // Billing information
   billingName    String?
   billingEmail   String?
   billingPhone   String?
   billingAddress String?
 
+  // Delivery information
   deliveryProvince String?
   deliveryDistrict String?
   deliverySector   String?
@@ -221,8 +224,67 @@ model CHECKOUT {
   deliveryVillage  String?
   deliveryLocation String?
 
-  paymentReference String?
-  transactionId    String?
+  // Enhanced Payment Fields
+  txRef             String? @unique
+  flwRef            String?
+  txOrderId         String?
+  currency          String? @default("RWF")
+  clientIp          String?
+  deviceFingerprint String?
+  narration         String?
+
+  // Bank transfer specific fields
+  transferReference String?
+  transferAccount   String?
+  transferBank      String?
+  accountExpiration DateTime?
+  transferNote      String?
+  transferAmount    Float?
+
+  // Mobile money specific fields
+  network     String? // Network provider (MTN, Airtel, etc.)
+  voucher     String? // Voucher code
+  paymentCode String? // Payment code for USSD
+
+  // Card payment specific fields - UPDATED SECTION
+  cardFirst6Digits String? // First 6 digits of card
+  cardLast4Digits  String? // Last 4 digits of card
+  cardType         String? // MASTERCARD, VISA, etc.
+  cardExpiry       String? // Card expiry (MM/YY format)
+  cardCountry      String? // Card issuing country
+  authModel        String? // PIN, NOAUTH, OTP, etc.
+  encryptionKey    String? // Encryption key for card payments
+
+  // Authorization and redirect information
+  redirectUrl          String?
+  authorizationMode    String?
+  authorizationUrl     String?
+  validateInstructions String?
+
+  // Transaction status and references
+  transactionId     String?
+  paymentReference  String?
+  processorResponse String?
+
+  // Response fields - ENHANCED
+  flwStatus     String?
+  flwMessage    String?
+  chargedAmount Float?
+  appFee        Float?
+  merchantFee   Float?
+
+  // Additional metadata
+  paymentPlan String?
+  fraudStatus String?
+  riskAction  String?
+  chargeType  String?
+  paymentType String?
+
+  // Customer information from response
+  customerId    String?
+  customerName  String?
+  customerEmail String?
+  customerPhone String?
 
   notes        String?
   deliveryDate DateTime?
@@ -241,6 +303,12 @@ model CHECKOUT {
   @@index([restaurantId])
   @@index([paymentStatus])
   @@index([paymentMethod])
+  @@index([txRef])
+  @@index([flwRef])
+  @@index([transactionId])
+  @@index([flwStatus])
+  @@index([fraudStatus])
+  @@index([customerId])
 }
 
 model Order {
@@ -295,6 +363,78 @@ model OrderItem {
   updatedAt DateTime @updatedAt
 }
 
+// Wallet model for managing user account balances
+model Wallet {
+  id           String   @id @default(uuid())
+  restaurantId String   @unique
+  balance      Float    @default(0)
+  currency     String   @default("RWF")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  restaurant   Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@index([restaurantId])
+  @@index([isActive])
+}
+
+// Wallet transaction model for tracking all wallet activities
+model WalletTransaction {
+  id              String                @id @default(uuid())
+  walletId        String
+  type            WalletTransactionType
+  amount          Float // Positive for credit, negative for debit
+  previousBalance Float
+  newBalance      Float
+  description     String?
+  reference       String? // Reference to related entity (checkout, order, etc.)
+
+  // Integration fields for top-ups
+  flwTxRef      String? @unique
+  flwRef        String?
+  flwStatus     String?
+  flwMessage    String?
+  paymentMethod String?
+  externalTxId  String?
+
+  status   TransactionStatus @default(PENDING)
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@index([flwTxRef])
+}
+
+// Enum for wallet transaction types
+enum WalletTransactionType {
+  TOP_UP // Adding money to wallet
+  PAYMENT // Payment for checkout/order
+  REFUND // Refund to wallet
+  ADJUSTMENT // Manual adjustment by admin
+  WITHDRAWAL // Withdrawal from wallet (if supported)
+}
+
+// Enum for transaction status
+enum TransactionStatus {
+  PENDING // Transaction initiated
+  PROCESSING // Transaction being processed
+  COMPLETED // Transaction completed successfully
+  FAILED // Transaction failed
+  CANCELLED // Transaction cancelled
+  REFUNDED // Transaction refunded
+}
+
 model POSSale {
   id            String     @id @default(uuid())
   restaurantId  String
@@ -342,7 +482,7 @@ enum CartStatus {
 // Payment method enum
 enum PaymentMethod {
   CASH
-  MOBILE_MONEY // PayPack for Rwanda
+  MOBILE_MONEY // Mobile money for Rwanda
   BANK_TRANSFER
   CARD
 }

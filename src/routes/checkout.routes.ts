@@ -7,6 +7,7 @@ import {
   updateCheckout,
   processPayment,
   cancelCheckout,
+  verifyPayment,
 } from "../controllers/checkout.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -53,6 +54,17 @@ checkoutRoutes.patch("/:checkoutId", isAuthenticated, updateCheckout);
  * Access: Restaurant (own checkouts) or Admin (any checkout)
  */
 checkoutRoutes.post("/:checkoutId/payment", isAuthenticated, processPayment);
+
+/**
+ * Verify payment status
+ * GET /checkouts/:checkoutId/verify-payment
+ * Access: Restaurant (own checkouts) or Admin (any checkout)
+ */
+checkoutRoutes.get(
+  "/:checkoutId/verify-payment",
+  isAuthenticated,
+  verifyPayment
+);
 
 /**
  * Cancel checkout (revert cart to active)
