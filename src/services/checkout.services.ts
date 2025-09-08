@@ -1,54 +1,43 @@
-const axios = require("axios");
+import dotenv from "dotenv";
 import prisma from "../prisma";
-import { PaymentMethod, PaymentStatus } from "@prisma/client";
+import {
+  debitWalletService,
+  getWalletByRestaurantIdService,
+} from "./wallet.service";
 import {
   sendPaymentNotificationEmail,
   cleanPhoneNumber,
   isValidRwandaPhone,
 } from "../utils/emailTemplates";
-import { createOrder } from "../utils/paypal";
+import {
+  BankTransferPaymentResult,
+  CardPaymentResult,
+  CashPaymentResult,
+  CreateCheckoutData,
+  MobileMoneyPaymentResult,
+  MobileMoneyPaymentSubmissionData,
+  UpdateCheckoutData,
+} from "../types/paymentTypes";
+import { PaymentMethod, PaymentStatus } from "@prisma/client";
 
-// PayPack integration - Install: npm install paypack-js
-const PaypackJs = require("paypack-js").default;
-require("dotenv").config();
+dotenv.config();
 
-// Configure PayPack
-const paypack = PaypackJs.config({
-  client_id: process.env.PAYPACK_APPLICATION_ID!,
-  client_secret: process.env.PAYPACK_APPLICATION_SECRET!,
-  timeout: 30000, // 30 seconds timeout
-});
+const Flutterwave = require("flutterwave-node-v3");
 
-// Interface for creating a checkout
-interface CreateCheckoutData {
-  cartId: string;
-  restaurantId: string;
-  paymentMethod: PaymentMethod;
-  billingName?: string;
-  billingEmail?: string;
-  billingPhone?: string;
-  billingAddress?: string;
-  notes?: string;
-  deliveryDate?: Date;
-}
+// Initialize Flutterwave
+const flw = new Flutterwave(
+  process.env.FLW_PUBLIC_KEY,
+  process.env.FLW_SECRET_KEY
+);
 
-// Interface for updating checkout
-interface UpdateCheckoutData {
-  paymentMethod?: PaymentMethod;
-  billingName?: string;
-  billingEmail?: string;
-  billingPhone?: string;
-  billingAddress?: string;
-  notes?: string;
-  deliveryDate?: Date;
-  paymentStatus?: PaymentStatus;
-  paymentReference?: string;
-  transactionId?: string;
-}
+type PaymentResult =
+  | MobileMoneyPaymentResult
+  | CardPaymentResult
+  | BankTransferPaymentResult
+  | CashPaymentResult;
 
 /**
- * Service to create a new checkout from cart
- * Validates cart exists, has items, and belongs to restaurant
+ * Enhanced service to create a new checkout from cart
  */
 export const createCheckoutService = async (data: CreateCheckoutData) => {
   const {
@@ -61,6 +50,10 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     billingAddress,
     notes,
     deliveryDate,
+    clientIp = "127.0.0.1",
+    deviceFingerprint,
+    narration,
+    currency = "RWF",
   } = data;
 
   // Validate cart exists and belongs to restaurant
@@ -115,6 +108,12 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     throw new Error("Checkout already exists for this cart");
   }
 
+  // Generate transaction reference
+  const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
+  const txOrderId = `ORDER_${Date.now()}_${Math.random()
+    .toString(36)
+    .substr(2, 9)}`;
+
   // Create checkout
   const checkout = await prisma.cHECKOUT.create({
     data: {
@@ -129,6 +128,12 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
       notes,
       deliveryDate,
       paymentStatus: "PENDING",
+      txRef,
+      txOrderId,
+      currency,
+      clientIp,
+      deviceFingerprint,
+      narration: narration || `Payment for ${cart.restaurant.name} order`,
     },
     include: {
       cart: {
@@ -161,7 +166,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
 };
 
 /**
- * Service to get checkout by ID
+ * Enhanced service to get checkout by ID
  */
 export const getCheckoutByIdService = async (
   checkoutId: string,
@@ -187,7 +192,7 @@ export const getCheckoutByIdService = async (
           phone: true,
         },
       },
-      order: true, // Include associated order if exists
+      order: true,
     },
   });
 
@@ -195,7 +200,6 @@ export const getCheckoutByIdService = async (
     throw new Error("Checkout not found");
   }
 
-  // If restaurantId is provided, verify ownership
   if (restaurantId && checkout.restaurantId !== restaurantId) {
     throw new Error(
       "Unauthorized: Checkout does not belong to this restaurant"
@@ -206,7 +210,7 @@ export const getCheckoutByIdService = async (
 };
 
 /**
- * Service to get all checkouts for a restaurant
+ * Enhanced service to get all checkouts for a restaurant
  */
 export const getRestaurantCheckoutsService = async (
   restaurantId: string,
@@ -268,7 +272,7 @@ export const getRestaurantCheckoutsService = async (
 };
 
 /**
- * Service to get all checkouts (Admin only)
+ * Enhanced service to get all checkouts (Admin only)
  */
 export const getAllCheckoutsService = async ({
   page = 1,
@@ -334,20 +338,18 @@ export const getAllCheckoutsService = async ({
 };
 
 /**
- * Service to update checkout
+ * Enhanced service to update checkout
  */
 export const updateCheckoutService = async (
   checkoutId: string,
   data: UpdateCheckoutData,
   restaurantId?: string
 ) => {
-  // First get the checkout to verify ownership
   const existingCheckout = await getCheckoutByIdService(
     checkoutId,
     restaurantId
   );
 
-  // Don't allow updates if payment is already completed
   if (existingCheckout.paymentStatus === "COMPLETED") {
     throw new Error("Cannot update checkout after payment is completed");
   }
@@ -388,7 +390,7 @@ export const updateCheckoutService = async (
 };
 
 /**
- * Service to cancel/delete checkout
+ * Enhanced service to cancel/delete checkout
  */
 export const cancelCheckoutService = async (
   checkoutId: string,
@@ -404,7 +406,6 @@ export const cancelCheckoutService = async (
     throw new Error("Cannot cancel checkout that has been converted to order");
   }
 
-  // Delete checkout and revert cart status
   await prisma.$transaction([
     prisma.cHECKOUT.delete({
       where: { id: checkoutId },
@@ -419,16 +420,24 @@ export const cancelCheckoutService = async (
 };
 
 /**
- * Service to process payment for checkout
- * This would integrate with PayPack for Rwanda mobile money payments
+ * Enhanced service to process payment for checkout with all 3 payment methods
  */
 export const processPaymentService = async (
   checkoutId: string,
   paymentData: {
     paymentMethod: PaymentMethod;
-    phoneNumber?: string; // For mobile money
-    cardToken?: string; // For card payments
-    bankAccount?: string; // For bank transfers
+    phoneNumber?: string;
+    cardDetails?: {
+      cardNumber: string;
+      cvv: string;
+      expiryMonth: string;
+      expiryYear: string;
+      pin?: string;
+    };
+    bankDetails?: {
+      clientIp?: string;
+    };
+    processDirectly?: boolean;
   }
 ) => {
   const checkout = await getCheckoutByIdService(checkoutId);
@@ -444,211 +453,373 @@ export const processPaymentService = async (
   });
 
   try {
-    let paymentResult;
+    let paymentResult: PaymentResult;
 
-    // Process different payment methods
-    switch (paymentData.paymentMethod) {
-      case "MOBILE_MONEY":
-        // Integrate with PayPack API for Rwanda
-        paymentResult = await processMobileMoneyPayment({
-          amount: checkout.totalAmount,
-          phoneNumber: paymentData.phoneNumber!,
-          reference: `CHECKOUT_${checkoutId}`,
-        });
-        break;
+    if (paymentData.processDirectly) {
+      switch (paymentData.paymentMethod) {
+        case "MOBILE_MONEY":
+          paymentResult = await processMobileMoneyPayment({
+            amount: checkout.totalAmount,
+            phoneNumber: paymentData.phoneNumber!,
+            txRef: checkout.txRef!,
+            orderId: checkout.txOrderId!,
+            email: checkout.billingEmail || checkout.restaurant.email,
+            fullname: checkout.billingName || checkout.restaurant.name,
+            currency: checkout.currency || "RWF",
+          });
+          break;
 
-      case "CARD":
-        paymentResult = await processCardPayment({
-          amount: checkout.totalAmount,
-          cardToken: paymentData.cardToken!,
-          reference: `CHECKOUT_${checkoutId}`,
-        });
-        break;
+        case "CARD":
+          paymentResult = await processCardPayment({
+            amount: checkout.totalAmount,
+            txRef: checkout.txRef!,
+            email: checkout.billingEmail || checkout.restaurant.email,
+            fullname: checkout.billingName || checkout.restaurant.name,
+            phoneNumber: paymentData.phoneNumber || checkout.billingPhone || "",
+            currency: checkout.currency || "RWF",
+            cardDetails: paymentData.cardDetails!,
+          });
+          break;
 
-      case "BANK_TRANSFER":
-        paymentResult = await processBankTransfer({
-          amount: checkout.totalAmount,
-          bankAccount: paymentData.bankAccount!,
-          reference: `CHECKOUT_${checkoutId}`,
-        });
-        break;
+        case "BANK_TRANSFER":
+          paymentResult = await processBankTransfer({
+            amount: checkout.totalAmount,
+            txRef: checkout.txRef!,
+            email: checkout.billingEmail || checkout.restaurant.email,
+            phoneNumber: paymentData.phoneNumber || checkout.billingPhone || "",
+            currency: checkout.currency || "RWF",
+            clientIp:
+              paymentData.bankDetails?.clientIp ||
+              checkout.clientIp ||
+              "127.0.0.1",
+            deviceFingerprint:
+              checkout.deviceFingerprint || "62wd23423rq324323qew1",
+            narration: checkout.narration || "Order payment",
+          });
+          break;
 
-      case "CASH":
-        // For cash payments, mark as completed immediately
-        paymentResult = {
-          success: true,
-          transactionId: `CASH_${checkoutId}_${Date.now()}`,
-          reference: `CASH_${checkoutId}`,
-        };
-        break;
+        case "CASH":
+          // NEW WALLET INTEGRATION FOR CASH PAYMENTS
+          try {
+            // Get restaurant's wallet
+            const wallet = await getWalletByRestaurantIdService(
+              checkout.restaurantId
+            );
 
-      default:
-        throw new Error("Unsupported payment method");
-    }
+            if (!wallet.isActive) {
+              throw new Error("Wallet is inactive. Please contact support.");
+            }
 
-    console.log("====================================");
-    console.log("Payment result", paymentResult);
-    console.log("====================================");
+            // Check if wallet has sufficient balance
+            if (wallet.balance < checkout.totalAmount) {
+              throw new Error(
+                `Insufficient wallet balance. Available: ${wallet.balance} ${
+                  wallet.currency
+                }, Required: ${checkout.totalAmount} ${
+                  checkout.currency || "RWF"
+                }`
+              );
+            }
 
-    const products = checkout.cart.cartItems.map((item) => ({
-      name: item.product.productName,
-      quantity: item.quantity,
-      price: item.product.unitPrice * item.quantity,
-      unitPrice: item.product.unitPrice,
-    }));
+            // Debit wallet for the payment
+            const walletDebitResult = await debitWalletService({
+              walletId: wallet.id,
+              amount: checkout.totalAmount,
+              description: `Payment for checkout ${checkoutId} - Order ${checkout.txOrderId}`,
+              reference: checkoutId,
+              checkoutId: checkoutId,
+            });
 
-    if (paymentResult.success) {
-      // Payment successful - update checkout
-      const updatedCheckout = await updateCheckoutService(checkoutId, {
-        paymentStatus: "PROCESSING",
-        transactionId: paymentResult.transactionId,
-        paymentReference: paymentResult.reference,
-      });
+            paymentResult = {
+              success: true,
+              transactionId: `WALLET_${checkout.txRef}_${Date.now()}`,
+              reference: checkout.txRef ?? "",
+              flwRef: `WALLET_${checkout.txRef}`,
+              status: "successful",
+              message: "Payment completed using wallet balance",
+              walletDetails: {
+                previousBalance: walletDebitResult.transaction.previousBalance,
+                newBalance: walletDebitResult.newBalance,
+                transactionId: walletDebitResult.transaction.id,
+              },
+            };
+          } catch (walletError: any) {
+            // If wallet payment fails, return appropriate error
+            paymentResult = {
+              success: false,
+              transactionId: "",
+              reference: checkout.txRef ?? "",
+              flwRef: "",
+              status: "failed",
+              message: walletError.message || "Wallet payment failed",
+              error: walletError.message,
+            };
+          }
+          break;
 
-      sendPaymentNotificationEmail({
-        amount: checkout.totalAmount,
-        phoneNumber: paymentData.phoneNumber!,
-        restaurantName: checkout.restaurant.name,
-        products,
-        customer: {
-          name: checkout.billingName || "Customer",
-          email: checkout.billingEmail!,
-        },
-        checkoutId: checkoutId,
-        paymentMethod: paymentData.paymentMethod,
-      });
-      if ("redirectUrl" in paymentResult) {
-        return {
-          success: true,
-          checkout: updatedCheckout,
-          transactionId: paymentResult.transactionId,
-          redirectUrl: paymentResult.redirectUrl,
-        };
-      } else {
-        return {
-          success: true,
-          checkout: updatedCheckout,
-          transactionId: paymentResult.transactionId,
-        };
+        default:
+          throw new Error("Unsupported payment method");
       }
     } else {
-      // Payment failed
+      paymentResult = {
+        success: true,
+        transactionId: checkout.txRef!,
+        reference: checkout.txRef!,
+        flwRef: checkout.txRef!,
+        status: "pending",
+        message: "Checkout prepared for payment",
+      };
+    }
+
+    console.log("Payment result:", paymentResult);
+
+    if (paymentResult.success) {
+      const updateData: UpdateCheckoutData = {
+        paymentStatus:
+          paymentResult.status === "successful" ? "COMPLETED" : "PROCESSING",
+        transactionId: paymentResult.transactionId,
+        paymentReference: paymentResult.reference,
+        flwRef: paymentResult.flwRef,
+        flwStatus: paymentResult.status,
+        flwMessage: paymentResult.message,
+      };
+
+      // Handle card payment specific data
+      if (
+        paymentData.paymentMethod === "CARD" &&
+        "cardPaymentData" in paymentResult &&
+        paymentResult.cardPaymentData
+      ) {
+        const cardData = paymentResult.cardPaymentData;
+        updateData.chargedAmount = cardData.chargedAmount;
+        updateData.appFee = cardData.appFee;
+        updateData.merchantFee = cardData.merchantFee;
+        updateData.processorResponse = cardData.processorResponse;
+        updateData.authModel = cardData.authModel;
+        updateData.deviceFingerprint = cardData.deviceFingerprint;
+        updateData.fraudStatus = cardData.fraudStatus;
+        updateData.paymentType = cardData.paymentType;
+        updateData.chargeType = cardData.chargeType;
+        updateData.narration = cardData.narration;
+        // Store card data (Note: need to add these fields to UpdateCheckoutData interface)
+        (updateData as any).cardFirst6Digits = cardData.cardFirst6Digits;
+        (updateData as any).cardLast4Digits = cardData.cardLast4Digits;
+        (updateData as any).cardType = cardData.cardType;
+        (updateData as any).cardExpiry = cardData.cardExpiry;
+        (updateData as any).customerId = cardData.customerId?.toString();
+        (updateData as any).customerName = cardData.customerName;
+        (updateData as any).customerEmail = cardData.customerEmail;
+        (updateData as any).customerPhone = cardData.customerPhone;
+      }
+
+      // Handle payment method specific data with type guards
+      if ("transferDetails" in paymentResult && paymentResult.transferDetails) {
+        updateData.transferReference =
+          paymentResult.transferDetails.transferReference;
+        updateData.transferAccount =
+          paymentResult.transferDetails.transferAccount;
+        updateData.transferBank = paymentResult.transferDetails.transferBank;
+        updateData.transferAmount =
+          paymentResult.transferDetails.transferAmount;
+        updateData.transferNote = paymentResult.transferDetails.transferNote;
+        updateData.accountExpiration =
+          paymentResult.transferDetails.accountExpiration ?? undefined;
+      }
+
+      if (
+        "authorizationDetails" in paymentResult &&
+        paymentResult.authorizationDetails
+      ) {
+        updateData.authorizationMode = paymentResult.authorizationDetails.mode;
+        updateData.redirectUrl = paymentResult.authorizationDetails.redirectUrl;
+        updateData.authorizationUrl =
+          paymentResult.authorizationDetails.redirectUrl;
+      }
+
+      const updatedCheckout = await updateCheckoutService(
+        checkoutId,
+        updateData
+      );
+
+      // Send notification email for successful payments
+      if (paymentResult.status === "successful" && checkout.billingEmail) {
+        const products = checkout.cart.cartItems.map((item) => ({
+          name: item.product.productName,
+          quantity: item.quantity,
+          price: item.product.unitPrice * item.quantity,
+          unitPrice: item.product.unitPrice,
+        }));
+
+        sendPaymentNotificationEmail({
+          amount: checkout.totalAmount,
+          phoneNumber: paymentData.phoneNumber || checkout.billingPhone || "",
+          restaurantName: checkout.restaurant.name,
+          products,
+          customer: {
+            name: checkout.billingName || checkout.restaurant.name,
+            email: checkout.billingEmail!,
+          },
+          checkoutId: checkoutId,
+          paymentMethod: paymentData.paymentMethod,
+          walletDetails:
+            "walletDetails" in paymentResult
+              ? paymentResult.walletDetails
+              : undefined,
+        });
+      }
+
+      return {
+        success: true,
+        checkout: updatedCheckout,
+        transactionId: paymentResult.transactionId,
+        redirectUrl:
+          "authorizationDetails" in paymentResult
+            ? paymentResult.authorizationDetails?.redirectUrl
+            : undefined,
+        transferDetails:
+          "transferDetails" in paymentResult
+            ? paymentResult.transferDetails
+            : undefined,
+        walletDetails:
+          "walletDetails" in paymentResult
+            ? paymentResult.walletDetails
+            : undefined,
+        status: paymentResult.status,
+        message: paymentResult.message,
+      };
+    } else {
       await updateCheckoutService(checkoutId, {
         paymentStatus: "FAILED",
+        flwStatus: "failed",
+        flwMessage: paymentResult.error || "Payment failed",
       });
 
       return {
         success: false,
-        error: "Payment failed",
+        error: paymentResult.error || "Payment failed",
       };
     }
   } catch (error: any) {
-    console.log("====================================");
-    console.log("Error processing payment", error);
-    console.log("====================================");
-    // Payment processing error
+    console.log("Error processing payment:", error);
     await updateCheckoutService(checkoutId, {
       paymentStatus: "FAILED",
+      flwStatus: "failed",
+      flwMessage: error.message,
     });
 
     throw new Error(`Payment processing failed: ${error.message}`);
   }
 };
 
-// payment processing functions - Replace with actual payment gateway integrations
+/**
+ * Service to verify payment status
+ */
+export const verifyPaymentStatus = async (transactionId: string) => {
+  try {
+    const response = await flw.Transaction.verify({ id: transactionId });
+
+    if (
+      response.status === "success" &&
+      response.data.status === "successful"
+    ) {
+      return {
+        success: true,
+        data: response.data,
+        amount: response.data.amount,
+        currency: response.data.currency,
+        status: response.data.status,
+        flwRef: response.data.flw_ref,
+        txRef: response.data.tx_ref,
+        chargedAmount: response.data.charged_amount,
+        appFee: response.data.app_fee,
+        merchantFee: response.data.merchant_fee,
+        processorResponse: response.data.processor_response,
+      };
+    } else {
+      return {
+        success: false,
+        error: "Payment verification failed",
+        data: response.data,
+        status: response.data?.status,
+      };
+    }
+  } catch (error: any) {
+    console.log("Error verifying payment:", error);
+    return {
+      success: false,
+      error: "Payment verification failed  " + error.message,
+    };
+  }
+};
 
 /**
- * function for PayPack mobile money integration
- * Replace with actual PayPack API integration
+ * Process Rwanda Mobile Money Payment
  */
 async function processMobileMoneyPayment({
   amount,
   phoneNumber,
-  reference,
-}: {
-  amount: number;
-  phoneNumber: string;
-  reference: string;
-}) {
+  txRef,
+  orderId,
+  email,
+  fullname,
+  currency = "RWF",
+}: MobileMoneyPaymentSubmissionData): Promise<MobileMoneyPaymentResult> {
   try {
     // Clean and validate phone number
     const cleanedPhoneNumber = cleanPhoneNumber(phoneNumber);
 
     if (!isValidRwandaPhone(cleanedPhoneNumber)) {
       throw new Error(
-        "Invalid Rwanda mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX"
+        "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX"
       );
     }
 
     console.log(
-      `Processing mobile money payment: ${amount} RWF to ${cleanedPhoneNumber}`
+      `Processing mobile money payment: ${amount} ${currency} to ${cleanedPhoneNumber}`
     );
 
-    // Process payment with retry logic
-    let paymentResponse;
-    let retryCount = 0;
-    const maxRetries = 3;
+    const payload = {
+      tx_ref: txRef,
+      order_id: orderId,
+      amount: amount.toString(),
+      currency: currency,
+      email: email,
+      phone_number: cleanedPhoneNumber,
+      fullname: fullname,
+    };
 
-    while (retryCount < maxRetries) {
-      try {
-        // Make PayPack API call with timeout
-        paymentResponse = await Promise.race([
-          paypack.cashin({
-            number: cleanedPhoneNumber,
-            amount: Math.round(amount),
-            environment:
-              process.env.NODE_ENV === "development"
-                ? "development"
-                : "production",
-          }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Payment timeout")), 25000)
-          ),
-        ]);
+    const response = await flw.MobileMoney.rwanda(payload);
+    console.log("Mobile Money Response:", response);
 
-        console.log("====================================");
-        console.log("PayPack payment response:", paymentResponse);
-        console.log("====================================");
-
-        break; // Success, exit retry loop
-      } catch (error) {
-        retryCount++;
-        console.log(`Payment attempt ${retryCount} failed:`, error);
-
-        if (retryCount >= maxRetries) {
-          throw error;
-        }
-
-        // Wait before retry (exponential backoff)
-        await new Promise((resolve) =>
-          setTimeout(resolve, 1000 * Math.pow(2, retryCount))
-        );
-      }
-    }
-
-    // Check if payment was successful
-    if (paymentResponse && paymentResponse.data) {
+    if (response.status === "success") {
       return {
         success: true,
-        transactionId: paymentResponse.data.ref || `PAYPACK_${Date.now()}`,
-        reference: paymentResponse.data.ref || reference,
-        status: paymentResponse.data.status.toUpperCase() || "PENDING",
+        transactionId: response.data?.flw_ref || txRef,
+        reference: response.data?.tx_ref || txRef,
+        flwRef: response.data?.flw_ref || txRef,
+        status: response.data?.status || "pending",
+        message: response.message || "Mobile money payment initiated",
+        authorizationDetails: response.meta?.authorization && {
+          mode: response.meta.authorization.mode,
+          redirectUrl: response.meta.authorization.redirect,
+        },
       };
     } else {
-      throw new Error("Invalid payment response from PayPack");
+      return {
+        success: false,
+        error: response.message || "Mobile money payment failed",
+        transactionId: "",
+        reference: "",
+        flwRef: "",
+        status: "failed",
+        message: response.message || "Mobile money payment failed",
+      };
     }
   } catch (error: any) {
-    console.log("PayPack payment failed:", error);
+    console.log("Mobile money payment failed:", error);
 
-    // Determine error type for better user feedback
-    let errorMessage = "Payment processing failed";
-
-    if (error.message.includes("timeout")) {
-      errorMessage = "Payment request timed out. Please try again.";
-    } else if (
-      error.message.includes("Invalid") ||
-      error.message.includes("phone")
-    ) {
+    let errorMessage = "Mobile money payment processing failed";
+    if (error.message.includes("Invalid") || error.message.includes("phone")) {
       errorMessage = "Invalid phone number format";
     } else if (error.message.includes("insufficient")) {
       errorMessage = "Insufficient balance";
@@ -656,54 +827,250 @@ async function processMobileMoneyPayment({
 
     return {
       success: false,
+      transactionId: "",
+      reference: "",
+      flwRef: "",
+      status: "failed",
+      message: errorMessage,
       error: errorMessage,
       details: error.message,
     };
   }
 }
+
 /**
- * function for card payment processing
+ * Process Card Payment
  */
 async function processCardPayment({
   amount,
-  cardToken,
-  reference,
+  txRef,
+  email,
+  fullname,
+  phoneNumber,
+  currency = "RWF",
+  cardDetails,
 }: {
   amount: number;
-  cardToken: string;
-  reference: string;
-}) {
-  const url = await createOrder();
-
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-
-  return {
-    success: true,
-    transactionId: `CARD_${Date.now()}`,
-    reference,
-    redirectUrl: url,
+  txRef: string;
+  email: string;
+  fullname: string;
+  phoneNumber: string;
+  currency?: string;
+  cardDetails: {
+    cardNumber: string;
+    cvv: string;
+    expiryMonth: string;
+    expiryYear: string;
+    pin?: string;
   };
+}): Promise<CardPaymentResult> {
+  try {
+    console.log(`Processing card payment: ${amount} ${currency} for ${email}`);
+
+    const payload = {
+      card_number: cardDetails.cardNumber,
+      cvv: cardDetails.cvv,
+      expiry_month: cardDetails.expiryMonth,
+      expiry_year: cardDetails.expiryYear,
+      currency: currency,
+      amount: amount.toString(),
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/payments/flutterwave/callback`,
+      fullname: fullname,
+      email: email,
+      phone_number: phoneNumber,
+      enckey: process.env.FLW_ENCRYPTION_KEY,
+      tx_ref: txRef,
+    };
+
+    // Add PIN if provided
+    if (cardDetails.pin) {
+      (payload as any).authorization = {
+        mode: "pin",
+        pin: cardDetails.pin,
+      };
+    }
+
+    const response = await flw.Charge.card(payload);
+    console.log("Card Payment Response:", response);
+
+    if (response.status === "success") {
+      let authorizationDetails:
+        | { mode: string; redirectUrl: string; message?: string }
+        | undefined = undefined;
+
+      // Handle different authorization modes
+      if (response.meta?.authorization?.mode === "pin") {
+        authorizationDetails = {
+          mode: "pin",
+          redirectUrl: "",
+          message: "Please enter your card PIN",
+        };
+      } else if (response.meta?.authorization?.mode === "redirect") {
+        authorizationDetails = {
+          mode: "redirect",
+          redirectUrl: response.meta.authorization.redirect,
+          message: "Redirecting to bank for authorization",
+        };
+      } else if (response.meta?.authorization?.mode === "otp") {
+        authorizationDetails = {
+          mode: "otp",
+          redirectUrl: response.meta.authorization.endpoint,
+          message: "Please enter the OTP sent to your phone/email",
+        };
+      }
+
+      return {
+        success: true,
+        transactionId:
+          response.data?.id?.toString() || response.data?.flw_ref || txRef,
+        reference: response.data?.tx_ref || txRef,
+        flwRef: response.data?.flw_ref || txRef,
+        status: response.data?.status || "pending",
+        message: response.message || "Card payment initiated",
+        authorizationDetails,
+        // Additional data to store in database
+        cardPaymentData: {
+          transactionId: response.data?.id,
+          flwRef: response.data?.flw_ref,
+          deviceFingerprint: response.data?.device_fingerprint,
+          amount: response.data?.amount,
+          chargedAmount: response.data?.charged_amount,
+          appFee: response.data?.app_fee,
+          merchantFee: response.data?.merchant_fee,
+          processorResponse: response.data?.processor_response,
+          authModel: response.data?.auth_model,
+          currency: response.data?.currency,
+          ip: response.data?.ip,
+          narration: response.data?.narration,
+          status: response.data?.status,
+          authUrl: response.data?.auth_url,
+          paymentType: response.data?.payment_type,
+          fraudStatus: response.data?.fraud_status,
+          chargeType: response.data?.charge_type,
+          // Card specific data
+          cardFirst6Digits: response.data?.card?.first_6digits,
+          cardLast4Digits: response.data?.card?.last_4digits,
+          cardCountry: response.data?.card?.country,
+          cardType: response.data?.card?.type,
+          cardExpiry: response.data?.card?.expiry,
+          // Customer data
+          customerId: response.data?.customer?.id,
+          customerName: response.data?.customer?.name,
+          customerEmail: response.data?.customer?.email,
+          customerPhone: response.data?.customer?.phone_number,
+        },
+      };
+    } else {
+      return {
+        success: false,
+        error: response.message || "Card payment initialization failed",
+        transactionId: "",
+        reference: "",
+        flwRef: "",
+        status: "failed",
+        message: "Card payment initialization failed",
+      };
+    }
+  } catch (error: any) {
+    console.log("Card payment failed:", error.message);
+    return {
+      success: false,
+      error: "Card payment processing failed: " + error.message,
+      details: error.message,
+      transactionId: "",
+      reference: "",
+      flwRef: "",
+      status: "failed",
+      message: "Card payment processing failed: " + error.message,
+    };
+  }
 }
 
 /**
- * function for bank transfer processing
+ * Process Bank Transfer
  */
 async function processBankTransfer({
   amount,
-  bankAccount,
-  reference,
+  txRef,
+  email,
+  phoneNumber,
+  currency = "RWF",
+  clientIp = "127.0.0.1",
+  deviceFingerprint = "62wd23423rq324323qew1",
+  narration = "Order payment",
 }: {
   amount: number;
-  bankAccount: string;
-  reference: string;
-}) {
-  console.log(`Processing bank transfer: ${amount} RWF to ${bankAccount}`);
+  txRef: string;
+  email: string;
+  phoneNumber: string;
+  currency?: string;
+  clientIp?: string;
+  deviceFingerprint?: string;
+  narration?: string;
+}): Promise<BankTransferPaymentResult> {
+  try {
+    console.log(`Processing bank transfer: ${amount} ${currency} for ${email}`);
 
-  await new Promise((resolve) => setTimeout(resolve, 3000));
+    const payload = {
+      tx_ref: txRef,
+      amount: amount.toString(),
+      email: email,
+      phone_number: phoneNumber,
+      currency: currency,
+      client_ip: clientIp,
+      device_fingerprint: deviceFingerprint,
+      narration: narration,
+      is_permanent: false,
+      expires: 3600, // 1 hour expiration
+    };
 
-  return {
-    success: true,
-    transactionId: `BANK_${Date.now()}`,
-    reference,
-  };
+    const response = await flw.Charge.bank_transfer(payload);
+    console.log("Bank Transfer Response:", response);
+
+    if (response.status === "success") {
+      const transferDetails = response.meta?.authorization && {
+        transferReference: response.meta.authorization.transfer_reference,
+        transferAccount: response.meta.authorization.transfer_account,
+        transferBank: response.meta.authorization.transfer_bank,
+        transferAmount: parseFloat(
+          response.meta.authorization.transfer_amount || "0"
+        ),
+        transferNote: response.meta.authorization.transfer_note,
+        accountExpiration: response.meta.authorization.account_expiration
+          ? new Date(response.meta.authorization.account_expiration)
+          : null,
+      };
+
+      return {
+        success: true,
+        transactionId: response.data?.flw_ref || txRef,
+        reference: response.data?.tx_ref || txRef,
+        flwRef: response.data?.flw_ref || txRef,
+        status: response.data?.status || "pending",
+        message: response.message || "Bank transfer initiated",
+        transferDetails,
+      };
+    } else {
+      return {
+        success: false,
+        transactionId: "",
+        reference: "",
+        flwRef: "",
+        status: "failed",
+        message: response.message || "Bank transfer initialization failed",
+        error: response.message || "Bank transfer initialization failed",
+      };
+    }
+  } catch (error: any) {
+    console.log("Bank transfer failed:", error);
+    return {
+      success: false,
+      transactionId: "",
+      reference: "",
+      flwRef: "",
+      status: "failed",
+      message: "Bank transfer initialization failed  " + error.message,
+      error: "Bank transfer initialization failed  " + error.message,
+    };
+  }
 }

@@ -4,7 +4,6 @@ import { PaginationService } from "./paginationService";
 import prisma from "../prisma";
 import { LocationValidationService } from "./location.service";
 import { ProductSubmissionInput } from "../types/productTypes";
-import { getProductsFromDatabase } from "./ussdServices";
 
 // Interface for farmer feedback request
 export interface IFarmerFeedbackRequest {
@@ -367,11 +366,19 @@ export const updateFarmerFeedbackService = async (
 export async function submitProductService(
   submissionData: ProductSubmissionInput
 ) {
+  const productData = await prisma.product.findUnique({
+    where: { id: submissionData.productId },
+  });
+
+  if (!productData) {
+    throw new Error("Product not found");
+  }
+
   // Get valid products from database
   const validProducts = await getProductsFromDatabase();
 
   // Validate product name
-  if (!validProducts.includes(submissionData.productName)) {
+  if (!validProducts.includes(productData.productName)) {
     throw new Error(
       `Invalid product. Valid products are: ${validProducts.join(", ")}`
     );
@@ -403,26 +410,13 @@ export async function submitProductService(
     throw new Error("Farmer not found");
   }
 
-  // Validate farmer's location data
-  if (
-    !submissionData.province ||
-    !submissionData.district ||
-    !submissionData.sector ||
-    !submissionData.cell ||
-    !submissionData.village
-  ) {
-    throw new Error(
-      "submissionData location data is incomplete. Please update your profile."
-    );
-  }
-
   const locationValidation =
     LocationValidationService.validateLocationHierarchy({
-      province: submissionData.province,
-      district: submissionData.district,
-      sector: submissionData.sector,
-      cell: submissionData.cell,
-      village: submissionData.village,
+      province: submissionData.province || farmer.province,
+      district: submissionData.district || farmer.district,
+      sector: submissionData.sector || farmer.sector,
+      cell: submissionData.cell || farmer.cell,
+      village: submissionData.village || farmer.village,
     });
 
   if (!locationValidation.isValid) {
@@ -433,30 +427,20 @@ export async function submitProductService(
     );
   }
 
-  // Find product by product name
-  const product = await prisma.product.findFirst({
-    where: { productName: submissionData.productName },
-    select: { id: true, categoryId: true },
-  });
-
-  if (!product) {
-    throw new Error("Product not found in the system");
-  }
-
   // Create submission with farmer's location data
   const submission = await prisma.farmerSubmission.create({
     data: {
       farmerId: submissionData.farmerId,
-      productName: submissionData.productName,
-      categoryId: product.categoryId,
+      productName: productData.productName,
+      categoryId: productData.categoryId,
       submittedQty: submissionData.submittedQty,
       wishedPrice: submissionData.wishedPrice,
       status: "PENDING",
-      province: submissionData.province,
-      district: submissionData.district,
-      sector: submissionData.sector,
-      cell: submissionData.cell,
-      village: submissionData.village,
+      province: submissionData.province || farmer.province,
+      district: submissionData.district || farmer.district,
+      sector: submissionData.sector || farmer.sector,
+      cell: submissionData.cell || farmer.cell,
+      village: submissionData.village || farmer.village,
     },
     include: {
       farmer: {
@@ -474,4 +458,28 @@ export async function submitProductService(
   });
 
   return submission;
+}
+
+// Get products from database
+export async function getProductsFromDatabase(): Promise<string[]> {
+  try {
+    const products = await prisma.product.findMany({
+      where: { status: "ACTIVE" },
+      select: { productName: true },
+      distinct: ["productName"],
+    });
+    return products.map((p) => p.productName);
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    // Fallback to hardcoded list
+    return [
+      "Tomatoes",
+      "Onions",
+      "Maize",
+      "Potatoes",
+      "Cassava",
+      "Irish Potatoes",
+      "Banana",
+    ];
+  }
 }

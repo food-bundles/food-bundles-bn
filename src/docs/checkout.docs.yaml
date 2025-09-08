@@ -1,6 +1,6 @@
 tags:
   - name: Checkout API Management
-    description: Operations related to checkout and payment processing for restaurants
+    description: Advanced operations for checkout and payment processing with Mobile Money, Card, and Bank Transfer support
 
 components:
   schemas:
@@ -28,6 +28,8 @@ components:
           type: string
           enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
           description: Current payment status
+
+        # Billing Information
         billingName:
           type: string
           description: Billing name
@@ -40,6 +42,155 @@ components:
         billingAddress:
           type: string
           description: Billing address
+
+        # Delivery Information
+        deliveryProvince:
+          type: string
+          description: Delivery province
+        deliveryDistrict:
+          type: string
+          description: Delivery district
+        deliverySector:
+          type: string
+          description: Delivery sector
+        deliveryCell:
+          type: string
+          description: Delivery cell
+        deliveryVillage:
+          type: string
+          description: Delivery village
+        deliveryLocation:
+          type: string
+          description: Specific delivery location
+
+        # Enhanced Payment Fields
+        txRef:
+          type: string
+          description: Transaction reference
+          example: "REST_123_CART_456_1704038400000"
+        flwRef:
+          type: string
+          description: Transaction reference
+        txOrderId:
+          type: string
+          description: Transaction order ID
+        currency:
+          type: string
+          description: Currency code
+          example: "RWF"
+        clientIp:
+          type: string
+          description: Client IP address
+          example: "192.168.1.1"
+        deviceFingerprint:
+          type: string
+          description: Device fingerprint
+        narration:
+          type: string
+          description: Payment narration
+
+        # Bank transfer specific fields
+        transferReference:
+          type: string
+          description: Bank transfer reference
+        transferAccount:
+          type: string
+          description: Transfer account number
+        transferBank:
+          type: string
+          description: Bank name for transfer
+        accountExpiration:
+          type: string
+          format: date-time
+          description: Account expiration time
+        transferNote:
+          type: string
+          description: Transfer note
+        transferAmount:
+          type: number
+          description: Transfer amount
+
+        # Mobile money specific fields
+        network:
+          type: string
+          description: Network provider (MTN, Airtel, etc.)
+        voucher:
+          type: string
+          description: Voucher code
+        paymentCode:
+          type: string
+          description: Payment code for USSD
+
+        # Card payment specific fields
+        cardNumber:
+          type: string
+          description: Last 4 digits of card number
+        cardType:
+          type: string
+          description: Card type (Visa, MasterCard, etc.)
+        cardCountry:
+          type: string
+          description: Card issuing country
+        authModel:
+          type: string
+          description: Authorization model (PIN, NOAUTH, etc.)
+        encryptionKey:
+          type: string
+          description: Encryption key for card payments
+
+        # Authorization and redirect information
+        redirectUrl:
+          type: string
+          description: Redirect URL for payment authorization
+        authorizationMode:
+          type: string
+          description: Authorization mode
+        authorizationUrl:
+          type: string
+          description: Authorization URL
+        validateInstructions:
+          type: string
+          description: Validation instructions
+
+        # Transaction status and references
+        transactionId:
+          type: string
+          description: Transaction ID
+        paymentReference:
+          type: string
+          description: Payment reference
+        processorResponse:
+          type: string
+          description: Processor response
+
+        # Response fields
+        flwStatus:
+          type: string
+          description: Status
+        flwMessage:
+          type: string
+          description: Message
+        chargedAmount:
+          type: number
+          description: Charged amount
+        appFee:
+          type: number
+          description: Application fee
+        merchantFee:
+          type: number
+          description: Merchant fee
+
+        # Additional metadata
+        paymentPlan:
+          type: string
+          description: Payment plan
+        fraudStatus:
+          type: string
+          description: Fraud status
+        riskAction:
+          type: string
+          description: Risk action
+
         notes:
           type: string
           description: Special notes or instructions
@@ -47,12 +198,7 @@ components:
           type: string
           format: date-time
           description: Requested delivery date
-        paymentReference:
-          type: string
-          description: Payment gateway reference
-        transactionId:
-          type: string
-          description: Transaction ID from payment provider
+
         createdAt:
           type: string
           format: date-time
@@ -63,37 +209,14 @@ components:
           type: string
           format: date-time
           description: When payment was completed
+
+        # Relations
         cart:
           $ref: "#/components/schemas/CartWithItems"
         restaurant:
           $ref: "#/components/schemas/RestaurantInfo"
         order:
           $ref: "#/components/schemas/OrderInfo"
-
-    CartWithItems:
-      type: object
-      properties:
-        id:
-          type: string
-        totalAmount:
-          type: number
-          format: float
-        status:
-          type: string
-        cartItems:
-          type: array
-          items:
-            $ref: "#/components/schemas/CartItem"
-
-    OrderInfo:
-      type: object
-      properties:
-        id:
-          type: string
-        orderNumber:
-          type: string
-        status:
-          type: string
 
     CreateCheckoutRequest:
       type: object
@@ -128,6 +251,20 @@ components:
           type: string
           format: date-time
           description: Requested delivery date
+        clientIp:
+          type: string
+          description: Client IP address
+          example: "192.168.1.1"
+        deviceFingerprint:
+          type: string
+          description: Device fingerprint
+        narration:
+          type: string
+          description: Payment narration
+        currency:
+          type: string
+          description: Currency code
+          example: "RWF"
 
     UpdateCheckoutRequest:
       type: object
@@ -166,6 +303,79 @@ components:
         transactionId:
           type: string
           description: Transaction ID (Admin only)
+        txRef:
+          type: string
+          description: Transaction reference
+        flwRef:
+          type: string
+          description: Reference
+        txOrderId:
+          type: string
+          description: Transaction order ID
+        currency:
+          type: string
+          description: Currency code
+        clientIp:
+          type: string
+          description: Client IP address
+        deviceFingerprint:
+          type: string
+          description: Device fingerprint
+        narration:
+          type: string
+          description: Payment narration
+        transferReference:
+          type: string
+          description: Transfer reference
+        transferAccount:
+          type: string
+          description: Transfer account
+        transferBank:
+          type: string
+          description: Transfer bank
+        accountExpiration:
+          type: string
+          format: date-time
+          description: Account expiration
+        transferNote:
+          type: string
+          description: Transfer note
+        transferAmount:
+          type: number
+          description: Transfer amount
+        network:
+          type: string
+          description: Network provider
+        voucher:
+          type: string
+          description: Voucher code
+        paymentCode:
+          type: string
+          description: Payment code
+        redirectUrl:
+          type: string
+          description: Redirect URL
+        authorizationMode:
+          type: string
+          description: Authorization mode
+        authorizationUrl:
+          type: string
+          description: Authorization URL
+        flwStatus:
+          type: string
+          description: Status
+        flwMessage:
+          type: string
+          description: Message
+        chargedAmount:
+          type: number
+          description: Charged amount
+        appFee:
+          type: number
+          description: Application fee
+        merchantFee:
+          type: number
+          description: Merchant fee
 
     ProcessPaymentRequest:
       type: object
@@ -179,12 +389,68 @@ components:
         phoneNumber:
           type: string
           description: Phone number (required for MOBILE_MONEY)
-        cardToken:
+        cardDetails:
+          type: object
+          description: Card details (required for CARD)
+          properties:
+            cardNumber:
+              type: string
+              description: Card number
+            cvv:
+              type: string
+              description: CVV code
+            expiryMonth:
+              type: string
+              description: Expiry month (MM)
+            expiryYear:
+              type: string
+              description: Expiry year (YYYY)
+            pin:
+              type: string
+              description: PIN (optional)
+        bankDetails:
+          type: object
+          description: Bank details (optional for BANK_TRANSFER)
+          properties:
+            clientIp:
+              type: string
+              description: Client IP address
+        processDirectly:
+          type: boolean
+          description: Whether to process payment immediately
+          default: true
+
+    PaymentVerificationRequest:
+      type: object
+      required:
+        - transactionId
+      properties:
+        transactionId:
           type: string
-          description: Card token (required for CARD)
-        bankAccount:
+          description: Transaction ID to verify
+
+    PaymentVerificationResponse:
+      type: object
+      properties:
+        message:
           type: string
-          description: Bank account number (required for BANK_TRANSFER)
+        data:
+          type: object
+          properties:
+            verified:
+              type: boolean
+            status:
+              type: string
+            amount:
+              type: number
+            currency:
+              type: string
+            transactionId:
+              type: string
+            flwRef:
+              type: string
+            txRef:
+              type: string
 
     PaymentResponse:
       type: object
@@ -198,6 +464,56 @@ components:
               $ref: "#/components/schemas/Checkout"
             transactionId:
               type: string
+            redirectUrl:
+              type: string
+              description: URL for payment authorization redirect
+            transferDetails:
+              type: object
+              description: Bank transfer details
+              properties:
+                transferReference:
+                  type: string
+                transferAccount:
+                  type: string
+                transferBank:
+                  type: string
+                transferAmount:
+                  type: number
+                transferNote:
+                  type: string
+                accountExpiration:
+                  type: string
+                  format: date-time
+            status:
+              type: string
+            requiresRedirect:
+              type: boolean
+              description: Whether payment requires redirect
+
+    CartWithItems:
+      type: object
+      properties:
+        id:
+          type: string
+        totalAmount:
+          type: number
+          format: float
+        status:
+          type: string
+        cartItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+
+    OrderInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        orderNumber:
+          type: string
+        status:
+          type: string
 
     CheckoutPaginationResponse:
       type: object
@@ -236,14 +552,16 @@ components:
       properties:
         message:
           type: string
+        error:
+          type: string
 
 paths:
   /checkouts:
     post:
       tags:
         - Checkout API Management
-      summary: Create a new checkout
-      description: Create a new checkout from an active cart for payment processing
+      summary: Create a new checkout integration
+      description: Create a new checkout from an active cart with enhanced payment fields
       security:
         - BearerAuth: []
       requestBody:
@@ -254,7 +572,7 @@ paths:
               $ref: "#/components/schemas/CreateCheckoutRequest"
       responses:
         201:
-          description: Checkout created successfully
+          description: Checkout created successfully integration
           content:
             application/json:
               schema:
@@ -306,8 +624,8 @@ paths:
     get:
       tags:
         - Checkout API Management
-      summary: Get all checkouts (Admin only)
-      description: Retrieve all checkouts with filtering and pagination (Admin access required)
+      summary: Get all checkouts with enhanced fields (Admin only)
+      description: Retrieve all checkouts integration details and filtering
       security:
         - BearerAuth: []
       parameters:
@@ -340,7 +658,7 @@ paths:
           description: Filter by payment method
       responses:
         200:
-          description: Checkouts retrieved successfully
+          description: Checkouts retrieved successfully with enhanced fields
           content:
             application/json:
               schema:
@@ -368,8 +686,8 @@ paths:
     get:
       tags:
         - Checkout API Management
-      summary: Get restaurant's checkouts
-      description: Retrieve checkouts for the authenticated restaurant with filtering
+      summary: Get restaurant's checkouts with enhanced fields
+      description: Retrieve checkouts for the authenticated restaurant integration details
       security:
         - BearerAuth: []
       parameters:
@@ -402,7 +720,7 @@ paths:
           description: Filter by payment method
       responses:
         200:
-          description: Checkouts retrieved successfully
+          description: Checkouts retrieved successfully with enhanced fields
           content:
             application/json:
               schema:
@@ -430,8 +748,8 @@ paths:
     get:
       tags:
         - Checkout API Management
-      summary: Get checkout by ID
-      description: Retrieve a specific checkout by ID with detailed information
+      summary: Get checkout by ID with enhanced fields
+      description: Retrieve a specific checkout by ID with detailed integration information
       security:
         - BearerAuth: []
       parameters:
@@ -443,7 +761,7 @@ paths:
           description: Unique checkout identifier
       responses:
         200:
-          description: Checkout retrieved successfully
+          description: Checkout retrieved successfully with enhanced fields
           content:
             application/json:
               schema:
@@ -484,8 +802,8 @@ paths:
     patch:
       tags:
         - Checkout API Management
-      summary: Update checkout
-      description: Update checkout details before payment completion
+      summary: Update checkout with enhanced fields
+      description: Update checkout details including payment fields before payment completion
       security:
         - BearerAuth: []
       parameters:
@@ -503,7 +821,7 @@ paths:
               $ref: "#/components/schemas/UpdateCheckoutRequest"
       responses:
         200:
-          description: Checkout updated successfully
+          description: Checkout updated successfully with enhanced fields
           content:
             application/json:
               schema:
@@ -626,8 +944,8 @@ paths:
     post:
       tags:
         - Checkout API Management
-      summary: Process payment for checkout
-      description: Process payment using various methods (Cash, Mobile Money, Bank Transfer, Card)
+      summary: Process payment for checkout integration
+      description: Process payment using various methods (Cash, Mobile Money, Bank Transfer, Card) integration
       security:
         - BearerAuth: []
       parameters:
@@ -645,27 +963,37 @@ paths:
               $ref: "#/components/schemas/ProcessPaymentRequest"
             examples:
               mobile_money:
-                summary: Mobile Money Payment (PayPack)
+                summary: Mobile Money Payment
                 value:
                   paymentMethod: "MOBILE_MONEY"
-                  phoneNumber: "+250788123456"
+                  phoneNumber: "250788123456"
+                  processDirectly: true
               cash_payment:
                 summary: Cash Payment
                 value:
                   paymentMethod: "CASH"
+                  processDirectly: true
               card_payment:
                 summary: Card Payment
                 value:
                   paymentMethod: "CARD"
-                  cardToken: "card_token_123"
+                  cardDetails:
+                    cardNumber: "5531886652142950"
+                    cvv: "564"
+                    expiryMonth: "09"
+                    expiryYear: "29"
+                    pin: "3310"
+                  processDirectly: true
               bank_transfer:
                 summary: Bank Transfer
                 value:
                   paymentMethod: "BANK_TRANSFER"
-                  bankAccount: "12345678901"
+                  bankDetails:
+                    clientIp: "192.168.1.100"
+                  processDirectly: true
       responses:
         200:
-          description: Payment processed successfully
+          description: Payment processed successfully integration
           content:
             application/json:
               schema:
@@ -683,9 +1011,71 @@ paths:
                 missing_phone:
                   value:
                     message: "Phone number is required for mobile money payments"
+                invalid_phone:
+                  value:
+                    message: "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX"
+                missing_card_details:
+                  value:
+                    message: "Complete card details (number, CVV, expiry month/year) are required"
                 payment_failed:
                   value:
                     message: "Payment failed"
+                    error: "Insufficient balance"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Checkout not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /checkouts/{checkoutId}/verify-payment:
+    get:
+      tags:
+        - Checkout API Management
+      summary: Verify payment status
+      description: Verify the status of a payment transaction
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: checkoutId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique checkout identifier
+        - name: transactionId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Transaction ID to verify
+      responses:
+        200:
+          description: Payment verification completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentVerificationResponse"
+        400:
+          description: Bad request - Missing transaction ID or verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Transaction ID is required for verification"
         401:
           description: Unauthorized
           content:

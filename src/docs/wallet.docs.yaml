@@ -1,0 +1,963 @@
+tags:
+  - name: Wallet Management
+    description: Comprehensive wallet operations for account balance management
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Wallet:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique wallet identifier
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        restaurantId:
+          type: string
+          format: uuid
+          description: Associated restaurant ID
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        balance:
+          type: number
+          format: float
+          description: Current wallet balance
+          example: 50000.00
+        currency:
+          type: string
+          description: Currency code (RWF only)
+          example: "RWF"
+          default: "RWF"
+        isActive:
+          type: boolean
+          description: Wallet status
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        restaurant:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "123e4567-e89b-12d3-a456-426614174001"
+            name:
+              type: string
+              example: "Kigali Restaurant"
+            email:
+              type: string
+              format: email
+              example: "info@kigalirestaurant.rw"
+            phone:
+              type: string
+              example: "250788123456"
+        _count:
+          type: object
+          properties:
+            transactions:
+              type: integer
+              description: Total number of transactions
+              example: 15
+
+    WalletTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique transaction identifier
+          example: "123e4567-e89b-12d3-a456-426614174002"
+        walletId:
+          type: string
+          format: uuid
+          description: Associated wallet ID
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        type:
+          type: string
+          enum: [TOP_UP, PAYMENT, REFUND, ADJUSTMENT, WITHDRAWAL]
+          description: Transaction type
+          example: "TOP_UP"
+        amount:
+          type: number
+          format: float
+          description: Transaction amount (positive for credit, negative for debit)
+          example: 10000.00
+        previousBalance:
+          type: number
+          format: float
+          description: Balance before transaction
+          example: 40000.00
+        newBalance:
+          type: number
+          format: float
+          description: Balance after transaction
+          example: 50000.00
+        description:
+          type: string
+          description: Transaction description
+          example: "Wallet top-up via MOBILE_MONEY"
+        reference:
+          type: string
+          description: Reference to related entity
+          example: "CHECKOUT_12345"
+        flwTxRef:
+          type: string
+          description: Flutterwave transaction reference
+          example: "FLW_123456789"
+        flwRef:
+          type: string
+          description: Flutterwave reference
+          example: "FLWREF_123456789"
+        flwStatus:
+          type: string
+          description: Flutterwave status
+          example: "successful"
+        flwMessage:
+          type: string
+          description: Flutterwave message
+          example: "Transaction completed successfully"
+        paymentMethod:
+          type: string
+          description: Payment method used for top-up
+          example: "MOBILE_MONEY"
+        externalTxId:
+          type: string
+          description: External transaction ID
+          example: "123456789"
+        status:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Transaction status
+          example: "COMPLETED"
+        metadata:
+          type: object
+          description: Additional metadata
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        wallet:
+          type: object
+          properties:
+            id:
+              type: string
+            currency:
+              type: string
+            restaurant:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+
+    CreateWalletRequest:
+      type: object
+      properties:
+        currency:
+          type: string
+          description: Currency code
+          example: "RWF"
+          default: "RWF"
+
+    TopUpWalletRequest:
+      type: object
+      required:
+        - amount
+        - paymentMethod
+      properties:
+        amount:
+          type: number
+          format: float
+          description: Amount to top up
+          example: 10000.00
+          minimum: 1
+        paymentMethod:
+          type: string
+          enum: [MOBILE_MONEY, CARD]
+          description: Payment method for top-up
+          example: "MOBILE_MONEY"
+        phoneNumber:
+          type: string
+          description: Phone number (required for MOBILE_MONEY)
+          example: "250788123456"
+        cardDetails:
+          type: object
+          description: Card details (required for CARD)
+          properties:
+            cardNumber:
+              type: string
+              description: Card number
+              example: "5531886652142950"
+            cvv:
+              type: string
+              description: CVV code
+              example: "564"
+            expiryMonth:
+              type: string
+              description: Expiry month (MM)
+              example: "09"
+            expiryYear:
+              type: string
+              description: Expiry year (YYYY)
+              example: "29"
+            pin:
+              type: string
+              description: PIN (optional)
+              example: "3310"
+        description:
+          type: string
+          description: Optional description for the top-up
+          example: "Wallet top-up"
+
+    WalletAdjustmentRequest:
+      type: object
+      required:
+        - amount
+        - type
+      properties:
+        amount:
+          type: number
+          format: float
+          description: Adjustment amount
+          example: 5000.00
+          minimum: 0.01
+        type:
+          type: string
+          enum: [credit, debit]
+          description: Type of adjustment
+          example: "credit"
+        description:
+          type: string
+          description: Reason for adjustment
+          example: "Manual credit adjustment by admin"
+
+    UpdateWalletStatusRequest:
+      type: object
+      required:
+        - isActive
+      properties:
+        isActive:
+          type: boolean
+          description: Wallet status
+          example: true
+
+    TopUpResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Top-up initiated successfully"
+        data:
+          type: object
+          properties:
+            wallet:
+              $ref: "#/components/schemas/Wallet"
+            transaction:
+              $ref: "#/components/schemas/WalletTransaction"
+            redirectUrl:
+              type: string
+              description: URL for payment authorization redirect
+              example: "https://flutterwave.com/redirect/123456"
+            status:
+              type: string
+              example: "pending"
+            requiresRedirect:
+              type: boolean
+              example: true
+
+    WalletTransactionPaginationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Transactions retrieved successfully"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletTransaction"
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    WalletPaginationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Wallets retrieved successfully"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Wallet"
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+    VerificationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Payment verified successfully"
+        data:
+          type: object
+          properties:
+            verified:
+              type: boolean
+              example: true
+            amount:
+              type: number
+              example: 10000.00
+            currency:
+              type: string
+              example: "RWF"
+            status:
+              type: string
+              example: "successful"
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 100
+        totalPages:
+          type: integer
+          example: 5
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Error message"
+        error:
+          type: string
+          example: "Detailed error description"
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Operation completed successfully"
+        data:
+          type: object
+
+paths:
+  /wallets:
+    post:
+      tags: [Wallet Management]
+      summary: Create wallet for restaurant
+      description: Create a new wallet for the authenticated restaurant
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWalletRequest"
+      responses:
+        201:
+          description: Wallet created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Wallet created successfully"
+                  data:
+                    $ref: "#/components/schemas/Wallet"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                wallet_exists:
+                  value:
+                    message: "Wallet already exists for this restaurant"
+                    error: "Wallet creation failed"
+                    code: "WALLET_EXISTS"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      tags: [Wallet Management]
+      summary: Get all wallets (Admin only)
+      description: Retrieve all wallets with filtering and pagination
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Items per page
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by wallet status
+        - name: restaurantName
+          in: query
+          schema:
+            type: string
+          description: Filter by restaurant name
+      responses:
+        200:
+          description: Wallets retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletPaginationResponse"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/my-wallet:
+    get:
+      tags: [Wallet Management]
+      summary: Get restaurant's wallet
+      description: Retrieve the authenticated restaurant's wallet details
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Wallet retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Wallet retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Wallet"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/top-up:
+    post:
+      tags: [Wallet Management]
+      summary: Top up wallet using Flutterwave
+      description: Add funds to wallet using Mobile Money or Card payments
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TopUpWalletRequest"
+      responses:
+        200:
+          description: Top-up initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopUpResponse"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_amount:
+                  value:
+                    message: "Amount must be greater than 0"
+                    error: "Invalid amount specified"
+                    code: "INVALID_AMOUNT"
+                missing_phone:
+                  value:
+                    message: "Phone number is required for mobile money payments"
+                    error: "Missing required field"
+                    code: "MISSING_PHONE"
+                invalid_phone:
+                  value:
+                    message: "Invalid Rwanda mobile number format"
+                    error: "Phone number validation failed"
+                    code: "INVALID_PHONE"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/transactions:
+    get:
+      tags: [Wallet Management]
+      summary: Get wallet transactions
+      description: Retrieve authenticated restaurant's wallet transactions with filtering
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [TOP_UP, PAYMENT, REFUND, ADJUSTMENT, WITHDRAWAL]
+          description: Filter by transaction type
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Filter by transaction status
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start date for filtering
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End date for filtering
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Items per page
+      responses:
+        200:
+          description: Transactions retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletTransactionPaginationResponse"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/transactions/{transactionId}:
+    get:
+      tags: [Wallet Management]
+      summary: Get wallet transaction by ID
+      description: Retrieve specific wallet transaction details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Transaction ID
+      responses:
+        200:
+          description: Transaction retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Transaction retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/WalletTransaction"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Unauthorized access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/verify-topup/{transactionId}:
+    get:
+      tags: [Wallet Management]
+      summary: Verify wallet top-up payment
+      description: Verify the status of a wallet top-up payment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Transaction ID to verify
+      responses:
+        200:
+          description: Payment verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationResponse"
+        400:
+          description: Verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/{walletId}:
+    get:
+      tags: [Wallet Management]
+      summary: Get wallet by ID (Admin only)
+      description: Retrieve specific wallet details by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: walletId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Wallet ID
+      responses:
+        200:
+          description: Wallet retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Wallet retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Wallet"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      tags: [Wallet Management]
+      summary: Update wallet status (Admin only)
+      description: Activate or deactivate a wallet
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: walletId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Wallet ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWalletStatusRequest"
+      responses:
+        200:
+          description: Wallet status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Wallet activated successfully"
+                  data:
+                    $ref: "#/components/schemas/Wallet"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/{walletId}/adjust:
+    post:
+      tags: [Wallet Management]
+      summary: Adjust wallet balance (Admin only)
+      description: Manually adjust wallet balance (credit or debit)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: walletId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Wallet ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletAdjustmentRequest"
+      responses:
+        200:
+          description: Wallet adjustment successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Wallet credit adjustment successful"
+                  data:
+                    type: object
+                    properties:
+                      wallet:
+                        $ref: "#/components/schemas/Wallet"
+                      transaction:
+                        $ref: "#/components/schemas/WalletTransaction"
+                      newBalance:
+                        type: number
+                        example: 55000.00
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                insufficient_balance:
+                  value:
+                    message: "Insufficient wallet balance. Available: 40000.00, Required: 50000.00"
+                    error: "Insufficient funds for debit adjustment"
+                    code: "INSUFFICIENT_BALANCE"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
