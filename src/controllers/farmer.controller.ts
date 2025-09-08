@@ -9,7 +9,6 @@ import {
 } from "../services/farmer.service";
 import { FarmerFeedbackStatus, Role } from "@prisma/client";
 import { PaginationService } from "../services/paginationService";
-import prisma from "../prisma";
 import { ProductSubmissionInput } from "../types/productTypes";
 import errorHandler, { catchAsyncError } from "../utils/errorhandler.utlity";
 
@@ -267,32 +266,16 @@ export default class FarmerController {
 export const submitProductController = catchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     const userId = (req as any).user?.id;
-    const {
-      productName,
-      quantity,
-      wishedPrice,
-      province,
-      district,
-      sector,
-      cell,
-      village,
-    } = req.body;
+    const { productId } = req.params;
+
+    const { quantity, wishedPrice, province, district, sector, cell, village } =
+      req.body;
 
     // Validate required fields
-    if (
-      !productName ||
-      !quantity ||
-      !wishedPrice ||
-      !province ||
-      !district ||
-      !sector ||
-      !cell ||
-      !village
-    ) {
+    if (!quantity || !wishedPrice) {
       return next(
         new errorHandler({
-          message:
-            "productName, quantity, wishedPrice, province, district, sector, cell, and village are required",
+          message: "Quantity, and wishedPrice are required",
           statusCode: 400,
         })
       );
@@ -329,7 +312,7 @@ export const submitProductController = catchAsyncError(
 
     const submissionData: ProductSubmissionInput = {
       farmerId: userId,
-      productName: productName.trim(),
+      productId: productId,
       submittedQty: parseFloat(quantity),
       wishedPrice: parseFloat(wishedPrice),
       province,

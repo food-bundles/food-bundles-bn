@@ -7,14 +7,9 @@ components:
     ProductSubmissionInput:
       type: object
       required:
-        - productName
         - quantity
         - wishedPrice
       properties:
-        productName:
-          type: string
-          description: Name of the product being submitted
-          example: "Tomatoes"
         quantity:
           type: number.01
           description: Quantity in kilograms
@@ -117,13 +112,20 @@ components:
           example: "+250788123456"
 
 paths:
-  /farmers/submit-product:
+  /farmers/submit-product/{productId}:
     post:
       tags:
         - Farmer API Management
       summary: Submit a new product
       security:
         - BearerAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product ID to be submitted
       requestBody:
         required: true
         content:

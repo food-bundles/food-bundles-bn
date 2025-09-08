@@ -2,14 +2,14 @@ import { ProductCategory } from "@prisma/client";
 
 export interface ProductSubmissionInput {
   farmerId: string;
-  productName: string;
+  productId: string;
   submittedQty: number;
   wishedPrice: number;
-  province: string;
-  district: string;
-  sector: string;
-  cell: string;
-  village: string;
+  province?: string;
+  district?: string;
+  sector?: string;
+  cell?: string;
+  village?: string;
 }
 
 // Enhanced session data for USSD
@@ -166,18 +166,18 @@ export const translations = {
     pleaseRegister: "Banza wiyandikishe mbere yo kwoherereza umusaruro.",
     selectCategory: "Hitamo icyiciro cy'umusaruro:",
     selectProduct: "Hitamo umusaruro:",
-    enterQuantity: "Andika ibiro mu kg:",
-    enterPrice: "Andika igiciro ukeneye kuri kg (RWF):",
+    enterQuantity: "Andika ingano y'umusaruro mu:",
+    enterPrice: "Andika igiciro ukeneye (RWF):",
     enterPinConfirm: "Andika PIN yawe kugirango wemeze:",
     invalidCategory: "Icyiciro wahisemo ntaricyo. Ongera ugerageze.",
     invalidProduct: "Umusaruro wahisemo ntawo ari. Ongera ugerageze.",
-    invalidQuantity: "Andika ibiro byemewe. Ongera ugerageze.",
+    invalidQuantity: "Andika ingano y'umusaruro yemewe. Ongera ugerageze.",
     invalidPrice: "Andika igiciro cyemewe. Ongera ugerageze.",
     incorrectPin: "PIN y'imibare itari yo. Ongera ugerageze.",
     submissionSuccessful: "Kwohererza byagenze neza. Urakoze!",
     submissionFailed: "Kwohererza byanze. Ongera ugerageze.",
     checkSubmissions: "Reba ibyohererejwe",
-    lastThreeOrders: "Amateka 3 y'ubucuruzi:",
+    lastThreeOrders: "Imisaruro 3 y'ubucuruzi iheruka:",
     noOrders: "Nta makuru y'ubucuruzi ufite.",
     enterPasswordForLanguage: "Andika PIN kugirango uhindure ururimi:",
     enterPasswordForSubmissions:
@@ -188,11 +188,11 @@ export const translations = {
       "PIN y'imibare itari yo. Ururimi ntiruhagarikwa.",
     incorrectPasswordSubmissions:
       "PIN y'imibare itari yo. Ntushobora kureba ibyohererejwe.",
-    helpMenu: "Ubufasha - Hitamo:",
+    helpMenu: "Ubufasha:",
     supportContact: "Telefoni y'ubufasha",
     callUs: "Duhamagare",
-    whatsapp: "Twandikire kuri WhatsApp",
-    email: "Twandikire kuri Email",
+    whatsapp: "WhatsApp",
+    email: "Email",
     productPrices: "Ibiciro by'ibicuruzwa",
     supportNumber: "Kugirango ubone ubufasha, hamagara: 911",
     noPricesAvailable: "Nta biciro bihari kuri ubu.",
@@ -235,8 +235,8 @@ export const translations = {
     pleaseRegister: "Please register first before submitting a product.",
     selectCategory: "Select product category:",
     selectProduct: "Select product:",
-    enterQuantity: "Enter quantity in kg:",
-    enterPrice: "Enter your wished price per kg (RWF):",
+    enterQuantity: "Enter quantity in:",
+    enterPrice: "Enter your wished price (RWF):",
     enterPinConfirm: "Enter your PIN to confirm:",
     invalidCategory: "Invalid category selection. Please try again.",
     invalidProduct: "Invalid product selection. Please try again.",
@@ -254,11 +254,11 @@ export const translations = {
     languageChanged: "Language changed successfully!",
     incorrectPasswordLanguage: "Incorrect PIN. Language not changed.",
     incorrectPasswordSubmissions: "Incorrect PIN. Cannot view submissions.",
-    helpMenu: "Help - Select:",
+    helpMenu: "Help:",
     supportContact: "Support Contact",
     callUs: "Call Us",
-    whatsapp: "WhatsApp Us",
-    email: "Email Us",
+    whatsapp: "WhatsApp",
+    email: "Email",
     productPrices: "Product Prices",
     supportNumber: "For support, call: 911",
     noPricesAvailable: "No prices available at the moment.",
@@ -303,8 +303,8 @@ export const translations = {
       "Veuillez d'abord vous inscrire avant de soumettre un produit.",
     selectCategory: "Sélectionnez la catégorie de produit:",
     selectProduct: "Sélectionnez le produit:",
-    enterQuantity: "Entrez la quantité en kg:",
-    enterPrice: "Entrez votre prix souhaité par kg (RWF):",
+    enterQuantity: "Entrez la quantité en:",
+    enterPrice: "Entrez votre prix souhaité (RWF):",
     enterPinConfirm: "Entrez votre PIN pour confirmer:",
     invalidCategory: "Sélection de catégorie invalide. Veuillez réessayer.",
     invalidProduct: "Sélection de produit invalide. Veuillez réessayer.",
@@ -323,11 +323,11 @@ export const translations = {
     incorrectPasswordLanguage: "PIN incorrect. Langue non changée.",
     incorrectPasswordSubmissions:
       "PIN incorrect. Impossible de voir les soumissions.",
-    helpMenu: "Aide - Sélectionnez:",
+    helpMenu: "Aide:",
     supportContact: "Contact de support",
     callUs: "Appelez-nous",
-    whatsapp: "WhatsApp Nous",
-    email: "Email Nous",
+    whatsapp: "WhatsApp",
+    email: "Email",
     productPrices: "Prix des produits",
     supportNumber: "Pour le support, appelez: 911",
     noPricesAvailable: "Aucun prix disponible pour le moment.",

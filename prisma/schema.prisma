@@ -416,25 +416,6 @@ model WalletTransaction {
   @@index([flwTxRef])
 }
 
-// Enum for wallet transaction types
-enum WalletTransactionType {
-  TOP_UP // Adding money to wallet
-  PAYMENT // Payment for checkout/order
-  REFUND // Refund to wallet
-  ADJUSTMENT // Manual adjustment by admin
-  WITHDRAWAL // Withdrawal from wallet (if supported)
-}
-
-// Enum for transaction status
-enum TransactionStatus {
-  PENDING // Transaction initiated
-  PROCESSING // Transaction being processed
-  COMPLETED // Transaction completed successfully
-  FAILED // Transaction failed
-  CANCELLED // Transaction cancelled
-  REFUNDED // Transaction refunded
-}
-
 model POSSale {
   id            String     @id @default(uuid())
   restaurantId  String
@@ -507,4 +488,23 @@ enum OrderStatus {
   DELIVERED // Order successfully delivered
   CANCELLED // Order cancelled
   REFUNDED // Order refunded
+}
+
+// Enum for wallet transaction types
+enum WalletTransactionType {
+  TOP_UP 
+  PAYMENT 
+  REFUND 
+  ADJUSTMENT // Manual adjustment by admin
+  WITHDRAWAL 
+}
+
+// Enum for transaction status
+enum TransactionStatus {
+  PENDING 
+  PROCESSING 
+  COMPLETED 
+  FAILED 
+  CANCELLED 
+  REFUNDED
 }

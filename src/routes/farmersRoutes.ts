@@ -8,7 +8,11 @@ import FarmerController, {
 
 const farmersRoutes = Router();
 
-farmersRoutes.post("/submit-product", isAuthenticated, submitProductController);
+farmersRoutes.post(
+  "/submit-product/:productId",
+  isAuthenticated,
+  submitProductController
+);
 
 // Get pending feedback submissions (farmers only)
 farmersRoutes.get(

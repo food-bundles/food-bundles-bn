@@ -312,10 +312,10 @@ paths:
               $ref: "#/components/schemas/PurchaseProductRequest"
             examples:
               purchase_example:
-                summary: Purchase 50kg at $2.5 per kg
+                summary: Purchase 50kg at RWF120 per unit
                 value:
                   acceptedQty: 50
-                  unitPrice: 2.5
+                  unitPrice: 120
       responses:
         200:
           description: Product purchased successfully

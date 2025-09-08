@@ -1,11 +1,24 @@
 import dotenv from "dotenv";
 import prisma from "../prisma";
-import { PaymentMethod, PaymentStatus } from "@prisma/client";
+import {
+  debitWalletService,
+  getWalletByRestaurantIdService,
+} from "./wallet.service";
 import {
   sendPaymentNotificationEmail,
   cleanPhoneNumber,
   isValidRwandaPhone,
 } from "../utils/emailTemplates";
+import {
+  BankTransferPaymentResult,
+  CardPaymentResult,
+  CashPaymentResult,
+  CreateCheckoutData,
+  MobileMoneyPaymentResult,
+  MobileMoneyPaymentSubmissionData,
+  UpdateCheckoutData,
+} from "../types/paymentTypes";
+import { PaymentMethod, PaymentStatus } from "@prisma/client";
 
 dotenv.config();
 
@@ -16,147 +29,6 @@ const flw = new Flutterwave(
   process.env.FLW_PUBLIC_KEY,
   process.env.FLW_SECRET_KEY
 );
-
-// Enhanced interface for creating a checkout
-interface CreateCheckoutData {
-  cartId: string;
-  restaurantId: string;
-  paymentMethod: PaymentMethod;
-  billingName?: string;
-  billingEmail?: string;
-  billingPhone?: string;
-  billingAddress?: string;
-  notes?: string;
-  deliveryDate?: Date;
-  clientIp?: string;
-  deviceFingerprint?: string;
-  narration?: string;
-  currency?: string;
-}
-
-// Enhanced interface for updating checkout
-interface UpdateCheckoutData {
-  paymentMethod?: PaymentMethod;
-  billingName?: string;
-  billingEmail?: string;
-  billingPhone?: string;
-  billingAddress?: string;
-  notes?: string;
-  deliveryDate?: Date;
-  paymentStatus?: PaymentStatus;
-  paymentReference?: string;
-  transactionId?: string;
-  txRef?: string;
-  flwRef?: string;
-  txOrderId?: string;
-  currency?: string;
-  clientIp?: string;
-  deviceFingerprint?: string;
-  narration?: string;
-  transferReference?: string;
-  transferAccount?: string;
-  transferBank?: string;
-  accountExpiration?: Date;
-  transferNote?: string;
-  transferAmount?: number;
-  network?: string;
-  voucher?: string;
-  paymentCode?: string;
-  redirectUrl?: string;
-  authorizationMode?: string;
-  authorizationUrl?: string;
-  flwStatus?: string;
-  flwMessage?: string;
-  chargedAmount?: number;
-  appFee?: number;
-  merchantFee?: number;
-  processorResponse?: string;
-  authModel?: string;
-  fraudStatus?: string;
-  chargeType?: string;
-  paymentType?: string;
-
-  cardFirst6Digits?: string;
-  cardLast4Digits?: string;
-  cardType?: string;
-  cardExpiry?: string;
-  cardCountry?: string;
-  encryptionKey?: string;
-
-  customerId?: string;
-  customerName?: string;
-  customerEmail?: string;
-  customerPhone?: string;
-}
-
-interface BasePaymentResult {
-  success: boolean;
-  transactionId: string;
-  reference: string;
-  flwRef: string;
-  status: string;
-  message: string;
-  error?: string;
-  details?: string;
-}
-
-interface MobileMoneyPaymentResult extends BasePaymentResult {
-  authorizationDetails?: {
-    mode: string;
-    redirectUrl: string;
-  };
-}
-
-interface CardPaymentResult extends BasePaymentResult {
-  authorizationDetails?: {
-    mode: string;
-    redirectUrl: string;
-    message?: string;
-  };
-  cardPaymentData?: {
-    transactionId?: number;
-    flwRef?: string;
-    deviceFingerprint?: string;
-    amount?: number;
-    chargedAmount?: number;
-    appFee?: number;
-    merchantFee?: number;
-    processorResponse?: string;
-    authModel?: string;
-    currency?: string;
-    ip?: string;
-    narration?: string;
-    status?: string;
-    authUrl?: string;
-    paymentType?: string;
-    fraudStatus?: string;
-    chargeType?: string;
-    // Card specific data
-    cardFirst6Digits?: string;
-    cardLast4Digits?: string;
-    cardCountry?: string;
-    cardType?: string;
-    cardExpiry?: string;
-    // Customer data
-    customerId?: number;
-    customerName?: string;
-    customerEmail?: string;
-    customerPhone?: string;
-  };
-}
-
-interface BankTransferPaymentResult extends BasePaymentResult {
-  transferDetails?: {
-    transferReference: string;
-    transferAccount: string;
-    transferBank: string;
-    transferAmount: number;
-    transferNote: string;
-    accountExpiration: Date | null;
-  };
-}
-
-interface CashPaymentResult extends BasePaymentResult {}
 
 type PaymentResult =
   | MobileMoneyPaymentResult
@@ -627,14 +499,62 @@ export const processPaymentService = async (
           break;
 
         case "CASH":
-          paymentResult = {
-            success: true,
-            transactionId: `CASH_${checkout.txRef}_${Date.now()}`,
-            reference: checkout.txRef ?? "",
-            flwRef: `CASH_${checkout.txRef}`,
-            status: "successful",
-            message: "Cash payment recorded",
-          };
+          // NEW WALLET INTEGRATION FOR CASH PAYMENTS
+          try {
+            // Get restaurant's wallet
+            const wallet = await getWalletByRestaurantIdService(
+              checkout.restaurantId
+            );
+
+            if (!wallet.isActive) {
+              throw new Error("Wallet is inactive. Please contact support.");
+            }
+
+            // Check if wallet has sufficient balance
+            if (wallet.balance < checkout.totalAmount) {
+              throw new Error(
+                `Insufficient wallet balance. Available: ${wallet.balance} ${
+                  wallet.currency
+                }, Required: ${checkout.totalAmount} ${
+                  checkout.currency || "RWF"
+                }`
+              );
+            }
+
+            // Debit wallet for the payment
+            const walletDebitResult = await debitWalletService({
+              walletId: wallet.id,
+              amount: checkout.totalAmount,
+              description: `Payment for checkout ${checkoutId} - Order ${checkout.txOrderId}`,
+              reference: checkoutId,
+              checkoutId: checkoutId,
+            });
+
+            paymentResult = {
+              success: true,
+              transactionId: `WALLET_${checkout.txRef}_${Date.now()}`,
+              reference: checkout.txRef ?? "",
+              flwRef: `WALLET_${checkout.txRef}`,
+              status: "successful",
+              message: "Payment completed using wallet balance",
+              walletDetails: {
+                previousBalance: walletDebitResult.transaction.previousBalance,
+                newBalance: walletDebitResult.newBalance,
+                transactionId: walletDebitResult.transaction.id,
+              },
+            };
+          } catch (walletError: any) {
+            // If wallet payment fails, return appropriate error
+            paymentResult = {
+              success: false,
+              transactionId: "",
+              reference: checkout.txRef ?? "",
+              flwRef: "",
+              status: "failed",
+              message: walletError.message || "Wallet payment failed",
+              error: walletError.message,
+            };
+          }
           break;
 
         default:
@@ -721,6 +641,7 @@ export const processPaymentService = async (
         updateData
       );
 
+      // Send notification email for successful payments
       if (paymentResult.status === "successful" && checkout.billingEmail) {
         const products = checkout.cart.cartItems.map((item) => ({
           name: item.product.productName,
@@ -740,6 +661,10 @@ export const processPaymentService = async (
           },
           checkoutId: checkoutId,
           paymentMethod: paymentData.paymentMethod,
+          walletDetails:
+            "walletDetails" in paymentResult
+              ? paymentResult.walletDetails
+              : undefined,
         });
       }
 
@@ -754,6 +679,10 @@ export const processPaymentService = async (
         transferDetails:
           "transferDetails" in paymentResult
             ? paymentResult.transferDetails
+            : undefined,
+        walletDetails:
+          "walletDetails" in paymentResult
+            ? paymentResult.walletDetails
             : undefined,
         status: paymentResult.status,
         message: paymentResult.message,
@@ -834,15 +763,7 @@ async function processMobileMoneyPayment({
   email,
   fullname,
   currency = "RWF",
-}: {
-  amount: number;
-  phoneNumber: string;
-  txRef: string;
-  orderId: string;
-  email: string;
-  fullname: string;
-  currency?: string;
-}): Promise<MobileMoneyPaymentResult> {
+}: MobileMoneyPaymentSubmissionData): Promise<MobileMoneyPaymentResult> {
   try {
     // Clean and validate phone number
     const cleanedPhoneNumber = cleanPhoneNumber(phoneNumber);
