@@ -11,6 +11,7 @@ import { FarmingProfileService } from "./farmingProfile.service";
 import { LocationValidationService } from "./location.service";
 import { PinManagementService } from "./pinManagement.service";
 import { ProfileManagementService } from "./profileManagement.service";
+import { SupportService } from "./support.service";
 
 let ussdSessions: Record<string, ISessionData> = {};
 
@@ -252,21 +253,84 @@ function handlePaginationNavigation(
 async function verifyUserPin(
   phoneNumber: string,
   pin: string
-): Promise<boolean> {
+): Promise<{ isValid: boolean; message?: TranslationKey }> {
   try {
+    if (!/^\d{4}$/.test(pin)) {
+      return { isValid: false, message: "invalidPinFormat" };
+    }
+
     const farmer = await prisma.farmer.findUnique({
       where: { phone: phoneNumber },
       select: { password: true },
     });
 
-    if (!farmer) return false;
+    if (!farmer) return { isValid: false, message: "userNotFound" };
 
-    // Use your password verification function
     const bcrypt = require("bcrypt");
-    return await bcrypt.compare(pin, farmer.password);
+    const isValid = await bcrypt.compare(pin, farmer.password);
+
+    return { isValid, message: isValid ? undefined : "incorrectPin" };
   } catch (error) {
     console.error("Error verifying PIN:", error);
-    return false;
+    return { isValid: false, message: "pinVerificationFailed" };
+  }
+}
+
+// Back navigation handler function
+function handleBackNavigation(
+  session: ISessionData,
+  lang: "KINY" | "ENG" | "FRE"
+): string | null {
+  if (!session.previousSteps || session.previousSteps.length === 0) {
+    return null;
+  }
+
+  const previousStep = session.previousSteps.pop();
+  if (!previousStep) return null;
+
+  switch (previousStep.step) {
+    case "mainMenu":
+      return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "submitProduct")}
+2. ${getTranslation(lang, "help")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "exit")}`;
+
+    case "accountMenu":
+      return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "updateProfile")}
+3. ${getTranslation(lang, "farmingProfile")}
+4. ${getTranslation(lang, "earningsDashboard")}
+5. ${getTranslation(lang, "securitySettings")}
+6. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}`;
+
+    case "securityMenu":
+      return `CON ${getTranslation(lang, "securitySettings")}
+1. ${getTranslation(lang, "changePIN")}
+2. ${getTranslation(lang, "accountActivity")}
+3. ${getTranslation(lang, "privacySettings")}
+4. ${getTranslation(lang, "accountRecovery")}
+0. ${getTranslation(lang, "back")}`;
+
+    case "profileMenu":
+      return `CON ${getTranslation(lang, "updateProfile")}
+1. ${getTranslation(lang, "changePhoneNumber")}
+2. ${getTranslation(lang, "updateLocation")}
+3. ${getTranslation(lang, "communicationPrefs")}
+0. ${getTranslation(lang, "back")}`;
+
+    case "helpMenu":
+      return `CON ${getTranslation(lang, "helpMenu")}
+1. ${getTranslation(lang, "technicalSupport")}
+2. ${getTranslation(lang, "faqSection")}
+3. ${getTranslation(lang, "contactSupport")}
+4. ${getTranslation(lang, "systemStatus")}
+0. ${getTranslation(lang, "back")}`;
+
+    default:
+      return null;
   }
 }
 
@@ -438,10 +502,26 @@ export async function handleUssdLogic({
   let session = ussdSessions[sessionId];
   if (!session) {
     session = {
-      language: "KINY", // Default language, will be updated after language selection
+      language: "KINY",
       previousSteps: [],
+      lastActivity: new Date(),
     };
     ussdSessions[sessionId] = session;
+  } else {
+    // Update last activity timestamp
+    session.lastActivity = new Date();
+  }
+
+  // Check session expiration (15 minutes)
+  if (
+    session.lastActivity &&
+    Date.now() - session.lastActivity.getTime() > 15 * 60 * 1000
+  ) {
+    delete ussdSessions[sessionId];
+    return `END ${getTranslation(
+      session.language || "KINY",
+      "sessionExpiredPleaseRestart"
+    )}`;
   }
 
   // Check if user exists first
@@ -456,13 +536,23 @@ export async function handleUssdLogic({
 
   const lang = session.language || "KINY";
 
+  // Handle back navigation (input "0")
+  if (parts[parts.length - 1] === "0") {
+    const backResponse = handleBackNavigation(session, lang);
+    if (backResponse) {
+      return backResponse;
+    }
+  }
+
   // Only show language selection for new users
   if (text === "" && !session.languageSelected && !userExists) {
+    addToHistory(session, "mainMenu");
     return showLanguageSelection(lang);
   }
 
   // For returning users on first access, show main menu directly
   if (text === "" && userExists && session.languageSelected) {
+    addToHistory(session, "languageSelection");
     return `CON ${getTranslation(lang, "welcome")}
 1. ${getTranslation(lang, "submitProduct")}
 2. ${getTranslation(lang, "help")}
@@ -484,6 +574,13 @@ export async function handleUssdLogic({
       session.language = selectedLanguage;
       session.languageSelected = true;
 
+      // Save language preference for new users
+      try {
+        await updateUserLanguage(phoneNumber, selectedLanguage);
+      } catch (error) {
+        console.error("Failed to save language preference:", error);
+      }
+
       // New user - start with registration directly
       session.mode = "register";
       session.locationStep = "province";
@@ -503,9 +600,10 @@ export async function handleUssdLogic({
 
   // For returning users, handle main menu options
   switch (parts[0]) {
-    // 1. Submit Product - handles category -> product flow
     case "1": {
+      // Submit Product flow
       session.mode = "submit";
+      addToHistory(session, "mainMenu");
 
       const farmer = await prisma.farmer.findUnique({
         where: { phone: phoneNumber },
@@ -518,7 +616,6 @@ export async function handleUssdLogic({
       // Category selection with pagination
       if (parts.length === 1) {
         session.categoryPage = 1;
-        addToHistory(session, "mainMenu");
         return await buildCategoryMenu(lang, 1);
       }
 
@@ -539,7 +636,6 @@ export async function handleUssdLogic({
         }
 
         if (categoryChoice === "0") {
-          delete ussdSessions[sessionId];
           return `CON ${getTranslation(lang, "welcome")}
 1. ${getTranslation(lang, "submitProduct")}
 2. ${getTranslation(lang, "help")}
@@ -582,7 +678,6 @@ export async function handleUssdLogic({
           }
 
           navOptions.push(`0. ${getTranslation(lang, "back")}`);
-          // Removed main menu option (00)
 
           if (navOptions.length > 0) {
             productMenu += navOptions.join("\n");
@@ -631,7 +726,6 @@ ${await buildCategoryMenu(lang, session.categoryPage || 1)}`.replace(
           }
 
           navOptions.push(`0. ${getTranslation(lang, "back")}`);
-          // Removed main menu option (00)
 
           if (navOptions.length > 0) {
             productMenu += navOptions.join("\n");
@@ -668,7 +762,6 @@ ${await buildCategoryMenu(lang, session.categoryPage || 1)}`.replace(
           }
 
           navOptions.push(`0. ${getTranslation(lang, "back")}`);
-          // Removed main menu option (00)
 
           if (navOptions.length > 0) {
             productMenu += navOptions.join("\n");
@@ -720,7 +813,6 @@ ${getTranslation(lang, "selectProduct")}\n`;
           }
 
           navOptions.push(`0. ${getTranslation(lang, "back")}`);
-          // Removed main menu option (00)
 
           if (navOptions.length > 0) {
             productMenu += navOptions.join("\n");
@@ -759,7 +851,6 @@ ${getTranslation(lang, "selectProduct")}\n`;
           }
 
           navOptions.push(`0. ${getTranslation(lang, "back")}`);
-          // Removed main menu option (00)
 
           if (navOptions.length > 0) {
             productMenu += navOptions.join("\n");
@@ -826,8 +917,11 @@ ${getTranslation(lang, "enterPinConfirm")}
         }
 
         const pinValid = await verifyUserPin(phoneNumber, pinInput);
-        if (!pinValid) {
-          return `CON ${getTranslation(lang, "incorrectPin")}
+        if (!pinValid.isValid) {
+          return `CON ${getTranslation(
+            lang,
+            pinValid.message || "incorrectPin"
+          )}
 
 ${getTranslation(lang, "enterPinConfirm")}
 0. ${getTranslation(lang, "back")}`;
@@ -862,40 +956,72 @@ ${getTranslation(lang, "enterPinConfirm")}
       return `END ${getTranslation(lang, "invalidCategory")}`;
     }
 
-    // 2. Help - Removed main menu option
     case "2": {
+      // Help menu - Uses SupportService
       session.mode = "help";
 
       if (parts.length === 1) {
         addToHistory(session, "mainMenu");
         return `CON ${getTranslation(lang, "helpMenu")}
-${getTranslation(lang, "callUs")}: +250796897823
-${getTranslation(lang, "whatsapp")}: +250796897823
-${getTranslation(lang, "email")}: info@food.rw
-
+1. ${getTranslation(lang, "technicalSupport")}
+2. ${getTranslation(lang, "faqSection")}
+3. ${getTranslation(lang, "contactSupport")}
+4. ${getTranslation(lang, "systemStatus")}
 0. ${getTranslation(lang, "back")}`;
       }
 
-      if (parts[1] === "0") {
-        delete ussdSessions[sessionId];
-        return `CON ${getTranslation(lang, "welcome")}
-1. ${getTranslation(lang, "submitProduct")}
-2. ${getTranslation(lang, "help")}
-3. ${getTranslation(lang, "myAccount")}
-4. ${getTranslation(lang, "exit")}`;
+      // Handle help submenu options using SupportService
+      if (parts[1] === "1") {
+        // Technical support
+        if (parts.length === 2) {
+          addToHistory(session, "helpMenu");
+          return `CON ${getTranslation(lang, "technicalSupport")}
+1. ${getTranslation(lang, "submitTicket")}
+2. ${getTranslation(lang, "requestCallback")}
+3. ${getTranslation(lang, "emergencySupport")}
+0. ${getTranslation(lang, "back")}`;
+        }
+
+        // Handle technical support options
+        if (parts[2] === "1") {
+          // Submit ticket
+          return `CON ${getTranslation(lang, "submitTicket")}
+${getTranslation(lang, "contactSupportForAssistance")}
+0. ${getTranslation(lang, "back")}`;
+        }
+      }
+
+      if (parts[1] === "2") {
+        // FAQ Section
+        const faqs = SupportService.getFAQs(lang);
+        let faqMenu = `CON ${getTranslation(lang, "faqSection")}\n`;
+        faqs.slice(0, 5).forEach((faq: any, index: number) => {
+          faqMenu += `${index + 1}. ${faq.question}\n`;
+        });
+        faqMenu += `\n0. ${getTranslation(lang, "back")}`;
+        return faqMenu;
+      }
+
+      if (parts[1] === "4") {
+        // System status
+        const systemStatus = await SupportService.getSystemStatus();
+        return `END ${getTranslation(lang, "systemStatus")}:
+${getTranslation(lang, "overall")}: ${systemStatus.overall}
+${getTranslation(lang, "database")}: ${systemStatus.database}
+${getTranslation(lang, "sms")}: ${systemStatus.sms}
+${getTranslation(lang, "payments")}: ${systemStatus.payments}`;
       }
 
       return `CON ${getTranslation(lang, "helpMenu")}
-${getTranslation(lang, "callUs")}: +250796897823
-${getTranslation(lang, "whatsapp")}: +250796897823
-${getTranslation(lang, "email")}: info@food.rw
-
+1. ${getTranslation(lang, "technicalSupport")}
+2. ${getTranslation(lang, "faqSection")}
+3. ${getTranslation(lang, "contactSupport")}
+4. ${getTranslation(lang, "systemStatus")}
 0. ${getTranslation(lang, "back")}`;
     }
 
-    // 3. My Account - FIXED: Now properly redirects to account details instead of product selection
-
     case "3": {
+      // My Account
       session.mode = "account";
 
       const farmer = await prisma.farmer.findUnique({
@@ -918,20 +1044,70 @@ ${getTranslation(lang, "email")}: info@food.rw
 0. ${getTranslation(lang, "back")}`;
       }
 
-      // Security Settings submenu
-      if (parts[1] === "5") {
+      // Check Submissions - FIXED: Show proper message when no submissions
+      if (parts[1] === "1") {
         if (parts.length === 2) {
-          return `CON ${getTranslation(lang, "securitySettings")}
-1. ${getTranslation(lang, "changePIN")}
-2. ${getTranslation(lang, "accountActivity")}
-3. ${getTranslation(lang, "privacySettings")}
-4. ${getTranslation(lang, "accountRecovery")}
+          addToHistory(session, "accountMenu");
+          return `CON ${getTranslation(lang, "enterPasswordForSubmissions")}
 0. ${getTranslation(lang, "back")}`;
         }
 
-        // Change PIN
+        if (parts.length === 3) {
+          const pin = parts[2];
+          if (pin === "0") {
+            return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "updateProfile")}
+3. ${getTranslation(lang, "farmingProfile")}
+4. ${getTranslation(lang, "earningsDashboard")}
+5. ${getTranslation(lang, "securitySettings")}
+6. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}`;
+          }
+
+          const pinValid = await verifyUserPin(phoneNumber, pin);
+          if (!pinValid.isValid) {
+            return `CON ${getTranslation(
+              lang,
+              pinValid.message || "incorrectPasswordSubmissions"
+            )}
+${getTranslation(lang, "enterPasswordForSubmissions")}
+0. ${getTranslation(lang, "back")}`;
+          }
+
+          const submissions = await prisma.farmerSubmission.findMany({
+            where: { farmerId: farmer.id },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          });
+
+          if (submissions.length === 0) {
+            return `END ${getTranslation(lang, "noOrders")}`;
+          }
+
+          let response = `END ${getTranslation(lang, "lastThreeOrders")}\n\n`;
+          submissions.forEach((sub, index) => {
+            const date = new Date(sub.createdAt).toLocaleDateString();
+            response += `${index + 1}. ${sub.productName} - ${
+              sub.submittedQty
+            } - ${date}\n`;
+          });
+
+          return response;
+        }
+      }
+
+      // Security Settings submenu
+      if (parts[1] === "5") {
+        if (parts.length === 2) {
+          addToHistory(session, "accountMenu");
+          return await showSecurityMenu(lang);
+        }
+
+        // Change PIN - FIXED: Proper PIN validation flow
         if (parts[2] === "1") {
           if (parts.length === 3) {
+            addToHistory(session, "securityMenu");
             return `CON ${getTranslation(lang, "enterCurrentPIN")}
 0. ${getTranslation(lang, "back")}`;
           }
@@ -943,9 +1119,11 @@ ${getTranslation(lang, "email")}: info@food.rw
             }
 
             const pinValid = await verifyUserPin(phoneNumber, currentPin);
-
-            if (!pinValid) {
-              return `CON ${getTranslation(lang, "incorrectCurrentPIN")}
+            if (!pinValid.isValid) {
+              return `CON ${getTranslation(
+                lang,
+                pinValid.message || "incorrectCurrentPIN"
+              )}
 ${getTranslation(lang, "enterCurrentPIN")}
 0. ${getTranslation(lang, "back")}`;
             }
@@ -958,6 +1136,7 @@ ${getTranslation(lang, "enterCurrentPIN")}
           if (parts.length === 5) {
             const newPin = parts[4];
             if (newPin === "0") {
+              session.currentPinVerified = false;
               return `CON ${getTranslation(lang, "enterCurrentPIN")}
 0. ${getTranslation(lang, "back")}`;
             }
@@ -968,20 +1147,19 @@ ${getTranslation(lang, "enterNewPIN")}
 0. ${getTranslation(lang, "back")}`;
             }
 
+            session.newPin = newPin;
             return `CON ${getTranslation(lang, "confirmNewPIN")}
 0. ${getTranslation(lang, "back")}`;
           }
 
           if (parts.length === 6) {
             const confirmPin = parts[5];
-            const newPin = parts[4];
-
             if (confirmPin === "0") {
               return `CON ${getTranslation(lang, "enterNewPIN")}
 0. ${getTranslation(lang, "back")}`;
             }
 
-            if (newPin !== confirmPin) {
+            if (session.newPin !== confirmPin) {
               return `CON ${getTranslation(lang, "pinMismatch")}
 ${getTranslation(lang, "confirmNewPIN")}
 0. ${getTranslation(lang, "back")}`;
@@ -989,8 +1167,8 @@ ${getTranslation(lang, "confirmNewPIN")}
 
             const success = await PinManagementService.changePIN(
               phoneNumber,
-              parts[3],
-              newPin
+              parts[3], // old PIN
+              session.newPin!
             );
 
             delete ussdSessions[sessionId];
@@ -1014,19 +1192,26 @@ ${getTranslation(lang, "confirmNewPIN")}
             }
 
             const pinValid = await verifyUserPin(phoneNumber, pin);
-            if (!pinValid) {
-              return `END ${getTranslation(lang, "incorrectPinActivity")}`;
+            if (!pinValid.isValid) {
+              return `END ${getTranslation(
+                lang,
+                pinValid.message || "incorrectPinActivity"
+              )}`;
             }
 
             const recentActivity =
               await ActivityMonitoringService.getRecentActivity(phoneNumber);
             let response = `END ${getTranslation(lang, "recentActivity")}\n\n`;
 
-            recentActivity.slice(0, 5).forEach((activity, index) => {
-              const date = new Date(activity.attemptTime).toLocaleDateString();
-              const status = activity.successful ? "✓" : "✗";
-              response += `${index + 1}. ${date} ${status}\n`;
-            });
+            recentActivity
+              .slice(0, 5)
+              .forEach((activity: any, index: number) => {
+                const date = new Date(
+                  activity.attemptTime
+                ).toLocaleDateString();
+                const status = activity.successful ? "✓" : "✗";
+                response += `${index + 1}. ${date} ${status}\n`;
+              });
 
             return response.trim();
           }
@@ -1036,17 +1221,16 @@ ${getTranslation(lang, "confirmNewPIN")}
       // Update Profile submenu
       if (parts[1] === "2") {
         if (parts.length === 2) {
-          return `CON ${getTranslation(lang, "updateProfile")}
-1. ${getTranslation(lang, "changePhoneNumber")}
-2. ${getTranslation(lang, "updateLocation")}
-3. ${getTranslation(lang, "communicationPrefs")}
-0. ${getTranslation(lang, "back")}`;
+          addToHistory(session, "accountMenu");
+          return await showUpdateProfileMenu(lang);
         }
 
-        // Change Phone Number
+        // Change Phone Number - FIXED: Show current phone number
         if (parts[2] === "1") {
           if (parts.length === 3) {
+            addToHistory(session, "profileMenu");
             return `CON ${getTranslation(lang, "enterNewPhoneNumber")}
+${getTranslation(lang, "currentPhone")}: ${phoneNumber}
 0. ${getTranslation(lang, "back")}`;
           }
 
@@ -1101,175 +1285,75 @@ ${getTranslation(lang, "enterVerificationCode")}
         }
       }
 
-      // Farming Profile submenu
-      if (parts[1] === "3") {
+      // Change Language
+      if (parts[1] === "6") {
         if (parts.length === 2) {
-          return `CON ${getTranslation(lang, "farmingProfile")}
-1. ${getTranslation(lang, "primaryCrops")}
-2. ${getTranslation(lang, "farmInformation")}
-3. ${getTranslation(lang, "businessPreferences")}
-4. ${getTranslation(lang, "viewProfile")}
+          addToHistory(session, "accountMenu");
+          return `CON ${getTranslation(lang, "enterPasswordForLanguage")}
 0. ${getTranslation(lang, "back")}`;
         }
 
-        // View Farming Profile
-        if (parts[2] === "4") {
-          if (parts.length === 3) {
-            return `CON ${getTranslation(lang, "enterPINForProfile")}
+        if (parts.length === 3) {
+          const pin = parts[2];
+          if (pin === "0") {
+            return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "updateProfile")}
+3. ${getTranslation(lang, "farmingProfile")}
+4. ${getTranslation(lang, "earningsDashboard")}
+5. ${getTranslation(lang, "securitySettings")}
+6. ${getTranslation(lang, "changeLanguage")}
 0. ${getTranslation(lang, "back")}`;
           }
 
-          if (parts.length === 4) {
-            const pin = parts[3];
-            if (pin === "0") {
-              return await showFarmingProfileMenu(lang);
-            }
-
-            const pinValid = await verifyUserPin(phoneNumber, pin);
-            if (!pinValid) {
-              return `END ${getTranslation(lang, "incorrectPinProfile")}`;
-            }
-
-            const profile = await FarmingProfileService.getFarmingProfile(
-              phoneNumber
-            );
-            if (!profile) {
-              return `END ${getTranslation(lang, "profileNotFound")}`;
-            }
-
-            let response = `END ${getTranslation(
+          const pinValid = await verifyUserPin(phoneNumber, pin);
+          if (!pinValid.isValid) {
+            return `CON ${getTranslation(
               lang,
-              "farmingProfileDetails"
-            )}\n\n`;
-            response += `${getTranslation(lang, "farmSize")}: ${
-              profile.profile?.farmSize || "N/A"
-            }\n`;
-            response += `${getTranslation(lang, "experience")}: ${
-              profile.profile?.experienceYears || "N/A"
-            } years\n`;
-            response += `${getTranslation(lang, "cooperative")}: ${
-              profile.profile?.cooperativeMember ? "Yes" : "No"
-            }\n`;
-            response += `${getTranslation(lang, "primaryCropsCount")}: ${
-              profile.primaryCrops?.length || 0
-            }\n`;
+              pinValid.message || "incorrectPasswordLanguage"
+            )}
+${getTranslation(lang, "enterPasswordForLanguage")}
+0. ${getTranslation(lang, "back")}`;
+          }
 
-            return response.trim();
+          return showLanguageSelection(lang);
+        }
+
+        if (parts.length === 4) {
+          const langChoice = parts[3];
+          const languageMap: Record<string, "KINY" | "ENG" | "FRE"> = {
+            "1": "KINY",
+            "2": "ENG",
+            "3": "FRE",
+          };
+
+          const selectedLanguage = languageMap[langChoice];
+          if (selectedLanguage) {
+            await updateUserLanguage(phoneNumber, selectedLanguage);
+            delete ussdSessions[sessionId];
+            return `END ${getTranslation(selectedLanguage, "languageChanged")}`;
+          } else {
+            return showLanguageSelection(lang);
           }
         }
       }
 
-      // Earnings Dashboard
-      if (parts[1] === "4") {
-        if (parts.length === 2) {
-          return `CON ${getTranslation(lang, "earningsDashboard")}
-1. ${getTranslation(lang, "incomeSummary")}
-2. ${getTranslation(lang, "performanceMetrics")}
-3. ${getTranslation(lang, "comparisonAnalytics")}
-4. ${getTranslation(lang, "paymentHistory")}
+      return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "updateProfile")}
+3. ${getTranslation(lang, "farmingProfile")}
+4. ${getTranslation(lang, "earningsDashboard")}
+5. ${getTranslation(lang, "securitySettings")}
+6. ${getTranslation(lang, "changeLanguage")}
 0. ${getTranslation(lang, "back")}`;
-        }
-
-        // Income Summary
-        if (parts[2] === "1") {
-          if (parts.length === 3) {
-            return `CON ${getTranslation(lang, "enterPINForEarnings")}
-0. ${getTranslation(lang, "back")}`;
-          }
-
-          if (parts.length === 4) {
-            const pin = parts[3];
-            if (pin === "0") {
-              return await showEarningsDashboardMenu(lang);
-            }
-
-            const pinValid = await verifyUserPin(phoneNumber, pin);
-            if (!pinValid) {
-              return `END ${getTranslation(lang, "incorrectPinEarnings")}`;
-            }
-
-            const summary = await AnalyticsEarningsService.getIncomesSummary(
-              phoneNumber
-            );
-            if (!summary) {
-              return `END ${getTranslation(lang, "earningsDataNotAvailable")}`;
-            }
-
-            let response = `END ${getTranslation(
-              lang,
-              "incomeSummaryDetails"
-            )}\n\n`;
-            response += `${getTranslation(lang, "thisMonth")}: ${
-              summary.thisMonth
-            } RWF\n`;
-            response += `${getTranslation(lang, "lastMonth")}: ${
-              summary.lastMonth
-            } RWF\n`;
-            response += `${getTranslation(lang, "yearToDate")}: ${
-              summary.yearToDate
-            } RWF\n`;
-            response += `${getTranslation(
-              lang,
-              "avgPerSubmission"
-            )}: ${Math.round(summary.avgPerSubmission)} RWF\n`;
-
-            return response.trim();
-          }
-        }
-
-        // Performance Metrics
-        if (parts[2] === "2") {
-          if (parts.length === 3) {
-            return `CON ${getTranslation(lang, "enterPINForMetrics")}
-0. ${getTranslation(lang, "back")}`;
-          }
-
-          if (parts.length === 4) {
-            const pin = parts[3];
-            if (pin === "0") {
-              return await showEarningsDashboardMenu(lang);
-            }
-
-            const pinValid = await verifyUserPin(phoneNumber, pin);
-            if (!pinValid) {
-              return `END ${getTranslation(lang, "incorrectPinMetrics")}`;
-            }
-
-            const metrics =
-              await AnalyticsEarningsService.getPerformanceMetrics(phoneNumber);
-            if (!metrics) {
-              return `END ${getTranslation(lang, "metricsDataNotAvailable")}`;
-            }
-
-            let response = `END ${getTranslation(
-              lang,
-              "performanceMetricsDetails"
-            )}\n\n`;
-            response += `${getTranslation(
-              lang,
-              "acceptanceRate"
-            )}: ${Math.round(metrics.acceptanceRate)}%\n`;
-            response += `${getTranslation(lang, "avgPricePerKg")}: ${Math.round(
-              metrics.avgPrice
-            )} RWF\n`;
-
-            if (metrics.topProducts.length > 0) {
-              response += `${getTranslation(lang, "topProduct")}: ${
-                metrics.topProducts[0].productName
-              }\n`;
-            }
-
-            return response.trim();
-          }
-        }
-      }
     }
 
     // 4. Exit
     case "4":
       delete ussdSessions[sessionId];
       return `END ${getTranslation(lang, "exitMessage")}`;
-  }
 
-  return "END Invalid input. Try again.";
+    default:
+      return `END ${getTranslation(lang, "invalidSelection")}`;
+  }
 }

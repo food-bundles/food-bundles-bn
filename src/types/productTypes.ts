@@ -37,6 +37,7 @@ export interface ISessionData {
   password?: string;
   currentPinVerified?: boolean;
   newPhoneNumber?: string;
+  newPin?: string;
 
   // Product submission flow
   productPage?: number;
@@ -48,13 +49,22 @@ export interface ISessionData {
   quantity?: string;
   wishedPrice?: string;
 
+  // Support service data
+  supportTicket?: {
+    category?: string;
+    description?: string;
+    priority?: string;
+  };
+
   // Navigation history for back functionality
   previousSteps?: Array<{
     step: string;
     data?: any;
   }>;
-}
 
+  // Timestamp for session expiration
+  lastActivity?: Date;
+}
 export interface IUssdRequest {
   sessionId: string;
   serviceCode?: string;
@@ -253,7 +263,17 @@ export type TranslationKey =
   | "accessDenied"
   | "accountLocked"
   | "suspiciousActivity"
-  | "securityAlert";
+  | "securityAlert"
+  | "currentPhone"
+  | "noDataAvailable"
+  | "userNotFound"
+  | "pinVerificationFailed"
+  | "sessionExpiredPleaseRestart"
+  | "contactSupportForAssistance"
+  | "overall"
+  | "database"
+  | "sms"
+  | "payments";
 
 // Translation object with support for Kinyarwanda, English, and French
 
@@ -437,6 +457,16 @@ export const translations = {
     accountLocked: "Konti yafunzwe",
     suspiciousActivity: "Ibikorwa bya giteye amakenga",
     securityAlert: "Itangazo ry'umutekano",
+    currentPhone: "Telefoni y'ubu",
+    noDataAvailable: "Nta makuru ahari",
+    userNotFound: "Nta konti yashonje",
+    pinVerificationFailed: "Kugenzura PIN byanze",
+    sessionExpiredPleaseRestart: "Icyiciro cyarangije. Ongera utangire",
+    contactSupportForAssistance: "Hamagara ubufasha kuri +250796897823",
+    overall: "Ubusanzwe",
+    database: "Ububiko",
+    sms: "Ubutumwa",
+    payments: "Ubwishyu",
   },
   ENG: {
     welcome: "Welcome to FoodBundles!",
@@ -614,6 +644,16 @@ export const translations = {
     accessDenied: "Access denied",
     accountLocked: "Account locked",
     suspiciousActivity: "Suspicious activity",
+    currentPhone: "Current phone",
+    noDataAvailable: "No data available",
+    userNotFound: "Account not found",
+    pinVerificationFailed: "PIN verification failed",
+    sessionExpiredPleaseRestart: "Session expired. Please start again",
+    contactSupportForAssistance: "Contact support at +250796897823",
+    overall: "Overall",
+    database: "Database",
+    sms: "SMS",
+    payments: "Payments",
   },
   FRE: {
     welcome: "Bienvenue à FoodBundles!",
@@ -794,6 +834,16 @@ export const translations = {
     accountLocked: "Compte verrouillé",
     suspiciousActivity: "Activité suspecte",
     securityAlert: "Alerte de sécurité",
+    currentPhone: "Téléphone actuel",
+    noDataAvailable: "Aucune donnée disponible",
+    userNotFound: "Compte non trouvé",
+    pinVerificationFailed: "Échec de la vérification du PIN",
+    sessionExpiredPleaseRestart: "Session expirée. Veuillez recommencer",
+    contactSupportForAssistance: "Contactez le support au +250796897823",
+    overall: "Global",
+    database: "Base de données",
+    sms: "SMS",
+    payments: "Paiements",
   },
 };
 
