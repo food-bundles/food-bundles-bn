@@ -38,6 +38,7 @@ export interface ISessionData {
   currentPinVerified?: boolean;
   newPhoneNumber?: string;
   newPin?: string;
+  pinChangeStep?: string;
 
   // Product submission flow
   productPage?: number;
@@ -117,6 +118,7 @@ export type TranslationKey =
   | "incorrectPin"
   | "submissionSuccessful"
   | "submissionFailed"
+  | "submissionFetchFailed"
   | "checkSubmissions"
   | "lastThreeOrders"
   | "noOrders"
@@ -185,6 +187,29 @@ export type TranslationKey =
   | "notificationFrequency"
   | "locationUpdatedSuccessfully"
   | "locationUpdateFailed"
+  | "invalidInput"
+  | "techSupportDesc"
+  | "reportIssue"
+  | "checkStatus"
+  | "describeIssue"
+  | "issueReportedSuccess"
+  | "issueReportFailed"
+  | "statusCheckFailed"
+  | "faqFetchFailed"
+  | "recentSubmissions"
+  | "status"
+  | "hectares"
+  | "years"
+  | "preferredBuyers"
+  | "profileFetchFailed"
+  | "totalEarnings"
+  | "monthlyAverage"
+  | "transactions"
+  | "incomeFetchFailed"
+  | "activityFetchFailed"
+  | "languageChangeFailed"
+  | "pinsDoNotMatch"
+  | "pinChangedSuccess"
   | "farmingProfile"
   | "primaryCrops"
   | "farmInformation"
@@ -306,7 +331,8 @@ export const translations = {
     invalidPrice: "Andika igiciro cyemewe. Ongera ugerageze.",
     incorrectPin: "PIN y'imibare itari yo. Ongera ugerageze.",
     submissionSuccessful: "Kwohererza byagenze neza. Urakoze!",
-    submissionFailed: "Kwohererza byanze. Ongera ugerageze.",
+    submissionFailed: "Kwoherereza byanze. Ongera ugerageze.",
+    submissionFetchFailed: "Kureba umusaruro byanze. Ongera ugerageze.",
     checkSubmissions: "Reba ibyohererejwe",
     lastThreeOrders: "Imisaruro 3 y'ubucuruzi iheruka:",
     noOrders: "Nta makuru y'ubucuruzi ufite.",
@@ -378,6 +404,29 @@ export const translations = {
     notificationFrequency: "Uko ubona ubutumwa",
     locationUpdatedSuccessfully: "Aho ubarizwa byahinduwe neza!",
     locationUpdateFailed: "GuhismsNndura aho ubarizwa byanze.",
+    invalidInput: "Andika ibisobanuro byemewe.",
+    techSupportDesc: "Ubufasha bwa tekinike",
+    reportIssue: "Tangaza ikibazo",
+    checkStatus: "Reba uko sisitemu imeze",
+    describeIssue: "Sobanura ikibazo cyawe:",
+    issueReportedSuccess: "Ikibazo cyawe cyoherejwe neza!",
+    issueReportFailed: "Kwohereza ikibazo byanze. Ongera ugerageze.",
+    statusCheckFailed: "Kureba uko sisitemu imeze byanze.",
+    faqFetchFailed: "Kubaza ibibazo byanze.",
+    recentSubmissions: "Ibicuruzwa byohererejwe vuba aha:",
+    status: "Imimerere",
+    hectares: "hekari",
+    years: "imyaka",
+    preferredBuyers: "Abaguzi bakunda",
+    profileFetchFailed: "Kureba umwirondoro byanze.",
+    totalEarnings: "Amafaranga yose yakiriwe",
+    monthlyAverage: "Ikigereranyo cy'amezi",
+    transactions: "Imicungiranyo",
+    incomeFetchFailed: "Kureba amafaranga yakiriwe byanze.",
+    activityFetchFailed: "Kureba ibikorwa byanze.",
+    languageChangeFailed: "Guhindura ururimi byanze.",
+    pinsDoNotMatch: "PIN ntabwo zihuye. Ongera ugerageze.",
+    pinChangedSuccess: "PIN yawe yahinduwe neza!",
     farmingProfile: "Umwirondoro w'ubuhinzi",
     primaryCrops: "Ibihingwa by'ibanze",
     farmInformation: "Amakuru y'umurima",
@@ -497,6 +546,8 @@ export const translations = {
     incorrectPin: "Incorrect PIN. Please try again.",
     submissionSuccessful: "Submission successful. Thank you!",
     submissionFailed: "Submission failed. Try again.",
+    submissionFetchFailed:
+      "Failed to fetch submissions. Please try again later.",
     checkSubmissions: "Check Submissions",
     lastThreeOrders: "Last 3 orders:",
     noOrders: "You have no order history.",
@@ -565,6 +616,29 @@ export const translations = {
     smsNotifications: "SMS Notifications",
     notificationFrequency: "Notification Frequency",
     locationUpdateFailed: "Location update failed.",
+    invalidInput: "Please enter valid input.",
+    techSupportDesc: "Technical support",
+    reportIssue: "Report issue",
+    checkStatus: "Check system status",
+    describeIssue: "Describe your issue:",
+    issueReportedSuccess: "Your issue has been reported successfully!",
+    issueReportFailed: "Failed to report issue. Please try again.",
+    statusCheckFailed: "Failed to check system status.",
+    faqFetchFailed: "Failed to fetch FAQs.",
+    recentSubmissions: "Recent submissions:",
+    status: "Status",
+    hectares: "hectares",
+    years: "years",
+    preferredBuyers: "Preferred buyers",
+    profileFetchFailed: "Failed to fetch profile.",
+    totalEarnings: "Total earnings",
+    monthlyAverage: "Monthly average",
+    transactions: "Transactions",
+    incomeFetchFailed: "Failed to fetch income data.",
+    activityFetchFailed: "Failed to fetch activities.",
+    languageChangeFailed: "Failed to change language.",
+    pinsDoNotMatch: "PINs do not match. Please try again.",
+    pinChangedSuccess: "PIN changed successfully!",
     farmingProfile: "Farming Profile",
     primaryCrops: "Primary Crops",
     farmInformation: "Farm Information",
@@ -686,6 +760,7 @@ export const translations = {
     incorrectPin: "PIN incorrect. Veuillez réessayer.",
     submissionSuccessful: "Soumission réussie. Merci!",
     submissionFailed: "Échec de la soumission. Réessayer.",
+    submissionFetchFailed: "Échec de la récupération des soumissions.",
     checkSubmissions: "Vérifier les soumissions",
     lastThreeOrders: "Les 3 dernières commandes:",
     noOrders: "Vous n'avez aucun historique de commande.",
@@ -753,6 +828,29 @@ export const translations = {
     phoneUpdateFailed: "Échec de la mise à jour du numéro.",
     locationUpdatedSuccessfully: "Emplacement mis à jour avec succès!",
     locationUpdateFailed: "Échec de la mise à jour de l'emplacement.",
+    invalidInput: "Veuillez entrer une entrée valide.",
+    techSupportDesc: "Support technique",
+    reportIssue: "Signaler un problème",
+    checkStatus: "Vérifier le statut du système",
+    describeIssue: "Décrivez votre problème:",
+    issueReportedSuccess: "Votre problème a été signalé avec succès!",
+    issueReportFailed: "Échec du signalement du problème. Veuillez réessayer.",
+    statusCheckFailed: "Échec de la vérification du statut du système.",
+    faqFetchFailed: "Échec de la récupération des FAQ.",
+    recentSubmissions: "Soumissions récentes:",
+    status: "Statut",
+    hectares: "hectares",
+    years: "ans",
+    preferredBuyers: "Acheteurs préférés",
+    profileFetchFailed: "Échec de la récupération du profil.",
+    totalEarnings: "Gains totaux",
+    monthlyAverage: "Moyenne mensuelle",
+    transactions: "Transactions",
+    incomeFetchFailed: "Échec de la récupération des données de revenus.",
+    activityFetchFailed: "Échec de la récupération des activités.",
+    languageChangeFailed: "Échec du changement de langue.",
+    pinsDoNotMatch: "Les PIN ne correspondent pas. Veuillez réessayer.",
+    pinChangedSuccess: "PIN changé avec succès!",
     smsNotifications: "Notifications SMS",
     notificationFrequency: "Fréquence des notifications",
     farmingProfile: "Profil agricole",
