@@ -107,10 +107,11 @@ export class FarmingProfileService {
     }
   }
 
-  static async getFarmingProfile(phoneNumber: string): Promise<any | null> {
+  static async getFarmingProfile(farmerId: string): Promise<any | null> {
+    console.log("Fetching farming profile for id:", farmerId);
     try {
       const farmer = await prisma.farmer.findUnique({
-        where: { phone: phoneNumber },
+        where: { id: farmerId },
         include: {
           FarmerProfile: true,
           FarmerPrimaryCrop: {

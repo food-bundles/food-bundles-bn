@@ -34,11 +34,10 @@ async function getUserLanguage(
       select: { preferredLanguage: true },
     });
 
-    // Return saved language or default to KINY
     return (farmer?.preferredLanguage as "KINY" | "ENG" | "FRE") || "KINY";
   } catch (error) {
     console.error("Error fetching user language:", error);
-    return "KINY"; // Default fallback
+    return "KINY";
   }
 }
 
@@ -132,10 +131,9 @@ function buildLocationMenu(
     menu += `${itemNumber}. ${item}\n`;
   });
 
-  // Add navigation options with special handling
+  // Add navigation options
   let navOptions: string[] = [];
 
-  // Add pagination options only if needed
   if (paginated.hasPrev) {
     navOptions.push(`98. ${getTranslation(lang, "previous")}`);
   }
@@ -143,7 +141,6 @@ function buildLocationMenu(
     navOptions.push(`99. ${getTranslation(lang, "next")}`);
   }
 
-  // Add back option
   if (backOption) {
     navOptions.push(`0. ${getTranslation(lang, "back")}`);
   }
@@ -177,344 +174,47 @@ function showLanguageSelection(lang: "KINY" | "ENG" | "FRE" = "KINY"): string {
 3. Français`;
 }
 
-// Handle registration flow
-async function handleRegistration(
-  parts: string[],
+// Helper function to handle back navigation
+function handleBackNavigation(
   session: ISessionData,
-  lang: "KINY" | "ENG" | "FRE",
-  phoneNumber: string,
-  sessionId: string
-): Promise<string> {
-  console.log(
-    `Registration flow - Step: ${session.locationStep}, Parts: ${JSON.stringify(
-      parts
-    )}`
-  );
-
-  const currentInput = parts[parts.length - 1];
-
-  // Handle province selection
-  if (session.locationStep === "province") {
-    const provinces = LocationValidationService.getAllProvinces();
-
-    if (currentInput === "99") {
-      // Next page
-      session.locationPage = (session.locationPage || 1) + 1;
-      return buildLocationMenu(
-        provinces,
-        session.locationPage,
-        "selectProvince",
-        lang,
-        false
-      );
-    }
-
-    if (currentInput === "98") {
-      // Previous page
-      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
-      return buildLocationMenu(
-        provinces,
-        session.locationPage,
-        "selectProvince",
-        lang,
-        false
-      );
-    }
-
-    // Handle province selection
-    const provinceIndex = parseInt(currentInput) - 1;
-    if (provinceIndex >= 0 && provinceIndex < provinces.length) {
-      session.selectedProvince = provinces[provinceIndex];
-      session.locationStep = "district";
-      session.locationPage = 1;
-
-      const districts = LocationValidationService.getDistrictsByProvince(
-        session.selectedProvince
-      );
-      return buildLocationMenu(districts, 1, "selectDistrict", lang, false);
-    }
-
-    return buildLocationMenu(
-      provinces,
-      session.locationPage || 1,
-      "selectProvince",
-      lang,
-      false
-    );
+  lang: "KINY" | "ENG" | "FRE"
+): string {
+  if (!session.previousSteps || session.previousSteps.length === 0) {
+    // Return to main menu if no history
+    return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "submitProduct")}
+2. ${getTranslation(lang, "help")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "exit")}`;
   }
 
-  // Handle district selection
-  if (session.locationStep === "district") {
-    const districts = LocationValidationService.getDistrictsByProvince(
-      session.selectedProvince!
-    );
+  const previousStep = session.previousSteps.pop();
 
-    if (currentInput === "99") {
-      session.locationPage = (session.locationPage || 1) + 1;
-      return buildLocationMenu(
-        districts,
-        session.locationPage,
-        "selectDistrict",
-        lang,
-        false
-      );
-    }
+  switch (previousStep?.step) {
+    case "mainMenu":
+      return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "submitProduct")}
+2. ${getTranslation(lang, "help")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "exit")}`;
 
-    if (currentInput === "98") {
-      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
-      return buildLocationMenu(
-        districts,
-        session.locationPage,
-        "selectDistrict",
-        lang,
-        false
-      );
-    }
+    case "accountMenu":
+      return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "updateProfile")}
+3. ${getTranslation(lang, "farmingProfile")}
+4. ${getTranslation(lang, "earningsDashboard")}
+5. ${getTranslation(lang, "securitySettings")}
+6. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}`;
 
-    const districtIndex = parseInt(currentInput) - 1;
-    if (districtIndex >= 0 && districtIndex < districts.length) {
-      session.selectedDistrict = districts[districtIndex];
-      session.locationStep = "sector";
-      session.locationPage = 1;
-
-      const sectors = LocationValidationService.getSectorsByDistrict(
-        session.selectedProvince!,
-        session.selectedDistrict
-      );
-      return buildLocationMenu(sectors, 1, "selectSector", lang, false);
-    }
-
-    return buildLocationMenu(
-      districts,
-      session.locationPage || 1,
-      "selectDistrict",
-      lang,
-      false
-    );
+    default:
+      return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "submitProduct")}
+2. ${getTranslation(lang, "help")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "exit")}`;
   }
-
-  // Handle sector selection
-  if (session.locationStep === "sector") {
-    const sectors = LocationValidationService.getSectorsByDistrict(
-      session.selectedProvince!,
-      session.selectedDistrict!
-    );
-
-    if (currentInput === "99") {
-      session.locationPage = (session.locationPage || 1) + 1;
-      return buildLocationMenu(
-        sectors,
-        session.locationPage,
-        "selectSector",
-        lang,
-        false
-      );
-    }
-
-    if (currentInput === "98") {
-      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
-      return buildLocationMenu(
-        sectors,
-        session.locationPage,
-        "selectSector",
-        lang,
-        false
-      );
-    }
-
-    const sectorIndex = parseInt(currentInput) - 1;
-    if (sectorIndex >= 0 && sectorIndex < sectors.length) {
-      session.selectedSector = sectors[sectorIndex];
-      session.locationStep = "cell";
-      session.locationPage = 1;
-
-      const cells = LocationValidationService.getCellsBySector(
-        session.selectedProvince!,
-        session.selectedDistrict!,
-        session.selectedSector
-      );
-      return buildLocationMenu(cells, 1, "selectCell", lang, false);
-    }
-
-    return buildLocationMenu(
-      sectors,
-      session.locationPage || 1,
-      "selectSector",
-      lang,
-      false
-    );
-  }
-
-  // Handle cell selection
-  if (session.locationStep === "cell") {
-    const cells = LocationValidationService.getCellsBySector(
-      session.selectedProvince!,
-      session.selectedDistrict!,
-      session.selectedSector!
-    );
-
-    if (currentInput === "99") {
-      session.locationPage = (session.locationPage || 1) + 1;
-      return buildLocationMenu(
-        cells,
-        session.locationPage,
-        "selectCell",
-        lang,
-        false
-      );
-    }
-
-    if (currentInput === "98") {
-      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
-      return buildLocationMenu(
-        cells,
-        session.locationPage,
-        "selectCell",
-        lang,
-        false
-      );
-    }
-
-    const cellIndex = parseInt(currentInput) - 1;
-    if (cellIndex >= 0 && cellIndex < cells.length) {
-      session.selectedCell = cells[cellIndex];
-      session.locationStep = "village";
-      session.locationPage = 1;
-
-      const villages = LocationValidationService.getVillagesByCell(
-        session.selectedProvince!,
-        session.selectedDistrict!,
-        session.selectedSector!,
-        session.selectedCell
-      );
-      return buildLocationMenu(villages, 1, "selectVillage", lang, false);
-    }
-
-    return buildLocationMenu(
-      cells,
-      session.locationPage || 1,
-      "selectCell",
-      lang,
-      false
-    );
-  }
-
-  // Handle village selection
-  if (session.locationStep === "village") {
-    const villages = LocationValidationService.getVillagesByCell(
-      session.selectedProvince!,
-      session.selectedDistrict!,
-      session.selectedSector!,
-      session.selectedCell!
-    );
-
-    if (currentInput === "99") {
-      session.locationPage = (session.locationPage || 1) + 1;
-      return buildLocationMenu(
-        villages,
-        session.locationPage,
-        "selectVillage",
-        lang,
-        false
-      );
-    }
-
-    if (currentInput === "98") {
-      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
-      return buildLocationMenu(
-        villages,
-        session.locationPage,
-        "selectVillage",
-        lang,
-        false
-      );
-    }
-
-    const villageIndex = parseInt(currentInput) - 1;
-    if (villageIndex >= 0 && villageIndex < villages.length) {
-      session.selectedVillage = villages[villageIndex];
-      session.locationStep = "confirm_pin";
-
-      return `CON ${getTranslation(lang, "createPin")}`;
-    }
-
-    return buildLocationMenu(
-      villages,
-      session.locationPage || 1,
-      "selectVillage",
-      lang,
-      false
-    );
-  }
-
-  // Handle PIN creation
-  if (session.locationStep === "confirm_pin") {
-    if (!session.password) {
-      // First PIN entry
-      const pin = currentInput;
-      if (!/^\d{4}$/.test(pin)) {
-        return `CON ${getTranslation(lang, "invalidPin")}
-        
-${getTranslation(lang, "createPin")}`;
-      }
-
-      session.password = pin;
-      return `CON ${getTranslation(lang, "confirmPin")}`;
-    } else {
-      // PIN confirmation
-      const confirmPin = currentInput;
-
-      if (confirmPin !== session.password) {
-        delete session.password;
-        return `CON ${getTranslation(lang, "pinMismatch")}
-        
-${getTranslation(lang, "createPin")}`;
-      }
-
-      // Register the user
-      try {
-        const hashedPin = await hashPassword(session.password);
-
-        await prisma.farmer.create({
-          data: {
-            phone: phoneNumber,
-            password: hashedPin,
-            province: session.selectedProvince!,
-            district: session.selectedDistrict!,
-            sector: session.selectedSector!,
-            cell: session.selectedCell!,
-            village: session.selectedVillage!,
-            preferredLanguage: session.language!,
-          },
-        });
-
-        delete ussdSessions[sessionId];
-        return `END ${getTranslation(lang, "registrationSuccessful")}`;
-      } catch (error) {
-        console.error("Registration error:", error);
-        delete ussdSessions[sessionId];
-        return `END ${getTranslation(lang, "registrationFailed")}`;
-      }
-    }
-  }
-
-  return `END ${getTranslation(lang, "invalidInput")}`;
-}
-
-// Session cleanup function
-function cleanupExpiredSessions() {
-  const now = new Date();
-  const sessionTimeout = 15 * 60 * 1000; // 15 minutes
-
-  Object.keys(ussdSessions).forEach((sessionId) => {
-    const session = ussdSessions[sessionId];
-    if (
-      session.lastActivity &&
-      now.getTime() - session.lastActivity.getTime() > sessionTimeout
-    ) {
-      delete ussdSessions[sessionId];
-    }
-  });
 }
 
 // Build product category menu
@@ -584,6 +284,498 @@ async function verifyUserPin(
   }
 }
 
+// Handle registration flow with improved back navigation
+async function handleRegistration(
+  parts: string[],
+  session: ISessionData,
+  lang: "KINY" | "ENG" | "FRE",
+  phoneNumber: string,
+  sessionId: string
+): Promise<string> {
+  console.log(
+    `Registration flow - Step: ${session.locationStep}, Parts: ${JSON.stringify(
+      parts
+    )}`
+  );
+
+  const currentInput = parts[parts.length - 1];
+
+  // Handle province selection
+  if (session.locationStep === "province") {
+    const provinces = LocationValidationService.getAllProvinces();
+
+    if (currentInput === "99") {
+      session.locationPage = (session.locationPage || 1) + 1;
+      return buildLocationMenu(
+        provinces,
+        session.locationPage,
+        "selectProvince",
+        lang,
+        false
+      );
+    }
+
+    if (currentInput === "98") {
+      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
+      return buildLocationMenu(
+        provinces,
+        session.locationPage,
+        "selectProvince",
+        lang,
+        false
+      );
+    }
+
+    const provinceIndex = parseInt(currentInput) - 1;
+    if (provinceIndex >= 0 && provinceIndex < provinces.length) {
+      session.selectedProvince = provinces[provinceIndex];
+      session.locationStep = "district";
+      session.locationPage = 1;
+
+      const districts = LocationValidationService.getDistrictsByProvince(
+        session.selectedProvince
+      );
+      return buildLocationMenu(districts, 1, "selectDistrict", lang, true);
+    }
+
+    return buildLocationMenu(
+      provinces,
+      session.locationPage || 1,
+      "selectProvince",
+      lang,
+      false
+    );
+  }
+
+  // Handle district selection
+  if (session.locationStep === "district") {
+    const districts = LocationValidationService.getDistrictsByProvince(
+      session.selectedProvince!
+    );
+
+    if (currentInput === "0") {
+      session.locationStep = "province";
+      session.locationPage = 1;
+      const provinces = LocationValidationService.getAllProvinces();
+      return buildLocationMenu(provinces, 1, "selectProvince", lang, false);
+    }
+
+    if (currentInput === "99") {
+      session.locationPage = (session.locationPage || 1) + 1;
+      return buildLocationMenu(
+        districts,
+        session.locationPage,
+        "selectDistrict",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "98") {
+      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
+      return buildLocationMenu(
+        districts,
+        session.locationPage,
+        "selectDistrict",
+        lang,
+        true
+      );
+    }
+
+    const districtIndex = parseInt(currentInput) - 1;
+    if (districtIndex >= 0 && districtIndex < districts.length) {
+      session.selectedDistrict = districts[districtIndex];
+      session.locationStep = "sector";
+      session.locationPage = 1;
+
+      const sectors = LocationValidationService.getSectorsByDistrict(
+        session.selectedProvince!,
+        session.selectedDistrict
+      );
+      return buildLocationMenu(sectors, 1, "selectSector", lang, true);
+    }
+
+    return buildLocationMenu(
+      districts,
+      session.locationPage || 1,
+      "selectDistrict",
+      lang,
+      true
+    );
+  }
+
+  // Handle sector selection
+  if (session.locationStep === "sector") {
+    const sectors = LocationValidationService.getSectorsByDistrict(
+      session.selectedProvince!,
+      session.selectedDistrict!
+    );
+
+    if (currentInput === "0") {
+      session.locationStep = "district";
+      session.locationPage = 1;
+      const districts = LocationValidationService.getDistrictsByProvince(
+        session.selectedProvince!
+      );
+      return buildLocationMenu(districts, 1, "selectDistrict", lang, true);
+    }
+
+    if (currentInput === "99") {
+      session.locationPage = (session.locationPage || 1) + 1;
+      return buildLocationMenu(
+        sectors,
+        session.locationPage,
+        "selectSector",
+        lang,
+        false
+      );
+    }
+
+    if (currentInput === "98") {
+      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
+      return buildLocationMenu(
+        sectors,
+        session.locationPage,
+        "selectSector",
+        lang,
+        false
+      );
+    }
+
+    const sectorIndex = parseInt(currentInput) - 1;
+    if (sectorIndex >= 0 && sectorIndex < sectors.length) {
+      session.selectedSector = sectors[sectorIndex];
+      session.locationStep = "cell";
+      session.locationPage = 1;
+
+      const cells = LocationValidationService.getCellsBySector(
+        session.selectedProvince!,
+        session.selectedDistrict!,
+        session.selectedSector
+      );
+      return buildLocationMenu(cells, 1, "selectCell", lang, false);
+    }
+
+    return buildLocationMenu(
+      sectors,
+      session.locationPage || 1,
+      "selectSector",
+      lang,
+      false
+    );
+  }
+
+  // Handle cell selection
+  if (session.locationStep === "cell") {
+    const cells = LocationValidationService.getCellsBySector(
+      session.selectedProvince!,
+      session.selectedDistrict!,
+      session.selectedSector!
+    );
+
+    if (currentInput === "0") {
+      session.locationStep = "sector";
+      session.locationPage = 1;
+      const sectors = LocationValidationService.getSectorsByDistrict(
+        session.selectedProvince!,
+        session.selectedDistrict!
+      );
+      return buildLocationMenu(sectors, 1, "selectSector", lang, false);
+    }
+
+    if (currentInput === "99") {
+      session.locationPage = (session.locationPage || 1) + 1;
+      return buildLocationMenu(
+        cells,
+        session.locationPage,
+        "selectCell",
+        lang,
+        false
+      );
+    }
+
+    if (currentInput === "98") {
+      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
+      return buildLocationMenu(
+        cells,
+        session.locationPage,
+        "selectCell",
+        lang,
+        false
+      );
+    }
+
+    const cellIndex = parseInt(currentInput) - 1;
+    if (cellIndex >= 0 && cellIndex < cells.length) {
+      session.selectedCell = cells[cellIndex];
+      session.locationStep = "village";
+      session.locationPage = 1;
+
+      const villages = LocationValidationService.getVillagesByCell(
+        session.selectedProvince!,
+        session.selectedDistrict!,
+        session.selectedSector!,
+        session.selectedCell
+      );
+      return buildLocationMenu(villages, 1, "selectVillage", lang, false);
+    }
+
+    return buildLocationMenu(
+      cells,
+      session.locationPage || 1,
+      "selectCell",
+      lang,
+      false
+    );
+  }
+
+  // Handle village selection
+  if (session.locationStep === "village") {
+    const villages = LocationValidationService.getVillagesByCell(
+      session.selectedProvince!,
+      session.selectedDistrict!,
+      session.selectedSector!,
+      session.selectedCell!
+    );
+
+    if (currentInput === "0") {
+      session.locationStep = "cell";
+      session.locationPage = 1;
+      const cells = LocationValidationService.getCellsBySector(
+        session.selectedProvince!,
+        session.selectedDistrict!,
+        session.selectedSector!
+      );
+      return buildLocationMenu(cells, 1, "selectCell", lang, false);
+    }
+
+    if (currentInput === "99") {
+      session.locationPage = (session.locationPage || 1) + 1;
+      return buildLocationMenu(
+        villages,
+        session.locationPage,
+        "selectVillage",
+        lang,
+        false
+      );
+    }
+
+    if (currentInput === "98") {
+      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
+      return buildLocationMenu(
+        villages,
+        session.locationPage,
+        "selectVillage",
+        lang,
+        false
+      );
+    }
+
+    const villageIndex = parseInt(currentInput) - 1;
+    if (villageIndex >= 0 && villageIndex < villages.length) {
+      session.selectedVillage = villages[villageIndex];
+      session.locationStep = "confirm_pin";
+
+      return `CON ${getTranslation(lang, "createPin")}`;
+    }
+
+    return buildLocationMenu(
+      villages,
+      session.locationPage || 1,
+      "selectVillage",
+      lang,
+      false
+    );
+  }
+
+  // Handle PIN creation
+  if (session.locationStep === "confirm_pin") {
+    if (currentInput === "0") {
+      session.locationStep = "village";
+      session.locationPage = 1;
+      const villages = LocationValidationService.getVillagesByCell(
+        session.selectedProvince!,
+        session.selectedDistrict!,
+        session.selectedSector!,
+        session.selectedCell!
+      );
+      return buildLocationMenu(villages, 1, "selectVillage", lang, false);
+    }
+
+    if (!session.password) {
+      // First PIN entry
+      const pin = currentInput;
+      if (!/^\d{4}$/.test(pin)) {
+        return `CON ${getTranslation(lang, "invalidPin")}
+        
+${getTranslation(lang, "createPin")}`;
+      }
+
+      session.password = pin;
+      return `CON ${getTranslation(lang, "confirmPin")}`;
+    } else {
+      // PIN confirmation
+      const confirmPin = currentInput;
+
+      if (confirmPin !== session.password) {
+        delete session.password;
+        return `CON ${getTranslation(lang, "pinMismatch")}
+        
+${getTranslation(lang, "createPin")}`;
+      }
+
+      // Register the user
+      try {
+        const hashedPin = await hashPassword(session.password);
+
+        await prisma.farmer.create({
+          data: {
+            phone: phoneNumber,
+            password: hashedPin,
+            province: session.selectedProvince!,
+            district: session.selectedDistrict!,
+            sector: session.selectedSector!,
+            cell: session.selectedCell!,
+            village: session.selectedVillage!,
+            preferredLanguage: session.language!,
+          },
+        });
+
+        delete ussdSessions[sessionId];
+        return `END ${getTranslation(lang, "registrationSuccessful")}`;
+      } catch (error) {
+        console.error("Registration error:", error);
+        delete ussdSessions[sessionId];
+        return `END ${getTranslation(lang, "registrationFailed")}`;
+      }
+    }
+  }
+
+  return `END ${getTranslation(lang, "invalidInput")}`;
+}
+
+// Enhanced system status check with proper error handling
+async function getSystemStatus(lang: "KINY" | "ENG" | "FRE"): Promise<string> {
+  try {
+    const status = await SupportService.getSystemStatus();
+
+    if (typeof status === "object" && status !== null) {
+      return `System Status: ${status.overall || "Unknown"}
+Database: ${status.database || "Unknown"}
+SMS: ${status.sms || "Unknown"}
+Payments: ${status.payments || "Unknown"}
+Last Updated: ${new Date().toLocaleString()}`;
+    }
+
+    return `System Status: Operational
+All services are running normally.
+Last checked: ${new Date().toLocaleString()}`;
+  } catch (error) {
+    console.error("Error getting system status:", error);
+    return `System Status: Error
+Unable to retrieve system status at this time.
+Please try again later.`;
+  }
+}
+
+// Enhanced FAQ handling with proper structure
+async function getFAQContent(
+  lang: "KINY" | "ENG" | "FRE",
+  faqIndex?: number
+): Promise<string> {
+  try {
+    const faqs = SupportService.getFAQs(lang);
+
+    if (faqIndex !== undefined && faqIndex >= 0 && faqIndex < faqs.length) {
+      const faq = faqs[faqIndex];
+      return `END ${faq.question}
+
+${faq.answer}`;
+    }
+
+    let response = `CON ${getTranslation(lang, "faqSection")}\n\n`;
+    faqs.slice(0, 5).forEach((faq, index) => {
+      response += `${index + 1}. ${faq.question}\n`;
+    });
+    response += `\n0. ${getTranslation(lang, "back")}`;
+
+    return response;
+  } catch (error) {
+    console.error("Error fetching FAQs:", error);
+    return `END ${getTranslation(lang, "faqFetchFailed")}`;
+  }
+}
+
+// Enhanced income summary with null checking
+async function getIncomeSummaryDisplay(
+  phoneNumber: string,
+  lang: "KINY" | "ENG" | "FRE"
+): Promise<string> {
+  try {
+    const summary = await AnalyticsEarningsService.getIncomesSummary(
+      phoneNumber
+    );
+
+    if (!summary) {
+      return `END ${getTranslation(lang, "noIncomeData")}
+${getTranslation(lang, "submitProductsFirst")}`;
+    }
+
+    let response = `END ${getTranslation(lang, "incomeSummary")}\n\n`;
+    response += `${getTranslation(lang, "thisMonth")}: ${
+      summary.thisMonth || 0
+    } RWF\n`;
+    response += `${getTranslation(lang, "lastMonth")}: ${
+      summary.lastMonth || 0
+    } RWF\n`;
+    response += `${getTranslation(lang, "yearToDate")}: ${
+      summary.yearToDate || 0
+    } RWF\n`;
+    response += `${getTranslation(lang, "avgPerSubmission")}: ${
+      summary.avgPerSubmission || 0
+    } RWF`;
+
+    return response;
+  } catch (error) {
+    console.error("Error fetching income summary:", error);
+    return `END ${getTranslation(lang, "incomeFetchFailed")}
+${getTranslation(lang, "tryAgainLater")}`;
+  }
+}
+
+// Session cleanup function with improved timeout handling
+function cleanupExpiredSessions() {
+  const now = new Date();
+  const sessionTimeout = 15 * 60 * 1000; // 15 minutes
+
+  Object.keys(ussdSessions).forEach((sessionId) => {
+    const session = ussdSessions[sessionId];
+    if (
+      session.lastActivity &&
+      now.getTime() - session.lastActivity.getTime() > sessionTimeout
+    ) {
+      delete ussdSessions[sessionId];
+      console.log(`Cleaned up expired session: ${sessionId}`);
+    }
+  });
+}
+
+// Enhanced error handling for session management
+function getOrCreateSession(sessionId: string): ISessionData {
+  let session = ussdSessions[sessionId];
+  if (!session) {
+    session = {
+      language: "KINY",
+      previousSteps: [],
+      lastActivity: new Date(),
+    };
+    ussdSessions[sessionId] = session;
+  } else {
+    session.lastActivity = new Date();
+  }
+  return session;
+}
+
 // Helper functions for the various sub-menus
 async function showSecurityMenu(lang: "KINY" | "ENG" | "FRE"): Promise<string> {
   return `CON ${getTranslation(lang, "securitySettings")}
@@ -626,350 +818,34 @@ async function showEarningsDashboardMenu(
 0. ${getTranslation(lang, "back")}`;
 }
 
-async function handleLocationUpdate(
-  parts: string[],
-  session: ISessionData,
-  lang: "KINY" | "ENG" | "FRE",
-  phoneNumber: string,
-  sessionId: string
-): Promise<string> {
-  if (parts.length === 3) {
-    session.locationStep = "province";
-    session.locationPage = 1;
-    const provinces = LocationValidationService.getAllProvinces();
-    return buildLocationMenu(provinces, 1, "selectProvince", lang);
-  }
-
-  const currentInput = parts[parts.length - 1];
-
-  // Handle province selection
-  if (session.locationStep === "province") {
-    const provinces = LocationValidationService.getAllProvinces();
-    const navigation = handlePaginationNavigation(
-      parts,
-      session,
-      provinces,
-      "province"
-    );
-
-    if (navigation.action === "next") {
-      session.locationPage = (session.locationPage || 1) + 1;
-      return buildLocationMenu(
-        provinces,
-        session.locationPage,
-        "selectProvince",
-        lang
-      );
-    }
-
-    if (navigation.action === "prev") {
-      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
-      return buildLocationMenu(
-        provinces,
-        session.locationPage,
-        "selectProvince",
-        lang
-      );
-    }
-
-    if (navigation.action === "back") {
-      return await showUpdateProfileMenu(lang);
-    }
-
-    if (
-      navigation.action === "select" &&
-      navigation.selectedIndex !== undefined
-    ) {
-      session.selectedProvince = provinces[navigation.selectedIndex];
-      session.locationStep = "district";
-      session.locationPage = 1;
-
-      const districts = LocationValidationService.getDistrictsByProvince(
-        session.selectedProvince
-      );
-      return buildLocationMenu(districts, 1, "selectDistrict", lang);
-    }
-  }
-
-  // Handle district selection
-  if (session.locationStep === "district") {
-    const districts = LocationValidationService.getDistrictsByProvince(
-      session.selectedProvince!
-    );
-    const navigation = handlePaginationNavigation(
-      parts,
-      session,
-      districts,
-      "district"
-    );
-
-    if (navigation.action === "next") {
-      session.locationPage = (session.locationPage || 1) + 1;
-      return buildLocationMenu(
-        districts,
-        session.locationPage,
-        "selectDistrict",
-        lang
-      );
-    }
-
-    if (navigation.action === "prev") {
-      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
-      return buildLocationMenu(
-        districts,
-        session.locationPage,
-        "selectDistrict",
-        lang
-      );
-    }
-
-    if (navigation.action === "back") {
-      session.locationStep = "province";
-      session.locationPage = 1;
-      const provinces = LocationValidationService.getAllProvinces();
-      return buildLocationMenu(provinces, 1, "selectProvince", lang);
-    }
-
-    if (
-      navigation.action === "select" &&
-      navigation.selectedIndex !== undefined
-    ) {
-      session.selectedDistrict = districts[navigation.selectedIndex];
-      session.locationStep = "sector";
-      session.locationPage = 1;
-
-      const sectors = LocationValidationService.getSectorsByDistrict(
-        session.selectedProvince!,
-        session.selectedDistrict
-      );
-      return buildLocationMenu(sectors, 1, "selectSector", lang);
-    }
-  }
-
-  // Handle sector selection
-  if (session.locationStep === "sector") {
-    const sectors = LocationValidationService.getSectorsByDistrict(
-      session.selectedProvince!,
-      session.selectedDistrict!
-    );
-    const navigation = handlePaginationNavigation(
-      parts,
-      session,
-      sectors,
-      "sector"
-    );
-
-    if (navigation.action === "next") {
-      session.locationPage = (session.locationPage || 1) + 1;
-      return buildLocationMenu(
-        sectors,
-        session.locationPage,
-        "selectSector",
-        lang
-      );
-    }
-
-    if (navigation.action === "prev") {
-      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
-      return buildLocationMenu(
-        sectors,
-        session.locationPage,
-        "selectSector",
-        lang
-      );
-    }
-
-    if (navigation.action === "back") {
-      session.locationStep = "district";
-      session.locationPage = 1;
-      const districts = LocationValidationService.getDistrictsByProvince(
-        session.selectedProvince!
-      );
-      return buildLocationMenu(districts, 1, "selectDistrict", lang);
-    }
-
-    if (
-      navigation.action === "select" &&
-      navigation.selectedIndex !== undefined
-    ) {
-      session.selectedSector = sectors[navigation.selectedIndex];
-      session.locationStep = "cell";
-      session.locationPage = 1;
-
-      const cells = LocationValidationService.getCellsBySector(
-        session.selectedProvince!,
-        session.selectedDistrict!,
-        session.selectedSector
-      );
-      return buildLocationMenu(cells, 1, "selectCell", lang);
-    }
-  }
-
-  // Handle cell selection
-  if (session.locationStep === "cell") {
-    const cells = LocationValidationService.getCellsBySector(
-      session.selectedProvince!,
-      session.selectedDistrict!,
-      session.selectedSector!
-    );
-    const navigation = handlePaginationNavigation(
-      parts,
-      session,
-      cells,
-      "cell"
-    );
-
-    if (navigation.action === "next") {
-      session.locationPage = (session.locationPage || 1) + 1;
-      return buildLocationMenu(cells, session.locationPage, "selectCell", lang);
-    }
-
-    if (navigation.action === "prev") {
-      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
-      return buildLocationMenu(cells, session.locationPage, "selectCell", lang);
-    }
-
-    if (navigation.action === "back") {
-      session.locationStep = "sector";
-      session.locationPage = 1;
-      const sectors = LocationValidationService.getSectorsByDistrict(
-        session.selectedProvince!,
-        session.selectedDistrict!
-      );
-      return buildLocationMenu(sectors, 1, "selectSector", lang);
-    }
-
-    if (
-      navigation.action === "select" &&
-      navigation.selectedIndex !== undefined
-    ) {
-      session.selectedCell = cells[navigation.selectedIndex];
-      session.locationStep = "village";
-      session.locationPage = 1;
-
-      const villages = LocationValidationService.getVillagesByCell(
-        session.selectedProvince!,
-        session.selectedDistrict!,
-        session.selectedSector!,
-        session.selectedCell
-      );
-      return buildLocationMenu(villages, 1, "selectVillage", lang);
-    }
-  }
-
-  // Handle village selection
-  if (session.locationStep === "village") {
-    const villages = LocationValidationService.getVillagesByCell(
-      session.selectedProvince!,
-      session.selectedDistrict!,
-      session.selectedSector!,
-      session.selectedCell!
-    );
-    const navigation = handlePaginationNavigation(
-      parts,
-      session,
-      villages,
-      "village"
-    );
-
-    if (navigation.action === "next") {
-      session.locationPage = (session.locationPage || 1) + 1;
-      return buildLocationMenu(
-        villages,
-        session.locationPage,
-        "selectVillage",
-        lang
-      );
-    }
-
-    if (navigation.action === "prev") {
-      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
-      return buildLocationMenu(
-        villages,
-        session.locationPage,
-        "selectVillage",
-        lang
-      );
-    }
-
-    if (navigation.action === "back") {
-      session.locationStep = "cell";
-      session.locationPage = 1;
-      const cells = LocationValidationService.getCellsBySector(
-        session.selectedProvince!,
-        session.selectedDistrict!,
-        session.selectedSector!
-      );
-      return buildLocationMenu(cells, 1, "selectCell", lang);
-    }
-
-    if (
-      navigation.action === "select" &&
-      navigation.selectedIndex !== undefined
-    ) {
-      session.selectedVillage = villages[navigation.selectedIndex];
-
-      try {
-        // Update user location in database
-        await prisma.farmer.update({
-          where: { phone: phoneNumber },
-          data: {
-            province: session.selectedProvince,
-            district: session.selectedDistrict,
-            sector: session.selectedSector,
-            cell: session.selectedCell,
-            village: session.selectedVillage,
-          },
-        });
-
-        delete ussdSessions[sessionId];
-        return `END ${getTranslation(lang, "locationUpdatedSuccessfully")}`;
-      } catch (error) {
-        console.error("Error updating location:", error);
-        return `END ${getTranslation(lang, "locationUpdateFailed")}`;
-      }
-    }
-  }
-
-  return `END ${getTranslation(lang, "invalidInput")}`;
-}
-
-// Helper function to handle pagination navigation
+// Enhanced pagination navigation handler
 function handlePaginationNavigation(
   parts: string[],
   session: ISessionData,
   items: string[],
   currentStep: string
 ): {
-  action: "next" | "prev" | "back" | "mainMenu" | "select" | null;
+  action: "next" | "prev" | "back" | "select" | null;
   selectedIndex?: number;
 } {
   const currentInput = parts[parts.length - 1];
-  const currentPage = session.locationPage || 1;
 
-  // Handle pagination navigation
-  if (currentInput === "99") {
-    return { action: "next" };
-  }
+  if (currentInput === "99") return { action: "next" };
+  if (currentInput === "98") return { action: "prev" };
+  if (currentInput === "0") return { action: "back" };
 
-  if (currentInput === "98") {
-    return { action: "prev" };
-  }
-
-  if (currentInput === "0") {
-    return { action: "back" };
-  }
-
-  // Handle item selection
   const selectedIndex = parseInt(currentInput) - 1;
-  const totalItems = items.length;
+  const currentPage = session.locationPage || 1;
+  const itemsPerPage = 6;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const adjustedIndex = startIndex + selectedIndex;
 
   if (
     !isNaN(selectedIndex) &&
     selectedIndex >= 0 &&
-    selectedIndex < totalItems
+    adjustedIndex < items.length
   ) {
-    return { action: "select", selectedIndex };
+    return { action: "select", selectedIndex: adjustedIndex };
   }
 
   return { action: null };
@@ -980,570 +856,563 @@ export async function handleUssdLogic({
   phoneNumber,
   text,
 }: IUssdRequest): Promise<string> {
-  // Clean up expired sessions
-  cleanupExpiredSessions();
+  try {
+    // Clean up expired sessions
+    cleanupExpiredSessions();
 
-  const parts = text.split("*");
-  console.log(
-    `USSD Request - Session: ${sessionId}, Phone: ${phoneNumber}, Text: ${text}, Parts: ${JSON.stringify(
-      parts
-    )}`
-  );
+    const parts = text.split("*").filter((part) => part !== "");
+    console.log(
+      `USSD Request - Session: ${sessionId}, Phone: ${phoneNumber}, Text: ${text}, Parts: ${JSON.stringify(
+        parts
+      )}`
+    );
 
-  // Initialize session
-  let session = ussdSessions[sessionId];
-  if (!session) {
-    session = {
-      language: "KINY",
-      previousSteps: [],
-      lastActivity: new Date(Date.now()),
-    };
-    ussdSessions[sessionId] = session;
-  } else {
-    // Update last activity time
-    session.lastActivity = new Date(Date.now());
-  }
+    // Get or create session
+    const session = getOrCreateSession(sessionId);
 
-  // Check if user exists first
-  const userExists = await checkUserExists(phoneNumber);
+    // Check if user exists
+    const userExists = await checkUserExists(phoneNumber);
 
-  // For returning users, get their saved language and skip language selection
-  if (userExists && !session.languageSelected) {
-    const savedLanguage = await getUserLanguage(phoneNumber);
-    session.language = savedLanguage;
-    session.languageSelected = true;
-  }
-
-  const lang = session.language || "KINY";
-
-  // Show language selection for new users only
-  if (text === "" && !session.languageSelected && !userExists) {
-    return showLanguageSelection(lang);
-  }
-
-  // For returning users on first access, show main menu directly
-  if (text === "" && userExists && session.languageSelected) {
-    return `CON ${getTranslation(lang, "welcome")}
-1. ${getTranslation(lang, "submitProduct")}
-2. ${getTranslation(lang, "help")}
-3. ${getTranslation(lang, "myAccount")}
-4. ${getTranslation(lang, "exit")}`;
-  }
-
-  // Handle language selection for new users
-  if (!session.languageSelected && !userExists) {
-    const langChoice = parts[0];
-    const languageMap: Record<string, "KINY" | "ENG" | "FRE"> = {
-      "1": "KINY",
-      "2": "ENG",
-      "3": "FRE",
-    };
-
-    const selectedLanguage = languageMap[langChoice];
-    if (selectedLanguage) {
-      session.language = selectedLanguage;
+    // For returning users, get their saved language
+    if (userExists && !session.languageSelected) {
+      const savedLanguage = await getUserLanguage(phoneNumber);
+      session.language = savedLanguage;
       session.languageSelected = true;
-      session.mode = "register";
-      session.locationStep = "province";
-      session.locationPage = 1;
+    }
 
-      console.log(
-        `Language selected: ${selectedLanguage}, Starting registration...`
-      );
+    const lang = session.language || "KINY";
 
-      const provinces = LocationValidationService.getAllProvinces();
-      return buildLocationMenu(
-        provinces,
-        1,
-        "selectProvince",
-        selectedLanguage,
-        false
-      );
-    } else {
+    // Show language selection for new users only
+    if (text === "" && !session.languageSelected && !userExists) {
       return showLanguageSelection(lang);
     }
-  }
 
-  // Handle registration flow for new users
-  if (!userExists && session.mode === "register") {
-    return await handleRegistration(
-      parts,
-      session,
-      lang,
-      phoneNumber,
-      sessionId
-    );
-  }
-
-  // For registered users, handle main menu options
-  if (userExists) {
-    switch (parts[0]) {
-      // 1. Submit Product - handles category -> product flow
-      case "1": {
-        session.mode = "submit";
-
-        const farmer = await prisma.farmer.findUnique({
-          where: { phone: phoneNumber },
-        });
-
-        if (!farmer) {
-          return `END ${getTranslation(lang, "pleaseRegister")}`;
-        }
-
-        // Category selection with pagination
-        if (parts.length === 1) {
-          session.categoryPage = 1;
-          addToHistory(session, "mainMenu");
-          return await buildCategoryMenu(lang, 1);
-        }
-
-        // Handle category pagination and selection
-        if (parts.length === 2) {
-          const categoryChoice = parts[1];
-
-          if (categoryChoice === "99") {
-            // Next page
-            session.categoryPage = (session.categoryPage || 1) + 1;
-            return await buildCategoryMenu(lang, session.categoryPage);
-          }
-
-          if (categoryChoice === "98") {
-            // Previous page
-            session.categoryPage = Math.max((session.categoryPage || 1) - 1, 1);
-            return await buildCategoryMenu(lang, session.categoryPage);
-          }
-
-          if (categoryChoice === "0") {
-            delete ussdSessions[sessionId];
-            return `CON ${getTranslation(lang, "welcome")}
+    // For returning users on first access, show main menu directly
+    if (text === "" && userExists && session.languageSelected) {
+      return `CON ${getTranslation(lang, "welcome")}
 1. ${getTranslation(lang, "submitProduct")}
 2. ${getTranslation(lang, "help")}
 3. ${getTranslation(lang, "myAccount")}
 4. ${getTranslation(lang, "exit")}`;
+    }
+
+    // Handle language selection for new users
+    if (!session.languageSelected && !userExists) {
+      const langChoice = parts[0];
+      const languageMap: Record<string, "KINY" | "ENG" | "FRE"> = {
+        "1": "KINY",
+        "2": "ENG",
+        "3": "FRE",
+      };
+
+      const selectedLanguage = languageMap[langChoice];
+      if (selectedLanguage) {
+        session.language = selectedLanguage;
+        session.languageSelected = true;
+        session.mode = "register";
+        session.locationStep = "province";
+        session.locationPage = 1;
+
+        const provinces = LocationValidationService.getAllProvinces();
+        return buildLocationMenu(
+          provinces,
+          1,
+          "selectProvince",
+          selectedLanguage,
+          false
+        );
+      } else {
+        return showLanguageSelection(lang);
+      }
+    }
+
+    // Handle registration flow for new users
+    if (!userExists && session.mode === "register") {
+      return await handleRegistration(
+        parts,
+        session,
+        lang,
+        phoneNumber,
+        sessionId
+      );
+    }
+
+    // For registered users, handle main menu options
+    if (userExists) {
+      const farmer = await prisma.farmer.findUnique({
+        where: { phone: phoneNumber },
+      });
+
+      if (!farmer) {
+        return `END ${getTranslation(lang, "pleaseRegister")}`;
+      }
+
+      switch (parts[0]) {
+        // 1. Submit Product
+        case "1": {
+          session.mode = "submit";
+
+          const farmer = await prisma.farmer.findUnique({
+            where: { phone: phoneNumber },
+          });
+
+          if (!farmer) {
+            return `END ${getTranslation(lang, "pleaseRegister")}`;
           }
 
-          // Get categories from database
-          const categories = await getActiveProductCategories();
-          const categoryIndex = parseInt(categoryChoice) - 1;
+          // Category selection with pagination
+          if (parts.length === 1) {
+            session.categoryPage = 1;
+            addToHistory(session, "mainMenu");
+            return await buildCategoryMenu(lang, 1);
+          }
 
-          if (categoryIndex >= 0 && categoryIndex < categories.length) {
-            const selectedCategory = categories[categoryIndex];
-            session.selectedCategoryId = selectedCategory.id;
-            session.selectedCategoryName = selectedCategory.name;
-            session.productPage = 1;
-            addToHistory(session, "categoryMenu");
+          // Handle category pagination and selection
+          if (parts.length === 2) {
+            const categoryChoice = parts[1];
 
-            const products = await getProductsByCategory(selectedCategory.id);
+            if (categoryChoice === "99") {
+              // Next page
+              session.categoryPage = (session.categoryPage || 1) + 1;
+              return await buildCategoryMenu(lang, session.categoryPage);
+            }
 
-            if (products.length === 0) {
-              return `CON ${getTranslation(lang, "noCategoryProducts")}
+            if (categoryChoice === "98") {
+              // Previous page
+              session.categoryPage = Math.max(
+                (session.categoryPage || 1) - 1,
+                1
+              );
+              return await buildCategoryMenu(lang, session.categoryPage);
+            }
+
+            if (categoryChoice === "0") {
+              delete ussdSessions[sessionId];
+              return `CON ${getTranslation(lang, "welcome")}
+1. ${getTranslation(lang, "submitProduct")}
+2. ${getTranslation(lang, "help")}
+3. ${getTranslation(lang, "myAccount")}
+4. ${getTranslation(lang, "exit")}`;
+            }
+
+            // Get categories from database
+            const categories = await getActiveProductCategories();
+            const categoryIndex = parseInt(categoryChoice) - 1;
+
+            if (categoryIndex >= 0 && categoryIndex < categories.length) {
+              const selectedCategory = categories[categoryIndex];
+              session.selectedCategoryId = selectedCategory.id;
+              session.selectedCategoryName = selectedCategory.name;
+              session.productPage = 1;
+              addToHistory(session, "categoryMenu");
+
+              const products = await getProductsByCategory(selectedCategory.id);
+
+              if (products.length === 0) {
+                return `CON ${getTranslation(lang, "noCategoryProducts")}
 0. ${getTranslation(lang, "back")}`;
-            }
+              }
 
-            // Build product menu with pagination
-            const productNames = products.map((product) => product.productName);
-            const paginated = paginateLocationList(productNames, 1);
-            let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
+              // Build product menu with pagination
+              const productNames = products.map(
+                (product) => product.productName
+              );
+              const paginated = paginateLocationList(productNames, 1);
+              let productMenu = `CON ${getTranslation(
+                lang,
+                "selectProduct"
+              )}\n`;
 
-            paginated.items.forEach((product, index) => {
-              const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
-              productMenu += `${itemNumber}. ${product}\n`;
-            });
+              paginated.items.forEach((product, index) => {
+                const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
+                productMenu += `${itemNumber}. ${product}\n`;
+              });
 
-            // Add navigation options
-            let navOptions: string[] = [];
-            if (paginated.hasNext) {
-              navOptions.push(`99. ${getTranslation(lang, "next")}`);
-            }
+              // Add navigation options
+              let navOptions: string[] = [];
+              if (paginated.hasNext) {
+                navOptions.push(`99. ${getTranslation(lang, "next")}`);
+              }
 
-            navOptions.push(`0. ${getTranslation(lang, "back")}`);
+              navOptions.push(`0. ${getTranslation(lang, "back")}`);
 
-            if (navOptions.length > 0) {
-              productMenu += navOptions.join("\n");
-            }
+              if (navOptions.length > 0) {
+                productMenu += navOptions.join("\n");
+              }
 
-            return productMenu;
-          } else {
-            return `CON ${getTranslation(lang, "invalidCategory")}
+              return productMenu;
+            } else {
+              return `CON ${getTranslation(lang, "invalidCategory")}
 
 ${await buildCategoryMenu(lang, session.categoryPage || 1)}`.replace(
-              "CON ",
-              ""
-            );
+                "CON ",
+                ""
+              );
+            }
           }
-        }
 
-        // Handle product selection and pagination
-        if (parts.length === 3) {
-          const productChoice = parts[2];
+          // Handle product selection and pagination
+          if (parts.length === 3) {
+            const productChoice = parts[2];
 
-          if (productChoice === "99") {
-            // Next page for products
-            session.productPage = (session.productPage || 1) + 1;
+            if (productChoice === "99") {
+              // Next page for products
+              session.productPage = (session.productPage || 1) + 1;
+              const products = await getProductsByCategory(
+                session.selectedCategoryId!
+              );
+
+              const productNames = products.map(
+                (product) => product.productName
+              );
+              const paginated = paginateLocationList(
+                productNames,
+                session.productPage
+              );
+
+              let productMenu = `CON ${getTranslation(
+                lang,
+                "selectProduct"
+              )}\n`;
+              paginated.items.forEach((product, index) => {
+                const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
+                productMenu += `${itemNumber}. ${product}\n`;
+              });
+
+              let navOptions: string[] = [];
+              if (paginated.hasPrev) {
+                navOptions.push(`98. ${getTranslation(lang, "previous")}`);
+              }
+              if (paginated.hasNext) {
+                navOptions.push(`99. ${getTranslation(lang, "next")}`);
+              }
+
+              navOptions.push(`0. ${getTranslation(lang, "back")}`);
+
+              if (navOptions.length > 0) {
+                productMenu += navOptions.join("\n");
+              }
+
+              return productMenu;
+            }
+
+            if (productChoice === "98") {
+              // Previous page for products
+              session.productPage = Math.max((session.productPage || 1) - 1, 1);
+              const products = await getProductsByCategory(
+                session.selectedCategoryId!
+              );
+
+              const productNames = products.map(
+                (product) => product.productName
+              );
+              const paginated = paginateLocationList(
+                productNames,
+                session.productPage
+              );
+
+              let productMenu = `CON ${getTranslation(
+                lang,
+                "selectProduct"
+              )}\n`;
+              paginated.items.forEach((product, index) => {
+                const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
+                productMenu += `${itemNumber}. ${product}\n`;
+              });
+
+              let navOptions: string[] = [];
+              if (paginated.hasPrev) {
+                navOptions.push(`98. ${getTranslation(lang, "previous")}`);
+              }
+              if (paginated.hasNext) {
+                navOptions.push(`99. ${getTranslation(lang, "next")}`);
+              }
+
+              navOptions.push(`0. ${getTranslation(lang, "back")}`);
+
+              if (navOptions.length > 0) {
+                productMenu += navOptions.join("\n");
+              }
+
+              return productMenu;
+            }
+
+            if (productChoice === "0") {
+              return await buildCategoryMenu(lang, session.categoryPage || 1);
+            }
+
+            // Get products for the selected category
             const products = await getProductsByCategory(
               session.selectedCategoryId!
             );
+            const productIndex = parseInt(productChoice) - 1;
 
-            const productNames = products.map((product) => product.productName);
-            const paginated = paginateLocationList(
-              productNames,
-              session.productPage
-            );
+            if (productIndex >= 0 && productIndex < products.length) {
+              session.selectedProduct = products[productIndex].productName;
+              session.selectedProductUnit = products[productIndex].unit;
+              addToHistory(session, "productMenu");
 
-            let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
-            paginated.items.forEach((product, index) => {
-              const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
-              productMenu += `${itemNumber}. ${product}\n`;
-            });
-
-            let navOptions: string[] = [];
-            if (paginated.hasPrev) {
-              navOptions.push(`98. ${getTranslation(lang, "previous")}`);
-            }
-            if (paginated.hasNext) {
-              navOptions.push(`99. ${getTranslation(lang, "next")}`);
-            }
-
-            navOptions.push(`0. ${getTranslation(lang, "back")}`);
-
-            if (navOptions.length > 0) {
-              productMenu += navOptions.join("\n");
-            }
-
-            return productMenu;
-          }
-
-          if (productChoice === "98") {
-            // Previous page for products
-            session.productPage = Math.max((session.productPage || 1) - 1, 1);
-            const products = await getProductsByCategory(
-              session.selectedCategoryId!
-            );
-
-            const productNames = products.map((product) => product.productName);
-            const paginated = paginateLocationList(
-              productNames,
-              session.productPage
-            );
-
-            let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
-            paginated.items.forEach((product, index) => {
-              const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
-              productMenu += `${itemNumber}. ${product}\n`;
-            });
-
-            let navOptions: string[] = [];
-            if (paginated.hasPrev) {
-              navOptions.push(`98. ${getTranslation(lang, "previous")}`);
-            }
-            if (paginated.hasNext) {
-              navOptions.push(`99. ${getTranslation(lang, "next")}`);
-            }
-
-            navOptions.push(`0. ${getTranslation(lang, "back")}`);
-
-            if (navOptions.length > 0) {
-              productMenu += navOptions.join("\n");
-            }
-
-            return productMenu;
-          }
-
-          if (productChoice === "0") {
-            return await buildCategoryMenu(lang, session.categoryPage || 1);
-          }
-
-          // Get products for the selected category
-          const products = await getProductsByCategory(
-            session.selectedCategoryId!
-          );
-          const productIndex = parseInt(productChoice) - 1;
-
-          if (productIndex >= 0 && productIndex < products.length) {
-            session.selectedProduct = products[productIndex].productName;
-            session.selectedProductUnit = products[productIndex].unit;
-            addToHistory(session, "productMenu");
-
-            // Show unit in the quantity prompt
-            return `CON ${getTranslation(lang, "enterQuantity")} (${
-              session.selectedProductUnit
-            })
+              // Show unit in the quantity prompt
+              return `CON ${getTranslation(lang, "enterQuantity")} (${
+                session.selectedProductUnit
+              })
 0. ${getTranslation(lang, "back")}`;
-          } else {
-            const paginated = paginateLocationList(
-              products.map((product) => product.productName),
-              session.productPage || 1
-            );
-            let productMenu = `CON ${getTranslation(lang, "invalidProduct")}
+            } else {
+              const paginated = paginateLocationList(
+                products.map((product) => product.productName),
+                session.productPage || 1
+              );
+              let productMenu = `CON ${getTranslation(lang, "invalidProduct")}
 
 ${getTranslation(lang, "selectProduct")}\n`;
 
-            paginated.items.forEach((product, index) => {
-              const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
-              productMenu += `${itemNumber}. ${product}\n`;
-            });
+              paginated.items.forEach((product, index) => {
+                const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
+                productMenu += `${itemNumber}. ${product}\n`;
+              });
 
-            let navOptions: string[] = [];
-            if (paginated.hasPrev) {
-              navOptions.push(`98. ${getTranslation(lang, "previous")}`);
+              let navOptions: string[] = [];
+              if (paginated.hasPrev) {
+                navOptions.push(`98. ${getTranslation(lang, "previous")}`);
+              }
+              if (paginated.hasNext) {
+                navOptions.push(`99. ${getTranslation(lang, "next")}`);
+              }
+
+              navOptions.push(`0. ${getTranslation(lang, "back")}`);
+
+              if (navOptions.length > 0) {
+                productMenu += navOptions.join("\n");
+              }
+
+              return productMenu;
             }
-            if (paginated.hasNext) {
-              navOptions.push(`99. ${getTranslation(lang, "next")}`);
-            }
-
-            navOptions.push(`0. ${getTranslation(lang, "back")}`);
-
-            if (navOptions.length > 0) {
-              productMenu += navOptions.join("\n");
-            }
-
-            return productMenu;
-          }
-        }
-
-        // Handle quantity input
-        if (parts.length === 4) {
-          const quantityInput = parts[3];
-
-          if (quantityInput === "0") {
-            // Back to product selection
-            const products = await getProductsByCategory(
-              session.selectedCategoryId!
-            );
-            const paginated = paginateLocationList(
-              products.map((product) => product.productName),
-              session.productPage || 1
-            );
-
-            let productMenu = `CON ${getTranslation(lang, "selectProduct")}\n`;
-            paginated.items.forEach((product, index) => {
-              const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
-              productMenu += `${itemNumber}. ${product}\n`;
-            });
-
-            let navOptions: string[] = [];
-            if (paginated.hasPrev) {
-              navOptions.push(`98. ${getTranslation(lang, "previous")}`);
-            }
-            if (paginated.hasNext) {
-              navOptions.push(`99. ${getTranslation(lang, "next")}`);
-            }
-
-            navOptions.push(`0. ${getTranslation(lang, "back")}`);
-
-            if (navOptions.length > 0) {
-              productMenu += navOptions.join("\n");
-            }
-
-            return productMenu;
           }
 
-          const quantity = parseFloat(quantityInput);
-          if (isNaN(quantity) || quantity <= 0) {
-            return `CON ${getTranslation(lang, "invalidQuantity")}
+          // Handle quantity input
+          if (parts.length === 4) {
+            const quantityInput = parts[3];
+
+            if (quantityInput === "0") {
+              // Back to product selection
+              const products = await getProductsByCategory(
+                session.selectedCategoryId!
+              );
+              const paginated = paginateLocationList(
+                products.map((product) => product.productName),
+                session.productPage || 1
+              );
+
+              let productMenu = `CON ${getTranslation(
+                lang,
+                "selectProduct"
+              )}\n`;
+              paginated.items.forEach((product, index) => {
+                const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
+                productMenu += `${itemNumber}. ${product}\n`;
+              });
+
+              let navOptions: string[] = [];
+              if (paginated.hasPrev) {
+                navOptions.push(`98. ${getTranslation(lang, "previous")}`);
+              }
+              if (paginated.hasNext) {
+                navOptions.push(`99. ${getTranslation(lang, "next")}`);
+              }
+
+              navOptions.push(`0. ${getTranslation(lang, "back")}`);
+
+              if (navOptions.length > 0) {
+                productMenu += navOptions.join("\n");
+              }
+
+              return productMenu;
+            }
+
+            const quantity = parseFloat(quantityInput);
+            if (isNaN(quantity) || quantity <= 0) {
+              return `CON ${getTranslation(lang, "invalidQuantity")}
 
 ${getTranslation(lang, "enterQuantity")} (${session.selectedProductUnit})
 0. ${getTranslation(lang, "back")}`;
-          }
+            }
 
-          session.quantity = quantityInput;
-          addToHistory(session, "quantityInput");
+            session.quantity = quantityInput;
+            addToHistory(session, "quantityInput");
 
-          return `CON ${getTranslation(lang, "enterPrice")}
-0. ${getTranslation(lang, "back")}`;
-        }
-
-        // Handle price input
-        if (parts.length === 5) {
-          const priceInput = parts[4];
-
-          if (priceInput === "0") {
-            return `CON ${getTranslation(lang, "enterQuantity")} (${
-              session.selectedProductUnit
-            })
-0. ${getTranslation(lang, "back")}`;
-          }
-
-          const price = parseFloat(priceInput);
-          if (isNaN(price) || price <= 0) {
-            return `CON ${getTranslation(lang, "invalidPrice")}
-
-${getTranslation(lang, "enterPrice")}
-0. ${getTranslation(lang, "back")}`;
-          }
-
-          session.wishedPrice = priceInput;
-          addToHistory(session, "priceInput");
-
-          return `CON ${getTranslation(lang, "enterPinConfirm")}
-0. ${getTranslation(lang, "back")}`;
-        }
-
-        // Handle PIN confirmation for submission
-        if (parts.length === 6) {
-          const pinInput = parts[5];
-
-          if (pinInput === "0") {
             return `CON ${getTranslation(lang, "enterPrice")}
 0. ${getTranslation(lang, "back")}`;
           }
 
-          const pinResult = await verifyUserPin(phoneNumber, pinInput);
-          if (!pinResult.isValid) {
-            return `CON ${getTranslation(
-              lang,
-              pinResult.message || "incorrectPin"
-            )}
+          // Handle price input
+          if (parts.length === 5) {
+            const priceInput = parts[4];
+
+            if (priceInput === "0") {
+              return `CON ${getTranslation(lang, "enterQuantity")} (${
+                session.selectedProductUnit
+              })
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            const price = parseFloat(priceInput);
+            if (isNaN(price) || price <= 0) {
+              return `CON ${getTranslation(lang, "invalidPrice")}
+
+${getTranslation(lang, "enterPrice")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            session.wishedPrice = priceInput;
+            addToHistory(session, "priceInput");
+
+            return `CON ${getTranslation(lang, "enterPinConfirm")}
+0. ${getTranslation(lang, "back")}`;
+          }
+
+          // Handle PIN confirmation for submission
+          if (parts.length === 6) {
+            const pinInput = parts[5];
+
+            if (pinInput === "0") {
+              return `CON ${getTranslation(lang, "enterPrice")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            const pinResult = await verifyUserPin(phoneNumber, pinInput);
+            if (!pinResult.isValid) {
+              return `CON ${getTranslation(
+                lang,
+                pinResult.message || "incorrectPin"
+              )}
 
 ${getTranslation(lang, "enterPinConfirm")}
 0. ${getTranslation(lang, "back")}`;
+            }
+
+            // Submit product with category ID instead of enum
+            try {
+              await prisma.farmerSubmission.create({
+                data: {
+                  farmerId: farmer.id,
+                  productName: session.selectedProduct!,
+                  categoryId: session.selectedCategoryId!,
+                  submittedQty: parseFloat(session.quantity!),
+                  wishedPrice: parseFloat(session.wishedPrice!),
+                  province: farmer.province,
+                  district: farmer.district,
+                  sector: farmer.sector,
+                  cell: farmer.cell,
+                  village: farmer.village,
+                },
+              });
+
+              delete ussdSessions[sessionId];
+              return `END ${getTranslation(lang, "submissionSuccessful")}`;
+            } catch (error) {
+              console.error("Product submission error:", error);
+              delete ussdSessions[sessionId];
+              return `END ${getTranslation(lang, "submissionFailed")}`;
+            }
           }
 
-          // Submit product with category ID instead of enum
-          try {
-            await prisma.farmerSubmission.create({
-              data: {
-                farmerId: farmer.id,
-                productName: session.selectedProduct!,
-                categoryId: session.selectedCategoryId!,
-                submittedQty: parseFloat(session.quantity!),
-                wishedPrice: parseFloat(session.wishedPrice!),
-                province: farmer.province,
-                district: farmer.district,
-                sector: farmer.sector,
-                cell: farmer.cell,
-                village: farmer.village,
-              },
-            });
-
-            delete ussdSessions[sessionId];
-            return `END ${getTranslation(lang, "submissionSuccessful")}`;
-          } catch (error) {
-            console.error("Product submission error:", error);
-            delete ussdSessions[sessionId];
-            return `END ${getTranslation(lang, "submissionFailed")}`;
-          }
+          return `END ${getTranslation(lang, "invalidCategory")}`;
         }
+        // 2. Help
+        case "2": {
+          session.mode = "help";
 
-        return `END ${getTranslation(lang, "invalidCategory")}`;
-      }
-
-      // 2. Help - Expanded with support services
-      case "2": {
-        session.mode = "help";
-
-        if (parts.length === 1) {
-          addToHistory(session, "mainMenu");
-          return `CON ${getTranslation(lang, "helpMenu")}
+          if (parts.length === 1) {
+            addToHistory(session, "mainMenu");
+            return `CON ${getTranslation(lang, "helpMenu")}
 1. ${getTranslation(lang, "technicalSupport")}
 2. ${getTranslation(lang, "faqSection")}
 3. ${getTranslation(lang, "contactSupport")}
-4. ${getTranslation(lang, "systemStatus")}
 0. ${getTranslation(lang, "back")}`;
-        }
+          }
 
-        // Technical Support
-        if (parts[1] === "1") {
-          if (parts.length === 2) {
-            return `CON ${getTranslation(lang, "technicalSupport")}
+          // Technical Support
+          if (parts[1] === "1") {
+            if (parts.length === 2) {
+              return `CON ${getTranslation(lang, "technicalSupport")}
 ${getTranslation(lang, "techSupportDesc")}
 
 1. ${getTranslation(lang, "reportIssue")}
 2. ${getTranslation(lang, "checkStatus")}
 0. ${getTranslation(lang, "back")}`;
-          }
+            }
 
-          if (parts[2] === "1") {
-            if (parts.length === 3) {
-              return `CON ${getTranslation(lang, "describeIssue")}
+            if (parts[2] === "1") {
+              if (parts.length === 3) {
+                return `CON ${getTranslation(lang, "describeIssue")}
 0. ${getTranslation(lang, "back")}`;
+              }
+
+              const issueDescription = parts.slice(3).join(" ");
+              try {
+                await SupportService.submitSupportTicket(phoneNumber, {
+                  category: "TECHNICAL",
+                  description: issueDescription,
+                  priority: "LOW",
+                });
+                return `END ${getTranslation(lang, "issueReportedSuccess")}`;
+              } catch (error) {
+                console.error("Error creating support ticket:", error);
+                return `END ${getTranslation(lang, "issueReportFailed")}`;
+              }
             }
 
-            const issueDescription = parts.slice(3).join(" ");
-            try {
-              await SupportService.submitSupportTicket(phoneNumber, {
-                category: "TECHNICAL",
-                description: issueDescription,
-                priority: "LOW",
-              });
-              return `END ${getTranslation(lang, "issueReportedSuccess")}`;
-            } catch (error) {
-              console.error("Error creating support ticket:", error);
-              return `END ${getTranslation(lang, "issueReportFailed")}`;
+            if (parts[2] === "2") {
+              try {
+                return `END ${await getSystemStatus(lang)}`;
+              } catch (error) {
+                console.error("Error getting system status:", error);
+                return `END ${getTranslation(lang, "statusCheckFailed")}`;
+              }
             }
           }
 
-          if (parts[2] === "2") {
-            try {
-              const status = await SupportService.getSystemStatus();
-              return `END ${getTranslation(lang, "systemStatus")}: ${status}`;
-            } catch (error) {
-              console.error("Error getting system status:", error);
-              return `END ${getTranslation(lang, "statusCheckFailed")}`;
+          // FAQ Section
+          if (parts[1] === "2") {
+            if (parts.length === 2) {
+              return await getFAQContent(lang);
             }
+
+            if (parts[2] === "0") {
+              return handleBackNavigation(session, lang);
+            }
+
+            const faqIndex = parseInt(parts[2]) - 1;
+            if (!isNaN(faqIndex)) {
+              return await getFAQContent(lang, faqIndex);
+            }
+
+            return await getFAQContent(lang);
           }
-        }
 
-        // FAQ Section
-        if (parts[1] === "2") {
-          try {
-            const faqs = await SupportService.getFAQs(lang);
-            let response = `CON ${getTranslation(lang, "faqSection")}\n\n`;
-
-            faqs.slice(0, 5).forEach((faq, index) => {
-              response += `${index + 1}. ${faq.question}\n`;
-            });
-
-            response += `\n0. ${getTranslation(lang, "back")}`;
-            return response;
-          } catch (error) {
-            console.error("Error fetching FAQs:", error);
-            return `END ${getTranslation(lang, "faqFetchFailed")}`;
-          }
-        }
-
-        // Contact Support
-        if (parts[1] === "3") {
-          return `END ${getTranslation(lang, "contactSupport")}
+          // Contact Support
+          if (parts[1] === "3") {
+            return `END ${getTranslation(lang, "contactSupport")}
 ${getTranslation(lang, "callUs")}: +250796897823
 ${getTranslation(lang, "whatsapp")}: +250796897823
 ${getTranslation(lang, "email")}: info@food.rw`;
-        }
-
-        // System Status
-        if (parts[1] === "4") {
-          try {
-            const status = await SupportService.getSystemStatus();
-            return `END ${getTranslation(lang, "systemStatus")}: ${status}`;
-          } catch (error) {
-            console.error("Error getting system status:", error);
-            return `END ${getTranslation(lang, "statusCheckFailed")}`;
           }
+
+          // Back navigation
+          if (parts[1] === "0") {
+            return handleBackNavigation(session, lang);
+          }
+
+          break;
         }
 
-        return `CON ${getTranslation(lang, "helpMenu")}
-1. ${getTranslation(lang, "technicalSupport")}
-2. ${getTranslation(lang, "faqSection")}
-3. ${getTranslation(lang, "contactSupport")}
-4. ${getTranslation(lang, "systemStatus")}
-0. ${getTranslation(lang, "back")}`;
-      }
+        // 3. My Account
+        case "3": {
+          session.mode = "account";
 
-      // 3. My Account - Expanded with all services
-      case "3": {
-        session.mode = "account";
-
-        const farmer = await prisma.farmer.findUnique({
-          where: { phone: phoneNumber },
-        });
-
-        if (!farmer) {
-          return `END ${getTranslation(lang, "pleaseRegister")}`;
-        }
-
-        if (parts.length === 1) {
-          addToHistory(session, "mainMenu");
-          return `CON ${getTranslation(lang, "myAccount")}
+          if (parts.length === 1) {
+            addToHistory(session, "mainMenu");
+            return `CON ${getTranslation(lang, "myAccount")}
 1. ${getTranslation(lang, "checkSubmissions")}
 2. ${getTranslation(lang, "updateProfile")}
 3. ${getTranslation(lang, "farmingProfile")}
@@ -1551,20 +1420,20 @@ ${getTranslation(lang, "email")}: info@food.rw`;
 5. ${getTranslation(lang, "securitySettings")}
 6. ${getTranslation(lang, "changeLanguage")}
 0. ${getTranslation(lang, "back")}`;
-        }
-
-        // Check submissions with pagination
-        if (parts[1] === "1") {
-          if (parts.length === 2) {
-            return `CON ${getTranslation(lang, "enterPasswordForSubmissions")}
-0. ${getTranslation(lang, "back")}`;
           }
 
-          if (parts.length === 3) {
-            const pinInput = parts[2];
+          // Check submissions with pagination
+          if (parts[1] === "1") {
+            if (parts.length === 2) {
+              return `CON ${getTranslation(lang, "enterPasswordForSubmissions")}
+0. ${getTranslation(lang, "back")}`;
+            }
 
-            if (pinInput === "0") {
-              return `CON ${getTranslation(lang, "myAccount")}
+            if (parts.length === 3) {
+              const pinInput = parts[2];
+
+              if (pinInput === "0") {
+                return `CON ${getTranslation(lang, "myAccount")}
 1. ${getTranslation(lang, "checkSubmissions")}
 2. ${getTranslation(lang, "updateProfile")}
 3. ${getTranslation(lang, "farmingProfile")}
@@ -1572,336 +1441,293 @@ ${getTranslation(lang, "email")}: info@food.rw`;
 5. ${getTranslation(lang, "securitySettings")}
 6. ${getTranslation(lang, "changeLanguage")}
 0. ${getTranslation(lang, "back")}`;
-            }
-
-            const pinResult = await verifyUserPin(phoneNumber, pinInput);
-            if (!pinResult.isValid) {
-              return `END ${getTranslation(
-                lang,
-                pinResult.message || "incorrectPasswordSubmissions"
-              )}`;
-            }
-
-            try {
-              const submissions = await prisma.farmerSubmission.findMany({
-                where: { farmerId: farmer.id },
-                take: 6,
-                orderBy: { createdAt: "desc" },
-              });
-
-              if (submissions.length === 0) {
-                return `END ${getTranslation(lang, "noOrders")}`;
               }
 
-              let response = `END ${getTranslation(
-                lang,
-                "recentSubmissions"
-              )}\n\n`;
-              submissions.forEach((submission, index) => {
-                response += `${index + 1}. ${submission.productName}\n`;
-                response += `   ${submission.submittedQty}kg @ ${submission.wishedPrice} RWF/kg\n`;
-                response += `   ${getTranslation(
-                  lang,
-                  "status"
-                )}: ${getTranslation(
-                  lang,
-                  submission.status as TranslationKey
-                )}\n\n`;
-              });
-
-              return response.trim();
-            } catch (error) {
-              console.error("Error fetching submissions:", error);
-              return `END ${getTranslation(lang, "submissionFetchFailed")}`;
-            }
-          }
-        }
-
-        // Update Profile
-        if (parts[1] === "2") {
-          if (parts.length === 2) {
-            addToHistory(session, "accountMenu");
-            return await showUpdateProfileMenu(lang);
-          }
-
-          // Handle location update
-          if (parts[2] === "2") {
-            return await handleLocationUpdate(
-              parts,
-              session,
-              lang,
-              phoneNumber,
-              sessionId
-            );
-          }
-
-          // Handle other profile updates
-          return await showUpdateProfileMenu(lang);
-        }
-
-        // Farming Profile
-        if (parts[1] === "3") {
-          if (parts.length === 2) {
-            addToHistory(session, "accountMenu");
-            return await showFarmingProfileMenu(lang);
-          }
-
-          // View farming profile
-          if (parts[2] === "4") {
-            try {
-              const profile = await FarmingProfileService.getFarmingProfile(
-                farmer.id
-              );
-              let response = `END ${getTranslation(
-                lang,
-                "farmingProfile"
-              )}\n\n`;
-
-              response += `${getTranslation(
-                lang,
-                "primaryCrops"
-              )}: ${profile.primaryCrops.join(", ")}\n`;
-              response += `${getTranslation(lang, "farmSize")}: ${
-                profile.farmSize
-              } ${getTranslation(lang, "hectares")}\n`;
-              response += `${getTranslation(lang, "experience")}: ${
-                profile.yearsExperience
-              } ${getTranslation(lang, "years")}\n`;
-              response += `${getTranslation(
-                lang,
-                "preferredBuyers"
-              )}: ${profile.preferredBuyerTypes.join(", ")}`;
-
-              return response;
-            } catch (error) {
-              console.error("Error fetching farming profile:", error);
-              return `END ${getTranslation(lang, "profileFetchFailed")}`;
-            }
-          }
-
-          return await showFarmingProfileMenu(lang);
-        }
-
-        // Earnings Dashboard
-        if (parts[1] === "4") {
-          if (parts.length === 2) {
-            addToHistory(session, "accountMenu");
-            return await showEarningsDashboardMenu(lang);
-          }
-
-          // Income Summary
-          if (parts[2] === "1") {
-            try {
-              const summary = await AnalyticsEarningsService.getIncomesSummary(
-                farmer.id
-              );
-              let response = `END ${getTranslation(lang, "incomeSummary")}\n\n`;
-
-              response += `${getTranslation(lang, "totalEarnings")}: ${
-                summary.totalEarnings
-              } RWF\n`;
-              response += `${getTranslation(lang, "monthlyAverage")}: ${
-                summary.monthlyAverage
-              } RWF\n`;
-              response += `${getTranslation(lang, "topProduct")}: ${
-                summary.topProduct
-              }\n`;
-              response += `${getTranslation(lang, "transactions")}: ${
-                summary.totalTransactions
-              }`;
-
-              return response;
-            } catch (error) {
-              console.error("Error fetching income summary:", error);
-              return `END ${getTranslation(lang, "incomeFetchFailed")}`;
-            }
-          }
-
-          return await showEarningsDashboardMenu(lang);
-        }
-
-        // Security Settings
-        if (parts[1] === "5") {
-          if (parts.length === 2) {
-            addToHistory(session, "accountMenu");
-            return await showSecurityMenu(lang);
-          }
-
-          // Change PIN
-          if (parts[2] === "1") {
-            let currentPin = "";
-            if (parts.length === 3) {
-              return `CON ${getTranslation(lang, "enterCurrentPIN")}
-0. ${getTranslation(lang, "back")}`;
-            }
-
-            if (parts.length === 4) {
-              currentPin = parts[3];
-              const pinResult = await verifyUserPin(phoneNumber, currentPin);
-
+              const pinResult = await verifyUserPin(phoneNumber, pinInput);
               if (!pinResult.isValid) {
                 return `END ${getTranslation(
                   lang,
-                  pinResult.message || "incorrectPin"
+                  pinResult.message || "incorrectPasswordSubmissions"
                 )}`;
               }
 
-              session.pinChangeStep = "newPin";
-              return `CON ${getTranslation(lang, "enterNewPIN")}
-0. ${getTranslation(lang, "back")}`;
+              try {
+                const submissions = await prisma.farmerSubmission.findMany({
+                  where: { farmerId: farmer.id },
+                  take: 6,
+                  orderBy: { createdAt: "desc" },
+                });
+
+                if (submissions.length === 0) {
+                  return `END ${getTranslation(lang, "noOrders")}`;
+                }
+
+                let response = `END ${getTranslation(
+                  lang,
+                  "recentSubmissions"
+                )}\n\n`;
+                submissions.forEach((submission, index) => {
+                  response += `${index + 1}. ${submission.productName}\n`;
+                  response += `   ${submission.submittedQty}kg @ ${submission.wishedPrice} RWF/kg\n`;
+                  response += `   ${getTranslation(
+                    lang,
+                    "status"
+                  )}: ${getTranslation(
+                    lang,
+                    submission.status as TranslationKey
+                  )}\n\n`;
+                });
+
+                return response.trim();
+              } catch (error) {
+                console.error("Error fetching submissions:", error);
+                return `END ${getTranslation(lang, "submissionFetchFailed")}`;
+              }
+            }
+          }
+
+          // Update Profile with enhanced navigation
+          if (parts[1] === "2") {
+            if (parts.length === 2) {
+              addToHistory(session, "accountMenu");
+              return await showUpdateProfileMenu(lang);
             }
 
-            if (parts.length === 5 && session.pinChangeStep === "newPin") {
-              const newPin = parts[4];
+            // Back navigation
+            if (parts[2] === "0") {
+              return handleBackNavigation(session, lang);
+            }
 
-              if (!/^\d{4}$/.test(newPin)) {
-                return `CON ${getTranslation(lang, "invalidPinFormat")}
+            return await showUpdateProfileMenu(lang);
+          }
+
+          // Farming Profile
+          if (parts[1] === "3") {
+            if (parts.length === 2) {
+              addToHistory(session, "accountMenu");
+              return await showFarmingProfileMenu(lang);
+            }
+
+            // View farming profile
+            if (parts[2] === "4") {
+              try {
+                const profile = await FarmingProfileService.getFarmingProfile(
+                  farmer.id
+                );
+
+                console.log("Farming Profile:", profile);
+
+                if (!profile) {
+                  return `END ${getTranslation(lang, "profileNotFound")}`;
+                }
+
+                let response = `END ${getTranslation(
+                  lang,
+                  "farmingProfile"
+                )}\n\n`;
+
+                response += `${getTranslation(
+                  lang,
+                  "primaryCrops"
+                )}: ${profile.FarmerPrimaryCrop.product.productName.join(
+                  ", "
+                )}\n`;
+
+                response += `${getTranslation(lang, "farmSize")}: ${
+                  profile.FarmerProfile.farmSize
+                } ${getTranslation(lang, "hectares")}\n`;
+                response += `${getTranslation(lang, "experience")}: ${
+                  profile.FarmerProfile.experienceYears
+                } ${getTranslation(lang, "years")}\n`;
+                response += `${getTranslation(
+                  lang,
+                  "cooperativeName"
+                )}: ${profile.FarmerProfile.cooperativeName.join(", ")}`;
+
+                return response;
+              } catch (error) {
+                console.error("Error fetching farming profile:", error);
+                return `END ${getTranslation(lang, "profileFetchFailed")}`;
+              }
+            }
+
+            return await showFarmingProfileMenu(lang);
+          }
+
+          // Earnings Dashboard
+          if (parts[1] === "4") {
+            if (parts.length === 2) {
+              addToHistory(session, "accountMenu");
+              return await showEarningsDashboardMenu(lang);
+            }
+
+            // Income Summary with null checking
+            if (parts[2] === "1") {
+              return await getIncomeSummaryDisplay(phoneNumber, lang);
+            }
+
+            // Back navigation
+            if (parts[2] === "0") {
+              return handleBackNavigation(session, lang);
+            }
+
+            return await showEarningsDashboardMenu(lang);
+          }
+
+          // Security Settings
+          if (parts[1] === "5") {
+            if (parts.length === 2) {
+              addToHistory(session, "accountMenu");
+              return await showSecurityMenu(lang);
+            }
+
+            // Change PIN
+            if (parts[2] === "1") {
+              let currentPin = "";
+              if (parts.length === 3) {
+                return `CON ${getTranslation(lang, "enterCurrentPIN")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (parts.length === 4) {
+                currentPin = parts[3];
+                const pinResult = await verifyUserPin(phoneNumber, currentPin);
+
+                if (!pinResult.isValid) {
+                  return `END ${getTranslation(
+                    lang,
+                    pinResult.message || "incorrectPin"
+                  )}`;
+                }
+
+                session.pinChangeStep = "newPin";
+                return `CON ${getTranslation(lang, "enterNewPIN")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (parts.length === 5 && session.pinChangeStep === "newPin") {
+                const newPin = parts[4];
+
+                if (!/^\d{4}$/.test(newPin)) {
+                  return `CON ${getTranslation(lang, "invalidPinFormat")}
 
 ${getTranslation(lang, "enterNewPIN")}
 0. ${getTranslation(lang, "back")}`;
+                }
+
+                session.newPin = newPin;
+                session.pinChangeStep = "confirmPin";
+                return `CON ${getTranslation(lang, "confirmNewPIN")}
+0. ${getTranslation(lang, "back")}`;
               }
 
-              session.newPin = newPin;
-              session.pinChangeStep = "confirmPin";
-              return `CON ${getTranslation(lang, "confirmNewPIN")}
-0. ${getTranslation(lang, "back")}`;
-            }
+              if (
+                parts.length === 6 &&
+                session.pinChangeStep === "confirmPin"
+              ) {
+                const confirmPin = parts[5];
 
-            if (parts.length === 6 && session.pinChangeStep === "confirmPin") {
-              const confirmPin = parts[5];
-
-              if (confirmPin !== session.newPin) {
-                return `CON ${getTranslation(lang, "pinsDoNotMatch")}
+                if (confirmPin !== session.newPin) {
+                  return `CON ${getTranslation(lang, "pinsDoNotMatch")}
 
 ${getTranslation(lang, "confirmNewPIN")}
 0. ${getTranslation(lang, "back")}`;
-              }
+                }
 
-              try {
-                await PinManagementService.changePIN(
-                  phoneNumber,
-                  (currentPin = ""),
-                  confirmPin
-                );
+                try {
+                  await PinManagementService.changePIN(
+                    phoneNumber,
+                    (currentPin = ""),
+                    confirmPin
+                  );
 
-                delete session.newPin;
-                delete session.pinChangeStep;
-                return `END ${getTranslation(lang, "pinChangedSuccess")}`;
-              } catch (error) {
-                console.error("Error changing PIN:", error);
-                return `END ${getTranslation(lang, "pinChangeFailedTryAgain")}`;
+                  delete session.newPin;
+                  delete session.pinChangeStep;
+                  return `END ${getTranslation(lang, "pinChangedSuccess")}`;
+                } catch (error) {
+                  console.error("Error changing PIN:", error);
+                  return `END ${getTranslation(
+                    lang,
+                    "pinChangeFailedTryAgain"
+                  )}`;
+                }
               }
             }
-          }
 
-          // Account Activity
-          if (parts[2] === "2") {
-            try {
-              const activities =
-                await ActivityMonitoringService.getRecentActivity(phoneNumber);
+            // Account Activity
+            if (parts[2] === "2") {
+              try {
+                const activities =
+                  await ActivityMonitoringService.getRecentActivity(
+                    phoneNumber
+                  );
 
-              let response = `END ${getTranslation(
-                lang,
-                "recentActivity"
-              )}\n\n`;
-
-              activities.forEach((activity, index) => {
-                const date = new Date(activity.timestamp).toLocaleDateString();
-                response += `${index + 1}. ${getTranslation(
+                let response = `END ${getTranslation(
                   lang,
-                  activity.action as TranslationKey
-                )} - ${date}\n`;
-              });
+                  "recentActivity"
+                )}\n\n`;
 
-              return response;
-            } catch (error) {
-              console.error("Error fetching activities:", error);
-              return `END ${getTranslation(lang, "activityFetchFailed")}`;
-            }
-          }
+                activities.forEach((activity, index) => {
+                  const date = new Date(
+                    activity.timestamp
+                  ).toLocaleDateString();
+                  response += `${index + 1}. ${getTranslation(
+                    lang,
+                    activity.action as TranslationKey
+                  )} - ${date}\n`;
+                });
 
-          return await showSecurityMenu(lang);
-        }
-
-        // Change language
-        if (parts[1] === "6") {
-          if (parts.length === 2) {
-            return `CON ${getTranslation(lang, "enterPasswordForLanguage")}
-0. ${getTranslation(lang, "back")}`;
-          }
-
-          if (parts.length === 3) {
-            const pinInput = parts[2];
-
-            if (pinInput === "0") {
-              return `CON ${getTranslation(lang, "myAccount")}
-1. ${getTranslation(lang, "checkSubmissions")}
-2. ${getTranslation(lang, "updateProfile")}
-3. ${getTranslation(lang, "farmingProfile")}
-4. ${getTranslation(lang, "earningsDashboard")}
-5. ${getTranslation(lang, "securitySettings")}
-6. ${getTranslation(lang, "changeLanguage")}
-0. ${getTranslation(lang, "back")}`;
-            }
-
-            const pinResult = await verifyUserPin(phoneNumber, pinInput);
-            if (!pinResult.isValid) {
-              return `END ${getTranslation(
-                lang,
-                pinResult.message || "incorrectPasswordLanguage"
-              )}`;
-            }
-
-            return `CON ${getTranslation(lang, "selectLanguage")}
-1. Kinyarwanda
-2. English
-3. Français
-0. ${getTranslation(lang, "back")}`;
-          }
-
-          if (parts.length === 4) {
-            const langChoice = parts[3];
-
-            if (langChoice === "0") {
-              return `CON ${getTranslation(lang, "myAccount")}
-1. ${getTranslation(lang, "checkSubmissions")}
-2. ${getTranslation(lang, "updateProfile")}
-3. ${getTranslation(lang, "farmingProfile")}
-4. ${getTranslation(lang, "earningsDashboard")}
-5. ${getTranslation(lang, "securitySettings")}
-6. ${getTranslation(lang, "changeLanguage")}
-0. ${getTranslation(lang, "back")}`;
-            }
-
-            const languageMap: Record<string, "KINY" | "ENG" | "FRE"> = {
-              "1": "KINY",
-              "2": "ENG",
-              "3": "FRE",
-            };
-
-            const newLanguage = languageMap[langChoice];
-            if (newLanguage) {
-              try {
-                await updateUserLanguage(phoneNumber, newLanguage);
-                session.language = newLanguage;
-
-                delete ussdSessions[sessionId];
-                return `END ${getTranslation(newLanguage, "languageChanged")}`;
+                return response;
               } catch (error) {
-                console.error("Error updating language:", error);
-                return `END ${getTranslation(lang, "languageChangeFailed")}`;
+                console.error("Error fetching activities:", error);
+                return `END ${getTranslation(lang, "activityFetchFailed")}`;
               }
-            } else {
+            }
+
+            return await showSecurityMenu(lang);
+          }
+
+          // Change language
+          if (parts[1] === "6") {
+            if (parts.length === 2) {
+              return `CON ${getTranslation(lang, "enterPasswordForLanguage")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            if (parts.length === 3) {
+              const pinInput = parts[2];
+
+              if (pinInput === "0") {
+                return `CON ${getTranslation(lang, "myAccount")}
+1. ${getTranslation(lang, "checkSubmissions")}
+2. ${getTranslation(lang, "updateProfile")}
+3. ${getTranslation(lang, "farmingProfile")}
+4. ${getTranslation(lang, "earningsDashboard")}
+5. ${getTranslation(lang, "securitySettings")}
+6. ${getTranslation(lang, "changeLanguage")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              const pinResult = await verifyUserPin(phoneNumber, pinInput);
+              if (!pinResult.isValid) {
+                return `END ${getTranslation(
+                  lang,
+                  pinResult.message || "incorrectPasswordLanguage"
+                )}`;
+              }
+
               return `CON ${getTranslation(lang, "selectLanguage")}
 1. Kinyarwanda
 2. English
 3. Français
 0. ${getTranslation(lang, "back")}`;
             }
-          }
-        }
 
-        return `CON ${getTranslation(lang, "myAccount")}
+            if (parts.length === 4) {
+              const langChoice = parts[3];
+
+              if (langChoice === "0") {
+                return `CON ${getTranslation(lang, "myAccount")}
 1. ${getTranslation(lang, "checkSubmissions")}
 2. ${getTranslation(lang, "updateProfile")}
 3. ${getTranslation(lang, "farmingProfile")}
@@ -1909,23 +1735,75 @@ ${getTranslation(lang, "confirmNewPIN")}
 5. ${getTranslation(lang, "securitySettings")}
 6. ${getTranslation(lang, "changeLanguage")}
 0. ${getTranslation(lang, "back")}`;
+              }
+
+              const languageMap: Record<string, "KINY" | "ENG" | "FRE"> = {
+                "1": "KINY",
+                "2": "ENG",
+                "3": "FRE",
+              };
+
+              const newLanguage = languageMap[langChoice];
+              if (newLanguage) {
+                try {
+                  await updateUserLanguage(phoneNumber, newLanguage);
+                  session.language = newLanguage;
+
+                  delete ussdSessions[sessionId];
+                  return `END ${getTranslation(
+                    newLanguage,
+                    "languageChanged"
+                  )}`;
+                } catch (error) {
+                  console.error("Error updating language:", error);
+                  return `END ${getTranslation(lang, "languageChangeFailed")}`;
+                }
+              } else {
+                return `CON ${getTranslation(lang, "selectLanguage")}
+1. Kinyarwanda
+2. English
+3. Français
+0. ${getTranslation(lang, "back")}`;
+              }
+            }
+          }
+
+          // Back navigation for main account menu
+          if (parts[1] === "0") {
+            return handleBackNavigation(session, lang);
+          }
+
+          break;
+        }
+
+        case "4":
+          delete ussdSessions[sessionId];
+          return `END ${getTranslation(lang, "exitMessage")}`;
       }
-
-      // 4. Exit
-      case "4":
-        delete ussdSessions[sessionId];
-        return `END ${getTranslation(lang, "exitMessage")}`;
     }
-  }
 
-  // Default fallback
-  if (userExists) {
-    return `CON ${getTranslation(lang, "welcome")}
+    // Default fallback with proper error messaging
+    if (userExists) {
+      return `CON ${getTranslation(lang, "invalidInput")}
+${getTranslation(lang, "welcome")}
 1. ${getTranslation(lang, "submitProduct")}
 2. ${getTranslation(lang, "help")}
 3. ${getTranslation(lang, "myAccount")}
 4. ${getTranslation(lang, "exit")}`;
-  } else {
-    return `END ${getTranslation(lang, "registrationFailed")}`;
+    } else {
+      return `END ${getTranslation(lang, "pleaseRegister")}`;
+    }
+  } catch (error) {
+    console.error("USSD Logic Error:", error);
+
+    // Clean up the session on critical errors
+    if (ussdSessions[sessionId]) {
+      delete ussdSessions[sessionId];
+    }
+
+    // Return user-friendly error message
+    const lang = ussdSessions[sessionId]?.language || "KINY";
+    return `END ${getTranslation(lang, "systemError")}
+${getTranslation(lang, "pleaseRetry")}`;
   }
 }

@@ -118,6 +118,7 @@ export type TranslationKey =
   | "incorrectPin"
   | "submissionSuccessful"
   | "submissionFailed"
+  | "submitProductsFirst"
   | "submissionFetchFailed"
   | "checkSubmissions"
   | "lastThreeOrders"
@@ -200,12 +201,13 @@ export type TranslationKey =
   | "status"
   | "hectares"
   | "years"
-  | "preferredBuyers"
+  | "cooperativeName"
   | "profileFetchFailed"
   | "totalEarnings"
   | "monthlyAverage"
   | "transactions"
   | "incomeFetchFailed"
+  | "noIncomeData"
   | "activityFetchFailed"
   | "languageChangeFailed"
   | "pinsDoNotMatch"
@@ -298,7 +300,9 @@ export type TranslationKey =
   | "overall"
   | "database"
   | "sms"
-  | "payments";
+  | "payments"
+  | "systemError"
+  | "pleaseRetry";
 
 // Translation object with support for Kinyarwanda, English, and French
 
@@ -332,6 +336,7 @@ export const translations = {
     incorrectPin: "PIN y'imibare itari yo. Ongera ugerageze.",
     submissionSuccessful: "Kwohererza byagenze neza. Urakoze!",
     submissionFailed: "Kwoherereza byanze. Ongera ugerageze.",
+    submitProductsFirst: "Banza wohereze umusaruro.",
     submissionFetchFailed: "Kureba umusaruro byanze. Ongera ugerageze.",
     checkSubmissions: "Reba ibyohererejwe",
     lastThreeOrders: "Imisaruro 3 y'ubucuruzi iheruka:",
@@ -405,7 +410,7 @@ export const translations = {
     locationUpdatedSuccessfully: "Aho ubarizwa byahinduwe neza!",
     locationUpdateFailed: "GuhismsNndura aho ubarizwa byanze.",
     invalidInput: "Andika ibisobanuro byemewe.",
-    techSupportDesc: "Ubufasha bwa tekinike",
+    techSupportDesc: "Mutubwire ubufasha bwa tekinike mukeneye.",
     reportIssue: "Tangaza ikibazo",
     checkStatus: "Reba uko sisitemu imeze",
     describeIssue: "Sobanura ikibazo cyawe:",
@@ -417,12 +422,13 @@ export const translations = {
     status: "Imimerere",
     hectares: "hekari",
     years: "imyaka",
-    preferredBuyers: "Abaguzi bakunda",
+    cooperativeName: "Izina rya Koperative",
     profileFetchFailed: "Kureba umwirondoro byanze.",
     totalEarnings: "Amafaranga yose yakiriwe",
     monthlyAverage: "Ikigereranyo cy'amezi",
     transactions: "Imicungiranyo",
     incomeFetchFailed: "Kureba amafaranga yakiriwe byanze.",
+    noIncomeData: "Nta amafaranga yose yakiriwe kuri ibicuruzwa.",
     activityFetchFailed: "Kureba ibikorwa byanze.",
     languageChangeFailed: "Guhindura ururimi byanze.",
     pinsDoNotMatch: "PIN ntabwo zihuye. Ongera ugerageze.",
@@ -434,7 +440,7 @@ export const translations = {
     viewProfile: "Kureba umwirondoro",
     enterPINForProfile: "Andika PIN kureba umwirondoro:",
     incorrectPinProfile: "PIN itari yo.",
-    profileNotFound: "Umwirondoro ntiwasanzwe.",
+    profileNotFound: "Umwirondoro ntiwabonetse.",
     farmingProfileDetails: "Amakuru y'umwirondoro w'ubuhinzi:",
     farmSize: "Ubunini bw'umurima",
     experience: "Uburambe",
@@ -516,6 +522,8 @@ export const translations = {
     database: "Ububiko",
     sms: "Ubutumwa",
     payments: "Ubwishyu",
+    systemError: "Habaye ikibazo muri sisitemu",
+    pleaseRetry: "Ongera ugerageze mukanya.",
   },
   ENG: {
     welcome: "Welcome to FoodBundles!",
@@ -546,6 +554,7 @@ export const translations = {
     incorrectPin: "Incorrect PIN. Please try again.",
     submissionSuccessful: "Submission successful. Thank you!",
     submissionFailed: "Submission failed. Try again.",
+    submitProductsFirst: "Please submit your products first.",
     submissionFetchFailed:
       "Failed to fetch submissions. Please try again later.",
     checkSubmissions: "Check Submissions",
@@ -617,7 +626,7 @@ export const translations = {
     notificationFrequency: "Notification Frequency",
     locationUpdateFailed: "Location update failed.",
     invalidInput: "Please enter valid input.",
-    techSupportDesc: "Technical support",
+    techSupportDesc: "Please let us know type of support you need.",
     reportIssue: "Report issue",
     checkStatus: "Check system status",
     describeIssue: "Describe your issue:",
@@ -629,12 +638,13 @@ export const translations = {
     status: "Status",
     hectares: "hectares",
     years: "years",
-    preferredBuyers: "Preferred buyers",
+    cooperativeName: "Cooperative Name",
     profileFetchFailed: "Failed to fetch profile.",
     totalEarnings: "Total earnings",
     monthlyAverage: "Monthly average",
     transactions: "Transactions",
     incomeFetchFailed: "Failed to fetch income data.",
+    noIncomeData: "No income data available at the moment.",
     activityFetchFailed: "Failed to fetch activities.",
     languageChangeFailed: "Failed to change language.",
     pinsDoNotMatch: "PINs do not match. Please try again.",
@@ -728,6 +738,8 @@ export const translations = {
     database: "Database",
     sms: "SMS",
     payments: "Payments",
+    systemError: "System error",
+    pleaseRetry: "Please try again later.",
   },
   FRE: {
     welcome: "Bienvenue à FoodBundles!",
@@ -760,6 +772,8 @@ export const translations = {
     incorrectPin: "PIN incorrect. Veuillez réessayer.",
     submissionSuccessful: "Soumission réussie. Merci!",
     submissionFailed: "Échec de la soumission. Réessayer.",
+    submitProductsFirst:
+      "Veuillez soumettre des produits avant de voir les soumissions.",
     submissionFetchFailed: "Échec de la récupération des soumissions.",
     checkSubmissions: "Vérifier les soumissions",
     lastThreeOrders: "Les 3 dernières commandes:",
@@ -841,12 +855,13 @@ export const translations = {
     status: "Statut",
     hectares: "hectares",
     years: "ans",
-    preferredBuyers: "Acheteurs préférés",
+    cooperativeName: "Nom de la coopération:",
     profileFetchFailed: "Échec de la récupération du profil.",
     totalEarnings: "Gains totaux",
     monthlyAverage: "Moyenne mensuelle",
     transactions: "Transactions",
     incomeFetchFailed: "Échec de la récupération des données de revenus.",
+    noIncomeData: "Aucune données de revenus disponibles pour le moment.",
     activityFetchFailed: "Échec de la récupération des activités.",
     languageChangeFailed: "Échec du changement de langue.",
     pinsDoNotMatch: "Les PIN ne correspondent pas. Veuillez réessayer.",
@@ -942,6 +957,8 @@ export const translations = {
     database: "Base de données",
     sms: "SMS",
     payments: "Paiements",
+    systemError: "Erreur système",
+    pleaseRetry: "Veuillez reessayer plus tard.",
   },
 };
 

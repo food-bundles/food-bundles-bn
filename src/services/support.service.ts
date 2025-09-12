@@ -133,45 +133,50 @@ export class SupportService {
       KINY: [
         {
           question: "Nigute nshobora guhindura PIN yanjye?",
-          answer: "Kanda 3 -> 4 -> andika PIN ya kijeshi -> andika PIN nshya",
+          answer:
+            "Ujya ahabanza -> Konti yanjye -> Amategeko y'umutekano -> Guhindura PIN -> andika PIN ya isanzwe -> andika PIN nshya",
         },
         {
           question: "Ibiciro byanjye bifatwa ryari?",
-          answer: "Ibiciro bifatwa mu minsi 7-10 nyuma yo kwemererwa.",
+          answer: "Ibiciro bifatwa mu minsi 1-2 nyuma yo kwemererwa.",
         },
         {
           question: "Nigute nshobora kureba amateka y'ibicuruzwa byanjye?",
-          answer: "Kanda 3 -> 1 -> andika PIN yawe",
+          answer:
+            "Ujya ahabanza -> Konti yanjye -> Reba ibyohererejwe -> andika PIN yawe",
         },
       ],
       ENG: [
         {
           question: "How do I change my PIN?",
-          answer: "Press 3 -> 4 -> enter old PIN -> enter new PIN",
+          answer:
+            "Go to Main Menu -> My Account -> Security Settings -> Change PIN -> enter old PIN -> enter new PIN",
         },
         {
           question: "When do I get paid for my products?",
-          answer: "Payments are processed within 7-10 days after approval.",
+          answer: "Payments are processed within 1-2 days after approval.",
         },
         {
           question: "How can I view my submission history?",
-          answer: "Press 3 -> 1 -> enter your PIN",
+          answer:
+            "Go to Main Menu -> My Account -> Check Submissions -> enter your PIN",
         },
       ],
       FRE: [
         {
           question: "Comment changer mon PIN?",
           answer:
-            "Appuyez sur 3 -> 4 -> entrez l'ancien PIN -> entrez le nouveau PIN",
+            "Aller au menu principal -> Mon compte -> Paramètres de sécurité -> Changer le PIN -> entrez l'ancien PIN -> entrez le nouveau PIN",
         },
         {
           question: "Quand suis-je payé pour mes produits?",
           answer:
-            "Les paiements sont traités dans les 7-10 jours après approbation.",
+            "Les paiements sont traités dans les 1-2 jours après approbation.",
         },
         {
           question: "Comment voir mon historique de soumissions?",
-          answer: "Appuyez sur 3 -> 1 -> entrez votre PIN",
+          answer:
+            "Aller au menu principal -> Mon compte -> Vérifier les soumissions -> entrez votre PIN",
         },
       ],
     };
