@@ -290,7 +290,16 @@ export const getAllSubmissionsService = async ({
   // Get submissions with pagination
   const submissions = await prisma.farmerSubmission.findMany({
     where: whereCondition,
-    include: includeConfig,
+    include: {
+      farmer: true,
+      category: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+        },
+      },
+    },
     orderBy: {
       [sortBy]: sortOrder,
     },
