@@ -349,16 +349,9 @@ export class UserController {
         id: user.id,
       };
 
-const token = generateToken(payload);
-const isProduction = process.env.NODE_ENV === "production";
+      const token = generateToken(payload);
 
-res.cookie("auth_token", token, {
-  httpOnly: true,
-  secure: isProduction, // true in production, false in development
-  sameSite: isProduction ? "none" : "lax", // "none" for production, "lax" for development
-  maxAge: 24 * 60 * 60 * 1000,
-  // DO NOT set domain property for cross-origin cookies
-});
+      // Remove all cookie-related code
       res.status(200).json({
         success: true,
         message: "Login successful",
@@ -375,10 +368,13 @@ res.cookie("auth_token", token, {
 
   static me = async (req: Request, res: Response) => {
     try {
-      const token = req.cookies["auth_token"];
-      if (!token) {
+      // Get token from Authorization header
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({ message: "No token provided" });
       }
+
+      const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
       const payload = verifyToken(token);
       if (!payload) {
@@ -419,24 +415,4 @@ res.cookie("auth_token", token, {
     }
   };
 
-  static logout = async (req: Request, res: Response) => {
-    try {
-      res.clearCookie("auth_token", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        path: "/",
-      });
-
-      res.status(200).json({
-        success: true,
-        message: "Logged out successfully",
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message || "Logout failed",
-      });
-    }
-  };
 }
