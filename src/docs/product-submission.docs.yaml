@@ -18,6 +18,10 @@ components:
           type: number.01
           description: Desired price per kilogram in RWF
           example: 500
+        location:
+          type: string
+          description: Location name
+          example: "KK 12 AVE, Kigali, Rwanda"
         province:
           type: string
           description: Province name
@@ -69,6 +73,10 @@ components:
           type: number
           format: float
           example: 500
+        location:
+          type: string
+          description: Location name
+          example: "KK 12 AVE, Kigali, Rwanda"
         province:
           type: string
           description: Province name

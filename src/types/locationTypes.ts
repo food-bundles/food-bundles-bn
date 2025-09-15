@@ -33,3 +33,12 @@ export interface LocationData {
   cell: string;
   village: string;
 }
+
+export interface UserLocationData {
+  location?: string;
+  province?: string;
+  district?: string;
+  sector?: string;
+  cell?: string;
+  village?: string;
+}

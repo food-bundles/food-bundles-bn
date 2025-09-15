@@ -3,6 +3,7 @@ export interface ProductSubmissionInput {
   productId: string;
   submittedQty: number;
   wishedPrice: number;
+  location?: string;
   province?: string;
   district?: string;
   sector?: string;

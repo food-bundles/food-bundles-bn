@@ -70,15 +70,14 @@ export class AnalyticsEarningsService {
 
       if (!farmer) return null;
 
+      const province = farmer?.province ?? "";
+      const district = farmer?.district ?? "";
+
       const [regionalAvg, previousYearComparison, marketPosition] =
         await Promise.all([
-          this.getRegionalAverage(farmer.province, farmer.district),
+          this.getRegionalAverage(province, district),
           this.getPreviousYearComparison(farmer.id),
-          this.getMarketPositionRanking(
-            farmer.id,
-            farmer.province,
-            farmer.district
-          ),
+          this.getMarketPositionRanking(farmer.id, province, district),
         ]);
 
       return {

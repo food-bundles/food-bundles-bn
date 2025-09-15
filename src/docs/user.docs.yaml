@@ -17,6 +17,10 @@ components:
     LocationData:
       type: object
       properties:
+        location:
+          type: string
+          description: Location name
+          example: "KK 12 AVE, Kigali, Rwanda"
         province:
           type: string
           description: Province name
@@ -53,6 +57,10 @@ components:
           type: string
           nullable: true
           description: Farmer's email address
+        location:
+          type: string
+          description: Location name
+          example: "KK 12 AVE, Kigali, Rwanda"
         province:
           type: string
           nullable: true
@@ -149,6 +157,10 @@ components:
           format: email
           description: Farmer's email address
           example: "farmer@food.rw"
+        location:
+          type: string
+          description: Location name
+          example: "KK 12 AVE, Kigali, Rwanda"
         province:
           type: string
           description: Province name
@@ -193,6 +205,9 @@ components:
           type: string
           nullable: true
           description: Restaurant phone number
+        location:
+          type: string
+          description: Location name
         province:
           type: string
           nullable: true
@@ -333,6 +348,10 @@ components:
           type: string
           description: Restaurant phone number
           example: "+250788123456"
+        location:
+          type: string
+          description: Location name
+          example: "KK 12 AVE, Kigali, Rwanda"
         province:
           type: string
           description: Province name
@@ -377,6 +396,9 @@ components:
           type: string
           nullable: true
           description: Admin phone number
+        location:
+          type: string
+          description: Location name
         province:
           type: string
           nullable: true
@@ -433,6 +455,10 @@ components:
           type: string
           enum: [ADMIN, AGGREGATOR]
           description: Admin role (required)
+        location:
+          type: string
+          description: Location name
+          example: "KK 12 AVE, Kigali, Rwanda"
         province:
           type: string
           description: Province name
@@ -479,6 +505,9 @@ components:
           type: string
           enum: [ADMIN, AGGREGATOR]
           description: Admin role
+        location:
+          type: string
+          description: Location name
         province:
           type: string
           description: Province name
@@ -1123,6 +1152,7 @@ paths:
                   username: "foodBundlesAdmin"
                   email: "admin@food.rw"
                   phone: "+250788123456"
+                  location: "KK 12 AVE, Kigali, Rwanda"
                   province: "Umujyi wa Kigali"
                   district: "Nyarugenge"
                   sector: "Gitega"
@@ -1136,6 +1166,7 @@ paths:
                   username: "FoodBundlesAggregator"
                   email: "aggregator@food.rw"
                   phone: "+250788123456"
+                  location: "KK 12 AVE, Kigali, Rwanda"
                   province: "Umujyi wa Kigali"
                   district: "Nyarugenge"
                   sector: "Gitega"
