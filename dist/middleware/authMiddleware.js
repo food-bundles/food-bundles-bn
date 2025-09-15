@@ -5,10 +5,12 @@ const jwt_1 = require("../utils/jwt");
 const userGets_1 = require("../services/userGets");
 const isAuthenticated = async (req, res, next) => {
     try {
-        const token = req.cookies?.auth_token;
-        if (!token) {
+        // Get token from Authorization header
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
             return res.status(401).json({ message: "Unauthorized: No token found" });
         }
+        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
         const decoded = (0, jwt_1.verifyToken)(token);
         const user = await (0, userGets_1.getUserById)(decoded.id);
         if (!user) {
