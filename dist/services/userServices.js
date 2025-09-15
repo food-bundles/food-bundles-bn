@@ -25,7 +25,7 @@ const checkExistingUser = async (phone, email) => {
 };
 // FARMER SERVICES
 const createFarmerService = async (farmerData) => {
-    const { phone, email, password, province, district, sector, cell, village } = farmerData;
+    const { phone, email, password, location, province, district, sector, cell, village, } = farmerData;
     if (!phone && !email) {
         throw new Error("Either phone or email is required");
     }
@@ -35,15 +35,17 @@ const createFarmerService = async (farmerData) => {
         throw new Error("User with this phone/email already exists");
     }
     // Validate location data if provided
-    const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
-        province,
-        district,
-        sector,
-        cell,
-        village,
-    });
-    if (!locationValidation.isValid) {
-        throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
+    if (province || district || sector || cell || village) {
+        const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
+            province: province,
+            district: district,
+            sector: sector,
+            cell: cell,
+            village: village,
+        });
+        if (!locationValidation.isValid) {
+            throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
+        }
     }
     // Remove the old farmer-specific check since we already checked globally
     try {
@@ -56,6 +58,7 @@ const createFarmerService = async (farmerData) => {
                 phone,
                 email,
                 password: hashedPassword,
+                location,
                 province,
                 district,
                 sector,
@@ -157,11 +160,11 @@ const updateFarmerService = async (id, updateData) => {
     // Validate location data if any location field is provided
     if (province || district || sector || cell || village) {
         const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
-            province: province ? province : existingFarmer.province,
-            district: district ? district : existingFarmer.district,
-            sector: sector ? sector : existingFarmer.sector,
-            cell: cell ? cell : existingFarmer.cell,
-            village: village ? village : existingFarmer.village,
+            province: (province ? province : existingFarmer.province),
+            district: (district ? district : existingFarmer.district),
+            sector: (sector ? sector : existingFarmer.sector),
+            cell: (cell ? cell : existingFarmer.cell),
+            village: (village ? village : existingFarmer.village),
         });
         if (!locationValidation.isValid) {
             throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
@@ -212,16 +215,9 @@ const deleteFarmerService = async (id) => {
 exports.deleteFarmerService = deleteFarmerService;
 // RESTAURANT SERVICES
 const createRestaurantService = async (restaurantData) => {
-    const { name, email, phone, password, province, district, sector, cell, village, } = restaurantData;
-    if (!name ||
-        !email ||
-        !password ||
-        !province ||
-        !district ||
-        !sector ||
-        !cell ||
-        !village) {
-        throw new Error("Name, email, password, province, district, sector, cell, and village are required for restaurants");
+    const { name, email, phone, password, location, province, district, sector, cell, village, } = restaurantData;
+    if (!name || !email || !password) {
+        throw new Error("Name, email, password are required for restaurants");
     }
     // Check if phone/email exists in any user table
     const existingUser = await checkExistingUser(phone || undefined, email);
@@ -229,15 +225,17 @@ const createRestaurantService = async (restaurantData) => {
         throw new Error("User with this phone/email already exists");
     }
     // Validate location data if provided
-    const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
-        province,
-        district,
-        sector,
-        cell,
-        village,
-    });
-    if (!locationValidation.isValid) {
-        throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
+    if (province || district || sector || cell || village) {
+        const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
+            province: province,
+            district: district,
+            sector: sector,
+            cell: cell,
+            village: village,
+        });
+        if (!locationValidation.isValid) {
+            throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
+        }
     }
     try {
         const hashedPassword = await (0, password_1.hashPassword)(password);
@@ -247,6 +245,7 @@ const createRestaurantService = async (restaurantData) => {
                 email,
                 phone,
                 password: hashedPassword,
+                location,
                 province,
                 district,
                 sector,
@@ -374,11 +373,11 @@ const updateRestaurantService = async (id, updateData) => {
     // Validate location data if any location field is provided
     if (province || district || sector || cell || village) {
         const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
-            province: province ? province : existingRestaurant.province,
-            district: district ? district : existingRestaurant.district,
-            sector: sector ? sector : existingRestaurant.sector,
-            cell: cell ? cell : existingRestaurant.cell,
-            village: village ? village : existingRestaurant.village,
+            province: (province ? province : existingRestaurant.province),
+            district: (district ? district : existingRestaurant.district),
+            sector: (sector ? sector : existingRestaurant.sector),
+            cell: (cell ? cell : existingRestaurant.cell),
+            village: (village ? village : existingRestaurant.village),
         });
         if (!locationValidation.isValid) {
             throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
@@ -429,17 +428,9 @@ const deleteRestaurantService = async (id) => {
 exports.deleteRestaurantService = deleteRestaurantService;
 // ADMIN SERVICES
 const createAdminService = async (adminData) => {
-    const { username, email, phone, password, role, province, district, sector, cell, village, } = adminData;
-    if (!username ||
-        !email ||
-        !password ||
-        !role ||
-        !province ||
-        !district ||
-        !sector ||
-        !cell ||
-        !village) {
-        throw new Error("Username, email, password, role, province, district, sector, cell, and village are required for admins");
+    const { username, email, phone, password, role, location, province, district, sector, cell, village, } = adminData;
+    if (!username || !email || !password || !role) {
+        throw new Error("Username, email, password, role are required for admins");
     }
     // Check if phone/email exists in any user table
     const existingUser = await checkExistingUser(phone || undefined, email);
@@ -449,11 +440,11 @@ const createAdminService = async (adminData) => {
     // Validate location data if provided
     if (province || district || sector || cell || village) {
         const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
-            province,
-            district,
-            sector,
-            cell,
-            village,
+            province: province,
+            district: district,
+            sector: sector,
+            cell: cell,
+            village: village,
         });
         if (!locationValidation.isValid) {
             throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
@@ -468,6 +459,7 @@ const createAdminService = async (adminData) => {
                 phone: phone || null,
                 password: hashedPassword,
                 role,
+                location,
                 province,
                 district,
                 sector,
@@ -548,11 +540,11 @@ const updateAdminService = async (id, updateData) => {
     // Validate location data if any location field is provided
     if (province || district || sector || cell || village) {
         const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
-            province: province ? province : existingAdmin.province,
-            district: district ? district : existingAdmin.district,
-            sector: sector ? sector : existingAdmin.sector,
-            cell: cell ? cell : existingAdmin.cell,
-            village: village ? village : existingAdmin.village,
+            province: (province ? province : existingAdmin.province),
+            district: (district ? district : existingAdmin.district),
+            sector: (sector ? sector : existingAdmin.sector),
+            cell: (cell ? cell : existingAdmin.cell),
+            village: (village ? village : existingAdmin.village),
         });
         if (!locationValidation.isValid) {
             throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
