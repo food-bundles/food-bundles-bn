@@ -332,7 +332,6 @@ export class UserController {
     }
   };
 
-  // Backend login controller
   static login = async (req: Request, res: Response) => {
     try {
       const { phone, email, password } = req.body;
@@ -346,20 +345,24 @@ export class UserController {
 
       const result = await loginService({ phone, email, password });
       const user = result.user;
-      const payload: JwtPayload = { id: user.id };
-      const token = generateToken(payload);
+      const payload: JwtPayload = {
+        id: user.id,
+      };
 
-      res.cookie("auth_token", token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: 24 * 60 * 60 * 1000,
-      });
+const token = generateToken(payload);
+const isProduction = process.env.NODE_ENV === "production";
 
+res.cookie("auth_token", token, {
+  httpOnly: true,
+  secure: isProduction, // true in production, false in development
+  sameSite: isProduction ? "none" : "lax", // "none" for production, "lax" for development
+  maxAge: 24 * 60 * 60 * 1000,
+  // DO NOT set domain property for cross-origin cookies
+});
       res.status(200).json({
         success: true,
         message: "Login successful",
-        token, // Also return token for debugging
+        token,
         data: result,
       });
     } catch (error: any) {
@@ -369,6 +372,7 @@ export class UserController {
       });
     }
   };
+
   static me = async (req: Request, res: Response) => {
     try {
       const token = req.cookies["auth_token"];
