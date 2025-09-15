@@ -298,8 +298,6 @@ paths:
         - ProductCategory Management
       summary: Get product category by ID
       description: Retrieve a specific product category by its ID with detailed information
-      security:
-        - BearerAuth: []
       parameters:
         - name: categoryId
           in: path

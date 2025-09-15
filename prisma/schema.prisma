@@ -18,13 +18,33 @@ model Farmer {
   cell     String
   village  String
 
+  locationUpdatedAt DateTime?
+
   role              Role    @default(FARMER)
   preferredLanguage String? @default("KINY")
   password          String?
 
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  submissions FarmerSubmission[]
+  phoneVerified  Boolean   @default(false)
+  phoneChangedAt DateTime?
+
+  accountLocked Boolean   @default(false)
+  lockedUntil   DateTime?
+  pinChangedAt  DateTime?
+
+  smsNotifications      Boolean @default(false)
+  notificationFrequency String?
+
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  submissions            FarmerSubmission[]
+  FarmerSecurityEvent    FarmerSecurityEvent[]
+  FarmerSecurityQuestion FarmerSecurityQuestion[]
+  FarmerLoginAttempt     FarmerLoginAttempt[]
+  FarmerSecurityAlert    FarmerSecurityAlert[]
+  FarmerProfile          FarmerProfile?
+  FarmerPrimaryCrop      FarmerPrimaryCrop[]
+  SupportTicket          SupportTicket[]
+  CallbackRequest        CallbackRequest[]
 }
 
 model Restaurant {
@@ -71,6 +91,7 @@ model FarmerSubmission {
   aggregatorId         String?
   submittedAt          DateTime              @default(now())
   verifiedAt           DateTime?
+  paymentMethod        PaymentMethod?
   approvedAt           DateTime?
   paidAt               DateTime?
   acceptedPrice        Float?
@@ -90,6 +111,146 @@ model FarmerSubmission {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model FarmerSecurityEvent {
+  id          String   @id @default(uuid())
+  farmerId    String
+  eventType   String // PIN_CHANGE, PHONE_CHANGE, LOGIN_ATTEMPT, etc.
+  description String?
+  ipAddress   String?
+  deviceInfo  String?
+  createdAt   DateTime @default(now())
+
+  farmer Farmer @relation(fields: [farmerId], references: [id])
+
+  @@index([farmerId])
+  @@index([eventType])
+}
+
+model FarmerSecurityQuestion {
+  id         String   @id @default(uuid())
+  farmerId   String
+  question   String
+  answerHash String
+  createdAt  DateTime @default(now())
+
+  farmer Farmer @relation(fields: [farmerId], references: [id])
+
+  @@index([farmerId])
+}
+
+model FarmerLoginAttempt {
+  id          String   @id @default(uuid())
+  farmerId    String
+  successful  Boolean
+  attemptTime DateTime
+  deviceInfo  String?
+
+  farmer Farmer @relation(fields: [farmerId], references: [id])
+
+  @@index([farmerId])
+  @@index([attemptTime])
+}
+
+model FarmerSecurityAlert {
+  id          String   @id @default(uuid())
+  farmerId    String
+  alertType   String
+  description String
+  severity    String // LOW, MEDIUM, HIGH, CRITICAL
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  farmer Farmer @relation(fields: [farmerId], references: [id])
+
+  @@index([farmerId])
+  @@index([severity])
+}
+
+model FarmerProfile {
+  id                     String   @id @default(uuid())
+  farmerId               String   @unique
+  farmSize               Float?
+  farmSizeUnit           String? // HECTARES, ACRES
+  experienceYears        Int?
+  cooperativeMember      Boolean?
+  cooperativeName        String?
+  certifications         String[]
+  farmingMethod          String? // ORGANIC, CONVENTIONAL, MIXED
+  preferredPaymentMethod String? // MOBILE_MONEY, BANK_TRANSFER, CASH
+  minimumOrderQuantity   Float?
+  deliveryPreference     String? // FARM_PICKUP, COOPERATIVE_CENTER, MARKET_DELIVERY
+  maxDeliveryDistance    Float?
+  defaultLocation        Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  farmer Farmer @relation(fields: [farmerId], references: [id])
+
+  @@index([farmerId])
+}
+
+model FarmerPrimaryCrop {
+  id              String   @id @default(uuid())
+  farmerId        String
+  productId       String
+  seasonal        Boolean  @default(false)
+  defaultQuantity Float
+  harvestMonths   String[]
+  createdAt       DateTime @default(now())
+
+  farmer  Farmer  @relation(fields: [farmerId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([farmerId])
+  @@index([productId])
+}
+
+model SupportTicket {
+  id           String   @id @default(uuid())
+  ticketNumber String   @unique
+  farmerId     String
+  category     String // TECHNICAL, PAYMENT, ACCOUNT, GENERAL
+  description  String
+  priority     String // LOW, MEDIUM, HIGH, URGENT
+  status       String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  farmer    Farmer            @relation(fields: [farmerId], references: [id])
+  responses SupportResponse[]
+
+  @@index([farmerId])
+  @@index([status])
+  @@index([ticketNumber])
+}
+
+model SupportResponse {
+  id        String   @id @default(uuid())
+  ticketId  String
+  message   String
+  isStaff   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+}
+
+model CallbackRequest {
+  id            String   @id @default(uuid())
+  farmerId      String
+  phoneNumber   String
+  preferredTime String
+  issue         String
+  status        String   @default("PENDING") // PENDING, SCHEDULED, COMPLETED
+  createdAt     DateTime @default(now())
+
+  farmer Farmer @relation(fields: [farmerId], references: [id])
+
+  @@index([farmerId])
+  @@index([status])
 }
 
 model Admin {
@@ -116,21 +277,21 @@ model Admin {
 }
 
 model Product {
-  id                String             @id @default(uuid())
+  id                String              @id @default(uuid())
   unitPrice         Float
   purchasePrice     Float
   unit              String
-  createdAt         DateTime           @default(now())
+  createdAt         DateTime            @default(now())
   bonus             Int
   createdBy         String
   expiryDate        DateTime?
   images            String[]
   quantity          Float
-  sku               String             @unique
-  updatedAt         DateTime           @updatedAt
+  sku               String              @unique
+  updatedAt         DateTime            @updatedAt
   categoryId        String
-  productName       String             @unique
-  status            ProductStatus      @default(ACTIVE)
+  productName       String              @unique
+  status            ProductStatus       @default(ACTIVE)
   province          String?
   district          String?
   sector            String?
@@ -138,9 +299,10 @@ model Product {
   village           String?
   farmerSubmissions FarmerSubmission[]
   orderItems        OrderItem[]
-  admin             Admin              @relation(fields: [createdBy], references: [id])
+  admin             Admin               @relation(fields: [createdBy], references: [id])
   CartItem          CartItem[]
-  category          ProductCategory    @relation(fields: [categoryId], references: [id])
+  category          ProductCategory     @relation(fields: [categoryId], references: [id])
+  FarmerPrimaryCrop FarmerPrimaryCrop[]
 }
 
 model ProductCategory {
@@ -492,19 +654,19 @@ enum OrderStatus {
 
 // Enum for wallet transaction types
 enum WalletTransactionType {
-  TOP_UP 
-  PAYMENT 
-  REFUND 
+  TOP_UP
+  PAYMENT
+  REFUND
   ADJUSTMENT // Manual adjustment by admin
-  WITHDRAWAL 
+  WITHDRAWAL
 }
 
 // Enum for transaction status
 enum TransactionStatus {
-  PENDING 
-  PROCESSING 
-  COMPLETED 
-  FAILED 
-  CANCELLED 
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
   REFUNDED
 }
