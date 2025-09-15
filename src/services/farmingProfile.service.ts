@@ -122,6 +122,28 @@ export class FarmingProfileService {
         },
       });
 
+      // Ensure FarmerProfile exists or create empty object
+      if (farmer && !farmer.FarmerProfile) {
+        farmer.FarmerProfile = {
+          id: farmer.id,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          farmerId: farmer.id,
+          farmSize: null,
+          farmSizeUnit: null,
+          experienceYears: null,
+          cooperativeMember: false,
+          cooperativeName: null,
+          certifications: [],
+          farmingMethod: null,
+          defaultLocation: null,
+          preferredPaymentMethod: null,
+          minimumOrderQuantity: null,
+          deliveryPreference: null,
+          maxDeliveryDistance: null,
+        };
+      }
+
       return farmer;
     } catch (error) {
       console.error("Error fetching farming profile:", error);

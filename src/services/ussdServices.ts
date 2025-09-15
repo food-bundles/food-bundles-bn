@@ -13,6 +13,7 @@ import { PinManagementService } from "./pinManagement.service";
 import { ProfileManagementService } from "./profileManagement.service";
 import { SupportService } from "./support.service";
 import { comparePassword, hashPassword } from "../utils/password";
+import { ProductData } from "./productService";
 
 let ussdSessions: Record<string, ISessionData> = {};
 
@@ -152,6 +153,371 @@ function buildLocationMenu(
   return menu;
 }
 
+// Function to handle location updates for profile
+async function handleLocationUpdate(
+  parts: string[],
+  session: ISessionData,
+  lang: "KINY" | "ENG" | "FRE",
+  phoneNumber: string
+): Promise<string> {
+  const currentInput = parts[parts.length - 1];
+
+  // Handle province selection
+  if (session.locationStep === "province") {
+    const provinces = LocationValidationService.getAllProvinces();
+
+    if (currentInput === "99") {
+      session.locationPage = (session.locationPage || 1) + 1;
+      return buildLocationMenu(
+        provinces,
+        session.locationPage,
+        "selectProvince",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "98") {
+      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
+      return buildLocationMenu(
+        provinces,
+        session.locationPage,
+        "selectProvince",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "0") {
+      session.locationStep = undefined;
+      session.locationPage = undefined;
+      return await showUpdateProfileMenu(lang);
+    }
+
+    const provinceIndex = parseInt(currentInput) - 1;
+    if (provinceIndex >= 0 && provinceIndex < provinces.length) {
+      session.selectedProvince = provinces[provinceIndex];
+      session.locationStep = "district";
+      session.locationPage = 1;
+
+      const districts = LocationValidationService.getDistrictsByProvince(
+        session.selectedProvince
+      );
+      return buildLocationMenu(districts, 1, "selectDistrict", lang, true);
+    }
+
+    return buildLocationMenu(
+      provinces,
+      session.locationPage || 1,
+      "selectProvince",
+      lang,
+      true
+    );
+  }
+
+  // Handle district selection
+  if (session.locationStep === "district") {
+    const districts = LocationValidationService.getDistrictsByProvince(
+      session.selectedProvince!
+    );
+
+    if (currentInput === "99") {
+      session.locationPage = (session.locationPage || 1) + 1;
+      return buildLocationMenu(
+        districts,
+        session.locationPage,
+        "selectDistrict",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "98") {
+      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
+      return buildLocationMenu(
+        districts,
+        session.locationPage,
+        "selectDistrict",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "0") {
+      session.locationStep = "province";
+      session.locationPage = 1;
+      const provinces = LocationValidationService.getAllProvinces();
+      return buildLocationMenu(provinces, 1, "selectProvince", lang, true);
+    }
+
+    const districtIndex = parseInt(currentInput) - 1;
+    if (districtIndex >= 0 && districtIndex < districts.length) {
+      session.selectedDistrict = districts[districtIndex];
+      session.locationStep = "sector";
+      session.locationPage = 1;
+
+      const sectors = LocationValidationService.getSectorsByDistrict(
+        session.selectedProvince!,
+        session.selectedDistrict
+      );
+      return buildLocationMenu(sectors, 1, "selectSector", lang, true);
+    }
+
+    return buildLocationMenu(
+      districts,
+      session.locationPage || 1,
+      "selectDistrict",
+      lang,
+      true
+    );
+  }
+
+  // Handle sector selection
+  if (session.locationStep === "sector") {
+    const sectors = LocationValidationService.getSectorsByDistrict(
+      session.selectedProvince!,
+      session.selectedDistrict!
+    );
+
+    if (currentInput === "99") {
+      session.locationPage = (session.locationPage || 1) + 1;
+      return buildLocationMenu(
+        sectors,
+        session.locationPage,
+        "selectSector",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "98") {
+      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
+      return buildLocationMenu(
+        sectors,
+        session.locationPage,
+        "selectSector",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "0") {
+      session.locationStep = "district";
+      session.locationPage = 1;
+      const districts = LocationValidationService.getDistrictsByProvince(
+        session.selectedProvince!
+      );
+      return buildLocationMenu(districts, 1, "selectDistrict", lang, true);
+    }
+
+    const sectorIndex = parseInt(currentInput) - 1;
+    if (sectorIndex >= 0 && sectorIndex < sectors.length) {
+      session.selectedSector = sectors[sectorIndex];
+      session.locationStep = "cell";
+      session.locationPage = 1;
+
+      const cells = LocationValidationService.getCellsBySector(
+        session.selectedProvince!,
+        session.selectedDistrict!,
+        session.selectedSector
+      );
+      return buildLocationMenu(cells, 1, "selectCell", lang, true);
+    }
+
+    return buildLocationMenu(
+      sectors,
+      session.locationPage || 1,
+      "selectSector",
+      lang,
+      true
+    );
+  }
+
+  // Handle cell selection
+  if (session.locationStep === "cell") {
+    const cells = LocationValidationService.getCellsBySector(
+      session.selectedProvince!,
+      session.selectedDistrict!,
+      session.selectedSector!
+    );
+
+    if (currentInput === "99") {
+      session.locationPage = (session.locationPage || 1) + 1;
+      return buildLocationMenu(
+        cells,
+        session.locationPage,
+        "selectCell",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "98") {
+      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
+      return buildLocationMenu(
+        cells,
+        session.locationPage,
+        "selectCell",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "0") {
+      session.locationStep = "sector";
+      session.locationPage = 1;
+      const sectors = LocationValidationService.getSectorsByDistrict(
+        session.selectedProvince!,
+        session.selectedDistrict!
+      );
+      return buildLocationMenu(sectors, 1, "selectSector", lang, true);
+    }
+
+    const cellIndex = parseInt(currentInput) - 1;
+    if (cellIndex >= 0 && cellIndex < cells.length) {
+      session.selectedCell = cells[cellIndex];
+      session.locationStep = "village";
+      session.locationPage = 1;
+
+      const villages = LocationValidationService.getVillagesByCell(
+        session.selectedProvince!,
+        session.selectedDistrict!,
+        session.selectedSector!,
+        session.selectedCell
+      );
+      return buildLocationMenu(villages, 1, "selectVillage", lang, true);
+    }
+
+    return buildLocationMenu(
+      cells,
+      session.locationPage || 1,
+      "selectCell",
+      lang,
+      true
+    );
+  }
+
+  // Handle village selection
+  if (session.locationStep === "village") {
+    const villages = LocationValidationService.getVillagesByCell(
+      session.selectedProvince!,
+      session.selectedDistrict!,
+      session.selectedSector!,
+      session.selectedCell!
+    );
+
+    if (currentInput === "99") {
+      session.locationPage = (session.locationPage || 1) + 1;
+      return buildLocationMenu(
+        villages,
+        session.locationPage,
+        "selectVillage",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "98") {
+      session.locationPage = Math.max((session.locationPage || 1) - 1, 1);
+      return buildLocationMenu(
+        villages,
+        session.locationPage,
+        "selectVillage",
+        lang,
+        true
+      );
+    }
+
+    if (currentInput === "0") {
+      session.locationStep = "cell";
+      session.locationPage = 1;
+      const cells = LocationValidationService.getCellsBySector(
+        session.selectedProvince!,
+        session.selectedDistrict!,
+        session.selectedSector!
+      );
+      return buildLocationMenu(cells, 1, "selectCell", lang, true);
+    }
+
+    const villageIndex = parseInt(currentInput) - 1;
+    if (villageIndex >= 0 && villageIndex < villages.length) {
+      session.selectedVillage = villages[villageIndex];
+      session.locationStep = "confirm_location";
+
+      return `CON ${getTranslation(lang, "confirmLocationUpdate")}
+${getTranslation(lang, "province")}: ${session.selectedProvince}
+${getTranslation(lang, "district")}: ${session.selectedDistrict}
+${getTranslation(lang, "sector")}: ${session.selectedSector}
+${getTranslation(lang, "cell")}: ${session.selectedCell}
+${getTranslation(lang, "village")}: ${session.selectedVillage}
+
+1. ${getTranslation(lang, "confirm")}
+2. ${getTranslation(lang, "cancel")}
+0. ${getTranslation(lang, "back")}`;
+    }
+
+    return buildLocationMenu(
+      villages,
+      session.locationPage || 1,
+      "selectVillage",
+      lang,
+      true
+    );
+  }
+
+  // Handle location confirmation
+  if (session.locationStep === "confirm_location") {
+    if (currentInput === "1") {
+      // Confirm and update location
+      try {
+        const success = await ProfileManagementService.updateLocation(
+          phoneNumber,
+          {
+            province: session.selectedProvince!,
+            district: session.selectedDistrict!,
+            sector: session.selectedSector!,
+            cell: session.selectedCell!,
+            village: session.selectedVillage!,
+          }
+        );
+
+        if (success) {
+          // Clear location session data
+          session.locationStep = undefined;
+          session.locationPage = undefined;
+          session.selectedProvince = undefined;
+          session.selectedDistrict = undefined;
+          session.selectedSector = undefined;
+          session.selectedCell = undefined;
+          session.selectedVillage = undefined;
+
+          return `END ${getTranslation(lang, "locationUpdatedSuccessfully")}`;
+        } else {
+          return `END ${getTranslation(lang, "locationUpdateFailed")}`;
+        }
+      } catch (error) {
+        console.error("Location update error:", error);
+        return `END ${getTranslation(lang, "locationUpdateFailed")}`;
+      }
+    }
+
+    if (currentInput === "2" || currentInput === "0") {
+      // Cancel or go back to village selection
+      session.locationStep = "village";
+      session.locationPage = 1;
+      const villages = LocationValidationService.getVillagesByCell(
+        session.selectedProvince!,
+        session.selectedDistrict!,
+        session.selectedSector!,
+        session.selectedCell!
+      );
+      return buildLocationMenu(villages, 1, "selectVillage", lang, true);
+    }
+  }
+
+  return `END ${getTranslation(lang, "invalidInput")}`;
+}
+
 // Helper function to check if user exists
 async function checkUserExists(phoneNumber: string): Promise<boolean> {
   try {
@@ -175,31 +541,47 @@ function showLanguageSelection(lang: "KINY" | "ENG" | "FRE" = "KINY"): string {
 }
 
 // Helper function to handle back navigation
-function handleBackNavigation(
+async function handleBackNavigation(
   session: ISessionData,
   lang: "KINY" | "ENG" | "FRE"
-): string {
+): Promise<string> {
   if (!session.previousSteps || session.previousSteps.length === 0) {
-    // Return to main menu if no history
-    return `CON ${getTranslation(lang, "welcome")}
-1. ${getTranslation(lang, "submitProduct")}
-2. ${getTranslation(lang, "help")}
-3. ${getTranslation(lang, "myAccount")}
-4. ${getTranslation(lang, "exit")}`;
+    return showMainMenu(lang);
   }
 
   const previousStep = session.previousSteps.pop();
 
+  // Clear current step data when going back
+  session.currentStep = undefined;
+  session.stepData = undefined;
+
   switch (previousStep?.step) {
     case "mainMenu":
-      return `CON ${getTranslation(lang, "welcome")}
+      return showMainMenu(lang);
+    case "accountMenu":
+      return showAccountMenu(lang);
+    case "categoryMenu":
+      return await buildCategoryMenu(lang, session.categoryPage || 1);
+    case "productMenu":
+      // Return to product selection with proper pagination
+      const products = await getProductsByCategory(session.selectedCategory!);
+      return buildProductMenu(products, session.productPage || 1, lang);
+    // Add more cases for other steps
+    default:
+      return showMainMenu(lang);
+  }
+}
+
+function showMainMenu(lang: "KINY" | "ENG" | "FRE" = "KINY"): string {
+  return `CON ${getTranslation(lang, "welcome")}
 1. ${getTranslation(lang, "submitProduct")}
 2. ${getTranslation(lang, "help")}
 3. ${getTranslation(lang, "myAccount")}
 4. ${getTranslation(lang, "exit")}`;
+}
 
-    case "accountMenu":
-      return `CON ${getTranslation(lang, "myAccount")}
+function showAccountMenu(lang: "KINY" | "ENG" | "FRE" = "KINY"): string {
+  return `CON ${getTranslation(lang, "myAccount")}
 1. ${getTranslation(lang, "checkSubmissions")}
 2. ${getTranslation(lang, "updateProfile")}
 3. ${getTranslation(lang, "farmingProfile")}
@@ -207,14 +589,34 @@ function handleBackNavigation(
 5. ${getTranslation(lang, "securitySettings")}
 6. ${getTranslation(lang, "changeLanguage")}
 0. ${getTranslation(lang, "back")}`;
+}
 
-    default:
-      return `CON ${getTranslation(lang, "welcome")}
-1. ${getTranslation(lang, "submitProduct")}
-2. ${getTranslation(lang, "help")}
-3. ${getTranslation(lang, "myAccount")}
-4. ${getTranslation(lang, "exit")}`;
+function buildProductMenu(
+  products: any[],
+  page: number = 1,
+  lang: "KINY" | "ENG" | "FRE" = "KINY"
+): string {
+  const paginated = paginateLocationList(products, page);
+
+  let menu = `CON ${getTranslation(lang, "selectProduct")}\n`;
+
+  paginated.items.forEach((product: any, index) => {
+    const itemNumber = (paginated.currentPage - 1) * 6 + index + 1;
+    menu += `${itemNumber}. ${product.prodcutName}\n`;
+  });
+
+  // Add navigation options
+  let navOptions: string[] = [];
+  if (paginated.hasPrev) {
+    navOptions.push(`98. ${getTranslation(lang, "previous")}`);
   }
+  if (paginated.hasNext) {
+    navOptions.push(`99. ${getTranslation(lang, "next")}`);
+  }
+
+  navOptions.push(`0. ${getTranslation(lang, "back")}`);
+
+  return `${menu}${navOptions.join("\n")}`;
 }
 
 // Build product category menu
@@ -818,6 +1220,21 @@ async function showEarningsDashboardMenu(
 0. ${getTranslation(lang, "back")}`;
 }
 
+// Function to check product prices
+async function getProductPurchasePrice(productName: string): Promise<number> {
+  try {
+    // This would typically come from your pricing database/API
+    const product = await prisma.product.findFirst({
+      where: { productName },
+      select: { purchasePrice: true },
+    });
+    return product?.purchasePrice || 0;
+  } catch (error) {
+    console.error("Error fetching product price:", error);
+    return 0;
+  }
+}
+
 // Enhanced pagination navigation handler
 function handlePaginationNavigation(
   parts: string[],
@@ -1263,11 +1680,57 @@ ${getTranslation(lang, "enterPrice")}
 0. ${getTranslation(lang, "back")}`;
             }
 
+            // Check if price is higher than purchase price
+            const purchasePrice = await getProductPurchasePrice(
+              session.selectedProduct!
+            );
+            if (purchasePrice > 0 && price > purchasePrice) {
+              session.wishedPrice = priceInput;
+              session.purchasePrice = purchasePrice.toString();
+              session.priceComparisonStep = "confirm_high_price";
+
+              return `CON ${getTranslation(lang, "priceHigherThanMarket")}
+${getTranslation(lang, "marketPrice")}: ${purchasePrice} RWF
+${getTranslation(lang, "yourPrice")}: ${price} RWF
+
+1. ${getTranslation(lang, "acceptAndContinue")}
+2. ${getTranslation(lang, "changePrice")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
             session.wishedPrice = priceInput;
             addToHistory(session, "priceInput");
 
             return `CON ${getTranslation(lang, "enterPinConfirm")}
 0. ${getTranslation(lang, "back")}`;
+          }
+
+          // Handle price comparison response
+          if (
+            parts.length === 6 &&
+            session.priceComparisonStep === "confirm_high_price"
+          ) {
+            const choice = parts[5];
+
+            if (choice === "0") {
+              return `CON ${getTranslation(lang, "enterPrice")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            if (choice === "1") {
+              // Accept high price and continue
+              session.priceComparisonStep = undefined;
+              addToHistory(session, "priceInput");
+              return `CON ${getTranslation(lang, "enterPinConfirm")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            if (choice === "2") {
+              // Change price
+              session.priceComparisonStep = undefined;
+              return `CON ${getTranslation(lang, "enterPrice")}
+0. ${getTranslation(lang, "back")}`;
+            }
           }
 
           // Handle PIN confirmation for submission
@@ -1493,12 +1956,179 @@ ${getTranslation(lang, "email")}: info@food.rw`;
               return await showUpdateProfileMenu(lang);
             }
 
+            // Change Phone Number
+            if (parts[2] === "1") {
+              if (parts.length === 3) {
+                session.profileUpdateStep = "phone_step1";
+                return `CON ${getTranslation(lang, "enterNewPhoneNumber")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (
+                parts.length === 4 &&
+                session.profileUpdateStep === "phone_step1"
+              ) {
+                const newPhone = parts[3];
+
+                // Basic phone validation
+                if (!/^\+?\d{10,15}$/.test(newPhone)) {
+                  return `CON ${getTranslation(lang, "invalidPhoneFormat")}
+
+${getTranslation(lang, "enterNewPhoneNumber")}
+0. ${getTranslation(lang, "back")}`;
+                }
+
+                session.newPhoneNumber = newPhone;
+                session.profileUpdateStep = "phone_step2";
+
+                // In real implementation, send SMS verification code here
+                return `CON ${getTranslation(lang, "verificationCodeSent")}
+
+${getTranslation(lang, "enterVerificationCode")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (
+                parts.length === 5 &&
+                session.profileUpdateStep === "phone_step2"
+              ) {
+                const verificationCode = parts[4];
+
+                if (verificationCode === "0") {
+                  session.profileUpdateStep = undefined;
+                  return await showUpdateProfileMenu(lang);
+                }
+
+                try {
+                  const success =
+                    await ProfileManagementService.updatePhoneNumber(
+                      phoneNumber,
+                      session.newPhoneNumber!,
+                      verificationCode
+                    );
+
+                  if (success) {
+                    delete session.newPhoneNumber;
+                    delete session.profileUpdateStep;
+                    return `END ${getTranslation(lang, "phoneNumberUpdated")}`;
+                  } else {
+                    return `END ${getTranslation(lang, "phoneUpdateFailed")}`;
+                  }
+                } catch (error) {
+                  console.error("Phone update error:", error);
+                  return `END ${getTranslation(lang, "phoneUpdateFailed")}`;
+                }
+              }
+            }
+
+            // Update Location
+            if (parts[2] === "2") {
+              if (parts.length === 3) {
+                session.locationStep = "province";
+                session.locationPage = 1;
+                session.profileUpdateType = "location";
+
+                const provinces = LocationValidationService.getAllProvinces();
+                return buildLocationMenu(
+                  provinces,
+                  1,
+                  "selectProvince",
+                  lang,
+                  true
+                );
+              }
+
+              return await handleLocationUpdate(
+                parts,
+                session,
+                lang,
+                phoneNumber
+              );
+            }
+
+            // Communication Preferences
+            if (parts[2] === "3") {
+              if (parts.length === 3) {
+                return `CON ${getTranslation(lang, "communicationPrefs")}
+1. ${getTranslation(lang, "smsNotifications")} ✅
+2. ${getTranslation(lang, "notificationFrequency")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (parts[3] === "1") {
+                // Toggle SMS notifications
+                try {
+                  await ProfileManagementService.updateCommunicationPreferences(
+                    phoneNumber,
+                    {
+                      smsNotifications: !farmer.smsNotifications,
+                      language: farmer.preferredLanguage as
+                        | "KINY"
+                        | "ENG"
+                        | "FRE",
+                      notificationFrequency:
+                        (farmer.notificationFrequency as
+                          | "IMMEDIATE"
+                          | "DAILY"
+                          | "WEEKLY") || "DAILY",
+                    }
+                  );
+                  return `END ${getTranslation(
+                    lang,
+                    "communicationUpdateSuccess"
+                  )}`;
+                } catch (error) {
+                  console.error("Communication pref update error:", error);
+                  return `END ${getTranslation(lang, "operationFailed")}`;
+                }
+              }
+
+              if (parts[3] === "2") {
+                if (parts.length === 4) {
+                  return `CON ${getTranslation(lang, "selectNotificationFreq")}
+1. ${getTranslation(lang, "IMMEDIATE")}
+2. ${getTranslation(lang, "DAILY")}
+3. ${getTranslation(lang, "WEEKLY")}
+0. ${getTranslation(lang, "back")}`;
+                }
+
+                const freqChoice = parts[4];
+                const frequencyMap = {
+                  "1": "IMMEDIATE",
+                  "2": "DAILY",
+                  "3": "WEEKLY",
+                } as const;
+
+                if (freqChoice in frequencyMap) {
+                  try {
+                    await ProfileManagementService.updateCommunicationPreferences(
+                      phoneNumber,
+                      {
+                        smsNotifications: farmer.smsNotifications,
+                        language: farmer.preferredLanguage as
+                          | "KINY"
+                          | "ENG"
+                          | "FRE",
+                        notificationFrequency:
+                          frequencyMap[freqChoice as keyof typeof frequencyMap],
+                      }
+                    );
+                    return `END ${getTranslation(
+                      lang,
+                      "communicationUpdateSuccess"
+                    )}`;
+                  } catch (error) {
+                    console.error("Frequency update error:", error);
+                    return `END ${getTranslation(lang, "operationFailed")}`;
+                  }
+                }
+              }
+            }
+
             // Back navigation
             if (parts[2] === "0") {
               return handleBackNavigation(session, lang);
             }
-
-            return await showUpdateProfileMenu(lang);
           }
 
           // Farming Profile
@@ -1506,6 +2136,239 @@ ${getTranslation(lang, "email")}: info@food.rw`;
             if (parts.length === 2) {
               addToHistory(session, "accountMenu");
               return await showFarmingProfileMenu(lang);
+            }
+
+            // Primary Crops implementation
+            if (parts[2] === "1") {
+              if (parts.length === 3) {
+                session.farmingProfileStep = "primary_crops_view";
+
+                // Get available products for selection
+                const categories = await getActiveProductCategories();
+                let menu = `CON ${getTranslation(lang, "selectCrops")}\n`;
+
+                categories.forEach((category, index) => {
+                  menu += `${index + 1}. ${category.name}\n`;
+                });
+
+                menu += `\n0. ${getTranslation(lang, "back")}`;
+                return menu;
+              }
+
+              if (
+                parts.length === 4 &&
+                session.farmingProfileStep === "primary_crops_view"
+              ) {
+                const categoryChoice = parts[3];
+
+                if (categoryChoice === "0") {
+                  return await showFarmingProfileMenu(lang);
+                }
+
+                const categoryIndex = parseInt(categoryChoice) - 1;
+                const categories = await getActiveProductCategories();
+
+                if (categoryIndex >= 0 && categoryIndex < categories.length) {
+                  session.selectedCategoryId = categories[categoryIndex].id;
+                  const products = await getProductsByCategory(
+                    session.selectedCategoryId
+                  );
+
+                  let productMenu = `CON ${getTranslation(
+                    lang,
+                    "selectCrops"
+                  )}\n`;
+                  products.forEach((product, index) => {
+                    productMenu += `${index + 1}. ${product.productName}\n`;
+                  });
+
+                  productMenu += `\n0. ${getTranslation(lang, "back")}`;
+                  session.farmingProfileStep = "select_crops";
+                  return productMenu;
+                }
+              }
+
+              if (
+                parts.length === 5 &&
+                session.farmingProfileStep === "select_crops"
+              ) {
+                const productChoice = parts[4];
+
+                if (productChoice === "0") {
+                  // Go back to category selection
+                  const categories = await getActiveProductCategories();
+                  let menu = `CON ${getTranslation(lang, "selectCrops")}\n`;
+
+                  categories.forEach((category, index) => {
+                    menu += `${index + 1}. ${category.name}\n`;
+                  });
+
+                  menu += `\n0. ${getTranslation(lang, "back")}`;
+                  return menu;
+                }
+
+                // Here you would implement the logic to save selected crops
+                // This is a simplified example
+                return `END ${getTranslation(lang, "cropsUpdated")}`;
+              }
+            }
+
+            // Farm Information implementation
+            if (parts[2] === "2") {
+              if (parts.length === 3) {
+                session.farmingProfileStep = "farm_info";
+                return `CON ${getTranslation(
+                  lang,
+                  "enterFarmSize"
+                )} (${getTranslation(lang, "hectares")})
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (
+                parts.length === 4 &&
+                session.farmingProfileStep === "farm_info"
+              ) {
+                const farmSizeInput = parts[3];
+
+                if (farmSizeInput === "0") {
+                  return await showFarmingProfileMenu(lang);
+                }
+
+                const farmSize = parseFloat(farmSizeInput);
+                if (isNaN(farmSize) || farmSize <= 0) {
+                  return `CON ${getTranslation(lang, "invalidNumber")}
+
+${getTranslation(lang, "enterFarmSize")} (${getTranslation(lang, "hectares")})
+0. ${getTranslation(lang, "back")}`;
+                }
+
+                session.farmSize = farmSize;
+                session.farmingProfileStep = "farm_experience";
+                return `CON ${getTranslation(
+                  lang,
+                  "enterExperience"
+                )} (${getTranslation(lang, "years")})
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (
+                parts.length === 5 &&
+                session.farmingProfileStep === "farm_experience"
+              ) {
+                const experienceInput = parts[4];
+
+                if (experienceInput === "0") {
+                  return `CON ${getTranslation(
+                    lang,
+                    "enterFarmSize"
+                  )} (${getTranslation(lang, "hectares")})
+0. ${getTranslation(lang, "back")}`;
+                }
+
+                const experience = parseInt(experienceInput);
+                if (isNaN(experience) || experience < 0) {
+                  return `CON ${getTranslation(lang, "invalidNumber")}
+
+${getTranslation(lang, "enterExperience")} (${getTranslation(lang, "years")})
+0. ${getTranslation(lang, "back")}`;
+                }
+
+                // Save farm information
+                try {
+                  await FarmingProfileService.updateFarmInformation(
+                    phoneNumber,
+                    {
+                      farmSize: session.farmSize,
+                      farmSizeUnit: "HECTARES",
+                      experienceYears: experience,
+                    }
+                  );
+
+                  return `END ${getTranslation(lang, "farmInfoUpdated")}`;
+                } catch (error) {
+                  console.error("Error updating farm info:", error);
+                  return `END ${getTranslation(lang, "operationFailed")}`;
+                }
+              }
+            }
+
+            // Business Preferences implementation
+            if (parts[2] === "3") {
+              if (parts.length === 3) {
+                session.farmingProfileStep = "business_prefs";
+                return `CON ${getTranslation(lang, "selectPaymentMethod")}
+1. ${getTranslation(lang, "MOBILE_MONEY")}
+2. ${getTranslation(lang, "BANK_TRANSFER")}
+3. ${getTranslation(lang, "CASH")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (
+                parts.length === 4 &&
+                session.farmingProfileStep === "business_prefs"
+              ) {
+                const paymentMethodChoice = parts[3];
+
+                if (paymentMethodChoice === "0") {
+                  return await showFarmingProfileMenu(lang);
+                }
+
+                const paymentMethodMap = {
+                  "1": "MOBILE_MONEY",
+                  "2": "BANK_TRANSFER",
+                  "3": "CASH",
+                } as const;
+
+                if (paymentMethodChoice in paymentMethodMap) {
+                  session.paymentMethod =
+                    paymentMethodMap[
+                      paymentMethodChoice as keyof typeof paymentMethodMap
+                    ];
+                  session.farmingProfileStep = "min_order_qty";
+
+                  return `CON ${getTranslation(lang, "enterMinOrderQty")}
+0. ${getTranslation(lang, "back")}`;
+                }
+              }
+
+              if (
+                parts.length === 5 &&
+                session.farmingProfileStep === "min_order_qty"
+              ) {
+                const minOrderInput = parts[4];
+
+                if (minOrderInput === "0") {
+                  return `CON ${getTranslation(lang, "selectPaymentMethod")}
+1. ${getTranslation(lang, "MOBILE_MONEY")}
+2. ${getTranslation(lang, "BANK_TRANSFER")}
+3. ${getTranslation(lang, "CASH")}
+0. ${getTranslation(lang, "back")}`;
+                }
+
+                const minOrderQty = parseFloat(minOrderInput);
+                if (isNaN(minOrderQty) || minOrderQty <= 0) {
+                  return `CON ${getTranslation(lang, "invalidNumber")}
+
+${getTranslation(lang, "enterMinOrderQty")}
+0. ${getTranslation(lang, "back")}`;
+                }
+
+                // Save business preferences
+                try {
+                  await FarmingProfileService.updateBusinessPreferences(
+                    phoneNumber,
+                    {
+                      preferredPaymentMethod: session.paymentMethod,
+                      minimumOrderQuantity: minOrderQty,
+                    }
+                  );
+
+                  return `END ${getTranslation(lang, "businessPrefsUpdated")}`;
+                } catch (error) {
+                  console.error("Error updating business prefs:", error);
+                  return `END ${getTranslation(lang, "operationFailed")}`;
+                }
+              }
             }
 
             // View farming profile
@@ -1517,32 +2380,59 @@ ${getTranslation(lang, "email")}: info@food.rw`;
 
                 console.log("Farming Profile:", profile);
 
-                if (!profile) {
-                  return `END ${getTranslation(lang, "profileNotFound")}`;
+                if (!profile || !profile.FarmerProfile) {
+                  return `END ${getTranslation(lang, "profileNotFound")}
+${getTranslation(lang, "pleaseUpdateProfile")}`;
                 }
 
                 let response = `END ${getTranslation(
                   lang,
-                  "farmingProfile"
+                  "farmingProfileDetails"
                 )}\n\n`;
 
-                response += `${getTranslation(
-                  lang,
-                  "primaryCrops"
-                )}: ${profile.FarmerPrimaryCrop.product.productName.join(
-                  ", "
-                )}\n`;
+                // Handle primary crops safely
+                if (
+                  profile.FarmerPrimaryCrop &&
+                  profile.FarmerPrimaryCrop.length > 0
+                ) {
+                  const cropNames = profile.FarmerPrimaryCrop.filter(
+                    (crop: any) => crop.product
+                  ).map((crop: any) => crop.product.productName);
+                  response += `${getTranslation(lang, "primaryCrops")}: ${
+                    cropNames.join(", ") || getTranslation(lang, "none")
+                  }\n`;
+                } else {
+                  response += `${getTranslation(
+                    lang,
+                    "primaryCrops"
+                  )}: ${getTranslation(lang, "none")}\n`;
+                }
 
+                // Handle farm information safely
                 response += `${getTranslation(lang, "farmSize")}: ${
-                  profile.FarmerProfile.farmSize
+                  profile.FarmerProfile.farmSize || 0
                 } ${getTranslation(lang, "hectares")}\n`;
                 response += `${getTranslation(lang, "experience")}: ${
-                  profile.FarmerProfile.experienceYears
+                  profile.FarmerProfile.experienceYears || 0
                 } ${getTranslation(lang, "years")}\n`;
-                response += `${getTranslation(
-                  lang,
-                  "cooperativeName"
-                )}: ${profile.FarmerProfile.cooperativeName.join(", ")}`;
+
+                if (profile.FarmerProfile.cooperativeName) {
+                  response += `${getTranslation(lang, "cooperativeName")}: ${
+                    profile.FarmerProfile.cooperativeName
+                  }\n`;
+                }
+
+                if (profile.FarmerProfile.cooperativeMember) {
+                  response += `${getTranslation(
+                    lang,
+                    "cooperativeMember"
+                  )}: ${getTranslation(lang, "yes")}\n`;
+                } else {
+                  response += `${getTranslation(
+                    lang,
+                    "cooperativeMember"
+                  )}: ${getTranslation(lang, "no")}\n`;
+                }
 
                 return response;
               } catch (error) {
@@ -1564,6 +2454,196 @@ ${getTranslation(lang, "email")}: info@food.rw`;
             // Income Summary with null checking
             if (parts[2] === "1") {
               return await getIncomeSummaryDisplay(phoneNumber, lang);
+            }
+
+            // Performance Metrics
+            if (parts[2] === "2") {
+              if (parts.length === 3) {
+                return `CON ${getTranslation(lang, "enterPINForMetrics")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (parts.length === 4) {
+                const pinInput = parts[3];
+
+                if (pinInput === "0") {
+                  return await showEarningsDashboardMenu(lang);
+                }
+
+                const pinResult = await verifyUserPin(phoneNumber, pinInput);
+                if (!pinResult.isValid) {
+                  return `END ${getTranslation(
+                    lang,
+                    pinResult.message || "incorrectPinMetrics"
+                  )}`;
+                }
+
+                try {
+                  const metrics =
+                    await AnalyticsEarningsService.getPerformanceMetrics(
+                      phoneNumber
+                    );
+
+                  if (!metrics) {
+                    return `END ${getTranslation(
+                      lang,
+                      "metricsDataNotAvailable"
+                    )}`;
+                  }
+
+                  let response = `END ${getTranslation(
+                    lang,
+                    "performanceMetricsDetails"
+                  )}\n\n`;
+                  response += `${getTranslation(lang, "acceptanceRate")}: ${
+                    metrics.acceptanceRate?.toFixed(2) || 0
+                  }%\n`;
+                  response += `${getTranslation(lang, "avgPricePerKg")}: ${
+                    metrics.avgPrice?.toFixed(2) || 0
+                  } RWF\n`;
+
+                  if (metrics.topProducts && metrics.topProducts.length > 0) {
+                    response += `${getTranslation(lang, "topProduct")}: ${
+                      metrics.topProducts[0].productName
+                    } (${metrics.topProducts[0]._sum.totalAmount || 0} RWF)\n`;
+                  }
+
+                  return response;
+                } catch (error) {
+                  console.error("Error fetching performance metrics:", error);
+                  return `END ${getTranslation(
+                    lang,
+                    "metricsDataNotAvailable"
+                  )}`;
+                }
+              }
+            }
+
+            // Comparison Analytics
+            if (parts[2] === "3") {
+              if (parts.length === 3) {
+                return `CON ${getTranslation(lang, "enterPINForEarnings")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (parts.length === 4) {
+                const pinInput = parts[3];
+
+                if (pinInput === "0") {
+                  return await showEarningsDashboardMenu(lang);
+                }
+
+                const pinResult = await verifyUserPin(phoneNumber, pinInput);
+                if (!pinResult.isValid) {
+                  return `END ${getTranslation(
+                    lang,
+                    pinResult.message || "incorrectPinEarnings"
+                  )}`;
+                }
+
+                try {
+                  const analytics =
+                    await AnalyticsEarningsService.getComparisonAnalytics(
+                      phoneNumber
+                    );
+
+                  if (!analytics) {
+                    return `END ${getTranslation(lang, "noDataAvailable")}`;
+                  }
+
+                  let response = `END ${getTranslation(
+                    lang,
+                    "comparisonAnalytics"
+                  )}\n\n`;
+                  response += `${getTranslation(lang, "regionalAverage")}: ${
+                    analytics.regionalAverage || 0
+                  } RWF\n`;
+                  response += `${getTranslation(lang, "yearlyGrowth")}: ${
+                    analytics.previousYear?.growthRate?.toFixed(2) || 0
+                  }%\n`;
+                  response += `${getTranslation(lang, "marketPosition")}: #${
+                    analytics.marketPosition || "N/A"
+                  }\n`;
+
+                  return response;
+                } catch (error) {
+                  console.error("Error fetching comparison analytics:", error);
+                  return `END ${getTranslation(lang, "noDataAvailable")}`;
+                }
+              }
+            }
+
+            // Payment History
+            if (parts[2] === "4") {
+              if (parts.length === 3) {
+                return `CON ${getTranslation(lang, "enterPINForEarnings")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (parts.length === 4) {
+                const pinInput = parts[3];
+
+                if (pinInput === "0") {
+                  return await showEarningsDashboardMenu(lang);
+                }
+
+                const pinResult = await verifyUserPin(phoneNumber, pinInput);
+                if (!pinResult.isValid) {
+                  return `END ${getTranslation(
+                    lang,
+                    pinResult.message || "incorrectPinEarnings"
+                  )}`;
+                }
+
+                try {
+                  const paymentHistory =
+                    await AnalyticsEarningsService.getPaymentHistory(
+                      phoneNumber,
+                      5
+                    );
+
+                  // Proper type checking for payment history
+                  if (
+                    !paymentHistory ||
+                    !Array.isArray((paymentHistory as any).recentPayments) ||
+                    (paymentHistory as any).recentPayments.length === 0
+                  ) {
+                    return `END ${getTranslation(lang, "noDataAvailable")}`;
+                  }
+
+                  // Type assertion for payment history
+                  const paymentData = paymentHistory as {
+                    recentPayments: any[];
+                    pendingAmount: number;
+                    pendingCount: number;
+                  };
+
+                  let response = `END ${getTranslation(
+                    lang,
+                    "paymentHistory"
+                  )}\n\n`;
+
+                  paymentData.recentPayments.forEach(
+                    (payment: any, index: number) => {
+                      response += `${index + 1}. ${payment.productName} - ${
+                        payment.totalAmount
+                      } RWF\n`;
+                      response += `   ${new Date(
+                        payment.paidAt
+                      ).toLocaleDateString()}\n\n`;
+                    }
+                  );
+
+                  response += `\n${getTranslation(lang, "pendingPayments")}: ${
+                    paymentData.pendingCount
+                  } (${paymentData.pendingAmount} RWF)`;
+
+                  return response;
+                } catch (error) {
+                  console.error("Error fetching payment history:", error);
+                  return `END ${getTranslation(lang, "noDataAvailable")}`;
+                }
+              }
             }
 
             // Back navigation

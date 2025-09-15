@@ -25,7 +25,8 @@ export interface ISessionData {
     | "cell"
     | "village"
     | "completed"
-    | "confirm_pin";
+    | "confirm_pin"
+    | "confirm_location";
   locationPage?: number;
   selectedProvince?: string;
   selectedDistrict?: string;
@@ -39,6 +40,8 @@ export interface ISessionData {
   newPhoneNumber?: string;
   newPin?: string;
   pinChangeStep?: string;
+  profileUpdateStep?: string;
+  profileUpdateType?: string;
 
   // Product submission flow
   productPage?: number;
@@ -56,6 +59,23 @@ export interface ISessionData {
     description?: string;
     priority?: string;
   };
+
+  currentStep?: string;
+  stepData?: any;
+  farmingProfileStep?: string;
+  farmSize?: number;
+  paymentMethod?: "MOBILE_MONEY" | "BANK_TRANSFER" | "CASH";
+  selectedCategory?: string;
+
+  // For price comparison feature
+  priceComparisonStep?: string;
+  purchasePrice?: string;
+
+  // For farming profile updates
+  farmingUpdateType?: "crops" | "farm_info" | "business_prefs";
+
+  // For navigation
+  previousMenu?: string;
 
   // Navigation history for back functionality
   previousSteps?: Array<{
@@ -175,6 +195,7 @@ export type TranslationKey =
   | "securityQuestions"
   | "emergencyContact"
   | "updateProfile"
+  | "pleaseUpdateProfile"
   | "changePhoneNumber"
   | "updateLocation"
   | "communicationPrefs"
@@ -184,8 +205,13 @@ export type TranslationKey =
   | "enterVerificationCode"
   | "phoneNumberUpdated"
   | "phoneUpdateFailed"
+  | "communicationUpdateSuccess"
   | "smsNotifications"
   | "notificationFrequency"
+  | "selectNotificationFreq"
+  | "IMMEDIATE"
+  | "DAILY"
+  | "WEEKLY"
   | "locationUpdatedSuccessfully"
   | "locationUpdateFailed"
   | "invalidInput"
@@ -202,9 +228,13 @@ export type TranslationKey =
   | "hectares"
   | "years"
   | "cooperativeName"
+  | "cooperativeMember"
+  | "yes"
+  | "no"
   | "profileFetchFailed"
   | "totalEarnings"
   | "monthlyAverage"
+  | "regionalAverage"
   | "transactions"
   | "incomeFetchFailed"
   | "noIncomeData"
@@ -302,7 +332,37 @@ export type TranslationKey =
   | "sms"
   | "payments"
   | "systemError"
-  | "pleaseRetry";
+  | "pleaseRetry"
+  | "priceHigherThanMarket"
+  | "marketPrice"
+  | "yourPrice"
+  | "acceptAndContinue"
+  | "changePrice"
+  | "confirmLocationUpdate"
+  | "province"
+  | "district"
+  | "sector"
+  | "cell"
+  | "village"
+  | "confirm"
+  | "cancel"
+  | "none"
+  | "cropsUpdated"
+  | "enterFarmSize"
+  | "invalidNumber"
+  | "enterExperience"
+  | "farmInfoUpdated"
+  | "selectPaymentMethod"
+  | "MOBILE_MONEY"
+  | "BANK_TRANSFER"
+  | "CASH"
+  | "enterMinOrderQty"
+  | "businessPrefsUpdated"
+  | "farmingMethod"
+  | "showMainMenu"
+  | "showAccountMenu"
+  | "currentStep"
+  | "stepData";
 
 // Translation object with support for Kinyarwanda, English, and French
 
@@ -396,6 +456,7 @@ export const translations = {
     securityQuestions: "Ibibazo by'umutekano",
     emergencyContact: "Telefoni y'ubutabazi",
     updateProfile: "Guhindura umwirondoro",
+    pleaseUpdateProfile: "Nyamuneka vugurura Umwirondoro",
     changePhoneNumber: "Guhindura nimero ya terefone",
     updateLocation: "Guhindura aho ubarizwa",
     communicationPrefs: "Uburyo bw'itumanaho",
@@ -405,8 +466,13 @@ export const translations = {
     enterVerificationCode: "Andika kode y'ikemeza:",
     phoneNumberUpdated: "Nimero ya terefone yahinduwe neza!",
     phoneUpdateFailed: "Guhindura nimero byanze.",
+    communicationUpdateSuccess: "Uburyo bw'itumanaho bwahinduwe neza!",
     smsNotifications: "Ubutumwa bugufi",
     notificationFrequency: "Uko ubona ubutumwa",
+    selectNotificationFreq: "Hitamo inshuro wajya ubona ubutumwa",
+    IMMEDIATE: "Ako kanya",
+    DAILY: "Buri munsi",
+    WEEKLY: "Buri cyumweru",
     locationUpdatedSuccessfully: "Aho ubarizwa byahinduwe neza!",
     locationUpdateFailed: "GuhismsNndura aho ubarizwa byanze.",
     invalidInput: "Andika ibisobanuro byemewe.",
@@ -423,9 +489,13 @@ export const translations = {
     hectares: "hekari",
     years: "imyaka",
     cooperativeName: "Izina rya Koperative",
+    cooperativeMember: "Umunyamuryango wa koperative",
+    yes: "Yego",
+    no: "Oya",
     profileFetchFailed: "Kureba umwirondoro byanze.",
     totalEarnings: "Amafaranga yose yakiriwe",
     monthlyAverage: "Ikigereranyo cy'amezi",
+    regionalAverage: "Ikigereranyo mu karere",
     transactions: "Imicungiranyo",
     incomeFetchFailed: "Kureba amafaranga yakiriwe byanze.",
     noIncomeData: "Nta amafaranga yose yakiriwe kuri ibicuruzwa.",
@@ -524,6 +594,36 @@ export const translations = {
     payments: "Ubwishyu",
     systemError: "Habaye ikibazo muri sisitemu",
     pleaseRetry: "Ongera ugerageze mukanya.",
+    priceHigherThanMarket: "Igiciro mwatanze kiri hejuru yicyemewe",
+    marketPrice: "Igiciro kw' isoko",
+    yourPrice: "Igiciro watanze",
+    acceptAndContinue: "Emeza maze ukomeze",
+    changePrice: "Hindura Igiciro",
+    confirmLocationUpdate: "Emeza impinduka zaho ubarizwa",
+    province: "Intara",
+    district: "Akrere",
+    sector: "Umurenge",
+    cell: "Akagari",
+    village: "Umudugudu",
+    confirm: "Emeza",
+    cancel: "Hagarika",
+    none: "Nta na kimwe",
+    cropsUpdated: "Ibihingwa byahinduwe neza!",
+    enterFarmSize: "Andika ubunini bw'umurima (hekari):",
+    invalidNumber: "Andika umubare wemewe.",
+    enterExperience: "Andika uburambe (imyaka):",
+    farmInfoUpdated: "Amakuru y'umurima yahinduwe neza!",
+    selectPaymentMethod: "Hitamo uburyo bwo kwishyura:",
+    MOBILE_MONEY: "Mobile Money",
+    BANK_TRANSFER: "Kohereza muri banki",
+    CASH: "Amafaranga yinkwi",
+    enterMinOrderQty: "Andika ingano ntoya y'ibicuruzwa:",
+    businessPrefsUpdated: "Uburyo bw'ubucuruzi bwahinduwe neza!",
+    farmingMethod: "Uburyo bwo guhinga",
+    showMainMenu: "Erekana menu nyamukuru",
+    showAccountMenu: "Erekana menu ya konti",
+    currentStep: "icyo ukora",
+    stepData: "amakuru y'icyo ukora",
   },
   ENG: {
     welcome: "Welcome to FoodBundles!",
@@ -612,6 +712,7 @@ export const translations = {
     securityQuestions: "Security Questions",
     emergencyContact: "Emergency Contact",
     updateProfile: "Update Profile",
+    pleaseUpdateProfile: "Please update your profile.",
     changePhoneNumber: "Change Phone Number",
     updateLocation: "Update Location",
     communicationPrefs: "Communication Preferences",
@@ -621,9 +722,15 @@ export const translations = {
     enterVerificationCode: "Enter verification code:",
     phoneNumberUpdated: "Phone number updated successfully!",
     phoneUpdateFailed: "Phone number update failed.",
+    communicationUpdateSuccess:
+      "Communication preferences updated successfully!",
     locationUpdatedSuccessfully: "Location updated successfully!",
     smsNotifications: "SMS Notifications",
     notificationFrequency: "Notification Frequency",
+    selectNotificationFreq: "Select notification frequency:",
+    IMMEDIATE: "IMMEDIATE",
+    DAILY: "DAILY",
+    WEEKLY: "WEEKLY",
     locationUpdateFailed: "Location update failed.",
     invalidInput: "Please enter valid input.",
     techSupportDesc: "Please let us know type of support you need.",
@@ -639,9 +746,13 @@ export const translations = {
     hectares: "hectares",
     years: "years",
     cooperativeName: "Cooperative Name",
+    cooperativeMember: "Cooperative Member",
+    yes: "Yes",
+    no: "No",
     profileFetchFailed: "Failed to fetch profile.",
     totalEarnings: "Total earnings",
     monthlyAverage: "Monthly average",
+    regionalAverage: "Regional average",
     transactions: "Transactions",
     incomeFetchFailed: "Failed to fetch income data.",
     noIncomeData: "No income data available at the moment.",
@@ -740,6 +851,36 @@ export const translations = {
     payments: "Payments",
     systemError: "System error",
     pleaseRetry: "Please try again later.",
+    priceHigherThanMarket: "Your price is higher than the market price",
+    marketPrice: "Market Price",
+    yourPrice: "Your Price",
+    acceptAndContinue: "Accept and Continue",
+    changePrice: "Change Price",
+    confirmLocationUpdate: "Confirm Location Update",
+    province: "Province",
+    district: "District",
+    sector: "Sector",
+    cell: "Cell",
+    village: "Village",
+    confirm: "Confirm",
+    cancel: "Cancel",
+    none: "None",
+    cropsUpdated: "Crops updated successfully!",
+    enterFarmSize: "Enter farm size (hectares):",
+    invalidNumber: "Please enter a valid number.",
+    enterExperience: "Enter farming experience (years):",
+    farmInfoUpdated: "Farm information updated successfully!",
+    selectPaymentMethod: "Select payment method:",
+    MOBILE_MONEY: "Mobile Money",
+    BANK_TRANSFER: "Bank Transfer",
+    CASH: "Cash",
+    enterMinOrderQty: "Enter minimum order quantity:",
+    businessPrefsUpdated: "Business preferences updated successfully!",
+    farmingMethod: "Farming Method",
+    showMainMenu: "Show main menu",
+    showAccountMenu: "Show account menu",
+    currentStep: "current step",
+    stepData: "step data",
   },
   FRE: {
     welcome: "Bienvenue à FoodBundles!",
@@ -831,6 +972,7 @@ export const translations = {
     securityQuestions: "Questions de sécurité",
     emergencyContact: "Contact d'urgence",
     updateProfile: "Mettre à jour le profil",
+    pleaseUpdateProfile: "Veuillez mettre à jour votre profil.",
     changePhoneNumber: "Changer le numéro de téléphone",
     updateLocation: "Mettre à jour l'emplacement",
     communicationPrefs: "Préférences de communication",
@@ -840,6 +982,8 @@ export const translations = {
     enterVerificationCode: "Entrez le code de vérification:",
     phoneNumberUpdated: "Numéro de téléphone mis à jour avec succès!",
     phoneUpdateFailed: "Échec de la mise à jour du numéro.",
+    communicationUpdateSuccess:
+      "Préférences de communication mis à jour avec succès!",
     locationUpdatedSuccessfully: "Emplacement mis à jour avec succès!",
     locationUpdateFailed: "Échec de la mise à jour de l'emplacement.",
     invalidInput: "Veuillez entrer une entrée valide.",
@@ -856,9 +1000,13 @@ export const translations = {
     hectares: "hectares",
     years: "ans",
     cooperativeName: "Nom de la coopération:",
+    cooperativeMember: "Membre de la coopération:",
+    yes: "Oui",
+    no: "Non",
     profileFetchFailed: "Échec de la récupération du profil.",
     totalEarnings: "Gains totaux",
     monthlyAverage: "Moyenne mensuelle",
+    regionalAverage: "Moyenne régionale",
     transactions: "Transactions",
     incomeFetchFailed: "Échec de la récupération des données de revenus.",
     noIncomeData: "Aucune données de revenus disponibles pour le moment.",
@@ -868,6 +1016,10 @@ export const translations = {
     pinChangedSuccess: "PIN changé avec succès!",
     smsNotifications: "Notifications SMS",
     notificationFrequency: "Fréquence des notifications",
+    selectNotificationFreq: "Sélectionnez la fréquence des notifications:",
+    IMMEDIATE: "Immédiat",
+    DAILY: "Tous les jours",
+    WEEKLY: "Hebdomadaire",
     farmingProfile: "Profil agricole",
     primaryCrops: "Cultures principales",
     farmInformation: "Informations sur la ferme",
@@ -959,6 +1111,36 @@ export const translations = {
     payments: "Paiements",
     systemError: "Erreur système",
     pleaseRetry: "Veuillez reessayer plus tard.",
+    priceHigherThanMarket: "Votre prix est plus haut que le prix de marche",
+    marketPrice: "Prix de marche",
+    yourPrice: "Votre Prix",
+    acceptAndContinue: "Accepter et Continuer",
+    changePrice: "Modifier le Prix",
+    confirmLocationUpdate: "Confirmer la mise à jour de la localisation",
+    province: "Province",
+    district: "District",
+    sector: "Secteur",
+    cell: "Cellule",
+    village: "Village",
+    confirm: "Confirmer",
+    cancel: "Annuler",
+    none: "Aucun",
+    cropsUpdated: "Cultures mises à jour avec succès!",
+    enterFarmSize: "Entrez la taille de la ferme (hectares):",
+    invalidNumber: "Veuillez entrer un nombre valide.",
+    enterExperience: "Entrez l'expérience agricole (années):",
+    farmInfoUpdated: "Informations sur la ferme mises à jour avec succès!",
+    selectPaymentMethod: "Sélectionnez le mode de paiement:",
+    MOBILE_MONEY: "Mobile Money",
+    BANK_TRANSFER: "Virement bancaire",
+    CASH: "Espèces",
+    enterMinOrderQty: "Entrez la quantité minimale de commande:",
+    businessPrefsUpdated: "Préférences commerciales mises à jour avec succès!",
+    farmingMethod: "Méthode d'agriculture",
+    showMainMenu: "Afficher le menu principal",
+    showAccountMenu: "Afficher le menu du compte",
+    currentStep: "étape actuelle",
+    stepData: "données d'étape",
   },
 };
 

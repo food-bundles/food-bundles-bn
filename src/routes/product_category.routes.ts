@@ -40,12 +40,7 @@ productCategoryRoutes.get(
 );
 
 // Get product category by ID
-productCategoryRoutes.get(
-  "/:categoryId",
-  isAuthenticated,
-  checkPermission("ADMIN", "AGGREGATOR", "LOGISTICS"),
-  getProductCategoryById
-);
+productCategoryRoutes.get("/:categoryId", getProductCategoryById);
 
 // Update product category (Admin only)
 productCategoryRoutes.patch(

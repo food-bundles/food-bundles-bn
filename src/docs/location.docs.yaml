@@ -1,0 +1,586 @@
+tags:
+  - name: Location API Management
+    description: Operations for retrieving Rwanda administrative locations data
+
+components:
+  schemas:
+    LocationData:
+      type: object
+      properties:
+        province:
+          type: string
+          description: Province name
+        district:
+          type: string
+          description: District name
+        sector:
+          type: string
+          description: Sector name
+        cell:
+          type: string
+          description: Cell name
+        village:
+          type: string
+          description: Village name
+
+    ProvinceRequest:
+      type: object
+      required:
+        - province
+      properties:
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+
+    DistrictRequest:
+      type: object
+      required:
+        - province
+        - district
+      properties:
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Gasabo"
+
+    SectorRequest:
+      type: object
+      required:
+        - province
+        - district
+        - sector
+      properties:
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Gasabo"
+        sector:
+          type: string
+          description: Sector name
+          example: "Bumbogo"
+
+    CellRequest:
+      type: object
+      required:
+        - province
+        - district
+        - sector
+        - cell
+      properties:
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Gasabo"
+        sector:
+          type: string
+          description: Sector name
+          example: "Bumbogo"
+        cell:
+          type: string
+          description: Cell name
+          example: "Kinyaga"
+
+    LocationValidationRequest:
+      type: object
+      properties:
+        province:
+          type: string
+          description: Province name (optional)
+        district:
+          type: string
+          description: District name (optional)
+        sector:
+          type: string
+          description: Sector name (optional)
+        cell:
+          type: string
+          description: Cell name (optional)
+        village:
+          type: string
+          description: Village name (optional)
+
+    LocationValidationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        isValid:
+          type: boolean
+        data:
+          $ref: "#/components/schemas/LocationData"
+        errors:
+          type: array
+          items:
+            type: string
+
+    LocationListResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            type: string
+        province:
+          type: string
+          description: Current province context (if applicable)
+        district:
+          type: string
+          description: Current district context (if applicable)
+        sector:
+          type: string
+          description: Current sector context (if applicable)
+        cell:
+          type: string
+          description: Current cell context (if applicable)
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        validProvinces:
+          type: array
+          items:
+            type: string
+          description: List of valid provinces (for province errors)
+        validDistricts:
+          type: array
+          items:
+            type: string
+          description: List of valid districts (for district errors)
+        validSectors:
+          type: array
+          items:
+            type: string
+          description: List of valid sectors (for sector errors)
+        validCells:
+          type: array
+          items:
+            type: string
+          description: List of valid cells (for cell errors)
+        province:
+          type: string
+          description: Province context
+        district:
+          type: string
+          description: District context
+        sector:
+          type: string
+          description: Sector context
+
+paths:
+  /locations/provinces:
+    get:
+      tags:
+        - Location API Management
+      summary: Get all provinces
+      description: Retrieve a list of all provinces in Rwanda
+      responses:
+        200:
+          description: Provinces retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Provinces retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      [
+                        "Umujyi wa Kigali",
+                        "Eastern Province",
+                        "Northern Province",
+                        "Southern Province",
+                        "Western Province",
+                      ]
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /locations/districts:
+    post:
+      tags:
+        - Location API Management
+      summary: Get all districts in a province
+      description: Retrieve all districts within a specified province
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProvinceRequest"
+      responses:
+        200:
+          description: Districts retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationListResponse"
+              example:
+                message: "Districts in Umujyi wa Kigali retrieved successfully"
+                data: ["Gasabo", "Kicukiro", "Nyarugenge"]
+                province: "Umujyi wa Kigali"
+        400:
+          description: Bad request - Province is required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Province is required"
+        404:
+          description: Province not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Province 'Invalid Province' not found"
+                validProvinces:
+                  [
+                    "Umujyi wa Kigali",
+                    "Eastern Province",
+                    "Northern Province",
+                    "Southern Province",
+                    "Western Province",
+                  ]
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /locations/sectors:
+    post:
+      tags:
+        - Location API Management
+      summary: Get all sectors in a district
+      description: Retrieve all sectors within a specified district and province
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DistrictRequest"
+      responses:
+        200:
+          description: Sectors retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationListResponse"
+              example:
+                message: "Sectors in Gasabo, Umujyi wa Kigali retrieved successfully"
+                data: ["Bumbogo", "Gatsata", "Gikomero", "Gisozi"]
+                province: "Umujyi wa Kigali"
+                district: "Gasabo"
+        400:
+          description: Bad request - Province and district are required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Province and district are required"
+        404:
+          description: Province or district not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                province_not_found:
+                  value:
+                    message: "Province 'Invalid Province' not found"
+                    validProvinces:
+                      [
+                        "Umujyi wa Kigali",
+                        "Eastern Province",
+                        "Northern Province",
+                        "Southern Province",
+                        "Western Province",
+                      ]
+                district_not_found:
+                  value:
+                    message: "District 'Invalid District' not found in province 'Umujyi wa Kigali'"
+                    validDistricts: ["Gasabo", "Kicukiro", "Nyarugenge"]
+                    province: "Umujyi wa Kigali"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /locations/cells:
+    post:
+      tags:
+        - Location API Management
+      summary: Get all cells in a sector
+      description: Retrieve all cells within a specified sector, district, and province
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SectorRequest"
+      responses:
+        200:
+          description: Cells retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationListResponse"
+              example:
+                message: "Cells in Bumbogo, Gasabo, Umujyi wa Kigali retrieved successfully"
+                data: ["Kinyaga", "Musave", "Mvuzo"]
+                province: "Umujyi wa Kigali"
+                district: "Gasabo"
+                sector: "Bumbogo"
+        400:
+          description: Bad request - Province, district, and sector are required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Province, district, and sector are required"
+        404:
+          description: Province, district, or sector not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                province_not_found:
+                  value:
+                    message: "Province 'Invalid Province' not found"
+                    validProvinces:
+                      [
+                        "Umujyi wa Kigali",
+                        "Eastern Province",
+                        "Northern Province",
+                        "Southern Province",
+                        "Western Province",
+                      ]
+                district_not_found:
+                  value:
+                    message: "District 'Invalid District' not found in province 'Umujyi wa Kigali'"
+                    validDistricts: ["Gasabo", "Kicukiro", "Nyarugenge"]
+                    province: "Umujyi wa Kigali"
+                sector_not_found:
+                  value:
+                    message: "Sector 'Invalid Sector' not found in district 'Gasabo', province 'Umujyi wa Kigali'"
+                    validSectors: ["Bumbogo", "Gatsata", "Gikomero", "Gisozi"]
+                    province: "Umujyi wa Kigali"
+                    district: "Gasabo"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /locations/villages:
+    post:
+      tags:
+        - Location API Management
+      summary: Get all villages in a cell
+      description: Retrieve all villages within a specified cell, sector, district, and province
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CellRequest"
+      responses:
+        200:
+          description: Villages retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationListResponse"
+              example:
+                message: "Villages in Kinyaga, Bumbogo, Gasabo, Umujyi wa Kigali retrieved successfully"
+                data: ["Akakaza", "Kigarama", "Kingabo"]
+                province: "Umujyi wa Kigali"
+                district: "Gasabo"
+                sector: "Bumbogo"
+                cell: "Kinyaga"
+        400:
+          description: Bad request - Province, district, sector, and cell are required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Province, district, sector, and cell are required"
+        404:
+          description: Province, district, sector, or cell not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                province_not_found:
+                  value:
+                    message: "Province 'Invalid Province' not found"
+                    validProvinces:
+                      [
+                        "Umujyi wa Kigali",
+                        "Eastern Province",
+                        "Northern Province",
+                        "Southern Province",
+                        "Western Province",
+                      ]
+                district_not_found:
+                  value:
+                    message: "District 'Invalid District' not found in province 'Umujyi wa Kigali'"
+                    validDistricts: ["Gasabo", "Kicukiro", "Nyarugenge"]
+                    province: "Umujyi wa Kigali"
+                sector_not_found:
+                  value:
+                    message: "Sector 'Invalid Sector' not found in district 'Gasabo', province 'Umujyi wa Kigali'"
+                    validSectors: ["Bumbogo", "Gatsata", "Gikomero", "Gisozi"]
+                    province: "Umujyi wa Kigali"
+                    district: "Gasabo"
+                cell_not_found:
+                  value:
+                    message: "Cell 'Invalid Cell' not found in sector 'Bumbogo', district 'Gasabo', province 'Umujyi wa Kigali'"
+                    validCells: ["Kinyaga", "Musave", "Mvuzo"]
+                    province: "Umujyi wa Kigali"
+                    district: "Gasabo"
+                    sector: "Bumbogo"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /locations/validate:
+    post:
+      tags:
+        - Location API Management
+      summary: Validate location hierarchy
+      description: Validate if the provided location hierarchy is correct and complete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationValidationRequest"
+            examples:
+              complete_hierarchy:
+                summary: Complete location hierarchy
+                value:
+                  province: "Umujyi wa Kigali"
+                  district: "Gasabo"
+                  sector: "Bumbogo"
+                  cell: "Kinyaga"
+                  village: "Akakaza"
+              partial_hierarchy:
+                summary: Partial location hierarchy
+                value:
+                  province: "Umujyi wa Kigali"
+                  district: "Gasabo"
+              empty_hierarchy:
+                summary: Empty location data
+                value: {}
+      responses:
+        200:
+          description: Location hierarchy is valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationValidationResponse"
+              example:
+                message: "Location hierarchy is valid"
+                isValid: true
+                data:
+                  province: "Umujyi wa Kigali"
+                  district: "Gasabo"
+                  sector: "Bumbogo"
+                  cell: "Kinyaga"
+                  village: "Akakaza"
+        400:
+          description: Location hierarchy is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationValidationResponse"
+              examples:
+                invalid_province:
+                  value:
+                    message: "Location hierarchy is invalid"
+                    isValid: false
+                    errors:
+                      - "Invalid province: Invalid Province. Valid provinces are: Umujyi wa Kigali, Eastern Province, Northern Province, Southern Province, Western Province"
+                incomplete_hierarchy:
+                  value:
+                    message: "Location hierarchy is invalid"
+                    isValid: false
+                    errors:
+                      - "Province is required when district is provided. Valid provinces are: Umujyi wa Kigali, Eastern Province, Northern Province, Southern Province, Western Province"
+                invalid_district:
+                  value:
+                    message: "Location hierarchy is invalid"
+                    isValid: false
+                    errors:
+                      - "Invalid district: Invalid District in province Umujyi wa Kigali. Valid districts are: Gasabo, Kicukiro, Nyarugenge"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
