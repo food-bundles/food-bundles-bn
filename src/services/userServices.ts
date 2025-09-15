@@ -41,8 +41,17 @@ const checkExistingUser = async (phone?: string, email?: string) => {
 };
 // FARMER SERVICES
 export const createFarmerService = async (farmerData: ICreateFarmerData) => {
-  const { phone, email, password, province, district, sector, cell, village } =
-    farmerData;
+  const {
+    phone,
+    email,
+    password,
+    location,
+    province,
+    district,
+    sector,
+    cell,
+    village,
+  } = farmerData;
 
   if (!phone && !email) {
     throw new Error("Either phone or email is required");
@@ -58,19 +67,21 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
   }
 
   // Validate location data if provided
-  const locationValidation =
-    LocationValidationService.validateLocationHierarchy({
-      province,
-      district,
-      sector,
-      cell,
-      village,
-    });
+  if (province || district || sector || cell || village) {
+    const locationValidation =
+      LocationValidationService.validateLocationHierarchy({
+        province: province as string,
+        district: district as string,
+        sector: sector as string,
+        cell: cell as string,
+        village: village as string,
+      });
 
-  if (!locationValidation.isValid) {
-    throw new Error(
-      `Location validation failed: ${locationValidation.errors.join(", ")}`
-    );
+    if (!locationValidation.isValid) {
+      throw new Error(
+        `Location validation failed: ${locationValidation.errors.join(", ")}`
+      );
+    }
   }
 
   // Remove the old farmer-specific check since we already checked globally
@@ -85,6 +96,7 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
         phone,
         email,
         password: hashedPassword,
+        location,
         province,
         district,
         sector,
@@ -219,11 +231,11 @@ export const updateFarmerService = async (
   if (province || district || sector || cell || village) {
     const locationValidation =
       LocationValidationService.validateLocationHierarchy({
-        province: province ? province : existingFarmer.province,
-        district: district ? district : existingFarmer.district,
-        sector: sector ? sector : existingFarmer.sector,
-        cell: cell ? cell : existingFarmer.cell,
-        village: village ? village : existingFarmer.village,
+        province: (province ? province : existingFarmer.province) as string,
+        district: (district ? district : existingFarmer.district) as string,
+        sector: (sector ? sector : existingFarmer.sector) as string,
+        cell: (cell ? cell : existingFarmer.cell) as string,
+        village: (village ? village : existingFarmer.village) as string,
       });
 
     if (!locationValidation.isValid) {
@@ -288,6 +300,7 @@ export const createRestaurantService = async (
     email,
     phone,
     password,
+    location,
     province,
     district,
     sector,
@@ -295,19 +308,8 @@ export const createRestaurantService = async (
     village,
   } = restaurantData;
 
-  if (
-    !name ||
-    !email ||
-    !password ||
-    !province ||
-    !district ||
-    !sector ||
-    !cell ||
-    !village
-  ) {
-    throw new Error(
-      "Name, email, password, province, district, sector, cell, and village are required for restaurants"
-    );
+  if (!name || !email || !password) {
+    throw new Error("Name, email, password are required for restaurants");
   }
 
   // Check if phone/email exists in any user table
@@ -317,19 +319,21 @@ export const createRestaurantService = async (
   }
 
   // Validate location data if provided
-  const locationValidation =
-    LocationValidationService.validateLocationHierarchy({
-      province,
-      district,
-      sector,
-      cell,
-      village,
-    });
+  if (province || district || sector || cell || village) {
+    const locationValidation =
+      LocationValidationService.validateLocationHierarchy({
+        province: province as string,
+        district: district as string,
+        sector: sector as string,
+        cell: cell as string,
+        village: village as string,
+      });
 
-  if (!locationValidation.isValid) {
-    throw new Error(
-      `Location validation failed: ${locationValidation.errors.join(", ")}`
-    );
+    if (!locationValidation.isValid) {
+      throw new Error(
+        `Location validation failed: ${locationValidation.errors.join(", ")}`
+      );
+    }
   }
 
   try {
@@ -341,6 +345,7 @@ export const createRestaurantService = async (
         email,
         phone,
         password: hashedPassword,
+        location,
         province,
         district,
         sector,
@@ -500,11 +505,11 @@ export const updateRestaurantService = async (
   if (province || district || sector || cell || village) {
     const locationValidation =
       LocationValidationService.validateLocationHierarchy({
-        province: province ? province : existingRestaurant.province,
-        district: district ? district : existingRestaurant.district,
-        sector: sector ? sector : existingRestaurant.sector,
-        cell: cell ? cell : existingRestaurant.cell,
-        village: village ? village : existingRestaurant.village,
+        province: (province ? province : existingRestaurant.province) as string,
+        district: (district ? district : existingRestaurant.district) as string,
+        sector: (sector ? sector : existingRestaurant.sector) as string,
+        cell: (cell ? cell : existingRestaurant.cell) as string,
+        village: (village ? village : existingRestaurant.village) as string,
       });
 
     if (!locationValidation.isValid) {
@@ -568,6 +573,7 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
     phone,
     password,
     role,
+    location,
     province,
     district,
     sector,
@@ -575,20 +581,8 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
     village,
   } = adminData;
 
-  if (
-    !username ||
-    !email ||
-    !password ||
-    !role ||
-    !province ||
-    !district ||
-    !sector ||
-    !cell ||
-    !village
-  ) {
-    throw new Error(
-      "Username, email, password, role, province, district, sector, cell, and village are required for admins"
-    );
+  if (!username || !email || !password || !role) {
+    throw new Error("Username, email, password, role are required for admins");
   }
 
   // Check if phone/email exists in any user table
@@ -601,11 +595,11 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
   if (province || district || sector || cell || village) {
     const locationValidation =
       LocationValidationService.validateLocationHierarchy({
-        province,
-        district,
-        sector,
-        cell,
-        village,
+        province: province as string,
+        district: district as string,
+        sector: sector as string,
+        cell: cell as string,
+        village: village as string,
       });
 
     if (!locationValidation.isValid) {
@@ -625,6 +619,7 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
         phone: phone || null,
         password: hashedPassword,
         role,
+        location,
         province,
         district,
         sector,
@@ -734,11 +729,11 @@ export const updateAdminService = async (
   if (province || district || sector || cell || village) {
     const locationValidation =
       LocationValidationService.validateLocationHierarchy({
-        province: province ? province : existingAdmin.province,
-        district: district ? district : existingAdmin.district,
-        sector: sector ? sector : existingAdmin.sector,
-        cell: cell ? cell : existingAdmin.cell,
-        village: village ? village : existingAdmin.village,
+        province: (province ? province : existingAdmin.province) as string,
+        district: (district ? district : existingAdmin.district) as string,
+        sector: (sector ? sector : existingAdmin.sector) as string,
+        cell: (cell ? cell : existingAdmin.cell) as string,
+        village: (village ? village : existingAdmin.village) as string,
       });
 
     if (!locationValidation.isValid) {

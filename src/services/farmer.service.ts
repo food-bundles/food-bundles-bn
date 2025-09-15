@@ -398,6 +398,7 @@ export async function submitProductService(
     where: { id: submissionData.farmerId },
     select: {
       id: true,
+      location: true,
       province: true,
       district: true,
       sector: true,
@@ -410,21 +411,29 @@ export async function submitProductService(
     throw new Error("Farmer not found");
   }
 
-  const locationValidation =
-    LocationValidationService.validateLocationHierarchy({
-      province: submissionData.province || farmer.province,
-      district: submissionData.district || farmer.district,
-      sector: submissionData.sector || farmer.sector,
-      cell: submissionData.cell || farmer.cell,
-      village: submissionData.village || farmer.village,
-    });
+  if (
+    submissionData.province ||
+    submissionData.district ||
+    submissionData.sector ||
+    submissionData.cell ||
+    submissionData.village
+  ) {
+    const locationValidation =
+      LocationValidationService.validateLocationHierarchy({
+        province: (submissionData?.province ?? farmer.province) as string,
+        district: (submissionData.district ?? farmer.district) as string,
+        sector: (submissionData.sector ?? farmer.sector) as string,
+        cell: (submissionData.cell ?? farmer.cell) as string,
+        village: (submissionData.village ?? farmer.village) as string,
+      });
 
-  if (!locationValidation.isValid) {
-    throw new Error(
-      `Farmer location validation failed: ${locationValidation.errors.join(
-        ", "
-      )}`
-    );
+    if (!locationValidation.isValid) {
+      throw new Error(
+        `Farmer location validation failed: ${locationValidation.errors.join(
+          ", "
+        )}`
+      );
+    }
   }
 
   // Create submission with farmer's location data
@@ -436,6 +445,7 @@ export async function submitProductService(
       submittedQty: submissionData.submittedQty,
       wishedPrice: submissionData.wishedPrice,
       status: "PENDING",
+      location: submissionData.location || farmer.location,
       province: submissionData.province || farmer.province,
       district: submissionData.district || farmer.district,
       sector: submissionData.sector || farmer.sector,

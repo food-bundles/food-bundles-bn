@@ -1,20 +1,20 @@
 import { Role } from "@prisma/client";
-import { LocationData } from "./locationTypes";
+import { UserLocationData } from "./locationTypes";
 
-export interface ICreateFarmerData extends LocationData {
+export interface ICreateFarmerData extends UserLocationData {
   phone?: string;
   email?: string;
   password?: string;
 }
 
-export interface ICreateRestaurantData extends LocationData {
+export interface ICreateRestaurantData extends UserLocationData {
   name: string;
   email: string;
   phone?: string;
   password: string;
 }
 
-export interface ICreateAdminData extends Partial<LocationData> {
+export interface ICreateAdminData extends Partial<UserLocationData> {
   username: string;
   email: string;
   phone?: string;
@@ -22,20 +22,20 @@ export interface ICreateAdminData extends Partial<LocationData> {
   role: Role;
 }
 
-export interface IUpdateFarmerData extends Partial<LocationData> {
+export interface IUpdateFarmerData extends Partial<UserLocationData> {
   phone?: string;
   email?: string;
   password?: string;
 }
 
-export interface IUpdateRestaurantData extends Partial<LocationData> {
+export interface IUpdateRestaurantData extends Partial<UserLocationData> {
   name?: string;
   email?: string;
   phone?: string;
   password?: string;
 }
 
-export interface IUpdateAdminData extends Partial<LocationData> {
+export interface IUpdateAdminData extends Partial<UserLocationData> {
   username?: string;
   email?: string;
   password?: string;
