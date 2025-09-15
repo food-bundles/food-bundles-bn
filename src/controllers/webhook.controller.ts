@@ -18,18 +18,22 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       JSON.stringify(payload, null, 2)
     );
 
-    // Handle different event types
-    switch (payload.event) {
+    // Handle different event types - FIX: Use 'event.type' instead of 'event'
+    const eventType = payload["event.type"] || payload.event;
+
+    switch (eventType) {
+      case "MOBILEMONEYRW_TRANSACTION":
+      case "CARD_TRANSACTION":
       case "charge.completed":
-        await handleChargeCompleted(payload.data);
+        await handleChargeCompleted(payload);
         break;
 
       case "transfer.completed":
-        await handleTransferCompleted(payload.data);
+        await handleTransferCompleted(payload);
         break;
 
       default:
-        console.log(`Unhandled webhook event: ${payload.event}`);
+        console.log(`Unhandled webhook event: ${eventType}`);
     }
 
     res.status(200).json({ message: "Webhook processed successfully" });
@@ -43,18 +47,30 @@ const handleChargeCompleted = async (data: any) => {
   try {
     console.log("Processing charge.completed webhook:", data);
 
-    // Extract transaction reference
-    const txRef = data.tx_ref;
-    const flwRef = data.flw_ref;
+    // Extract transaction reference - FIX: Use 'txRef' instead of 'tx_ref'
+    const txRef = data.txRef || data.tx_ref;
+    const flwRef = data.flwRef || data.flw_ref;
     const status = data.status;
     const currency = data.currency;
 
+    console.log(
+      `Processing transaction: txRef=${txRef}, flwRef=${flwRef}, status=${status}`
+    );
+
     // Check if this is a wallet top-up transaction
     if (txRef && (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))) {
+      console.log("Detected wallet top-up transaction");
+
       // Find the corresponding wallet transaction
       const walletTransaction = await prisma.walletTransaction.findFirst({
         where: {
-          OR: [{ flwTxRef: txRef }, { flwRef: txRef }, { id: txRef }],
+          OR: [
+            { flwTxRef: txRef },
+            { flwRef: txRef },
+            { id: txRef },
+            // Also check if txRef contains the wallet transaction ID
+            { flwTxRef: { contains: txRef.split("_").pop() || "" } },
+          ],
         },
         include: {
           wallet: {
@@ -132,9 +148,26 @@ const handleChargeCompleted = async (data: any) => {
           });
 
           console.log(`Wallet top-up failed: ${walletTransaction.id}`);
+        } else {
+          console.log(
+            `Transaction already processed or status unchanged: ${walletTransaction.status}`
+          );
         }
       } else {
-        console.log("No matching wallet transaction found for tx_ref:", txRef);
+        console.log("No matching wallet transaction found for txRef:", txRef);
+        // Additional logging for debugging
+        console.log("Available wallet transactions with similar refs:");
+        const similarTransactions = await prisma.walletTransaction.findMany({
+          where: {
+            OR: [
+              { flwTxRef: { contains: txRef.substring(0, 10) } },
+              { status: "PENDING" },
+            ],
+          },
+          select: { id: true, flwTxRef: true, status: true, amount: true },
+          take: 5,
+        });
+        console.log(similarTransactions);
       }
     }
 
@@ -188,6 +221,8 @@ const handleChargeCompleted = async (data: any) => {
 
         console.log(`Checkout payment failed: ${checkout.id}`);
       }
+    } else if (!txRef.includes("WALLET_TOPUP_") && !txRef.startsWith("175")) {
+      console.log("No matching checkout found for txRef:", txRef);
     }
   } catch (error: any) {
     console.error("Error processing charge.completed webhook:", error);
