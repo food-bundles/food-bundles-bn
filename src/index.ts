@@ -34,6 +34,7 @@ app.use(
       "https://food-bundle-bn.onrender.com",
     ],
     credentials: true,
+    exposedHeaders: ["Set-Cookie"],
   })
 );
 app.use(express.json());

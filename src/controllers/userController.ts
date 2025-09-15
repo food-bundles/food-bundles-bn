@@ -332,6 +332,7 @@ export class UserController {
     }
   };
 
+  // Backend login controller
   static login = async (req: Request, res: Response) => {
     try {
       const { phone, email, password } = req.body;
@@ -345,21 +346,20 @@ export class UserController {
 
       const result = await loginService({ phone, email, password });
       const user = result.user;
-      const payload: JwtPayload = {
-        id: user.id,
-      };
-
+      const payload: JwtPayload = { id: user.id };
       const token = generateToken(payload);
+
       res.cookie("auth_token", token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        secure: true,
+        sameSite: "none",
         maxAge: 24 * 60 * 60 * 1000,
       });
+
       res.status(200).json({
         success: true,
         message: "Login successful",
-        token,
+        token, // Also return token for debugging
         data: result,
       });
     } catch (error: any) {
@@ -369,7 +369,6 @@ export class UserController {
       });
     }
   };
-
   static me = async (req: Request, res: Response) => {
     try {
       const token = req.cookies["auth_token"];
