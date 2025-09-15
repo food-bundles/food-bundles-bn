@@ -231,7 +231,16 @@ const getAllSubmissionsService = async ({ userId, userRole, options = {}, }) => 
     // Get submissions with pagination
     const submissions = await prisma_1.default.farmerSubmission.findMany({
         where: whereCondition,
-        include: includeConfig,
+        include: {
+            farmer: true,
+            category: {
+                select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                },
+            },
+        },
         orderBy: {
             [sortBy]: sortOrder,
         },

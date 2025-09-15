@@ -32,6 +32,12 @@ checkoutRoutes.patch("/:checkoutId", authMiddleware_1.isAuthenticated, checkout_
  */
 checkoutRoutes.post("/:checkoutId/payment", authMiddleware_1.isAuthenticated, checkout_controller_1.processPayment);
 /**
+ * Verify payment status
+ * GET /checkouts/:checkoutId/verify-payment
+ * Access: Restaurant (own checkouts) or Admin (any checkout)
+ */
+checkoutRoutes.get("/:checkoutId/verify-payment", authMiddleware_1.isAuthenticated, checkout_controller_1.verifyPayment);
+/**
  * Cancel checkout (revert cart to active)
  * DELETE /checkouts/:checkoutId
  * Access: Restaurant (own checkouts) or Admin (any checkout)

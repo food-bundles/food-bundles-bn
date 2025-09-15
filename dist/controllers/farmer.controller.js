@@ -236,18 +236,12 @@ FarmerController.updateFarmerFeedback = async (req, res) => {
 exports.default = FarmerController;
 exports.submitProductController = (0, errorhandler_utlity_1.catchAsyncError)(async (req, res, next) => {
     const userId = req.user?.id;
-    const { productName, quantity, wishedPrice, province, district, sector, cell, village, } = req.body;
+    const { productId } = req.params;
+    const { quantity, wishedPrice, province, district, sector, cell, village } = req.body;
     // Validate required fields
-    if (!productName ||
-        !quantity ||
-        !wishedPrice ||
-        !province ||
-        !district ||
-        !sector ||
-        !cell ||
-        !village) {
+    if (!quantity || !wishedPrice) {
         return next(new errorhandler_utlity_1.default({
-            message: "productName, quantity, wishedPrice, province, district, sector, cell, and village are required",
+            message: "Quantity, and wishedPrice are required",
             statusCode: 400,
         }));
     }
@@ -273,7 +267,7 @@ exports.submitProductController = (0, errorhandler_utlity_1.catchAsyncError)(asy
     }
     const submissionData = {
         farmerId: userId,
-        productName: productName.trim(),
+        productId: productId,
         submittedQty: parseFloat(quantity),
         wishedPrice: parseFloat(wishedPrice),
         province,

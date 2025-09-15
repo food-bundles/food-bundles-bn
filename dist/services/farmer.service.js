@@ -5,11 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateFarmerFeedbackService = exports.getFarmerFeedbackHistoryService = exports.getPendingFeedbackSubmissionsService = exports.submitFarmerFeedbackService = void 0;
 exports.submitProductService = submitProductService;
+exports.getProductsFromDatabase = getProductsFromDatabase;
 const client_1 = require("@prisma/client");
 const paginationService_1 = require("./paginationService");
 const prisma_1 = __importDefault(require("../prisma"));
 const location_service_1 = require("./location.service");
-const ussdServices_1 = require("./ussdServices");
 // Service to handle farmer feedback on verified submissions
 const submitFarmerFeedbackService = async (submissionId, farmerId, feedbackData) => {
     const existingSubmission = await prisma_1.default.farmerSubmission.findUnique({
@@ -276,10 +276,16 @@ const updateFarmerFeedbackService = async (submissionId, farmerId, feedbackData)
 };
 exports.updateFarmerFeedbackService = updateFarmerFeedbackService;
 async function submitProductService(submissionData) {
+    const productData = await prisma_1.default.product.findUnique({
+        where: { id: submissionData.productId },
+    });
+    if (!productData) {
+        throw new Error("Product not found");
+    }
     // Get valid products from database
-    const validProducts = await (0, ussdServices_1.getProductsFromDatabase)();
+    const validProducts = await getProductsFromDatabase();
     // Validate product name
-    if (!validProducts.includes(submissionData.productName)) {
+    if (!validProducts.includes(productData.productName)) {
         throw new Error(`Invalid product. Valid products are: ${validProducts.join(", ")}`);
     }
     // Validate quantity and price
@@ -294,6 +300,7 @@ async function submitProductService(submissionData) {
         where: { id: submissionData.farmerId },
         select: {
             id: true,
+            location: true,
             province: true,
             district: true,
             sector: true,
@@ -304,46 +311,37 @@ async function submitProductService(submissionData) {
     if (!farmer) {
         throw new Error("Farmer not found");
     }
-    // Validate farmer's location data
-    if (!submissionData.province ||
-        !submissionData.district ||
-        !submissionData.sector ||
-        !submissionData.cell ||
-        !submissionData.village) {
-        throw new Error("submissionData location data is incomplete. Please update your profile.");
-    }
-    const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
-        province: submissionData.province,
-        district: submissionData.district,
-        sector: submissionData.sector,
-        cell: submissionData.cell,
-        village: submissionData.village,
-    });
-    if (!locationValidation.isValid) {
-        throw new Error(`Farmer location validation failed: ${locationValidation.errors.join(", ")}`);
-    }
-    // Find product by product name
-    const product = await prisma_1.default.product.findFirst({
-        where: { productName: submissionData.productName },
-        select: { id: true, categoryId: true },
-    });
-    if (!product) {
-        throw new Error("Product not found in the system");
+    if (submissionData.province ||
+        submissionData.district ||
+        submissionData.sector ||
+        submissionData.cell ||
+        submissionData.village) {
+        const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
+            province: (submissionData?.province ?? farmer.province),
+            district: (submissionData.district ?? farmer.district),
+            sector: (submissionData.sector ?? farmer.sector),
+            cell: (submissionData.cell ?? farmer.cell),
+            village: (submissionData.village ?? farmer.village),
+        });
+        if (!locationValidation.isValid) {
+            throw new Error(`Farmer location validation failed: ${locationValidation.errors.join(", ")}`);
+        }
     }
     // Create submission with farmer's location data
     const submission = await prisma_1.default.farmerSubmission.create({
         data: {
             farmerId: submissionData.farmerId,
-            productName: submissionData.productName,
-            categoryId: product.categoryId,
+            productName: productData.productName,
+            categoryId: productData.categoryId,
             submittedQty: submissionData.submittedQty,
             wishedPrice: submissionData.wishedPrice,
             status: "PENDING",
-            province: submissionData.province,
-            district: submissionData.district,
-            sector: submissionData.sector,
-            cell: submissionData.cell,
-            village: submissionData.village,
+            location: submissionData.location || farmer.location,
+            province: submissionData.province || farmer.province,
+            district: submissionData.district || farmer.district,
+            sector: submissionData.sector || farmer.sector,
+            cell: submissionData.cell || farmer.cell,
+            village: submissionData.village || farmer.village,
         },
         include: {
             farmer: {
@@ -360,4 +358,28 @@ async function submitProductService(submissionData) {
         },
     });
     return submission;
+}
+// Get products from database
+async function getProductsFromDatabase() {
+    try {
+        const products = await prisma_1.default.product.findMany({
+            where: { status: "ACTIVE" },
+            select: { productName: true },
+            distinct: ["productName"],
+        });
+        return products.map((p) => p.productName);
+    }
+    catch (error) {
+        console.error("Error fetching products:", error);
+        // Fallback to hardcoded list
+        return [
+            "Tomatoes",
+            "Onions",
+            "Maize",
+            "Potatoes",
+            "Cassava",
+            "Irish Potatoes",
+            "Banana",
+        ];
+    }
 }

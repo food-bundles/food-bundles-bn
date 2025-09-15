@@ -3,9 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateOrderStatusTemplate = exports.sendPaymentConfirmationTemplate = exports.sendPaymentNotificationTemplate = exports.isValidRwandaPhone = exports.cleanPhoneNumber = void 0;
+exports.sendWalletNotificationTemplate = exports.generateOrderStatusTemplate = exports.sendPaymentConfirmationTemplate = exports.sendPaymentNotificationTemplate = exports.isValidRwandaPhone = exports.cleanPhoneNumber = void 0;
 exports.sendPaymentNotificationEmail = sendPaymentNotificationEmail;
 exports.sendPaymentConfirmationEmail = sendPaymentConfirmationEmail;
+exports.sendWalletNotificationEmail = sendWalletNotificationEmail;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 // Clean and format phone number for Rwanda
 const cleanPhoneNumber = (phone) => {
@@ -34,6 +35,16 @@ exports.isValidRwandaPhone = isValidRwandaPhone;
 const sendPaymentNotificationTemplate = (data) => {
     const expirationTime = new Date();
     expirationTime.setHours(expirationTime.getHours() + 8);
+    const walletDetailsHtml = data.walletDetails
+        ? `
+    <p>Wallet Details:</p>
+    <ul>
+      <li>Previous Balance: ${data.walletDetails.previousBalance}</li>
+      <li>New Balance: ${data.walletDetails.newBalance}</li>
+      <li>Transaction ID: ${data.walletDetails.transactionId}</li>
+    </ul>
+  `
+        : "";
     return `<!DOCTYPE html>
   <html lang="en">
   <head>
@@ -182,6 +193,10 @@ const sendPaymentNotificationTemplate = (data) => {
     })}</p>
         </div>
 
+        <!-- ... -->
+          ${walletDetailsHtml}
+        <!-- ... -->
+
         <div class="payment-details">
           <h2>📱 Next Steps</h2>
           <ol>
@@ -191,6 +206,8 @@ const sendPaymentNotificationTemplate = (data) => {
             <li>You'll receive a confirmation email with delivery details</li>
           </ol>
         </div>
+
+
 
         <p>Need help? Contact our customer support team at any time.</p>
       </div>
@@ -469,6 +486,72 @@ const generateOrderStatusTemplate = (data) => {
   </html>`;
 };
 exports.generateOrderStatusTemplate = generateOrderStatusTemplate;
+/**
+ * Generate wallet notification email template
+ */
+const sendWalletNotificationTemplate = (data) => {
+    const transactionTypeMap = {
+        TOP_UP: { emoji: "💰", text: "Top-up" },
+        PAYMENT: { emoji: "💳", text: "Payment" },
+        REFUND: { emoji: "↩️", text: "Refund" },
+        ADJUSTMENT: { emoji: "⚖️", text: "Adjustment" },
+        WITHDRAWAL: { emoji: "💸", text: "Withdrawal" },
+    };
+    const typeInfo = transactionTypeMap[data.type] || transactionTypeMap.TOP_UP;
+    return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wallet Notification - FoodBundles</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #22c55e, #16a34a); color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .transaction-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #22c55e; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #22c55e; font-weight: bold; }
+      .amount { font-size: 24px; font-weight: bold; color: #22c55e; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>${typeInfo.emoji} Wallet ${typeInfo.text}</h1>
+      </div>
+      <div class="content">
+        <p>Dear ${data.restaurantName},</p>
+        
+        <p>Your wallet has been ${data.type
+        .toLowerCase()
+        .replace("_", " ")}ed successfully.</p>
+        
+        <div class="transaction-details">
+          <h2>📊 Transaction Details</h2>
+          <p><span class="highlight">Transaction ID:</span> ${data.transactionId}</p>
+          <p><span class="highlight">Type:</span> ${typeInfo.text}</p>
+          <p><span class="highlight">Amount:</span> <span class="amount">${data.amount.toLocaleString()} RWF</span></p>
+          <p><span class="highlight">New Balance:</span> <strong>${data.newBalance.toLocaleString()} RWF</strong></p>
+          ${data.paymentMethod
+        ? `<p><span class="highlight">Payment Method:</span> ${data.paymentMethod}</p>`
+        : ""}
+          ${data.description
+        ? `<p><span class="highlight">Description:</span> ${data.description}</p>`
+        : ""}
+        </div>
+
+        <p>If you did not initiate this transaction, please contact our support team immediately.</p>
+      </div>
+      <div class="footer">
+        <p>Thank you for using FoodBundles Wallet!</p>
+        <p>🌱 <strong>Secure and convenient payment solutions</strong></p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+exports.sendWalletNotificationTemplate = sendWalletNotificationTemplate;
 // Send payment notification email
 async function sendPaymentNotificationEmail(paymentData) {
     if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
@@ -531,5 +614,36 @@ async function sendPaymentConfirmationEmail(paymentData) {
     }
     catch (error) {
         console.error("Failed to send payment confirmation email:", error);
+    }
+}
+// Send wallet notification email
+async function sendWalletNotificationEmail(data) {
+    if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+        console.log("Email credentials not configured");
+        return;
+    }
+    const config = {
+        service: "gmail",
+        auth: {
+            user: process.env.GOOGLE_EMAIL,
+            pass: process.env.GOOGLE_PASSWORD,
+        },
+        tls: {
+            rejectUnauthorized: false,
+        },
+    };
+    const transporter = nodemailer_1.default.createTransport(config);
+    const walletEmail = {
+        from: process.env.GOOGLE_EMAIL,
+        to: data.email,
+        subject: `Wallet ${data.type} - FoodBundles`,
+        html: (0, exports.sendWalletNotificationTemplate)(data),
+    };
+    try {
+        await transporter.sendMail(walletEmail);
+        console.log("Wallet notification email sent successfully");
+    }
+    catch (error) {
+        console.error("Failed to send wallet notification email:", error);
     }
 }

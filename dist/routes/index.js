@@ -18,6 +18,9 @@ const cart_routes_1 = __importDefault(require("./cart.routes"));
 const checkout_routes_1 = __importDefault(require("./checkout.routes"));
 const order_routes_1 = __importDefault(require("./order.routes"));
 const product_category_routes_1 = __importDefault(require("./product_category.routes"));
+const wallet_routes_1 = __importDefault(require("./wallet.routes"));
+const payments_route_1 = __importDefault(require("./payments.route"));
+const location_routes_1 = __importDefault(require("./location.routes"));
 const routes = (0, express_1.Router)();
 // Order matters! Most specific routes should come first
 routes.use("/farmers", farmersRoutes_1.default);
@@ -29,6 +32,9 @@ routes.use("/carts", cart_routes_1.default);
 routes.use("/category", product_category_routes_1.default);
 routes.use("/checkouts", checkout_routes_1.default);
 routes.use("/orders", order_routes_1.default);
+routes.use("/wallets", wallet_routes_1.default);
+routes.use("/payments", payments_route_1.default);
+routes.use("/locations", location_routes_1.default);
 // These should come after the specific routes above
 routes.use("/", ProductVerifyRoute_1.default);
 routes.use("/", userRoute_1.default);

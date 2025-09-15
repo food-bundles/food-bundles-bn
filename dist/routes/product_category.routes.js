@@ -13,7 +13,7 @@ productCategoryRoutes.post("/", authMiddleware_1.isAuthenticated, (0, authMiddle
 // Get all product categories with filtering and pagination
 productCategoryRoutes.get("/", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)("ADMIN", "AGGREGATOR", "LOGISTICS"), product_category_controller_1.getAllProductCategories);
 // Get product category by ID
-productCategoryRoutes.get("/:categoryId", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)("ADMIN", "AGGREGATOR", "LOGISTICS"), product_category_controller_1.getProductCategoryById);
+productCategoryRoutes.get("/:categoryId", product_category_controller_1.getProductCategoryById);
 // Update product category (Admin only)
 productCategoryRoutes.patch("/:categoryId", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)("ADMIN"), product_category_controller_1.updateProductCategory);
 // Delete product category (Admin only)

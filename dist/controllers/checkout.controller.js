@@ -1,15 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cancelCheckout = exports.processPayment = exports.updateCheckout = exports.getAllCheckouts = exports.getMyCheckouts = exports.getCheckoutById = exports.createCheckout = void 0;
+exports.cancelCheckout = exports.verifyPayment = exports.processPayment = exports.updateCheckout = exports.getAllCheckouts = exports.getMyCheckouts = exports.getCheckoutById = exports.createCheckout = void 0;
 const checkout_services_1 = require("../services/checkout.services");
 const client_1 = require("@prisma/client");
 /**
- * Controller to create a new checkout from cart
+ * Enhanced controller to create a new checkout from cart
  * POST /checkouts
  */
 const createCheckout = async (req, res) => {
     try {
-        const { cartId, paymentMethod, billingName, billingEmail, billingPhone, billingAddress, notes, deliveryDate, } = req.body;
+        const { cartId, paymentMethod, billingName, billingEmail, billingPhone, billingAddress, notes, deliveryDate, clientIp, deviceFingerprint, narration, currency, } = req.body;
         const restaurantId = req.user.id;
         // Validate required fields
         if (!cartId || !paymentMethod) {
@@ -33,6 +33,10 @@ const createCheckout = async (req, res) => {
             billingAddress,
             notes,
             deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
+            clientIp: clientIp || req.ip,
+            deviceFingerprint,
+            narration,
+            currency,
         });
         res.status(201).json({
             message: "Checkout created successfully",
@@ -160,13 +164,13 @@ const getAllCheckouts = async (req, res) => {
 };
 exports.getAllCheckouts = getAllCheckouts;
 /**
- * Controller to update checkout
+ * Enhanced controller to update checkout
  * PATCH /checkouts/:checkoutId
  */
 const updateCheckout = async (req, res) => {
     try {
         const { checkoutId } = req.params;
-        const { paymentMethod, billingName, billingEmail, billingPhone, billingAddress, notes, deliveryDate, paymentStatus, paymentReference, transactionId, } = req.body;
+        const { paymentMethod, billingName, billingEmail, billingPhone, billingAddress, notes, deliveryDate, paymentStatus, paymentReference, transactionId, txRef, flwRef, txOrderId, currency, clientIp, deviceFingerprint, narration, transferReference, transferAccount, transferBank, accountExpiration, transferNote, transferAmount, network, voucher, paymentCode, redirectUrl, authorizationMode, authorizationUrl, flwStatus, flwMessage, chargedAmount, appFee, merchantFee, } = req.body;
         const userRole = req.user.role;
         const restaurantId = userRole === "RESTAURANT" ? req.user.id : undefined;
         // Validate payment method if provided
@@ -183,13 +187,27 @@ const updateCheckout = async (req, res) => {
                 message: "Invalid payment status",
             });
         }
-        // Only admins can update payment status
-        if (paymentStatus && userRole !== "ADMIN") {
-            return res.status(403).json({
-                message: "Only admins can update payment status",
-            });
+        // Only admins can update certain fields
+        if (userRole !== "ADMIN") {
+            const adminOnlyFields = [
+                "paymentStatus",
+                "flwStatus",
+                "flwMessage",
+                "chargedAmount",
+                "appFee",
+                "merchantFee",
+                "flwRef",
+            ];
+            const providedFields = Object.keys(req.body);
+            const unauthorizedFields = providedFields.filter((field) => adminOnlyFields.includes(field));
+            if (unauthorizedFields.length > 0) {
+                return res.status(403).json({
+                    message: `Only admins can update these fields: ${unauthorizedFields.join(", ")}`,
+                });
+            }
         }
         const updateData = {};
+        // Basic fields
         if (paymentMethod !== undefined)
             updateData.paymentMethod = paymentMethod;
         if (billingName !== undefined)
@@ -210,6 +228,54 @@ const updateCheckout = async (req, res) => {
             updateData.paymentReference = paymentReference;
         if (transactionId !== undefined)
             updateData.transactionId = transactionId;
+        if (txRef !== undefined)
+            updateData.txRef = txRef;
+        if (flwRef !== undefined)
+            updateData.flwRef = flwRef;
+        if (txOrderId !== undefined)
+            updateData.txOrderId = txOrderId;
+        if (currency !== undefined)
+            updateData.currency = currency;
+        if (clientIp !== undefined)
+            updateData.clientIp = clientIp;
+        if (deviceFingerprint !== undefined)
+            updateData.deviceFingerprint = deviceFingerprint;
+        if (narration !== undefined)
+            updateData.narration = narration;
+        if (transferReference !== undefined)
+            updateData.transferReference = transferReference;
+        if (transferAccount !== undefined)
+            updateData.transferAccount = transferAccount;
+        if (transferBank !== undefined)
+            updateData.transferBank = transferBank;
+        if (accountExpiration !== undefined)
+            updateData.accountExpiration = new Date(accountExpiration);
+        if (transferNote !== undefined)
+            updateData.transferNote = transferNote;
+        if (transferAmount !== undefined)
+            updateData.transferAmount = transferAmount;
+        if (network !== undefined)
+            updateData.network = network;
+        if (voucher !== undefined)
+            updateData.voucher = voucher;
+        if (paymentCode !== undefined)
+            updateData.paymentCode = paymentCode;
+        if (redirectUrl !== undefined)
+            updateData.redirectUrl = redirectUrl;
+        if (authorizationMode !== undefined)
+            updateData.authorizationMode = authorizationMode;
+        if (authorizationUrl !== undefined)
+            updateData.authorizationUrl = authorizationUrl;
+        if (flwStatus !== undefined)
+            updateData.flwStatus = flwStatus;
+        if (flwMessage !== undefined)
+            updateData.flwMessage = flwMessage;
+        if (chargedAmount !== undefined)
+            updateData.chargedAmount = chargedAmount;
+        if (appFee !== undefined)
+            updateData.appFee = appFee;
+        if (merchantFee !== undefined)
+            updateData.merchantFee = merchantFee;
         const updatedCheckout = await (0, checkout_services_1.updateCheckoutService)(checkoutId, updateData, restaurantId);
         res.status(200).json({
             message: "Checkout updated successfully",
@@ -224,13 +290,13 @@ const updateCheckout = async (req, res) => {
 };
 exports.updateCheckout = updateCheckout;
 /**
- * Controller to process payment for checkout
+ * Enhanced controller to process payment for checkout
  * POST /checkouts/:checkoutId/payment
  */
 const processPayment = async (req, res) => {
     try {
         const { checkoutId } = req.params;
-        const { paymentMethod, phoneNumber, cardToken, bankAccount } = req.body;
+        const { paymentMethod, phoneNumber, cardDetails, bankDetails, processDirectly = true, } = req.body;
         // Validate required fields
         if (!paymentMethod) {
             return res.status(400).json({
@@ -243,34 +309,63 @@ const processPayment = async (req, res) => {
                 message: "Phone number is required for mobile money payments",
             });
         }
-        if (paymentMethod === "CARD" && !cardToken) {
+        if (paymentMethod === "CARD" && !cardDetails) {
             return res.status(400).json({
-                message: "Card token is required for card payments",
+                message: "Card details are required for card payments",
             });
         }
-        if (paymentMethod === "BANK_TRANSFER" && !bankAccount) {
-            return res.status(400).json({
-                message: "Bank account is required for bank transfers",
-            });
+        // Validate card details if provided
+        if (cardDetails) {
+            const { cardNumber, cvv, expiryMonth, expiryYear } = cardDetails;
+            if (!cardNumber || !cvv || !expiryMonth || !expiryYear) {
+                return res.status(400).json({
+                    message: "Complete card details (number, CVV, expiry month/year) are required",
+                });
+            }
         }
         const paymentResult = await (0, checkout_services_1.processPaymentService)(checkoutId, {
             paymentMethod,
             phoneNumber,
-            cardToken,
-            bankAccount,
+            cardDetails,
+            bankDetails,
+            processDirectly,
         });
         if (paymentResult.success) {
-            if (paymentMethod === "CARD" && paymentResult.redirectUrl) {
-                // For card payments, redirect to PayPal
-                return res.redirect(paymentResult.redirectUrl);
-            }
-            else {
-                // For other payment methods, return JSON response
+            // Handle different response types based on payment method
+            if (paymentResult.redirectUrl) {
+                // For payments requiring redirect (3DS, authorization pages)
                 res.status(200).json({
-                    message: "Payment processed successfully",
+                    message: "Payment initiated - redirect required",
                     data: {
                         checkout: paymentResult.checkout,
                         transactionId: paymentResult.transactionId,
+                        redirectUrl: paymentResult.redirectUrl,
+                        status: paymentResult.status,
+                        requiresRedirect: true,
+                    },
+                });
+            }
+            else if (paymentResult.transferDetails) {
+                // For bank transfers with account details
+                res.status(200).json({
+                    message: "Bank transfer initiated",
+                    data: {
+                        checkout: paymentResult.checkout,
+                        transactionId: paymentResult.transactionId,
+                        transferDetails: paymentResult.transferDetails,
+                        status: paymentResult.status,
+                        message: "Please transfer funds to the provided account details",
+                    },
+                });
+            }
+            else {
+                // For completed payments or pending mobile money
+                res.status(200).json({
+                    message: paymentResult.message || "Payment processed successfully",
+                    data: {
+                        checkout: paymentResult.checkout,
+                        transactionId: paymentResult.transactionId,
+                        status: paymentResult.status,
                     },
                 });
             }
@@ -278,16 +373,77 @@ const processPayment = async (req, res) => {
         else {
             res.status(400).json({
                 message: paymentResult.error || "Payment failed",
+                error: paymentResult.error,
             });
         }
     }
     catch (error) {
         res.status(500).json({
             message: error.message || "Failed to process payment",
+            error: error.message,
         });
     }
 };
 exports.processPayment = processPayment;
+/**
+ * New controller to verify payment status
+ * GET /checkouts/:checkoutId/verify-payment
+ */
+const verifyPayment = async (req, res) => {
+    try {
+        const { checkoutId } = req.params;
+        const { transactionId } = req.query;
+        if (!transactionId) {
+            return res.status(400).json({
+                message: "Transaction ID is required for verification",
+            });
+        }
+        // Get checkout details
+        const checkout = await (0, checkout_services_1.getCheckoutByIdService)(checkoutId);
+        // Verify payment
+        const verificationResult = await (0, checkout_services_1.verifyPaymentStatus)(transactionId);
+        if (verificationResult.success) {
+            // Update checkout with verified payment details
+            await (0, checkout_services_1.updateCheckoutService)(checkoutId, {
+                paymentStatus: "COMPLETED",
+                flwStatus: verificationResult.status,
+                chargedAmount: verificationResult.chargedAmount,
+                appFee: verificationResult.appFee,
+                merchantFee: verificationResult.merchantFee,
+                processorResponse: verificationResult.processorResponse,
+            });
+            res.status(200).json({
+                message: "Payment verified successfully",
+                data: {
+                    verified: true,
+                    status: verificationResult.status,
+                    amount: verificationResult.amount,
+                    currency: verificationResult.currency,
+                    transactionId: transactionId,
+                    flwRef: verificationResult.flwRef,
+                    txRef: verificationResult.txRef,
+                },
+            });
+        }
+        else {
+            res.status(400).json({
+                message: "Payment verification failed",
+                data: {
+                    verified: false,
+                    error: verificationResult.error,
+                    status: verificationResult.status,
+                },
+            });
+        }
+    }
+    catch (error) {
+        res.status(500).json({
+            message: error.message || "Failed to verify payment",
+            error: error.message,
+        });
+    }
+};
+exports.verifyPayment = verifyPayment;
 /**
  * Controller to cancel checkout
  * DELETE /checkouts/:checkoutId
