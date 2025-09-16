@@ -58,7 +58,7 @@ cartRoutes.get(
  * PATCH /carts/items/:cartItemId
  * Access: Restaurant only
  */
-cartRoutes.patch(
+cartRoutes.put(
   "/items/:cartItemId",
   isAuthenticated,
   checkPermission("RESTAURANT"),
