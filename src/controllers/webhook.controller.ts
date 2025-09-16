@@ -52,6 +52,8 @@ const handleChargeCompleted = async (data: any) => {
     const flwRef = data.flwRef || data.flw_ref;
     const status = data.status;
     const currency = data.currency;
+    const appFee = data.appfee;
+    const merchantFee = data.merchantfee;
 
     console.log(
       `Processing transaction: txRef=${txRef}, flwRef=${flwRef}, status=${status}`
@@ -200,6 +202,8 @@ const handleChargeCompleted = async (data: any) => {
             flwMessage: "Payment completed via webhook",
             transactionId: data.id?.toString(),
             flwRef: flwRef,
+            appFee: appFee,
+            merchantFee: merchantFee,
             paidAt: new Date(),
             updatedAt: new Date(),
           },
