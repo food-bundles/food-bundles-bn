@@ -30,7 +30,7 @@ cartRoutes.get("/summary", authMiddleware_1.isAuthenticated, (0, authMiddleware_
  * PATCH /carts/items/:cartItemId
  * Access: Restaurant only
  */
-cartRoutes.patch("/items/:cartItemId", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)("RESTAURANT"), cart_controller_1.updateCartItem);
+cartRoutes.put("/items/:cartItemId", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)("RESTAURANT"), cart_controller_1.updateCartItem);
 /**
  * Remove item from cart
  * DELETE /carts/items/:cartItemId
