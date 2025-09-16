@@ -44,7 +44,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 // Remove cookieParser middleware
 
-app.use("/", routes);
+app.use("/api", routes);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ message: "Backend is healthy" });
