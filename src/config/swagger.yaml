@@ -4,9 +4,9 @@ info:
   description: API documentation for managing agricultural products in the FoodBundles platform.
   version: 1.0.0
 servers:
-  - url: "http://localhost:4000"
-    description: Local development server
-  - url: "https://food-bundle-bn.onrender.com"
-    description: Production server
   - url: "https://server.food.rw"
     description: Live Production server
+  - url: "https://food-bundle-bn.onrender.com"
+    description: Production server
+  - url: "http://localhost:4000"
+    description: Local development server
