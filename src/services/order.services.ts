@@ -106,6 +106,7 @@ export const createOrderFromCheckoutService = async (
     const newOrder = await tx.order.create({
       data: {
         orderNumber,
+        checkoutId,
         restaurantId,
         totalAmount,
         status: "PENDING",
