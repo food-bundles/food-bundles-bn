@@ -28,18 +28,14 @@ const app = express();
 
 app.use(
   cors({
-    origin: [
-      "https://www.food.rw",
-      "https://food-bundles.vercel.app",
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "https://food-bundle-bn.onrender.com",
-    ],
-    credentials: false, // Changed to false since we don't use cookies anymore
-    allowedHeaders: ["Content-Type", "Authorization"], // Add Authorization header
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
   })
 );
+
+// Handle preflight requests
+app.options("*", cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));

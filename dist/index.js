@@ -26,17 +26,12 @@ const options = {
 const specs = (0, swagger_jsdoc_1.default)(options);
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
-    origin: [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "https://food-bundles-fn.vercel.app",
-        "https://food-bundle-bn.onrender.com",
-        "https://food.rw",
-    ],
-    credentials: false, // Changed to false since we don't use cookies anymore
-    allowedHeaders: ["Content-Type", "Authorization"], // Add Authorization header
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
 }));
+// Handle preflight requests
+app.options("*", (0, cors_1.default)());
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: false }));
 // Remove cookieParser middleware
