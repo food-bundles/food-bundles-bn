@@ -376,8 +376,8 @@ const processPaymentService = async (checkoutId, paymentData) => {
                     phoneNumber: paymentData.phoneNumber,
                     txRef: checkout.txRef,
                     orderId: checkout.txOrderId,
-                    email: checkout.billingEmail || checkout.restaurant.email,
-                    fullname: checkout.billingName || checkout.restaurant.name,
+                    email: checkout.restaurant.email,
+                    fullname: checkout.restaurant.name,
                     currency: checkout.currency || "RWF",
                 });
                 break;
