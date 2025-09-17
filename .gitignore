@@ -5,7 +5,7 @@ node_modules
 # flutterwave-keys 
 flutterwave-keys.txt
 
-# dist  # commented out
+dist 
 
 uploads
 /generated/prisma

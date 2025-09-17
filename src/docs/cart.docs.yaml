@@ -327,7 +327,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /carts/items/{cartItemId}:
-    patch:
+    put:
       tags:
         - Cart API Management
       summary: Update cart item quantity

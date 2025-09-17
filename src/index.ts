@@ -1,3 +1,4 @@
+// Backend Index - Updated for Token-Based Auth
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -5,7 +6,7 @@ import swaggerUi from "swagger-ui-express";
 import swaggerJSDoc from "swagger-jsdoc";
 import YAML from "yamljs";
 import routes from "./routes";
-import cookieParser from "cookie-parser";
+// Remove cookieParser import as we no longer use cookies
 import { ENV } from "./config";
 
 const swaggerBaseDoc = YAML.load("./src/config/swagger.yaml");
@@ -33,12 +34,15 @@ app.use(
       "https://food-bundles-fn.vercel.app",
       "https://food-bundle-bn.onrender.com",
     ],
-    credentials: true,
+    credentials: false, // Changed to false since we don't use cookies anymore
+    allowedHeaders: ["Content-Type", "Authorization"], // Add Authorization header
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   })
 );
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
+// Remove cookieParser middleware
 
 app.use("/", routes);
 
