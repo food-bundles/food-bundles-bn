@@ -29,12 +29,11 @@ const app = express();
 app.use(
   cors({
     origin: [
+      "https://www.food.rw",
+      "https://food-bundles.vercel.app",
       "http://localhost:3000",
       "http://localhost:3001",
-      "https://food-bundles-fn.vercel.app",
       "https://food-bundle-bn.onrender.com",
-      "https://food.rw",
-      "https://www.food.rw",
     ],
     credentials: false, // Changed to false since we don't use cookies anymore
     allowedHeaders: ["Content-Type", "Authorization"], // Add Authorization header
