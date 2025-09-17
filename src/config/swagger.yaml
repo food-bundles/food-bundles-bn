@@ -8,3 +8,5 @@ servers:
     description: Local development server
   - url: "https://food-bundle-bn.onrender.com"
     description: Production server
+  - url: "https://server.food.rw"
+    description: Live Production server
