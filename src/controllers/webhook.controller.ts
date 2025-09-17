@@ -2,10 +2,10 @@ import { Request, Response } from "express";
 import prisma from "../prisma";
 import {
   sendPaymentConfirmationEmail,
-  sendPaymentNotificationEmail,
   sendWalletNotificationEmail,
 } from "../utils/emailTemplates";
 import { sendMessage } from "../utils/sms.utility";
+import { createOrderFromCheckoutService } from "../services/order.services";
 
 export const handlePaymentWebhook = async (req: Request, res: Response) => {
   try {
@@ -217,15 +217,6 @@ const handleChargeCompleted = async (data: any) => {
           },
         });
 
-        await prisma.order.update({
-          where: { id: checkout.order?.id },
-          data: {
-            paymentStatus: "COMPLETED",
-            paymentReference: data.id?.toString(),
-            status: "CONFIRMED",
-          },
-        });
-
         if (
           eventType === "MOBILEMONEYRW_TRANSACTION" ||
           checkout.paymentMethod === "MOBILE_MONEY"
@@ -270,6 +261,13 @@ const handleChargeCompleted = async (data: any) => {
 
         console.log(`Checkout payment failed: ${checkout.id}`);
       }
+
+      // Create order from checkout
+      await createOrderFromCheckoutService({
+        checkoutId: checkout.id,
+        restaurantId: checkout.restaurantId,
+        status: status === "successful" ? "CONFIRMED" : "CANCELLED",
+      });
     } else if (!txRef.includes("WALLET_TOPUP_") && !txRef.startsWith("175")) {
       console.log("No matching checkout found for txRef:", txRef);
     }

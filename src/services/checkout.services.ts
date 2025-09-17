@@ -19,7 +19,6 @@ import {
   UpdateCheckoutData,
 } from "../types/paymentTypes";
 import { PaymentMethod, PaymentStatus } from "@prisma/client";
-import { createOrderFromCheckoutService } from "./order.services";
 import { clearCartService } from "./cart.service";
 
 dotenv.config();
@@ -113,6 +112,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     checkout = await prisma.cHECKOUT.update({
       where: { id: existingCheckout.id },
       data: {
+        orderId: null,
         totalAmount: cart.totalAmount || existingCheckout.totalAmount,
         paymentMethod: paymentMethod || existingCheckout.paymentMethod,
         billingName: billingName || existingCheckout.billingName,
@@ -496,122 +496,114 @@ export const processPaymentService = async (
   try {
     let paymentResult: PaymentResult;
 
-    if (paymentData.processDirectly) {
-      switch (paymentData.paymentMethod) {
-        case "MOBILE_MONEY":
-          paymentResult = await processMobileMoneyPayment({
-            amount: checkout.totalAmount,
-            phoneNumber: paymentData.phoneNumber!,
-            txRef: checkout.txRef!,
-            orderId: checkout.txOrderId!,
-            email: checkout.billingEmail || checkout.restaurant.email,
-            fullname: checkout.billingName || checkout.restaurant.name,
-            currency: checkout.currency || "RWF",
-          });
-          break;
+    switch (paymentData.paymentMethod) {
+      case "MOBILE_MONEY":
+        paymentResult = await processMobileMoneyPayment({
+          amount: checkout.totalAmount,
+          phoneNumber: paymentData.phoneNumber!,
+          txRef: checkout.txRef!,
+          orderId: checkout.txOrderId!,
+          email: checkout.billingEmail || checkout.restaurant.email,
+          fullname: checkout.billingName || checkout.restaurant.name,
+          currency: checkout.currency || "RWF",
+        });
+        break;
 
-        case "CARD":
-          paymentResult = await processCardPayment({
-            amount: checkout.totalAmount,
-            txRef: checkout.txRef!,
-            email: checkout.billingEmail || checkout.restaurant.email,
-            fullname: checkout.billingName || checkout.restaurant.name,
-            phoneNumber: paymentData.phoneNumber || checkout.billingPhone || "",
-            currency: checkout.currency || "RWF",
-            cardDetails: paymentData.cardDetails!,
-          });
-          break;
+      case "CARD":
+        paymentResult = await processCardPayment({
+          amount: checkout.totalAmount,
+          txRef: checkout.txRef!,
+          email: checkout.billingEmail || checkout.restaurant.email,
+          fullname: checkout.billingName || checkout.restaurant.name,
+          phoneNumber: paymentData.phoneNumber || checkout.billingPhone || "",
+          currency: checkout.currency || "RWF",
+          cardDetails: paymentData.cardDetails!,
+        });
+        break;
 
-        case "BANK_TRANSFER":
-          paymentResult = await processBankTransfer({
-            amount: checkout.totalAmount,
-            txRef: checkout.txRef!,
-            email: checkout.billingEmail || checkout.restaurant.email,
-            phoneNumber: paymentData.phoneNumber || checkout.billingPhone || "",
-            currency: checkout.currency || "RWF",
-            clientIp:
-              paymentData.bankDetails?.clientIp ||
-              checkout.clientIp ||
-              "127.0.0.1",
-            deviceFingerprint:
-              checkout.deviceFingerprint || "62wd23423rq324323qew1",
-            narration: checkout.narration || "Order payment",
-          });
-          break;
+      case "BANK_TRANSFER":
+        paymentResult = await processBankTransfer({
+          amount: checkout.totalAmount,
+          txRef: checkout.txRef!,
+          email: checkout.billingEmail || checkout.restaurant.email,
+          phoneNumber: paymentData.phoneNumber || checkout.billingPhone || "",
+          currency: checkout.currency || "RWF",
+          clientIp:
+            paymentData.bankDetails?.clientIp ||
+            checkout.clientIp ||
+            "127.0.0.1",
+          deviceFingerprint:
+            checkout.deviceFingerprint || "62wd23423rq324323qew1",
+          narration: checkout.narration || "Order payment",
+        });
+        break;
 
-        case "CASH":
-          try {
-            // Get restaurant's wallet
-            const wallet = await getWalletByRestaurantIdService(
-              checkout.restaurantId
-            );
+      case "CASH":
+        try {
+          // Get restaurant's wallet
+          const wallet = await getWalletByRestaurantIdService(
+            checkout.restaurantId
+          );
 
-            if (!wallet.isActive) {
-              throw new Error("Wallet is inactive. Please contact support.");
-            }
-
-            // Check if wallet has sufficient balance
-            if (wallet.balance < checkout.totalAmount) {
-              throw new Error(
-                `Insufficient wallet balance. Available: ${wallet.balance} ${
-                  wallet.currency
-                }, Required: ${checkout.totalAmount} ${
-                  checkout.currency || "RWF"
-                }`
-              );
-            }
-
-            // Debit wallet for the payment
-            const walletDebitResult = await debitWalletService({
-              walletId: wallet.id,
-              amount: checkout.totalAmount,
-              description: `Payment for checkout ${checkoutId} - Order ${checkout.txOrderId}`,
-              reference: checkoutId,
-              checkoutId: checkoutId,
-            });
-
-            paymentResult = {
-              success: true,
-              transactionId: `WALLET_${checkout.txRef}_${Date.now()}`,
-              reference: checkout.txRef ?? "",
-              flwRef: `WALLET_${checkout.txRef}`,
-              status: "successful",
-              message: "Payment completed using wallet balance",
-              walletDetails: {
-                previousBalance: walletDebitResult.transaction.previousBalance,
-                newBalance: walletDebitResult.newBalance,
-                transactionId: walletDebitResult.transaction.id,
-              },
-            };
-          } catch (walletError: any) {
-            // If wallet payment fails, return appropriate error
-            paymentResult = {
-              success: false,
-              transactionId: "",
-              reference: checkout.txRef ?? "",
-              flwRef: "",
-              status: "failed",
-              message: walletError.message || "Wallet payment failed",
-              error: walletError.message,
-            };
+          if (!wallet.isActive) {
+            throw new Error("Wallet is inactive. Please contact support.");
           }
-          break;
 
-        default:
-          throw new Error("Unsupported payment method");
-      }
-    } else {
-      paymentResult = {
-        success: true,
-        transactionId: checkout.txRef!,
-        reference: checkout.txRef!,
-        flwRef: checkout.txRef!,
-        status: "pending",
-        message: "Checkout prepared for payment",
-      };
+          // Check if wallet has sufficient balance
+          if (wallet.balance < checkout.totalAmount) {
+            throw new Error(
+              `Insufficient wallet balance. Available: ${wallet.balance} ${
+                wallet.currency
+              }, Required: ${checkout.totalAmount} ${
+                checkout.currency || "RWF"
+              }`
+            );
+          }
+
+          // Debit wallet for the payment
+          const walletDebitResult = await debitWalletService({
+            walletId: wallet.id,
+            amount: checkout.totalAmount,
+            description: `Payment for checkout ${checkoutId} - Order ${checkout.txOrderId}`,
+            reference: checkoutId,
+            checkoutId: checkoutId,
+          });
+
+          paymentResult = {
+            success: true,
+            transactionId: `WALLET_${checkout.txRef}_${Date.now()}`,
+            reference: checkout.txRef ?? "",
+            flwRef: `WALLET_${checkout.txRef}`,
+            status: "successful",
+            message: "Payment completed using wallet balance",
+            walletDetails: {
+              previousBalance: walletDebitResult.transaction.previousBalance,
+              newBalance: walletDebitResult.newBalance,
+              transactionId: walletDebitResult.transaction.id,
+            },
+          };
+        } catch (walletError: any) {
+          // If wallet payment fails, return appropriate error
+          paymentResult = {
+            success: false,
+            transactionId: "",
+            reference: checkout.txRef ?? "",
+            flwRef: "",
+            status: "failed",
+            message: walletError.message || "Wallet payment failed",
+            error: walletError.message,
+          };
+        }
+        break;
+
+      default:
+        throw new Error("Unsupported payment method");
     }
 
     console.log("Payment result:", paymentResult);
+
+    // Clear the cart by setting its status to COMPLETED
+    await clearCartService(checkout.restaurantId);
 
     if (paymentResult.success) {
       const updateData: UpdateCheckoutData = {
@@ -706,17 +698,6 @@ export const processPaymentService = async (
               ? paymentResult.walletDetails
               : undefined,
         });
-      }
-
-      if (paymentResult.status === "successful") {
-        // Create order from checkout
-        await createOrderFromCheckoutService({
-          checkoutId: checkout.id,
-          restaurantId: checkout.restaurantId,
-        });
-
-        // Clear the cart by setting its status to COMPLETED
-        await clearCartService(checkout.restaurantId);
       }
 
       return {

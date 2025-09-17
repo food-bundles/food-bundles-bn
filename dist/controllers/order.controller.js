@@ -25,6 +25,7 @@ const createOrderFromCheckout = async (req, res) => {
             checkoutId,
             restaurantId,
             notes,
+            status: client_1.OrderStatus.PENDING,
             requestedDelivery: requestedDelivery
                 ? new Date(requestedDelivery)
                 : undefined,
