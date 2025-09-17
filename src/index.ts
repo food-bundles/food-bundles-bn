@@ -34,6 +34,7 @@ app.use(
       "https://food-bundles-fn.vercel.app",
       "https://food-bundle-bn.onrender.com",
       "https://food.rw",
+      "https://www.food.rw",
     ],
     credentials: false, // Changed to false since we don't use cookies anymore
     allowedHeaders: ["Content-Type", "Authorization"], // Add Authorization header
