@@ -32,7 +32,7 @@ const addToCartService = async (data) => {
     if (product.quantity < quantity) {
         throw new Error(`Insufficient stock. Available: ${product.quantity}`);
     }
-    // Find or create active cart for restaurant
+    // Find or create the single active cart for this restaurant
     let cart = await prisma_1.default.cart.findFirst({
         where: {
             restaurantId,
@@ -321,7 +321,7 @@ const clearCartService = async (restaurantId) => {
     // Update cart total to 0
     await prisma_1.default.cart.update({
         where: { id: cart.id },
-        data: { totalAmount: 0 },
+        data: { totalAmount: 0, status: "ACTIVE" },
     });
     return { message: "Cart cleared successfully" };
 };

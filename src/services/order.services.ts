@@ -76,10 +76,6 @@ export const createOrderFromCheckoutService = async (
     );
   }
 
-  if (checkout.paymentStatus !== "COMPLETED") {
-    throw new Error("Payment must be completed before creating order");
-  }
-
   if (checkout.orderId) {
     throw new Error("Order already exists for this checkout");
   }

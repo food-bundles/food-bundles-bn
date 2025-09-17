@@ -38,6 +38,7 @@ const createCheckout = async (req, res) => {
             narration,
             currency,
         });
+        console.log("Checkout created:", req);
         res.status(201).json({
             message: "Checkout created successfully",
             data: checkout,

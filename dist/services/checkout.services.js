@@ -8,6 +8,9 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const prisma_1 = __importDefault(require("../prisma"));
 const wallet_service_1 = require("./wallet.service");
 const emailTemplates_1 = require("../utils/emailTemplates");
+const order_services_1 = require("./order.services");
+const cart_service_1 = require("./cart.service");
+const sms_utility_1 = require("../utils/sms.utility");
 dotenv_1.default.config();
 const Flutterwave = require("flutterwave-node-v3");
 // Initialize Flutterwave
@@ -16,7 +19,7 @@ const flw = new Flutterwave(process.env.FLW_PUBLIC_KEY, process.env.FLW_SECRET_K
  * Enhanced service to create a new checkout from cart
  */
 const createCheckoutService = async (data) => {
-    const { cartId, restaurantId, paymentMethod, billingName, billingEmail, billingPhone, billingAddress, notes, deliveryDate, clientIp = "127.0.0.1", deviceFingerprint, narration, currency = "RWF", } = data;
+    const { cartId, restaurantId, paymentMethod, billingName, billingEmail, billingPhone, billingAddress, notes, deliveryDate, clientIp, deviceFingerprint, narration, currency = "RWF", } = data;
     // Validate cart exists and belongs to restaurant
     const cart = await prisma_1.default.cart.findUnique({
         where: { id: cartId },
@@ -54,8 +57,48 @@ const createCheckoutService = async (data) => {
     const existingCheckout = await prisma_1.default.cHECKOUT.findUnique({
         where: { cartId },
     });
+    let checkout;
     if (existingCheckout) {
-        throw new Error("Checkout already exists for this cart");
+        // Update existing checkout
+        checkout = await prisma_1.default.cHECKOUT.update({
+            where: { id: existingCheckout.id },
+            data: {
+                totalAmount: cart.totalAmount || existingCheckout.totalAmount,
+                paymentMethod: paymentMethod || existingCheckout.paymentMethod,
+                billingName: billingName || existingCheckout.billingName,
+                billingEmail: billingEmail || existingCheckout.billingEmail,
+                billingPhone: billingPhone || existingCheckout.billingPhone,
+                billingAddress: billingAddress || existingCheckout.billingAddress,
+                notes: notes || existingCheckout.notes,
+                deliveryDate: deliveryDate || existingCheckout.deliveryDate,
+                paymentStatus: "PENDING",
+                currency: currency || existingCheckout.currency,
+                clientIp: clientIp || existingCheckout.clientIp,
+                deviceFingerprint: deviceFingerprint || existingCheckout.deviceFingerprint,
+                narration: narration ||
+                    existingCheckout.narration ||
+                    `Payment for ${cart.restaurant.name} order`,
+            },
+            include: {
+                cart: {
+                    include: {
+                        cartItems: {
+                            include: {
+                                product: true,
+                            },
+                        },
+                    },
+                },
+                restaurant: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        phone: true,
+                    },
+                },
+            },
+        });
     }
     // Generate transaction reference
     const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
@@ -63,7 +106,7 @@ const createCheckoutService = async (data) => {
         .toString(36)
         .substr(2, 9)}`;
     // Create checkout
-    const checkout = await prisma_1.default.cHECKOUT.create({
+    checkout = await prisma_1.default.cHECKOUT.create({
         data: {
             cartId,
             restaurantId,
@@ -103,11 +146,7 @@ const createCheckoutService = async (data) => {
             },
         },
     });
-    // Update cart status to CHECKED_OUT
-    await prisma_1.default.cart.update({
-        where: { id: cartId },
-        data: { status: "CHECKED_OUT" },
-    });
+    console.log("Checkout created:", checkout);
     return checkout;
 };
 exports.createCheckoutService = createCheckoutService;
@@ -508,6 +547,15 @@ const processPaymentService = async (checkoutId, paymentData) => {
                         : undefined,
                 });
             }
+            if (paymentResult.status === "successful") {
+                // Create order from checkout
+                await (0, order_services_1.createOrderFromCheckoutService)({
+                    checkoutId: checkout.id,
+                    restaurantId: checkout.restaurantId,
+                });
+                // Clear the cart by setting its status to COMPLETED
+                await (0, cart_service_1.clearCartService)(checkout.restaurantId);
+            }
             return {
                 success: true,
                 checkout: updatedCheckout,
@@ -611,6 +659,8 @@ async function processMobileMoneyPayment({ amount, phoneNumber, txRef, orderId, 
         const response = await flw.MobileMoney.rwanda(payload);
         console.log("Mobile Money Response:", response);
         if (response.status === "success") {
+            // Send payment notification sms
+            await (0, sms_utility_1.sendMessage)(`A payment of ${amount} ${currency} has been made to your mobile number ${cleanedPhoneNumber}`, cleanedPhoneNumber);
             return {
                 success: true,
                 transactionId: response.data?.flw_ref || txRef,

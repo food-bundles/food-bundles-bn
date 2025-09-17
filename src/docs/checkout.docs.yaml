@@ -570,6 +570,50 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateCheckoutRequest"
+            examples:
+              mobile_money:
+                summary: Mobile Money Payment
+                value:
+                  cartId: "cart123"
+                  paymentMethod: "MOBILE_MONEY"
+                  billingPhone: "250788123456"
+                  billingAddress: "123 Main St"
+                  notes: "Special instructions"
+                  deliveryDate: "2023-06-30"
+              cash_payment:
+                summary: Cash Payment
+                value:
+                  cartId: "cart123"
+                  paymentMethod: "CASH"
+                  billingAddress: "123 Main St"
+                  notes: "Special instructions"
+                  deliveryDate: "2023-06-30"
+              card_payment:
+                summary: Card Payment
+                value:
+                  cartId: "cart123"
+                  paymentMethod: "CARD"
+                  billingEmail: "foodbundles@example.com"
+                  billingName: "John Doe"
+                  billingPhone: "250788123456"
+                  billingAddress: "123 Main St"
+                  notes: "Special instructions"
+                  deliveryDate: "2023-06-30"
+                  currency: "RWF"
+              bank_transfer:
+                summary: Bank Transfer
+                value:
+                  cartId: "cart123"
+                  paymentMethod: "BANK_TRANSFER"
+                  billingEmail: "foodbundles@example.com"
+                  billingPhone: "250788123456"
+                  billingAddress: "123 Main St"
+                  notes: "Special instructions"
+                  deliveryDate: "2023-06-30"
+                  currency: "RWF"
+                  clientIp: "192.168.1.100"
+                  deviceFingerprint: "62wd23423rq324323qew1"
+                  narration: "Payment for order 123"
       responses:
         201:
           description: Checkout created successfully integration
