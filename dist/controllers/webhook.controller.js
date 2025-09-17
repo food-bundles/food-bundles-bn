@@ -7,6 +7,7 @@ exports.handlePaymentWebhook = void 0;
 const prisma_1 = __importDefault(require("../prisma"));
 const emailTemplates_1 = require("../utils/emailTemplates");
 const sms_utility_1 = require("../utils/sms.utility");
+const order_services_1 = require("../services/order.services");
 const handlePaymentWebhook = async (req, res) => {
     try {
         // Verify webhook signature
@@ -185,14 +186,6 @@ const handleChargeCompleted = async (data) => {
                         updatedAt: new Date(),
                     },
                 });
-                await prisma_1.default.order.update({
-                    where: { id: checkout.order?.id },
-                    data: {
-                        paymentStatus: "COMPLETED",
-                        paymentReference: data.id?.toString(),
-                        status: "CONFIRMED",
-                    },
-                });
                 if (eventType === "MOBILEMONEYRW_TRANSACTION" ||
                     checkout.paymentMethod === "MOBILE_MONEY") {
                     await (0, sms_utility_1.sendMessage)(`Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${currency} for order ${checkout.orderId}. Thank you!`, checkout.billingPhone || "");
@@ -230,6 +223,12 @@ const handleChargeCompleted = async (data) => {
                 });
                 console.log(`Checkout payment failed: ${checkout.id}`);
             }
+            // Create order from checkout
+            await (0, order_services_1.createOrderFromCheckoutService)({
+                checkoutId: checkout.id,
+                restaurantId: checkout.restaurantId,
+                status: status === "successful" ? "CONFIRMED" : "CANCELLED",
+            });
         }
         else if (!txRef.includes("WALLET_TOPUP_") && !txRef.startsWith("175")) {
             console.log("No matching checkout found for txRef:", txRef);

@@ -33,6 +33,7 @@ export const createOrderFromCheckout = async (req: Request, res: Response) => {
       checkoutId,
       restaurantId,
       notes,
+      status: OrderStatus.PENDING,
       requestedDelivery: requestedDelivery
         ? new Date(requestedDelivery)
         : undefined,

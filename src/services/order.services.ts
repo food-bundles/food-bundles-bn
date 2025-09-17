@@ -6,6 +6,7 @@ import { ProductData } from "./productService";
 interface CreateOrderFromCheckoutData {
   checkoutId: string;
   restaurantId: string;
+  status: OrderStatus;
   notes?: string;
   requestedDelivery?: Date;
 }
