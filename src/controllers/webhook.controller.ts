@@ -1,6 +1,11 @@
 import { Request, Response } from "express";
 import prisma from "../prisma";
-import { sendWalletNotificationEmail } from "../utils/emailTemplates";
+import {
+  sendPaymentConfirmationEmail,
+  sendPaymentNotificationEmail,
+  sendWalletNotificationEmail,
+} from "../utils/emailTemplates";
+import { sendMessage } from "../utils/sms.utility";
 
 export const handlePaymentWebhook = async (req: Request, res: Response) => {
   try {
@@ -18,7 +23,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       JSON.stringify(payload, null, 2)
     );
 
-    // Handle different event types - FIX: Use 'event.type' instead of 'event'
+    // Handle different event types
     const eventType = payload["event.type"] || payload.event;
 
     switch (eventType) {
@@ -52,10 +57,14 @@ const handleChargeCompleted = async (data: any) => {
     const flwRef = data.flwRef || data.flw_ref;
     const status = data.status;
     const currency = data.currency;
+    const appFee = data.appfee;
+    const merchantFee = data.merchantfee;
 
     console.log(
       `Processing transaction: txRef=${txRef}, flwRef=${flwRef}, status=${status}`
     );
+
+    const eventType = data["event.type"] || data.event;
 
     // Check if this is a wallet top-up transaction
     if (txRef && (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))) {
@@ -185,6 +194,7 @@ const handleChargeCompleted = async (data: any) => {
             },
           },
         },
+        order: true,
       },
     });
 
@@ -200,10 +210,49 @@ const handleChargeCompleted = async (data: any) => {
             flwMessage: "Payment completed via webhook",
             transactionId: data.id?.toString(),
             flwRef: flwRef,
+            appFee: appFee,
+            merchantFee: merchantFee,
             paidAt: new Date(),
             updatedAt: new Date(),
           },
         });
+
+        await prisma.order.update({
+          where: { id: checkout.order?.id },
+          data: {
+            paymentStatus: "COMPLETED",
+            paymentReference: data.id?.toString(),
+            status: "CONFIRMED",
+          },
+        });
+
+        if (
+          eventType === "MOBILEMONEYRW_TRANSACTION" ||
+          checkout.paymentMethod === "MOBILE_MONEY"
+        ) {
+          await sendMessage(
+            `Payment completed: ${
+              checkout.chargedAmount || checkout.totalAmount
+            } ${currency} for order ${checkout.orderId}. Thank you!`,
+            checkout.billingPhone || ""
+          );
+        } else {
+          await sendPaymentConfirmationEmail({
+            amount: checkout.chargedAmount || checkout.totalAmount,
+            transactionId: data.id?.toString(),
+            restaurantName: checkout.restaurant.name,
+            products: checkout.cart.cartItems.map((item) => ({
+              name: item.product.productName,
+              quantity: item.quantity,
+              price: item.product.unitPrice,
+            })),
+            customer: {
+              name: checkout.billingName || "",
+              email: checkout.billingEmail || "",
+            },
+            checkoutId: checkout.id,
+          });
+        }
 
         console.log(`Checkout payment completed: ${checkout.id}`);
       } else if (status === "failed") {

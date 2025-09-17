@@ -19,6 +19,8 @@ import {
   UpdateCheckoutData,
 } from "../types/paymentTypes";
 import { PaymentMethod, PaymentStatus } from "@prisma/client";
+import { createOrderFromCheckoutService } from "./order.services";
+import { clearCartService } from "./cart.service";
 
 dotenv.config();
 
@@ -50,7 +52,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     billingAddress,
     notes,
     deliveryDate,
-    clientIp = "127.0.0.1",
+    clientIp,
     deviceFingerprint,
     narration,
     currency = "RWF",
@@ -104,63 +106,102 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     where: { cartId },
   });
 
+  let checkout;
+
   if (existingCheckout) {
-    throw new Error("Checkout already exists for this cart");
-  }
-
-  // Generate transaction reference
-  const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
-  const txOrderId = `ORDER_${Date.now()}_${Math.random()
-    .toString(36)
-    .substr(2, 9)}`;
-
-  // Create checkout
-  const checkout = await prisma.cHECKOUT.create({
-    data: {
-      cartId,
-      restaurantId,
-      totalAmount: cart.totalAmount,
-      paymentMethod,
-      billingName,
-      billingEmail,
-      billingPhone,
-      billingAddress,
-      notes,
-      deliveryDate,
-      paymentStatus: "PENDING",
-      txRef,
-      txOrderId,
-      currency,
-      clientIp,
-      deviceFingerprint,
-      narration: narration || `Payment for ${cart.restaurant.name} order`,
-    },
-    include: {
-      cart: {
-        include: {
-          cartItems: {
-            include: {
-              product: true,
+    // Update existing checkout
+    checkout = await prisma.cHECKOUT.update({
+      where: { id: existingCheckout.id },
+      data: {
+        totalAmount: cart.totalAmount || existingCheckout.totalAmount,
+        paymentMethod: paymentMethod || existingCheckout.paymentMethod,
+        billingName: billingName || existingCheckout.billingName,
+        billingEmail: billingEmail || existingCheckout.billingEmail,
+        billingPhone: billingPhone || existingCheckout.billingPhone,
+        billingAddress: billingAddress || existingCheckout.billingAddress,
+        notes: notes || existingCheckout.notes,
+        deliveryDate: deliveryDate || existingCheckout.deliveryDate,
+        paymentStatus: "PENDING",
+        currency: currency || existingCheckout.currency,
+        clientIp: clientIp || existingCheckout.clientIp,
+        deviceFingerprint:
+          deviceFingerprint || existingCheckout.deviceFingerprint,
+        narration:
+          narration ||
+          existingCheckout.narration ||
+          `Payment for ${cart.restaurant.name} order`,
+      },
+      include: {
+        cart: {
+          include: {
+            cartItems: {
+              include: {
+                product: true,
+              },
             },
           },
         },
-      },
-      restaurant: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
         },
       },
-    },
-  });
+    });
+  } else {
+    // Create new checkout
 
-  // Update cart status to CHECKED_OUT
-  await prisma.cart.update({
-    where: { id: cartId },
-    data: { status: "CHECKED_OUT" },
-  });
+    // Generate transaction reference
+    const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
+    const txOrderId = `ORDER_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
+    // Create checkout
+    checkout = await prisma.cHECKOUT.create({
+      data: {
+        cartId,
+        restaurantId,
+        totalAmount: cart.totalAmount,
+        paymentMethod,
+        billingName,
+        billingEmail,
+        billingPhone,
+        billingAddress,
+        notes,
+        deliveryDate,
+        paymentStatus: "PENDING",
+        txRef,
+        txOrderId,
+        currency,
+        clientIp,
+        deviceFingerprint,
+        narration: narration || `Payment for ${cart.restaurant.name} order`,
+      },
+      include: {
+        cart: {
+          include: {
+            cartItems: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        },
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+    });
+  }
 
   return checkout;
 };
@@ -499,7 +540,6 @@ export const processPaymentService = async (
           break;
 
         case "CASH":
-          // NEW WALLET INTEGRATION FOR CASH PAYMENTS
           try {
             // Get restaurant's wallet
             const wallet = await getWalletByRestaurantIdService(
@@ -666,6 +706,17 @@ export const processPaymentService = async (
               ? paymentResult.walletDetails
               : undefined,
         });
+      }
+
+      if (paymentResult.status === "successful") {
+        // Create order from checkout
+        await createOrderFromCheckoutService({
+          checkoutId: checkout.id,
+          restaurantId: checkout.restaurantId,
+        });
+
+        // Clear the cart by setting its status to COMPLETED
+        await clearCartService(checkout.restaurantId);
       }
 
       return {
