@@ -339,7 +339,7 @@ model Cart {
   // Relations
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   cartItems  CartItem[] // One cart can have many cart items
-  checkout   CHECKOUT? // One cart can have one checkout when proceeding to checkout
+  checkouts  CHECKOUT[] @relation("CartToCheckout")
 
   // Indexes for better performance
   @@index([restaurantId])
@@ -369,12 +369,13 @@ model CartItem {
 
 // Enhanced CHECKOUT schema model with fields
 model CHECKOUT {
-  id            String        @id @default(uuid())
-  cartId        String        @unique
-  restaurantId  String
-  totalAmount   Float
-  paymentMethod PaymentMethod
-  paymentStatus PaymentStatus @default(PENDING)
+  id              String        @id @default(uuid())
+  cartId          String
+  restaurantId    String
+  totalAmount     Float
+  paymentMethod   PaymentMethod
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentProvider String?       @default("FLUTTERWAVE")
 
   // Billing information
   billingName    String?
@@ -459,7 +460,7 @@ model CHECKOUT {
   updatedAt DateTime  @updatedAt
   paidAt    DateTime?
 
-  cart       Cart       @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  cart       Cart       @relation("CartToCheckout", fields: [cartId], references: [id])
   restaurant Restaurant @relation(fields: [restaurantId], references: [id])
 
   // Owning side of relation

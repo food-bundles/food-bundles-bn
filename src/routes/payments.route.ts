@@ -1,5 +1,8 @@
 import express from "express";
-import { handlePaymentWebhook } from "../controllers/webhook.controller";
+import {
+  handlePaymentWebhook,
+  handlePayPackWebhook,
+} from "../controllers/webhook.controller";
 
 const paymentsRoutes = express.Router();
 
@@ -9,5 +12,7 @@ paymentsRoutes.post(
   express.raw({ type: "application/json" }),
   handlePaymentWebhook
 );
+
+paymentsRoutes.post("/paypack", handlePayPackWebhook);
 
 export default paymentsRoutes;
