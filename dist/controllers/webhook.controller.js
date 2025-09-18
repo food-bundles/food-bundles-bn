@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.handlePayPackWebhook = exports.handlePaymentWebhook = void 0;
+exports.handlePaymentWebhook = void 0;
 const prisma_1 = __importDefault(require("../prisma"));
 const emailTemplates_1 = require("../utils/emailTemplates");
 const sms_utility_1 = require("../utils/sms.utility");
@@ -129,7 +129,7 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
         // Send appropriate notification based on payment method
         if (paymentProvider === "PAYPACK" ||
             checkout.paymentMethod === "MOBILE_MONEY") {
-            await (0, sms_utility_1.sendMessage)(`Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${checkout.currency} for order ${checkout.txOrderId}. Thank you!`, checkout.billingPhone || "");
+            await (0, sms_utility_1.sendMessage)(`Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${checkout.currency}. Thank you!`, checkout.billingPhone || "");
         }
         else {
             await (0, emailTemplates_1.sendPaymentConfirmationEmail)({
@@ -176,54 +176,51 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
 }
 const handlePaymentWebhook = async (req, res) => {
     try {
-        // Verify webhook signature
-        const secretHash = process.env.FLW_SECRET_HASH;
-        const signature = req.headers["verif-hash"];
-        if (!signature || signature !== secretHash) {
-            console.error("Unauthorized Flutterwave webhook attempt");
-            return res.status(401).json({ error: "Unauthorized webhook" });
-        }
         const payload = req.body;
-        console.log("Flutterwave Webhook received:", JSON.stringify(payload, null, 2));
-        await handleChargeCompleted(payload);
+        const paymentProvider = detectPaymentProvider(payload);
+        console.log(`${paymentProvider} Webhook received:`, JSON.stringify(payload, null, 2));
+        // Handle Flutterwave webhook
+        if (paymentProvider === "FLUTTERWAVE") {
+            // Verify webhook signature
+            const secretHash = process.env.FLW_SECRET_HASH;
+            const signature = req.headers["verif-hash"];
+            if (!signature || signature !== secretHash) {
+                console.error("Unauthorized Flutterwave webhook attempt");
+                return res.status(401).json({ error: "Unauthorized webhook" });
+            }
+            await handleChargeCompleted(payload);
+        }
+        // Handle PayPack webhook
+        else if (paymentProvider === "PAYPACK") {
+            console.log("PayPack Webhook received:", JSON.stringify(payload, null, 2));
+            const paymentStatus = payload?.data?.status;
+            const txRef = payload.data?.ref;
+            const flwRef = payload.data?.ref;
+            if (!txRef) {
+                console.error("No transaction reference found in PayPack webhook");
+                return res
+                    .status(400)
+                    .json({ error: "No transaction reference provided" });
+            }
+            console.log("PayPack Transaction reference:", txRef);
+            // Check if this is a wallet top-up transaction
+            if (txRef &&
+                (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))) {
+                await processWalletTransaction(txRef, flwRef, paymentStatus);
+            }
+            else {
+                // Process as regular checkout payment
+                await processCheckoutPayment(txRef, flwRef, paymentStatus, "PAYPACK");
+            }
+        }
         res.status(200).json({ message: "Webhook processed successfully" });
     }
     catch (error) {
-        console.error("Flutterwave webhook processing error:", error);
+        console.error("Payment webhook processing error:", error);
         res.status(500).json({ error: "Webhook processing failed" });
     }
 };
 exports.handlePaymentWebhook = handlePaymentWebhook;
-const handlePayPackWebhook = async (req, res) => {
-    try {
-        const info = req.body;
-        console.log("PayPack Webhook received:", JSON.stringify(info, null, 2));
-        const paymentStatus = info?.data?.status;
-        const txRef = info.data?.ref;
-        const flwRef = info.data?.ref;
-        if (!txRef) {
-            console.error("No transaction reference found in PayPack webhook");
-            return res
-                .status(400)
-                .json({ error: "No transaction reference provided" });
-        }
-        console.log("PayPack Transaction reference:", txRef);
-        // Check if this is a wallet top-up transaction
-        if (txRef && (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))) {
-            await processWalletTransaction(txRef, flwRef, paymentStatus);
-        }
-        else {
-            // Process as regular checkout payment
-            await processCheckoutPayment(txRef, flwRef, paymentStatus, "PAYPACK");
-        }
-        res.status(200).json({ message: "Webhook processed successfully" });
-    }
-    catch (error) {
-        console.error("PayPack webhook processing error:", error);
-        res.status(500).json({ error: "Webhook processing failed" });
-    }
-};
-exports.handlePayPackWebhook = handlePayPackWebhook;
 const handleChargeCompleted = async (data) => {
     try {
         console.log("Processing Flutterwave charge.completed webhook:", data);
@@ -250,3 +247,19 @@ const handleChargeCompleted = async (data) => {
         throw error;
     }
 };
+// Helper function to detect payment provider based on request body structure
+function detectPaymentProvider(body) {
+    // PayPack has nested structure with info?.data?.status and info.data?.ref
+    if (body?.data?.status !== undefined && body?.data?.ref !== undefined) {
+        return "PAYPACK";
+    }
+    // Flutterwave has flat structure with data.txRef, data["event.type"] and data.status
+    if (body?.txRef !== undefined ||
+        body?.tx_ref !== undefined ||
+        body?.["event.type"] !== undefined ||
+        body?.event !== undefined) {
+        return "FLUTTERWAVE";
+    }
+    // Default to Flutterwave if structure is unclear
+    return "FLUTTERWAVE";
+}
