@@ -217,59 +217,61 @@ async function processCheckoutPayment(
 
 export const handlePaymentWebhook = async (req: Request, res: Response) => {
   try {
-    // Verify webhook signature
-    const secretHash = process.env.FLW_SECRET_HASH;
-    const signature = req.headers["verif-hash"];
-
-    if (!signature || signature !== secretHash) {
-      console.error("Unauthorized Flutterwave webhook attempt");
-      return res.status(401).json({ error: "Unauthorized webhook" });
-    }
-
     const payload = req.body;
+    const paymentProvider = detectPaymentProvider(payload);
+
     console.log(
-      "Flutterwave Webhook received:",
+      `${paymentProvider} Webhook received:`,
       JSON.stringify(payload, null, 2)
     );
 
-    await handleChargeCompleted(payload);
+    // Handle Flutterwave webhook
+    if (paymentProvider === "FLUTTERWAVE") {
+      // Verify webhook signature
+      const secretHash = process.env.FLW_SECRET_HASH;
+      const signature = req.headers["verif-hash"];
 
+      if (!signature || signature !== secretHash) {
+        console.error("Unauthorized Flutterwave webhook attempt");
+        return res.status(401).json({ error: "Unauthorized webhook" });
+      }
+
+      await handleChargeCompleted(payload);
+    }
+    // Handle PayPack webhook
+    else if (paymentProvider === "PAYPACK") {
+      console.log(
+        "PayPack Webhook received:",
+        JSON.stringify(payload, null, 2)
+      );
+
+      const paymentStatus = payload?.data?.status;
+      const txRef = payload.data?.ref;
+      const flwRef = payload.data?.ref;
+
+      if (!txRef) {
+        console.error("No transaction reference found in PayPack webhook");
+        return res
+          .status(400)
+          .json({ error: "No transaction reference provided" });
+      }
+
+      console.log("PayPack Transaction reference:", txRef);
+
+      // Check if this is a wallet top-up transaction
+      if (
+        txRef &&
+        (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))
+      ) {
+        await processWalletTransaction(txRef, flwRef, paymentStatus);
+      } else {
+        // Process as regular checkout payment
+        await processCheckoutPayment(txRef, flwRef, paymentStatus, "PAYPACK");
+      }
+    }
     res.status(200).json({ message: "Webhook processed successfully" });
   } catch (error: any) {
-    console.error("Flutterwave webhook processing error:", error);
-    res.status(500).json({ error: "Webhook processing failed" });
-  }
-};
-
-export const handlePayPackWebhook = async (req: Request, res: Response) => {
-  try {
-    const info = req.body;
-    console.log("PayPack Webhook received:", JSON.stringify(info, null, 2));
-
-    const paymentStatus = info?.data?.status;
-    const txRef = info.data?.ref;
-    const flwRef = info.data?.ref;
-
-    if (!txRef) {
-      console.error("No transaction reference found in PayPack webhook");
-      return res
-        .status(400)
-        .json({ error: "No transaction reference provided" });
-    }
-
-    console.log("PayPack Transaction reference:", txRef);
-
-    // Check if this is a wallet top-up transaction
-    if (txRef && (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))) {
-      await processWalletTransaction(txRef, flwRef, paymentStatus);
-    } else {
-      // Process as regular checkout payment
-      await processCheckoutPayment(txRef, flwRef, paymentStatus, "PAYPACK");
-    }
-
-    res.status(200).json({ message: "Webhook processed successfully" });
-  } catch (error: any) {
-    console.error("PayPack webhook processing error:", error);
+    console.error("Payment webhook processing error:", error);
     res.status(500).json({ error: "Webhook processing failed" });
   }
 };
@@ -311,3 +313,24 @@ const handleChargeCompleted = async (data: any) => {
     throw error;
   }
 };
+
+// Helper function to detect payment provider based on request body structure
+function detectPaymentProvider(body: any): "FLUTTERWAVE" | "PAYPACK" {
+  // PayPack has nested structure with info?.data?.status and info.data?.ref
+  if (body?.data?.status !== undefined && body?.data?.ref !== undefined) {
+    return "PAYPACK";
+  }
+
+  // Flutterwave has flat structure with data.txRef, data["event.type"] and data.status
+  if (
+    body?.txRef !== undefined ||
+    body?.tx_ref !== undefined ||
+    body?.["event.type"] !== undefined ||
+    body?.event !== undefined
+  ) {
+    return "FLUTTERWAVE";
+  }
+
+  // Default to Flutterwave if structure is unclear
+  return "FLUTTERWAVE";
+}
