@@ -30,8 +30,6 @@ app.use((0, cors_1.default)({
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Accept"],
 }));
-// Handle preflight requests
-app.options("*", (0, cors_1.default)());
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: false }));
 // Remove cookieParser middleware
