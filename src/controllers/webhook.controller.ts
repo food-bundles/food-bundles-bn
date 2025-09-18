@@ -316,9 +316,21 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
         return res.status(401).json({ error: "Missing signature header" });
       }
 
+      // Use raw body for signature verification
+      let rawBody: string;
+
+      // Check if we have access to raw body
+      if ((req as any).rawBody) {
+        rawBody = (req as any).rawBody;
+      }
+      // If raw body not available, convert payload back to string
+      else {
+        rawBody = JSON.stringify(payload);
+      }
+
       const expectedSignature = crypto
         .createHmac("sha256", paypackSecret)
-        .update(payload)
+        .update(rawBody)
         .digest("base64");
 
       if (paypackSignature !== expectedSignature) {
