@@ -1,12 +1,9 @@
-// Backend Index - Updated for Token-Based Auth
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import swaggerUi from "swagger-ui-express";
 import swaggerJSDoc from "swagger-jsdoc";
 import YAML from "yamljs";
 import routes from "./routes";
-// Remove cookieParser import as we no longer use cookies
 import { ENV } from "./config";
 
 const swaggerBaseDoc = YAML.load("./src/config/swagger.yaml");
