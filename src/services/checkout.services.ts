@@ -19,11 +19,18 @@ import {
   UpdateCheckoutData,
 } from "../types/paymentTypes";
 import { PaymentMethod, PaymentStatus } from "@prisma/client";
-import { clearCartService } from "./cart.service";
 
 dotenv.config();
 
+// Payment Integration
+const PaypackJs = require("paypack-js").default;
 const Flutterwave = require("flutterwave-node-v3");
+
+// Initialize Paypack
+const paypack = PaypackJs.config({
+  client_id: process.env.PAYPACK_APPLICATION_ID,
+  client_secret: process.env.PAYPACK_APPLICATION_SECRET,
+});
 
 // Initialize Flutterwave
 const flw = new Flutterwave(
@@ -100,108 +107,55 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     }
   }
 
-  // Check if checkout already exists for this cart
-  const existingCheckout = await prisma.cHECKOUT.findUnique({
-    where: { cartId },
+  // Create new checkout
+
+  // Generate transaction reference
+  const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
+  const txOrderId = `ORDER_${Date.now()}_${Math.random()
+    .toString(36)
+    .substr(2, 9)}`;
+
+  // Create checkout
+  const checkout = await prisma.cHECKOUT.create({
+    data: {
+      cartId,
+      restaurantId,
+      totalAmount: cart.totalAmount,
+      paymentMethod,
+      billingName,
+      billingEmail,
+      billingPhone,
+      billingAddress,
+      notes,
+      deliveryDate,
+      paymentStatus: "PENDING",
+      txRef,
+      txOrderId,
+      currency,
+      clientIp,
+      deviceFingerprint,
+      narration: narration || `Payment for ${cart.restaurant.name} order`,
+    },
+    include: {
+      cart: {
+        include: {
+          cartItems: {
+            include: {
+              product: true,
+            },
+          },
+        },
+      },
+      restaurant: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
   });
-
-  let checkout;
-
-  if (existingCheckout) {
-    // Update existing checkout
-    checkout = await prisma.cHECKOUT.update({
-      where: { id: existingCheckout.id },
-      data: {
-        orderId: null,
-        totalAmount: cart.totalAmount || existingCheckout.totalAmount,
-        paymentMethod: paymentMethod || existingCheckout.paymentMethod,
-        billingName: billingName || existingCheckout.billingName,
-        billingEmail: billingEmail || existingCheckout.billingEmail,
-        billingPhone: billingPhone || existingCheckout.billingPhone,
-        billingAddress: billingAddress || existingCheckout.billingAddress,
-        notes: notes || existingCheckout.notes,
-        deliveryDate: deliveryDate || existingCheckout.deliveryDate,
-        paymentStatus: "PENDING",
-        currency: currency || existingCheckout.currency,
-        clientIp: clientIp || existingCheckout.clientIp,
-        deviceFingerprint:
-          deviceFingerprint || existingCheckout.deviceFingerprint,
-        narration:
-          narration ||
-          existingCheckout.narration ||
-          `Payment for ${cart.restaurant.name} order`,
-      },
-      include: {
-        cart: {
-          include: {
-            cartItems: {
-              include: {
-                product: true,
-              },
-            },
-          },
-        },
-        restaurant: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-    });
-  } else {
-    // Create new checkout
-
-    // Generate transaction reference
-    const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
-    const txOrderId = `ORDER_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-
-    // Create checkout
-    checkout = await prisma.cHECKOUT.create({
-      data: {
-        cartId,
-        restaurantId,
-        totalAmount: cart.totalAmount,
-        paymentMethod,
-        billingName,
-        billingEmail,
-        billingPhone,
-        billingAddress,
-        notes,
-        deliveryDate,
-        paymentStatus: "PENDING",
-        txRef,
-        txOrderId,
-        currency,
-        clientIp,
-        deviceFingerprint,
-        narration: narration || `Payment for ${cart.restaurant.name} order`,
-      },
-      include: {
-        cart: {
-          include: {
-            cartItems: {
-              include: {
-                product: true,
-              },
-            },
-          },
-        },
-        restaurant: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-    });
-  }
 
   return checkout;
 };
@@ -600,11 +554,6 @@ export const processPaymentService = async (
         throw new Error("Unsupported payment method");
     }
 
-    console.log("Payment result:", paymentResult);
-
-    // Clear the cart by setting its status to COMPLETED
-    await clearCartService(checkout.restaurantId);
-
     if (paymentResult.success) {
       const updateData: UpdateCheckoutData = {
         paymentStatus:
@@ -810,42 +759,91 @@ async function processMobileMoneyPayment({
       `Processing mobile money payment: ${amount} ${currency} to ${cleanedPhoneNumber}`
     );
 
-    const payload = {
-      tx_ref: txRef,
-      order_id: orderId,
-      amount: amount.toString(),
-      currency: currency,
-      email: email,
-      phone_number: cleanedPhoneNumber,
-      fullname: fullname,
-    };
+    // Primary: Try PayPack first
+    try {
+      const response = await paypack.cashin({
+        number: cleanedPhoneNumber,
+        amount: amount,
+        environment:
+          process.env.NODE_ENV === "production" ? "production" : "development",
+      });
 
-    const response = await flw.MobileMoney.rwanda(payload);
-    console.log("Mobile Money Response:", response);
+      if (response && response.data) {
+        // Update checkout with PayPack reference
+        await prisma.cHECKOUT.update({
+          where: { txRef: txRef },
+          data: {
+            paymentReference: response.data.ref || txRef,
+            txRef: response.data.ref || txRef,
+            flwRef: response.data.ref || txRef,
+            network: response.data.provider,
+            flwMessage: "PayPack payment initiated",
+            paymentType: "PAYPACK_MOBILE_MONEY",
+            paymentProvider: "PAYPACK",
+          },
+        });
 
-    if (response.status === "success") {
-      return {
-        success: true,
-        transactionId: response.data?.flw_ref || txRef,
-        reference: response.data?.tx_ref || txRef,
-        flwRef: response.data?.flw_ref || txRef,
-        status: response.data?.status || "pending",
-        message: response.message || "Mobile money payment initiated",
-        authorizationDetails: response.meta?.authorization && {
-          mode: response.meta.authorization.mode,
-          redirectUrl: response.meta.authorization.redirect,
-        },
+        return {
+          success: true,
+          transactionId: response.data.ref || txRef,
+          reference: response.data.ref || txRef,
+          flwRef: response.data.ref || txRef,
+          status: "pending",
+          message:
+            "Payment request sent to your phone number, please confirm it.",
+          authorizationDetails: {
+            mode: "mobile_money",
+            redirectUrl: "",
+          },
+        };
+      } else {
+        throw new Error("PayPack response invalid or missing reference");
+      }
+    } catch (error) {
+      console.log("PayPack payment failed", error);
+
+      // Fallback: Try Flutterwave
+      console.log("Falling back to Flutterwave...");
+
+      const payload = {
+        tx_ref: txRef,
+        order_id: orderId,
+        amount: amount.toString(),
+        currency: currency,
+        email: email,
+        phone_number: cleanedPhoneNumber,
+        fullname: fullname,
+        redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
       };
-    } else {
-      return {
-        success: false,
-        error: response.message || "Mobile money payment failed",
-        transactionId: "",
-        reference: "",
-        flwRef: "",
-        status: "failed",
-        message: response.message || "Mobile money payment failed",
-      };
+
+      const response = await flw.MobileMoney.rwanda(payload);
+      console.log("Mobile Money Response:", response);
+
+      if (response.status === "success") {
+        // Update checkout to indicate fallback to Flutterwave
+        await prisma.cHECKOUT.update({
+          where: { txRef: txRef },
+          data: {
+            paymentType: "FLUTTERWAVE_MOBILE_MONEY",
+            paymentProvider: "FLUTTERWAVE",
+          },
+        });
+
+        return {
+          success: true,
+          transactionId: response.data?.flw_ref || txRef,
+          reference: response.data?.tx_ref || txRef,
+          flwRef: response.data?.flw_ref || txRef,
+          status: response.data?.status || "pending",
+          message: response.message || "Mobile money payment initiated",
+          authorizationDetails: response.meta?.authorization && {
+            mode: response.meta.authorization.mode,
+            redirectUrl: response.meta.authorization.redirect,
+          },
+        };
+      } else {
+        throw new Error("Flutterwave payment failed");
+      }
     }
   } catch (error: any) {
     console.log("Mobile money payment failed:", error);
@@ -906,7 +904,7 @@ async function processCardPayment({
       expiry_year: cardDetails.expiryYear,
       currency: currency,
       amount: amount.toString(),
-      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/payments/flutterwave/callback`,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
       fullname: fullname,
       email: email,
       phone_number: phoneNumber,
@@ -951,6 +949,14 @@ async function processCardPayment({
         };
       }
 
+      // Update checkout to indicate fallback to Flutterwave
+      await prisma.cHECKOUT.update({
+        where: { txRef: txRef },
+        data: {
+          paymentType: "FLUTTERWAVE_CARD",
+          paymentProvider: "FLUTTERWAVE",
+        },
+      });
       return {
         success: true,
         transactionId:
@@ -1052,6 +1058,7 @@ async function processBankTransfer({
       client_ip: clientIp,
       device_fingerprint: deviceFingerprint,
       narration: narration,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
       is_permanent: false,
       expires: 3600, // 1 hour expiration
     };
@@ -1072,6 +1079,15 @@ async function processBankTransfer({
           ? new Date(response.meta.authorization.account_expiration)
           : null,
       };
+
+      // Update checkout to indicate fallback to Flutterwave
+      await prisma.cHECKOUT.update({
+        where: { txRef: txRef },
+        data: {
+          paymentType: "FLUTTERWAVE_BANK_TRANSFER",
+          paymentProvider: "FLUTTERWAVE",
+        },
+      });
 
       return {
         success: true,
