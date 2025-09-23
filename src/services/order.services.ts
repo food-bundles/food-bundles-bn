@@ -145,7 +145,15 @@ export const createOrderFromCheckoutService = async (
     // Link checkout to order
     await tx.cHECKOUT.update({
       where: { id: checkoutId },
-      data: { orderId: newOrder.id },
+      data: {
+        orderId: newOrder.id,
+        paymentStatus:
+          data.status === "CANCELLED"
+            ? PaymentStatus.CANCELLED
+            : data.status === "CONFIRMED"
+            ? PaymentStatus.COMPLETED
+            : PaymentStatus.PENDING,
+      },
     });
 
     return newOrder;

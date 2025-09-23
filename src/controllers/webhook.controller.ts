@@ -108,8 +108,6 @@ async function processCheckoutPayment(
   eventType?: string,
   data?: any
 ) {
-  console.log("Processing checkout payment for reference:", txRef);
-
   const whereClause =
     paymentProvider === "PAYPACK"
       ? { paymentReference: txRef, paymentProvider: "PAYPACK" }
@@ -294,7 +292,6 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       const signature = req.headers["verif-hash"];
 
       if (!signature || signature !== secretHash) {
-        console.error("Unauthorized Flutterwave webhook attempt");
         return res.status(401).json({ error: "Unauthorized webhook" });
       }
 
@@ -307,12 +304,10 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       const paypackSecret = process.env.PAYPACK_WEBHOOK_SECRET;
 
       if (!paypackSecret) {
-        console.error("PayPack webhook secret not configured");
         return res.status(500).json({ error: "Webhook configuration error" });
       }
 
       if (!paypackSignature) {
-        console.error("Missing PayPack signature header");
         return res.status(401).json({ error: "Missing signature header" });
       }
 
@@ -334,14 +329,8 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
         .digest("base64");
 
       if (paypackSignature !== expectedSignature) {
-        console.error("Invalid PayPack webhook signature");
         return res.status(401).json({ error: "Invalid webhook signature" });
       }
-
-      console.log(
-        "PayPack Webhook received:",
-        JSON.stringify(payload, null, 2)
-      );
 
       const paymentStatus = payload?.data?.status;
       const txRef = payload.data?.ref;
@@ -353,8 +342,6 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
           .status(400)
           .json({ error: "No transaction reference provided" });
       }
-
-      console.log("PayPack Transaction reference:", txRef);
 
       // Check if this is a wallet top-up transaction
       if (
