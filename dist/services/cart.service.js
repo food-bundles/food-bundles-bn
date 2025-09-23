@@ -314,14 +314,17 @@ const clearCartService = async (restaurantId) => {
     if (!cart) {
         throw new Error("No active cart found");
     }
-    // Delete all cart items
-    await prisma_1.default.cartItem.deleteMany({
-        where: { cartId: cart.id },
-    });
-    // Update cart total to 0
-    await prisma_1.default.cart.update({
-        where: { id: cart.id },
-        data: { totalAmount: 0, status: "ACTIVE" },
+    // Use transaction to ensure complete cleanup
+    await prisma_1.default.$transaction(async (tx) => {
+        // Recursively delete all cart items first
+        await tx.cartItem.deleteMany({
+            where: { cartId: cart.id },
+        });
+        // Update cart total to 0 and keep active for future use
+        await tx.cart.update({
+            where: { id: cart.id },
+            data: { totalAmount: 0, status: "ACTIVE" },
+        });
     });
     return { message: "Cart cleared successfully" };
 };

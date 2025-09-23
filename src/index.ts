@@ -3,8 +3,13 @@ import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import swaggerJSDoc from "swagger-jsdoc";
 import YAML from "yamljs";
+import { IncomingMessage } from "http";
 import routes from "./routes";
 import { ENV } from "./config";
+
+interface CustomIncomingMessage extends IncomingMessage {
+  rawBody: Buffer;
+}
 
 const swaggerBaseDoc = YAML.load("./src/config/swagger.yaml");
 
@@ -32,6 +37,13 @@ app.use(
 );
 
 app.use(express.json());
+app.use(
+  express.json({
+    verify: (req: CustomIncomingMessage, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: false }));
 // Remove cookieParser middleware
 

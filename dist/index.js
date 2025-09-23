@@ -29,6 +29,11 @@ app.use((0, cors_1.default)({
     allowedHeaders: ["Content-Type", "Authorization", "Accept"],
 }));
 app.use(express_1.default.json());
+app.use(express_1.default.json({
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    },
+}));
 app.use(express_1.default.urlencoded({ extended: false }));
 // Remove cookieParser middleware
 app.use("/", routes_1.default);

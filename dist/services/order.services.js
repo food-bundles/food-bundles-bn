@@ -4,10 +4,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getOrderStatisticsService = exports.deleteOrderService = exports.cancelOrderService = exports.updateOrderService = exports.getRestaurantOrdersService = exports.getAllOrdersService = exports.getOrderByIdService = exports.createDirectOrderService = exports.createOrderFromCheckoutService = void 0;
+exports.generateOrderNumber = generateOrderNumber;
 const prisma_1 = __importDefault(require("../prisma"));
+const client_1 = require("@prisma/client");
 /**
  * Service to create order from a completed checkout
- * This is the primary way orders are created after payment
  */
 const createOrderFromCheckoutService = async (data) => {
     const { checkoutId, restaurantId, notes, requestedDelivery } = data;
@@ -25,6 +26,7 @@ const createOrderFromCheckoutService = async (data) => {
                 },
             },
             restaurant: true,
+            order: true, // Include existing order if any
         },
     });
     if (!checkout) {
@@ -33,8 +35,25 @@ const createOrderFromCheckoutService = async (data) => {
     if (checkout.restaurantId !== restaurantId) {
         throw new Error("Unauthorized: Checkout does not belong to this restaurant");
     }
-    if (checkout.orderId) {
-        throw new Error("Order already exists for this checkout");
+    // If order already exists, update it instead of throwing error
+    if (checkout.orderId && checkout.order) {
+        const updateData = {};
+        if (notes !== undefined)
+            updateData.notes = notes;
+        if (requestedDelivery !== undefined)
+            updateData.requestedDelivery = requestedDelivery;
+        if (data.status !== undefined)
+            updateData.status = data.status;
+        // Only update if there's something to update
+        if (Object.keys(updateData).length > 0) {
+            const updatedOrder = await prisma_1.default.order.update({
+                where: { id: checkout.orderId },
+                data: updateData,
+            });
+            return await (0, exports.getOrderByIdService)(updatedOrder.id);
+        }
+        // Return existing order if no updates needed
+        return await (0, exports.getOrderByIdService)(checkout.orderId);
     }
     // Generate unique order number
     const orderNumber = await generateOrderNumber();
@@ -49,7 +68,7 @@ const createOrderFromCheckoutService = async (data) => {
         }
         totalAmount += item.subtotal;
     }
-    // Create order with transaction to ensure data consistency
+    // Create order with extended transaction timeout and optimized operations
     const order = await prisma_1.default.$transaction(async (tx) => {
         // Create order
         const newOrder = await tx.order.create({
@@ -58,7 +77,7 @@ const createOrderFromCheckoutService = async (data) => {
                 checkoutId,
                 restaurantId,
                 totalAmount,
-                status: "PENDING",
+                status: data.status || "PENDING",
                 paymentMethod: checkout.paymentMethod,
                 paymentStatus: checkout.paymentStatus,
                 paymentReference: checkout.paymentReference,
@@ -66,33 +85,55 @@ const createOrderFromCheckoutService = async (data) => {
                 requestedDelivery: requestedDelivery || checkout.deliveryDate,
             },
         });
-        // Create order items from cart items
+        // Prepare order items data
         const orderItemsData = checkout.cart.cartItems.map((item) => ({
             orderId: newOrder.id,
             productId: item.productId,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
         }));
+        // Batch create order items
         await tx.orderItem.createMany({
             data: orderItemsData,
         });
-        // Update product quantities (reduce stock)
-        for (const item of checkout.cart.cartItems) {
-            await tx.product.update({
-                where: { id: item.productId },
-                data: {
-                    quantity: {
-                        decrement: item.quantity,
-                    },
+        // Batch update product quantities - more efficient approach
+        const productUpdates = checkout.cart.cartItems.map((item) => tx.product.update({
+            where: { id: item.productId },
+            data: {
+                quantity: {
+                    decrement: item.quantity,
                 },
-            });
-        }
-        // Link checkout to order
-        await tx.cHECKOUT.update({
-            where: { id: checkoutId },
-            data: { orderId: newOrder.id },
-        });
+            },
+        }));
+        // Execute all product updates in parallel
+        await Promise.all(productUpdates);
+        // Update checkout and cart in parallel
+        await Promise.all([
+            tx.cHECKOUT.update({
+                where: { id: checkoutId },
+                data: {
+                    orderId: newOrder.id,
+                    paymentStatus: data.status === "CANCELLED"
+                        ? client_1.PaymentStatus.CANCELLED
+                        : data.status === "CONFIRMED"
+                            ? client_1.PaymentStatus.COMPLETED
+                            : client_1.PaymentStatus.PENDING,
+                },
+            }),
+            // Delete cart items
+            tx.cartItem.deleteMany({
+                where: { cartId: checkout.cartId },
+            }),
+        ]);
         return newOrder;
+    }, {
+        // Increase transaction timeout to 15 seconds
+        timeout: 15000,
+    });
+    // Update cart outside of transaction to avoid timeout
+    await prisma_1.default.cart.update({
+        where: { id: checkout.cartId },
+        data: { totalAmount: 0 },
     });
     // Return complete order with relations
     return await (0, exports.getOrderByIdService)(order.id);

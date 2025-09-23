@@ -108,8 +108,6 @@ async function processCheckoutPayment(
   eventType?: string,
   data?: any
 ) {
-  console.log("Processing checkout payment for reference:", txRef);
-
   const whereClause =
     paymentProvider === "PAYPACK"
       ? { paymentReference: txRef, paymentProvider: "PAYPACK" }
@@ -161,33 +159,29 @@ async function processCheckoutPayment(
     });
 
     // Send appropriate notification based on payment method
-    if (
-      paymentProvider === "PAYPACK" ||
-      checkout.paymentMethod === "MOBILE_MONEY"
-    ) {
-      await sendMessage(
-        `Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${
-          checkout.currency
-        }. Thank you!`,
-        checkout.billingPhone || ""
-      );
-    } else {
-      await sendPaymentConfirmationEmail({
-        amount: checkout.chargedAmount || checkout.totalAmount,
-        transactionId: data?.id?.toString() || flwRef,
-        restaurantName: checkout.restaurant.name,
-        products: checkout.cart.cartItems.map((item) => ({
-          name: item.product.productName,
-          quantity: item.quantity,
-          price: item.product.unitPrice,
-        })),
-        customer: {
-          name: checkout.billingName || "",
-          email: checkout.billingEmail || "",
-        },
-        checkoutId: checkout.id,
-      });
-    }
+
+    await sendMessage(
+      `Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${
+        checkout.currency
+      }. Thank you!`,
+      checkout.billingPhone || checkout.restaurant.phone || ""
+    );
+
+    await sendPaymentConfirmationEmail({
+      amount: checkout.chargedAmount || checkout.totalAmount,
+      transactionId: data?.id?.toString() || flwRef,
+      restaurantName: checkout.restaurant.name,
+      products: checkout.cart.cartItems.map((item) => ({
+        name: item.product.productName,
+        quantity: item.quantity,
+        price: item.product.unitPrice,
+      })),
+      customer: {
+        name: checkout.billingName || checkout.restaurant.name || "",
+        email: checkout.billingEmail || checkout.restaurant.email || "",
+      },
+      checkoutId: checkout.id,
+    });
 
     console.log(`Checkout payment completed: ${checkout.id}`);
   } else if (status === "failed") {
@@ -204,16 +198,6 @@ async function processCheckoutPayment(
     });
     console.log(`Checkout payment failed: ${checkout.id}`);
   }
-
-  // Create order from checkout
-  await createOrderFromCheckoutService({
-    checkoutId: checkout.id,
-    restaurantId: checkout.restaurantId,
-    status: status === "successful" ? "CONFIRMED" : "CANCELLED",
-  });
-
-  // Clear the cart by setting its status to COMPLETED
-  await clearCartService(checkout.restaurantId);
 
   return checkout;
 }
@@ -294,7 +278,6 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       const signature = req.headers["verif-hash"];
 
       if (!signature || signature !== secretHash) {
-        console.error("Unauthorized Flutterwave webhook attempt");
         return res.status(401).json({ error: "Unauthorized webhook" });
       }
 
@@ -307,29 +290,33 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       const paypackSecret = process.env.PAYPACK_WEBHOOK_SECRET;
 
       if (!paypackSecret) {
-        console.error("PayPack webhook secret not configured");
         return res.status(500).json({ error: "Webhook configuration error" });
       }
 
       if (!paypackSignature) {
-        console.error("Missing PayPack signature header");
         return res.status(401).json({ error: "Missing signature header" });
+      }
+
+      // Use raw body for signature verification
+      let rawBody: string;
+
+      // Check if we have access to raw body
+      if ((req as any).rawBody) {
+        rawBody = (req as any).rawBody;
+      }
+      // If raw body not available, convert payload back to string
+      else {
+        rawBody = JSON.stringify(payload);
       }
 
       const expectedSignature = crypto
         .createHmac("sha256", paypackSecret)
-        .update(payload)
+        .update(rawBody)
         .digest("base64");
 
       if (paypackSignature !== expectedSignature) {
-        console.error("Invalid PayPack webhook signature");
         return res.status(401).json({ error: "Invalid webhook signature" });
       }
-
-      console.log(
-        "PayPack Webhook received:",
-        JSON.stringify(payload, null, 2)
-      );
 
       const paymentStatus = payload?.data?.status;
       const txRef = payload.data?.ref;
@@ -341,8 +328,6 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
           .status(400)
           .json({ error: "No transaction reference provided" });
       }
-
-      console.log("PayPack Transaction reference:", txRef);
 
       // Check if this is a wallet top-up transaction
       if (

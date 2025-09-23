@@ -18,7 +18,8 @@ import {
   MobileMoneyPaymentSubmissionData,
   UpdateCheckoutData,
 } from "../types/paymentTypes";
-import { PaymentMethod, PaymentStatus } from "@prisma/client";
+import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
+import { createOrderFromCheckoutService } from "./order.services";
 
 dotenv.config();
 
@@ -441,7 +442,54 @@ export const processPaymentService = async (
     throw new Error("Payment already completed");
   }
 
-  // Update payment status to processing
+  // Create order immediately when payment
+  let order;
+  try {
+    if (!checkout.orderId) {
+      order = await createOrderFromCheckoutService({
+        checkoutId: checkoutId,
+        restaurantId: checkout.restaurantId,
+        status: OrderStatus.PENDING,
+      });
+    } else {
+      order = await prisma.order.findUnique({
+        where: { id: checkout.orderId },
+        include: {
+          restaurant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+          orderItems: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  productName: true,
+                  unitPrice: true,
+                  unit: true,
+                  images: true,
+                  category: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+  } catch (error: any) {
+    console.log("Error creating order:", error);
+    if (error.message.includes("timeout")) {
+      throw new Error("Order creation timed out. Please try again.");
+    }
+    throw error;
+  }
+
+  // Update payment status to processing (outside transaction)
   await updateCheckoutService(checkoutId, {
     paymentStatus: "PROCESSING",
     paymentMethod: paymentData.paymentMethod,
@@ -622,6 +670,22 @@ export const processPaymentService = async (
         updateData
       );
 
+      // Update order status based on payment result (outside transaction)
+      if (order) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            paymentStatus:
+              paymentResult.status === "successful"
+                ? "COMPLETED"
+                : "PROCESSING",
+            paymentReference: paymentResult.reference,
+            status:
+              paymentResult.status === "successful" ? "CONFIRMED" : "PENDING",
+          },
+        });
+      }
+
       // Send notification email for successful payments
       if (paymentResult.status === "successful" && checkout.billingEmail) {
         const products = checkout.cart.cartItems.map((item) => ({
@@ -652,6 +716,7 @@ export const processPaymentService = async (
       return {
         success: true,
         checkout: updatedCheckout,
+        order: order,
         transactionId: paymentResult.transactionId,
         redirectUrl:
           "authorizationDetails" in paymentResult
@@ -669,11 +734,22 @@ export const processPaymentService = async (
         message: paymentResult.message,
       };
     } else {
-      await updateCheckoutService(checkoutId, {
-        paymentStatus: "FAILED",
-        flwStatus: "failed",
-        flwMessage: paymentResult.error || "Payment failed",
-      });
+      // Update both checkout and order to failed status (outside transaction)
+      await Promise.all([
+        updateCheckoutService(checkoutId, {
+          paymentStatus: "FAILED",
+          flwStatus: "failed",
+          flwMessage: paymentResult.error || "Payment failed",
+        }),
+        order &&
+          prisma.order.update({
+            where: { id: order.id },
+            data: {
+              paymentStatus: "FAILED",
+              status: "CANCELLED",
+            },
+          }),
+      ]);
 
       return {
         success: false,
@@ -682,11 +758,23 @@ export const processPaymentService = async (
     }
   } catch (error: any) {
     console.log("Error processing payment:", error);
-    await updateCheckoutService(checkoutId, {
-      paymentStatus: "FAILED",
-      flwStatus: "failed",
-      flwMessage: error.message,
-    });
+
+    // Update both checkout and order to failed status (outside transaction)
+    await Promise.all([
+      updateCheckoutService(checkoutId, {
+        paymentStatus: "FAILED",
+        flwStatus: "failed",
+        flwMessage: error.message,
+      }),
+      order &&
+        prisma.order.update({
+          where: { id: order.id },
+          data: {
+            paymentStatus: "FAILED",
+            status: "CANCELLED",
+          },
+        }),
+    ]);
 
     throw new Error(`Payment processing failed: ${error.message}`);
   }
