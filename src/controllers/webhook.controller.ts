@@ -159,33 +159,29 @@ async function processCheckoutPayment(
     });
 
     // Send appropriate notification based on payment method
-    if (
-      paymentProvider === "PAYPACK" ||
-      checkout.paymentMethod === "MOBILE_MONEY"
-    ) {
-      await sendMessage(
-        `Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${
-          checkout.currency
-        }. Thank you!`,
-        checkout.billingPhone || ""
-      );
-    } else {
-      await sendPaymentConfirmationEmail({
-        amount: checkout.chargedAmount || checkout.totalAmount,
-        transactionId: data?.id?.toString() || flwRef,
-        restaurantName: checkout.restaurant.name,
-        products: checkout.cart.cartItems.map((item) => ({
-          name: item.product.productName,
-          quantity: item.quantity,
-          price: item.product.unitPrice,
-        })),
-        customer: {
-          name: checkout.billingName || "",
-          email: checkout.billingEmail || "",
-        },
-        checkoutId: checkout.id,
-      });
-    }
+
+    await sendMessage(
+      `Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${
+        checkout.currency
+      }. Thank you!`,
+      checkout.billingPhone || checkout.restaurant.phone || ""
+    );
+
+    await sendPaymentConfirmationEmail({
+      amount: checkout.chargedAmount || checkout.totalAmount,
+      transactionId: data?.id?.toString() || flwRef,
+      restaurantName: checkout.restaurant.name,
+      products: checkout.cart.cartItems.map((item) => ({
+        name: item.product.productName,
+        quantity: item.quantity,
+        price: item.product.unitPrice,
+      })),
+      customer: {
+        name: checkout.billingName || checkout.restaurant.name || "",
+        email: checkout.billingEmail || checkout.restaurant.email || "",
+      },
+      checkoutId: checkout.id,
+    });
 
     console.log(`Checkout payment completed: ${checkout.id}`);
   } else if (status === "failed") {
@@ -202,16 +198,6 @@ async function processCheckoutPayment(
     });
     console.log(`Checkout payment failed: ${checkout.id}`);
   }
-
-  // Create order from checkout
-  await createOrderFromCheckoutService({
-    checkoutId: checkout.id,
-    restaurantId: checkout.restaurantId,
-    status: status === "successful" ? "CONFIRMED" : "CANCELLED",
-  });
-
-  // Clear the cart by setting its status to COMPLETED
-  await clearCartService(checkout.restaurantId);
 
   return checkout;
 }
