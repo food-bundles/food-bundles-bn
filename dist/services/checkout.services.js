@@ -8,6 +8,8 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const prisma_1 = __importDefault(require("../prisma"));
 const wallet_service_1 = require("./wallet.service");
 const emailTemplates_1 = require("../utils/emailTemplates");
+const client_1 = require("@prisma/client");
+const order_services_1 = require("./order.services");
 dotenv_1.default.config();
 // Payment Integration
 const PaypackJs = require("paypack-js").default;
@@ -318,7 +320,55 @@ const processPaymentService = async (checkoutId, paymentData) => {
     if (checkout.paymentStatus === "COMPLETED") {
         throw new Error("Payment already completed");
     }
-    // Update payment status to processing
+    // Create order immediately when payment
+    let order;
+    try {
+        if (!checkout.orderId) {
+            order = await (0, order_services_1.createOrderFromCheckoutService)({
+                checkoutId: checkoutId,
+                restaurantId: checkout.restaurantId,
+                status: client_1.OrderStatus.PENDING,
+            });
+        }
+        else {
+            order = await prisma_1.default.order.findUnique({
+                where: { id: checkout.orderId },
+                include: {
+                    restaurant: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                            phone: true,
+                        },
+                    },
+                    orderItems: {
+                        include: {
+                            product: {
+                                select: {
+                                    id: true,
+                                    productName: true,
+                                    unitPrice: true,
+                                    unit: true,
+                                    images: true,
+                                    category: true,
+                                    status: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+        }
+    }
+    catch (error) {
+        console.log("Error creating order:", error);
+        if (error.message.includes("timeout")) {
+            throw new Error("Order creation timed out. Please try again.");
+        }
+        throw error;
+    }
+    // Update payment status to processing (outside transaction)
     await (0, exports.updateCheckoutService)(checkoutId, {
         paymentStatus: "PROCESSING",
         paymentMethod: paymentData.paymentMethod,
@@ -466,6 +516,19 @@ const processPaymentService = async (checkoutId, paymentData) => {
                     paymentResult.authorizationDetails.redirectUrl;
             }
             const updatedCheckout = await (0, exports.updateCheckoutService)(checkoutId, updateData);
+            // Update order status based on payment result (outside transaction)
+            if (order) {
+                await prisma_1.default.order.update({
+                    where: { id: order.id },
+                    data: {
+                        paymentStatus: paymentResult.status === "successful"
+                            ? "COMPLETED"
+                            : "PROCESSING",
+                        paymentReference: paymentResult.reference,
+                        status: paymentResult.status === "successful" ? "CONFIRMED" : "PENDING",
+                    },
+                });
+            }
             // Send notification email for successful payments
             if (paymentResult.status === "successful" && checkout.billingEmail) {
                 const products = checkout.cart.cartItems.map((item) => ({
@@ -493,6 +556,7 @@ const processPaymentService = async (checkoutId, paymentData) => {
             return {
                 success: true,
                 checkout: updatedCheckout,
+                order: order,
                 transactionId: paymentResult.transactionId,
                 redirectUrl: "authorizationDetails" in paymentResult
                     ? paymentResult.authorizationDetails?.redirectUrl
@@ -508,11 +572,22 @@ const processPaymentService = async (checkoutId, paymentData) => {
             };
         }
         else {
-            await (0, exports.updateCheckoutService)(checkoutId, {
-                paymentStatus: "FAILED",
-                flwStatus: "failed",
-                flwMessage: paymentResult.error || "Payment failed",
-            });
+            // Update both checkout and order to failed status (outside transaction)
+            await Promise.all([
+                (0, exports.updateCheckoutService)(checkoutId, {
+                    paymentStatus: "FAILED",
+                    flwStatus: "failed",
+                    flwMessage: paymentResult.error || "Payment failed",
+                }),
+                order &&
+                    prisma_1.default.order.update({
+                        where: { id: order.id },
+                        data: {
+                            paymentStatus: "FAILED",
+                            status: "CANCELLED",
+                        },
+                    }),
+            ]);
             return {
                 success: false,
                 error: paymentResult.error || "Payment failed",
@@ -521,11 +596,22 @@ const processPaymentService = async (checkoutId, paymentData) => {
     }
     catch (error) {
         console.log("Error processing payment:", error);
-        await (0, exports.updateCheckoutService)(checkoutId, {
-            paymentStatus: "FAILED",
-            flwStatus: "failed",
-            flwMessage: error.message,
-        });
+        // Update both checkout and order to failed status (outside transaction)
+        await Promise.all([
+            (0, exports.updateCheckoutService)(checkoutId, {
+                paymentStatus: "FAILED",
+                flwStatus: "failed",
+                flwMessage: error.message,
+            }),
+            order &&
+                prisma_1.default.order.update({
+                    where: { id: order.id },
+                    data: {
+                        paymentStatus: "FAILED",
+                        status: "CANCELLED",
+                    },
+                }),
+        ]);
         throw new Error(`Payment processing failed: ${error.message}`);
     }
 };
