@@ -3,9 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendWalletNotificationTemplate = exports.generateOrderStatusTemplate = exports.sendPaymentConfirmationTemplate = exports.sendPaymentNotificationTemplate = exports.isValidRwandaPhone = exports.cleanPhoneNumber = void 0;
+exports.sendWalletNotificationTemplate = exports.generateOrderStatusTemplate = exports.sendPaymentFailedTemplate = exports.sendPaymentConfirmationTemplate = exports.sendPaymentNotificationTemplate = exports.isValidRwandaPhone = exports.cleanPhoneNumber = void 0;
 exports.sendPaymentNotificationEmail = sendPaymentNotificationEmail;
 exports.sendPaymentConfirmationEmail = sendPaymentConfirmationEmail;
+exports.sendPaymentFailedEmail = sendPaymentFailedEmail;
 exports.sendWalletNotificationEmail = sendWalletNotificationEmail;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 // Clean and format phone number for Rwanda
@@ -379,6 +380,83 @@ const sendPaymentConfirmationTemplate = (data) => {
 };
 exports.sendPaymentConfirmationTemplate = sendPaymentConfirmationTemplate;
 /**
+ * Generate payment failed email template
+ */
+const sendPaymentFailedTemplate = (data) => {
+    return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Failed - FoodBundles</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; }
+      .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #ef4444, #b91c1c); color: #fff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .failure-badge { background: #fee2e2; color: #b91c1c; padding: 20px; border-radius: 12px; text-align: center; margin: 20px 0; font-weight: bold; font-size: 18px; border: 2px solid #f87171; }
+      .order-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ef4444; }
+      .product-item { display: flex; justify-content: space-between; margin: 8px 0; padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #b91c1c; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header"><h1>❌ Payment Failed</h1></div>
+      <div class="content">
+        <div class="failure-badge">
+          Unfortunately, your payment could not be processed.<br>
+          <small style="font-size: 14px; font-weight: normal;">Order #${data.checkoutId}</small>
+        </div>
+
+        <p>Dear ${data.customer.name},</p>
+        <p>We attempted to process your payment for your order from <strong>${data.restaurantName}</strong>, but it was not successful.</p>
+
+        <div class="order-details">
+          <h2>📋 Payment Details</h2>
+          <p><span class="highlight">Order ID:</span> ${data.checkoutId}</p>
+          <p><span class="highlight">Transaction ID:</span> ${data.transactionId}</p>
+          <p><span class="highlight">Amount:</span> ${data.amount.toLocaleString()} RWF</p>
+          ${data.failureReason
+        ? `<p><span class="highlight">Reason:</span> ${data.failureReason}</p>`
+        : ""}
+
+          <h3 style="margin-top: 20px;">🛒 Items Ordered:</h3>
+          ${data.products
+        .map((product) => `
+              <div class="product-item">
+                <div>
+                  <strong>${product.name}</strong><br>
+                  <small>Quantity: ${product.quantity}</small>
+                </div>
+                <div><strong>${product.price.toLocaleString()} RWF</strong></div>
+              </div>`)
+        .join("")}
+        </div>
+
+        <p>You can try again by re-initiating the payment in your FoodBundles account or choosing a different payment method.</p>
+
+        <div class="order-details">
+          <h2>📞 Need Help?</h2>
+          <ul>
+            <li>Email: support@foodbundles.rw</li>
+            <li>Phone: +250 XXX XXX XXX</li>
+            <li>Reference Order ID: <strong>${data.checkoutId}</strong></li>
+          </ul>
+        </div>
+
+        <p style="text-align:center; font-size:16px; color:#b91c1c; font-weight:bold;">
+          Don’t worry — your order is still saved and can be completed once the payment succeeds.
+        </p>
+      </div>
+      <div class="footer">🌱 The FoodBundles Team</div>
+    </div>
+  </body>
+  </html>`;
+};
+exports.sendPaymentFailedTemplate = sendPaymentFailedTemplate;
+/**
  * Generate order status update email template
  */
 const generateOrderStatusTemplate = (data) => {
@@ -614,6 +692,37 @@ async function sendPaymentConfirmationEmail(paymentData) {
     }
     catch (error) {
         console.error("Failed to send payment confirmation email:", error);
+    }
+}
+/**
+ * Send payment failed email
+ */
+async function sendPaymentFailedEmail(paymentData) {
+    if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+        console.log("Email credentials not configured");
+        return;
+    }
+    const config = {
+        service: "gmail",
+        auth: {
+            user: process.env.GOOGLE_EMAIL,
+            pass: process.env.GOOGLE_PASSWORD,
+        },
+        tls: { rejectUnauthorized: false },
+    };
+    const transporter = nodemailer_1.default.createTransport(config);
+    const failedEmail = {
+        from: process.env.GOOGLE_EMAIL,
+        to: paymentData.customer.email,
+        subject: `Payment Failed - FoodBundles Order #${paymentData.checkoutId}`,
+        html: (0, exports.sendPaymentFailedTemplate)(paymentData),
+    };
+    try {
+        await transporter.sendMail(failedEmail);
+        console.log("Payment failed email sent successfully");
+    }
+    catch (error) {
+        console.error("Failed to send payment failed email:", error);
     }
 }
 // Send wallet notification email
