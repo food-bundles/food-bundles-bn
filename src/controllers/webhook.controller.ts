@@ -138,6 +138,7 @@ async function processCheckoutPayment(
       where: whereClause,
       include: {
         restaurant: true,
+        checkoutItems: true,
         cart: {
           include: {
             cartItems: {
@@ -245,10 +246,10 @@ async function processCheckoutPayment(
         amount: checkout.chargedAmount || checkout.totalAmount,
         transactionId: data?.id?.toString() || flwRef,
         restaurantName: checkout.restaurant.name,
-        products: checkout.cart.cartItems.map((item) => ({
-          name: item.product.productName,
+        products: checkout.checkoutItems.map((item) => ({
+          name: item.productName,
           quantity: item.quantity,
-          price: item.product.unitPrice,
+          price: item.unitPrice,
         })),
         customer: {
           name: checkout.billingName || checkout.restaurant.name || "",
@@ -313,10 +314,10 @@ async function processCheckoutPayment(
         amount: checkout.chargedAmount || checkout.totalAmount,
         transactionId: data?.id?.toString() || flwRef,
         restaurantName: checkout.restaurant.name,
-        products: checkout.cart.cartItems.map((item) => ({
-          name: item.product.productName,
+        products: checkout.checkoutItems.map((item) => ({
+          name: item.productName,
           quantity: item.quantity,
-          price: item.product.unitPrice,
+          price: item.unitPrice,
         })),
         customer: {
           name: checkout.billingName || checkout.restaurant.name || "",

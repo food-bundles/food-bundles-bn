@@ -307,6 +307,7 @@ model Product {
   CartItem          CartItem[]
   category          ProductCategory     @relation(fields: [categoryId], references: [id])
   FarmerPrimaryCrop FarmerPrimaryCrop[]
+  CheckoutItem      CheckoutItem[]
 }
 
 model ProductCategory {
@@ -464,8 +465,9 @@ model CHECKOUT {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id])
 
   // Owning side of relation
-  orderId String? @unique
-  order   Order?  @relation(name: "CHECKOUTToOrder", fields: [orderId], references: [id])
+  orderId       String?        @unique
+  order         Order?         @relation(name: "CHECKOUTToOrder", fields: [orderId], references: [id])
+  checkoutItems CheckoutItem[]
 
   @@index([restaurantId])
   @@index([paymentStatus])
@@ -476,6 +478,28 @@ model CHECKOUT {
   @@index([flwStatus])
   @@index([fraudStatus])
   @@index([customerId])
+}
+
+model CheckoutItem {
+  id          String   @id @default(uuid())
+  checkoutId  String
+  productId   String? // Make this optional to allow SetNull
+  productName String // Store product name at time of checkout
+  quantity    Float
+  unitPrice   Float // Store price at time of checkout
+  subtotal    Float // quantity * unitPrice
+  unit        String // Store unit at time of checkout
+  images      String[] // Store images array at time of checkout
+  category    String? // Store category name at time of checkout
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  checkout CHECKOUT @relation(fields: [checkoutId], references: [id], onDelete: Cascade)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([checkoutId])
+  @@index([productId])
 }
 
 model Order {

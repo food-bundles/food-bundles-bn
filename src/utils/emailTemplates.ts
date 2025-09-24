@@ -48,6 +48,17 @@ export interface OrderStatusData {
   trackingInfo?: string;
 }
 
+export interface CheckoutItemData {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  unit: string;
+  images: string[];
+  category?: string;
+}
+
 export interface WalletNotificationData {
   email: string;
   restaurantName: string;
@@ -437,8 +448,8 @@ export const sendPaymentConfirmationTemplate = (
           <h2>📞 Need Support?</h2>
           <p>If you have any questions about your order, please contact us:</p>
           <ul style="margin: 10px 0; padding-left: 20px;">
-            <li>Email: support@foodbundles.rw</li>
-            <li>Phone: +250 XXX XXX XXX</li>
+            <li>Email: sales@food.rw</li>
+            <li>Phone: +250 796 897 823</li>
             <li>Reference your Order ID: <strong>${
               data.checkoutId
             }</strong></li>
@@ -543,8 +554,8 @@ export const sendPaymentFailedTemplate = (data: {
         <div class="order-details">
           <h2>📞 Need Help?</h2>
           <ul>
-            <li>Email: support@foodbundles.rw</li>
-            <li>Phone: +250 XXX XXX XXX</li>
+            <li>Email: sales@food.rw</li>
+            <li>Phone: +250 796 897 823</li>
             <li>Reference Order ID: <strong>${data.checkoutId}</strong></li>
           </ul>
         </div>

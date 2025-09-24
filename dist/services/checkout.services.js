@@ -33,7 +33,11 @@ const createCheckoutService = async (data) => {
         include: {
             cartItems: {
                 include: {
-                    product: true,
+                    product: {
+                        include: {
+                            category: true,
+                        },
+                    },
                 },
             },
             restaurant: true,
@@ -60,34 +64,60 @@ const createCheckoutService = async (data) => {
             throw new Error(`Insufficient stock for ${item.product.productName}. Available: ${item.product.quantity}, Required: ${item.quantity}`);
         }
     }
+    // Create checkout items data from cart items
+    const checkoutItemsData = cart.cartItems.map((item) => ({
+        productId: item.productId,
+        productName: item.product.productName,
+        quantity: item.quantity,
+        unitPrice: item.product.unitPrice,
+        subtotal: item.subtotal,
+        unit: item.product.unit,
+        images: item.product.images,
+        category: item.product.category?.name || undefined,
+    }));
     // Create new checkout
     // Generate transaction reference
     const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
     const txOrderId = `ORDER_${Date.now()}_${Math.random()
         .toString(36)
         .substr(2, 9)}`;
-    // Create checkout
-    const checkout = await prisma_1.default.cHECKOUT.create({
-        data: {
-            cartId,
-            restaurantId,
-            totalAmount: cart.totalAmount,
-            paymentMethod,
-            billingName,
-            billingEmail,
-            billingPhone,
-            billingAddress,
-            notes,
-            deliveryDate,
-            paymentStatus: "PENDING",
-            txRef,
-            txOrderId,
-            currency,
-            clientIp,
-            deviceFingerprint,
-            narration: narration || `Payment for ${cart.restaurant.name} order`,
-        },
+    // Create checkout with items in transaction
+    const checkout = await prisma_1.default.$transaction(async (tx) => {
+        const newCheckout = await tx.cHECKOUT.create({
+            data: {
+                cartId,
+                restaurantId,
+                totalAmount: cart.totalAmount,
+                paymentMethod,
+                billingName,
+                billingEmail,
+                billingPhone,
+                billingAddress,
+                notes,
+                deliveryDate,
+                paymentStatus: "PENDING",
+                txRef,
+                txOrderId,
+                currency,
+                clientIp,
+                deviceFingerprint,
+                narration: narration || `Payment for ${cart.restaurant.name} order`,
+            },
+        });
+        // Create checkout items
+        await tx.checkoutItem.createMany({
+            data: checkoutItemsData.map((item) => ({
+                ...item,
+                checkoutId: newCheckout.id,
+            })),
+        });
+        return newCheckout;
+    });
+    // Include checkout items in the response
+    const checkoutWithItems = await prisma_1.default.cHECKOUT.findUnique({
+        where: { id: checkout.id },
         include: {
+            checkoutItems: true, // Include the stored items
             cart: {
                 include: {
                     cartItems: {
@@ -107,7 +137,7 @@ const createCheckoutService = async (data) => {
             },
         },
     });
-    return checkout;
+    return checkoutWithItems;
 };
 exports.createCheckoutService = createCheckoutService;
 /**
@@ -119,6 +149,7 @@ const getCheckoutByIdService = async (checkoutId, restaurantId) => {
         return await prisma_1.default.cHECKOUT.findUnique({
             where: { id: checkoutId },
             include: {
+                checkoutItems: true,
                 cart: {
                     include: {
                         cartItems: {
@@ -166,6 +197,7 @@ const getRestaurantCheckoutsService = async (restaurantId, { page = 1, limit = 1
             skip,
             take: limit,
             include: {
+                checkoutItems: true,
                 cart: {
                     include: {
                         _count: {
@@ -214,6 +246,7 @@ const getAllCheckoutsService = async ({ page = 1, limit = 10, status, paymentMet
             skip,
             take: limit,
             include: {
+                checkoutItems: true,
                 restaurant: {
                     select: {
                         id: true,

@@ -16,6 +16,7 @@ const createOrderFromCheckoutService = async (data) => {
     const checkout = await prisma_1.default.cHECKOUT.findUnique({
         where: { id: checkoutId },
         include: {
+            checkoutItems: true,
             cart: {
                 include: {
                     cartItems: {
