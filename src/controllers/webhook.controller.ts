@@ -1,12 +1,16 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
 import prisma from "../prisma";
-import { sendPaymentConfirmationEmail } from "../utils/emailTemplates";
+import {
+  sendPaymentConfirmationEmail,
+  sendPaymentFailedEmail,
+} from "../utils/emailTemplates";
 import { sendMessage } from "../utils/sms.utility";
 import { createOrderFromCheckoutService } from "../services/order.services";
 import { clearCartService } from "../services/cart.service";
+import { retryDatabaseOperation } from "../utils/db-retry.utls";
 
-// Shared function to process wallet transactions
+// Shared function to process wallet transactions with retry logic
 async function processWalletTransaction(
   txRef: string,
   flwRef: string,
@@ -15,20 +19,22 @@ async function processWalletTransaction(
 ) {
   console.log("Processing wallet transaction for reference:", txRef);
 
-  const walletTransaction = await prisma.walletTransaction.findFirst({
-    where: {
-      OR: [
-        { flwTxRef: txRef },
-        { flwRef: txRef },
-        { id: txRef },
-        { flwTxRef: { contains: txRef.split("_").pop() || "" } },
-      ],
-    },
-    include: {
-      wallet: {
-        include: { restaurant: true },
+  const walletTransaction = await retryDatabaseOperation(async () => {
+    return await prisma.walletTransaction.findFirst({
+      where: {
+        OR: [
+          { flwTxRef: txRef },
+          { flwRef: txRef },
+          { id: txRef },
+          { flwTxRef: { contains: txRef.split("_").pop() || "" } },
+        ],
       },
-    },
+      include: {
+        wallet: {
+          include: { restaurant: true },
+        },
+      },
+    });
   });
 
   if (!walletTransaction) {
@@ -42,27 +48,29 @@ async function processWalletTransaction(
     const newBalance =
       walletTransaction.wallet.balance + walletTransaction.amount;
 
-    await prisma.$transaction([
-      prisma.wallet.update({
-        where: { id: walletTransaction.walletId },
-        data: {
-          balance: newBalance,
-          updatedAt: new Date(),
-        },
-      }),
-      prisma.walletTransaction.update({
-        where: { id: walletTransaction.id },
-        data: {
-          status: "COMPLETED",
-          newBalance,
-          flwStatus: "successful",
-          flwMessage: "Payment completed via webhook",
-          externalTxId: flwRef,
-          flwRef: flwRef,
-          updatedAt: new Date(),
-        },
-      }),
-    ]);
+    await retryDatabaseOperation(async () => {
+      return await prisma.$transaction([
+        prisma.wallet.update({
+          where: { id: walletTransaction.walletId },
+          data: {
+            balance: newBalance,
+            updatedAt: new Date(),
+          },
+        }),
+        prisma.walletTransaction.update({
+          where: { id: walletTransaction.id },
+          data: {
+            status: "COMPLETED",
+            newBalance,
+            flwStatus: "successful",
+            flwMessage: "Payment completed via webhook",
+            externalTxId: flwRef,
+            flwRef: flwRef,
+            updatedAt: new Date(),
+          },
+        }),
+      ]);
+    });
 
     // Send notification
     try {
@@ -78,17 +86,29 @@ async function processWalletTransaction(
       `Wallet top-up completed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet ${walletTransaction.walletId}`
     );
   } else if (status === "failed") {
-    await prisma.walletTransaction.update({
-      where: { id: walletTransaction.id },
-      data: {
-        status: "FAILED",
-        flwStatus: "failed",
-        flwMessage: "Payment failed via webhook",
-        externalTxId: flwRef,
-        flwRef: flwRef,
-        updatedAt: new Date(),
-      },
+    await retryDatabaseOperation(async () => {
+      return await prisma.walletTransaction.update({
+        where: { id: walletTransaction.id },
+        data: {
+          status: "FAILED",
+          flwStatus: "failed",
+          flwMessage: "Payment failed via webhook",
+          externalTxId: flwRef,
+          flwRef: flwRef,
+          updatedAt: new Date(),
+        },
+      });
     });
+
+    try {
+      await sendMessage(
+        `Payment failed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`,
+        walletTransaction.wallet.restaurant.phone || ""
+      );
+    } catch (error) {
+      console.error("Failed to send wallet failure notification:", error);
+    }
+
     console.log(`Wallet top-up failed: ${walletTransaction.id}`);
   } else {
     console.log(
@@ -99,7 +119,7 @@ async function processWalletTransaction(
   return walletTransaction;
 }
 
-// Shared function to process checkout payments
+// Shared function to process checkout payments with retry logic
 async function processCheckoutPayment(
   txRef: string,
   flwRef: string,
@@ -113,19 +133,21 @@ async function processCheckoutPayment(
       ? { paymentReference: txRef, paymentProvider: "PAYPACK" }
       : { OR: [{ txRef: txRef }, { paymentReference: txRef }] };
 
-  const checkout = await prisma.cHECKOUT.findFirst({
-    where: whereClause,
-    include: {
-      restaurant: true,
-      cart: {
-        include: {
-          cartItems: {
-            include: { product: true },
+  const checkout = await retryDatabaseOperation(async () => {
+    return await prisma.cHECKOUT.findFirst({
+      where: whereClause,
+      include: {
+        restaurant: true,
+        cart: {
+          include: {
+            cartItems: {
+              include: { product: true },
+            },
           },
         },
+        order: true,
       },
-      order: true,
-    },
+    });
   });
 
   if (!checkout) {
@@ -153,49 +175,159 @@ async function processCheckoutPayment(
       updateData.appFee = data?.data?.fee;
     }
 
-    await prisma.cHECKOUT.update({
-      where: { id: checkout.id },
-      data: updateData,
+    await retryDatabaseOperation(async () => {
+      return await prisma.cHECKOUT.update({
+        where: { id: checkout.id },
+        data: updateData,
+      });
     });
 
-    // Send appropriate notification based on payment method
+    // Create order if it doesn't exist
+    if (!checkout.order && !checkout.orderId) {
+      try {
+        const order = await retryDatabaseOperation(async () => {
+          return await createOrderFromCheckoutService({
+            checkoutId: checkout.id,
+            restaurantId: checkout.restaurantId,
+            status: "CONFIRMED",
+          });
+        });
 
-    await sendMessage(
-      `Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${
-        checkout.currency
-      }. Thank you!`,
-      checkout.billingPhone || checkout.restaurant.phone || ""
-    );
+        console.log(`Order created from checkout: ${order.id}`);
+      } catch (orderError) {
+        console.error("Failed to create order from checkout:", orderError);
+      }
+    }
 
-    await sendPaymentConfirmationEmail({
-      amount: checkout.chargedAmount || checkout.totalAmount,
-      transactionId: data?.id?.toString() || flwRef,
-      restaurantName: checkout.restaurant.name,
-      products: checkout.cart.cartItems.map((item) => ({
-        name: item.product.productName,
-        quantity: item.quantity,
-        price: item.product.unitPrice,
-      })),
-      customer: {
-        name: checkout.billingName || checkout.restaurant.name || "",
-        email: checkout.billingEmail || checkout.restaurant.email || "",
-      },
-      checkoutId: checkout.id,
-    });
+    // Update existing order if it exists
+    if (checkout.order || checkout.orderId) {
+      try {
+        await retryDatabaseOperation(async () => {
+          return await prisma.order.update({
+            where: { id: checkout.orderId || checkout.order?.id },
+            data: {
+              paymentStatus: "COMPLETED",
+              status: "CONFIRMED",
+              updatedAt: new Date(),
+            },
+          });
+        });
+      } catch (orderUpdateError) {
+        console.error("Failed to update order status:", orderUpdateError);
+      }
+    }
+
+    // Clear cart if checkout is completed
+    if (checkout.cart.cartItems.length > 0) {
+      try {
+        await retryDatabaseOperation(async () => {
+          return await clearCartService(checkout.cartId);
+        });
+      } catch (clearCartError) {
+        console.error("Failed to clear cart:", clearCartError);
+      }
+    }
+
+    // Send notifications (these are not critical, so we don't retry them)
+    try {
+      await sendMessage(
+        `Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${
+          checkout.currency
+        }. Thank you!`,
+        checkout.billingPhone || checkout.restaurant.phone || ""
+      );
+    } catch (smsError) {
+      console.error("Failed to send SMS notification:", smsError);
+    }
+
+    try {
+      await sendPaymentConfirmationEmail({
+        amount: checkout.chargedAmount || checkout.totalAmount,
+        transactionId: data?.id?.toString() || flwRef,
+        restaurantName: checkout.restaurant.name,
+        products: checkout.cart.cartItems.map((item) => ({
+          name: item.product.productName,
+          quantity: item.quantity,
+          price: item.product.unitPrice,
+        })),
+        customer: {
+          name: checkout.billingName || checkout.restaurant.name || "",
+          email: checkout.billingEmail || checkout.restaurant.email || "",
+        },
+        checkoutId: checkout.id,
+      });
+    } catch (emailError) {
+      console.error("Failed to send confirmation email:", emailError);
+    }
 
     console.log(`Checkout payment completed: ${checkout.id}`);
   } else if (status === "failed") {
-    await prisma.cHECKOUT.update({
-      where: { id: checkout.id },
-      data: {
-        paymentStatus: "FAILED",
-        flwStatus: "failed",
-        flwMessage: `Payment failed via ${paymentProvider.toLowerCase()} webhook`,
-        transactionId: data?.id?.toString() || flwRef,
-        flwRef: flwRef,
-        updatedAt: new Date(),
-      },
+    await retryDatabaseOperation(async () => {
+      return await prisma.cHECKOUT.update({
+        where: { id: checkout.id },
+        data: {
+          paymentStatus: "FAILED",
+          flwStatus: "failed",
+          flwMessage: `Payment failed via ${paymentProvider.toLowerCase()} webhook`,
+          transactionId: data?.id?.toString() || flwRef,
+          flwRef: flwRef,
+          updatedAt: new Date(),
+        },
+      });
     });
+
+    // Update order status to failed/cancelled
+    if (checkout.order || checkout.orderId) {
+      try {
+        await retryDatabaseOperation(async () => {
+          return await prisma.order.update({
+            where: { id: checkout.orderId || checkout.order?.id },
+            data: {
+              paymentStatus: "FAILED",
+              status: "CANCELLED",
+              updatedAt: new Date(),
+            },
+          });
+        });
+      } catch (orderUpdateError) {
+        console.error(
+          "Failed to update failed order status:",
+          orderUpdateError
+        );
+      }
+    }
+
+    try {
+      await sendMessage(
+        `Payment failed: ${checkout.chargedAmount || checkout.totalAmount} ${
+          checkout.currency
+        }. Please try again.`,
+        checkout.billingPhone || checkout.restaurant.phone || ""
+      );
+    } catch (smsError) {
+      console.error("Failed to send failure SMS notification:", smsError);
+    }
+
+    try {
+      await sendPaymentFailedEmail({
+        amount: checkout.chargedAmount || checkout.totalAmount,
+        transactionId: data?.id?.toString() || flwRef,
+        restaurantName: checkout.restaurant.name,
+        products: checkout.cart.cartItems.map((item) => ({
+          name: item.product.productName,
+          quantity: item.quantity,
+          price: item.product.unitPrice,
+        })),
+        customer: {
+          name: checkout.billingName || checkout.restaurant.name || "",
+          email: checkout.billingEmail || checkout.restaurant.email || "",
+        },
+        checkoutId: checkout.id,
+      });
+    } catch (emailError) {
+      console.error("Failed to send payment failed email:", emailError);
+    }
+
     console.log(`Checkout payment failed: ${checkout.id}`);
   }
 
@@ -343,6 +475,15 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
     res.status(200).json({ message: "Webhook processed successfully" });
   } catch (error: any) {
     console.error("Payment webhook processing error:", error);
+
+    // Check if it's a database connection issue
+    if (error.message?.includes("timeout") || error.code === "P1017") {
+      return res.status(503).json({
+        error: "Service temporarily unavailable",
+        message: "Database connection issue, webhook will be retried",
+      });
+    }
+
     res.status(500).json({ error: "Webhook processing failed" });
   }
 };

@@ -20,6 +20,7 @@ import {
 } from "../types/paymentTypes";
 import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import { createOrderFromCheckoutService } from "./order.services";
+import { retryDatabaseOperation } from "../utils/db-retry.utls";
 
 dotenv.config();
 
@@ -168,29 +169,35 @@ export const getCheckoutByIdService = async (
   checkoutId: string,
   restaurantId?: string
 ) => {
-  const checkout = await prisma.cHECKOUT.findUnique({
-    where: { id: checkoutId },
-    include: {
-      cart: {
-        include: {
-          cartItems: {
-            include: {
-              product: true,
+  console.log("checkoutId", checkoutId, "restaurantId", restaurantId);
+
+  const checkout = await retryDatabaseOperation(async () => {
+    return await prisma.cHECKOUT.findUnique({
+      where: { id: checkoutId },
+      include: {
+        cart: {
+          include: {
+            cartItems: {
+              include: {
+                product: true,
+              },
             },
           },
         },
-      },
-      restaurant: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
         },
+        order: true,
       },
-      order: true,
-    },
+    });
   });
+
+  console.log("checkout by ID", checkout);
 
   if (!checkout) {
     throw new Error("Checkout not found");
@@ -350,36 +357,38 @@ export const updateCheckoutService = async (
     throw new Error("Cannot update checkout after payment is completed");
   }
 
-  const updatedCheckout = await prisma.cHECKOUT.update({
-    where: { id: checkoutId },
-    data: {
-      ...data,
-      updatedAt: new Date(),
-      paidAt:
-        data.paymentStatus === "COMPLETED"
-          ? new Date()
-          : existingCheckout.paidAt,
-    },
-    include: {
-      cart: {
-        include: {
-          cartItems: {
-            include: {
-              product: true,
+  const updatedCheckout = await retryDatabaseOperation(async () => {
+    return await prisma.cHECKOUT.update({
+      where: { id: checkoutId },
+      data: {
+        ...data,
+        updatedAt: new Date(),
+        paidAt:
+          data.paymentStatus === "COMPLETED"
+            ? new Date()
+            : existingCheckout.paidAt,
+      },
+      include: {
+        cart: {
+          include: {
+            cartItems: {
+              include: {
+                product: true,
+              },
             },
           },
         },
-      },
-      restaurant: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
         },
+        order: true,
       },
-      order: true,
-    },
+    });
   });
 
   return updatedCheckout;
@@ -436,64 +445,83 @@ export const processPaymentService = async (
     processDirectly?: boolean;
   }
 ) => {
-  const checkout = await getCheckoutByIdService(checkoutId);
+  let checkout: Awaited<ReturnType<typeof getCheckoutByIdService>>;
+  let order: Awaited<ReturnType<typeof createOrderFromCheckoutService>> | null =
+    null;
 
-  if (checkout.paymentStatus === "COMPLETED") {
-    throw new Error("Payment already completed");
-  }
-
-  // Create order immediately when payment
-  let order;
   try {
+    // Get checkout with retry logic
+    checkout = await getCheckoutByIdService(checkoutId);
+    console.log("Processing payment for checkout:", checkout);
+
+    if (checkout.paymentStatus === "COMPLETED") {
+      throw new Error("Payment already completed");
+    }
+
+    // Create order immediately when payment starts
     if (!checkout.orderId) {
-      order = await createOrderFromCheckoutService({
-        checkoutId: checkoutId,
-        restaurantId: checkout.restaurantId,
-        status: OrderStatus.PENDING,
+      order = await retryDatabaseOperation(async () => {
+        return await createOrderFromCheckoutService({
+          checkoutId: checkoutId,
+          restaurantId: checkout.restaurantId,
+          status: OrderStatus.PENDING,
+        });
       });
     } else {
-      order = await prisma.order.findUnique({
-        where: { id: checkout.orderId },
-        include: {
-          restaurant: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              phone: true,
+      const existingOrder = await retryDatabaseOperation(async () => {
+        return await prisma.order.findUnique({
+          where: { id: checkout.orderId! },
+          include: {
+            restaurant: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
             },
-          },
-          orderItems: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  productName: true,
-                  unitPrice: true,
-                  unit: true,
-                  images: true,
-                  category: true,
-                  status: true,
+            orderItems: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    productName: true,
+                    unitPrice: true,
+                    unit: true,
+                    images: true,
+                    category: true,
+                    status: true,
+                  },
                 },
               },
             },
           },
-        },
+        });
       });
+
+      // Cast to match the expected type since createOrderFromCheckoutService returns a specific type
+      order = existingOrder as Awaited<
+        ReturnType<typeof createOrderFromCheckoutService>
+      >;
     }
   } catch (error: any) {
-    console.log("Error creating order:", error);
-    if (error.message.includes("timeout")) {
-      throw new Error("Order creation timed out. Please try again.");
+    console.log("Error in initial checkout/order operations:", error);
+    if (error.message.includes("timeout") || error.code === "P1017") {
+      throw new Error("Database connection issue. Please try again.");
     }
     throw error;
   }
 
-  // Update payment status to processing (outside transaction)
-  await updateCheckoutService(checkoutId, {
-    paymentStatus: "PROCESSING",
-    paymentMethod: paymentData.paymentMethod,
-  });
+  // Update payment status to processing with retry
+  try {
+    await updateCheckoutService(checkoutId, {
+      paymentStatus: "PROCESSING",
+      paymentMethod: paymentData.paymentMethod,
+    });
+  } catch (error: any) {
+    console.log("Error updating checkout to processing:", error);
+    // Continue with payment processing even if status update fails
+  }
 
   try {
     let paymentResult: PaymentResult;
@@ -542,16 +570,14 @@ export const processPaymentService = async (
 
       case "CASH":
         try {
-          // Get restaurant's wallet
-          const wallet = await getWalletByRestaurantIdService(
-            checkout.restaurantId
-          );
+          const wallet = await retryDatabaseOperation(async () => {
+            return await getWalletByRestaurantIdService(checkout.restaurantId);
+          });
 
           if (!wallet.isActive) {
             throw new Error("Wallet is inactive. Please contact support.");
           }
 
-          // Check if wallet has sufficient balance
           if (wallet.balance < checkout.totalAmount) {
             throw new Error(
               `Insufficient wallet balance. Available: ${wallet.balance} ${
@@ -562,13 +588,14 @@ export const processPaymentService = async (
             );
           }
 
-          // Debit wallet for the payment
-          const walletDebitResult = await debitWalletService({
-            walletId: wallet.id,
-            amount: checkout.totalAmount,
-            description: `Payment for checkout ${checkoutId} - Order ${checkout.txOrderId}`,
-            reference: checkoutId,
-            checkoutId: checkoutId,
+          const walletDebitResult = await retryDatabaseOperation(async () => {
+            return await debitWalletService({
+              walletId: wallet.id,
+              amount: checkout.totalAmount,
+              description: `Payment for checkout ${checkoutId} - Order ${checkout.txOrderId}`,
+              reference: checkoutId,
+              checkoutId: checkoutId,
+            });
           });
 
           paymentResult = {
@@ -585,7 +612,6 @@ export const processPaymentService = async (
             },
           };
         } catch (walletError: any) {
-          // If wallet payment fails, return appropriate error
           paymentResult = {
             success: false,
             transactionId: "",
@@ -602,6 +628,7 @@ export const processPaymentService = async (
         throw new Error("Unsupported payment method");
     }
 
+    // Handle payment result with retry logic
     if (paymentResult.success) {
       const updateData: UpdateCheckoutData = {
         paymentStatus:
@@ -613,7 +640,7 @@ export const processPaymentService = async (
         flwMessage: paymentResult.message,
       };
 
-      // Handle card payment specific data
+      // Add card payment specific data if applicable
       if (
         paymentData.paymentMethod === "CARD" &&
         "cardPaymentData" in paymentResult &&
@@ -630,18 +657,9 @@ export const processPaymentService = async (
         updateData.paymentType = cardData.paymentType;
         updateData.chargeType = cardData.chargeType;
         updateData.narration = cardData.narration;
-        // Store card data (Note: need to add these fields to UpdateCheckoutData interface)
-        (updateData as any).cardFirst6Digits = cardData.cardFirst6Digits;
-        (updateData as any).cardLast4Digits = cardData.cardLast4Digits;
-        (updateData as any).cardType = cardData.cardType;
-        (updateData as any).cardExpiry = cardData.cardExpiry;
-        (updateData as any).customerId = cardData.customerId?.toString();
-        (updateData as any).customerName = cardData.customerName;
-        (updateData as any).customerEmail = cardData.customerEmail;
-        (updateData as any).customerPhone = cardData.customerPhone;
       }
 
-      // Handle payment method specific data with type guards
+      // Handle transfer details
       if ("transferDetails" in paymentResult && paymentResult.transferDetails) {
         updateData.transferReference =
           paymentResult.transferDetails.transferReference;
@@ -665,52 +683,76 @@ export const processPaymentService = async (
           paymentResult.authorizationDetails.redirectUrl;
       }
 
-      const updatedCheckout = await updateCheckoutService(
-        checkoutId,
-        updateData
-      );
+      let updatedCheckout;
+      try {
+        updatedCheckout = await updateCheckoutService(checkoutId, updateData);
+      } catch (updateError: any) {
+        console.log(
+          "Error updating checkout after successful payment:",
+          updateError
+        );
+        // Even if update fails, payment was successful, so we should return success
+        // but log the issue for investigation
+        updatedCheckout = checkout;
+      }
 
-      // Update order status based on payment result (outside transaction)
-      if (order) {
-        await prisma.order.update({
-          where: { id: order.id },
-          data: {
-            paymentStatus:
-              paymentResult.status === "successful"
-                ? "COMPLETED"
-                : "PROCESSING",
-            paymentReference: paymentResult.reference,
-            status:
-              paymentResult.status === "successful" ? "CONFIRMED" : "PENDING",
-          },
-        });
+      // Update order status with retry
+      if (order && order.id) {
+        try {
+          await retryDatabaseOperation(async () => {
+            return await prisma.order.update({
+              where: { id: order!.id },
+              data: {
+                paymentStatus:
+                  paymentResult.status === "successful"
+                    ? "COMPLETED"
+                    : "PROCESSING",
+                paymentReference: paymentResult.reference,
+                status:
+                  paymentResult.status === "successful"
+                    ? "CONFIRMED"
+                    : "PENDING",
+              },
+            });
+          });
+        } catch (orderUpdateError: any) {
+          console.log(
+            "Error updating order after successful payment:",
+            orderUpdateError
+          );
+        }
       }
 
       // Send notification email for successful payments
       if (paymentResult.status === "successful" && checkout.billingEmail) {
-        const products = checkout.cart.cartItems.map((item) => ({
-          name: item.product.productName,
-          quantity: item.quantity,
-          price: item.product.unitPrice * item.quantity,
-          unitPrice: item.product.unitPrice,
-        }));
+        try {
+          const products = checkout.cart.cartItems.map((item) => ({
+            name: item.product.productName,
+            quantity: item.quantity,
+            price: item.product.unitPrice * item.quantity,
+            unitPrice: item.product.unitPrice,
+          }));
 
-        sendPaymentNotificationEmail({
-          amount: checkout.totalAmount,
-          phoneNumber: paymentData.phoneNumber || checkout.billingPhone || "",
-          restaurantName: checkout.restaurant.name,
-          products,
-          customer: {
-            name: checkout.billingName || checkout.restaurant.name,
-            email: checkout.billingEmail!,
-          },
-          checkoutId: checkoutId,
-          paymentMethod: paymentData.paymentMethod,
-          walletDetails:
-            "walletDetails" in paymentResult
-              ? paymentResult.walletDetails
-              : undefined,
-        });
+          sendPaymentNotificationEmail({
+            amount: checkout.totalAmount,
+            phoneNumber: paymentData.phoneNumber || checkout.billingPhone || "",
+            restaurantName: checkout.restaurant.name,
+            products,
+            customer: {
+              name: checkout.billingName || checkout.restaurant.name,
+              email: checkout.billingEmail!,
+            },
+            checkoutId: checkoutId,
+            paymentMethod: paymentData.paymentMethod,
+            walletDetails:
+              "walletDetails" in paymentResult
+                ? paymentResult.walletDetails
+                : undefined,
+          });
+        } catch (emailError) {
+          console.log("Error sending notification email:", emailError);
+          // Don't fail the payment process if email fails
+        }
       }
 
       return {
@@ -734,22 +776,29 @@ export const processPaymentService = async (
         message: paymentResult.message,
       };
     } else {
-      // Update both checkout and order to failed status (outside transaction)
-      await Promise.all([
-        updateCheckoutService(checkoutId, {
-          paymentStatus: "FAILED",
-          flwStatus: "failed",
-          flwMessage: paymentResult.error || "Payment failed",
-        }),
-        order &&
-          prisma.order.update({
-            where: { id: order.id },
-            data: {
-              paymentStatus: "FAILED",
-              status: "CANCELLED",
-            },
+      // Handle failed payment
+      try {
+        await Promise.all([
+          updateCheckoutService(checkoutId, {
+            paymentStatus: "FAILED",
+            flwStatus: "failed",
+            flwMessage: paymentResult.error || "Payment failed",
           }),
-      ]);
+          order &&
+            order.id &&
+            retryDatabaseOperation(async () => {
+              return await prisma.order.update({
+                where: { id: order!.id },
+                data: {
+                  paymentStatus: "FAILED",
+                  status: "CANCELLED",
+                },
+              });
+            }),
+        ]);
+      } catch (updateError) {
+        console.log("Error updating failed payment status:", updateError);
+      }
 
       return {
         success: false,
@@ -759,22 +808,29 @@ export const processPaymentService = async (
   } catch (error: any) {
     console.log("Error processing payment:", error);
 
-    // Update both checkout and order to failed status (outside transaction)
-    await Promise.all([
-      updateCheckoutService(checkoutId, {
-        paymentStatus: "FAILED",
-        flwStatus: "failed",
-        flwMessage: error.message,
-      }),
-      order &&
-        prisma.order.update({
-          where: { id: order.id },
-          data: {
-            paymentStatus: "FAILED",
-            status: "CANCELLED",
-          },
-        }),
-    ]);
+    // Update both checkout and order to failed status with retry
+    try {
+      await Promise.all([
+        updateCheckoutService(checkoutId, {
+          paymentStatus: "FAILED",
+          flwStatus: "failed",
+          flwMessage: error.message,
+        }).catch(console.error),
+        order &&
+          order.id &&
+          retryDatabaseOperation(async () => {
+            return await prisma.order.update({
+              where: { id: order!.id },
+              data: {
+                paymentStatus: "FAILED",
+                status: "CANCELLED",
+              },
+            });
+          }).catch(console.error),
+      ]);
+    } catch (updateError) {
+      console.log("Error updating payment failure status:", updateError);
+    }
 
     throw new Error(`Payment processing failed: ${error.message}`);
   }
