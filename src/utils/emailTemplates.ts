@@ -48,6 +48,17 @@ export interface OrderStatusData {
   trackingInfo?: string;
 }
 
+export interface CheckoutItemData {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  unit: string;
+  images: string[];
+  category?: string;
+}
+
 export interface WalletNotificationData {
   email: string;
   restaurantName: string;

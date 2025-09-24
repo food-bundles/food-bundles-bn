@@ -1,18 +1,9 @@
 "use strict";
-var __importDefault =
-  (this && this.__importDefault) ||
-  function (mod) {
-    return mod && mod.__esModule ? mod : { default: mod };
-  };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendWalletNotificationTemplate =
-  exports.generateOrderStatusTemplate =
-  exports.sendPaymentFailedTemplate =
-  exports.sendPaymentConfirmationTemplate =
-  exports.sendPaymentNotificationTemplate =
-  exports.isValidRwandaPhone =
-  exports.cleanPhoneNumber =
-    void 0;
+exports.sendWalletNotificationTemplate = exports.generateOrderStatusTemplate = exports.sendPaymentFailedTemplate = exports.sendPaymentConfirmationTemplate = exports.sendPaymentNotificationTemplate = exports.isValidRwandaPhone = exports.cleanPhoneNumber = void 0;
 exports.sendPaymentNotificationEmail = sendPaymentNotificationEmail;
 exports.sendPaymentConfirmationEmail = sendPaymentConfirmationEmail;
 exports.sendPaymentFailedEmail = sendPaymentFailedEmail;
@@ -20,32 +11,33 @@ exports.sendWalletNotificationEmail = sendWalletNotificationEmail;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 // Clean and format phone number for Rwanda
 const cleanPhoneNumber = (phone) => {
-  // Remove all non-digit characters
-  let cleaned = phone.replace(/\D/g, "");
-  // Replace +2507 with 07 (remove +25)
-  if (cleaned.startsWith("2507")) {
-    cleaned = "07" + cleaned.slice(4);
-  } else if (cleaned.startsWith("+2507")) {
-    cleaned = "07" + cleaned.slice(5);
-  }
-  return cleaned;
+    // Remove all non-digit characters
+    let cleaned = phone.replace(/\D/g, "");
+    // Replace +2507 with 07 (remove +25)
+    if (cleaned.startsWith("2507")) {
+        cleaned = "07" + cleaned.slice(4);
+    }
+    else if (cleaned.startsWith("+2507")) {
+        cleaned = "07" + cleaned.slice(5);
+    }
+    return cleaned;
 };
 exports.cleanPhoneNumber = cleanPhoneNumber;
 // Validate Rwanda phone number
 const isValidRwandaPhone = (phone) => {
-  const cleanPhone = (0, exports.cleanPhoneNumber)(phone);
-  const validPrefixes = ["078", "079", "072", "073"];
-  return validPrefixes.some((prefix) => cleanPhone.startsWith(prefix));
+    const cleanPhone = (0, exports.cleanPhoneNumber)(phone);
+    const validPrefixes = ["078", "079", "072", "073"];
+    return validPrefixes.some((prefix) => cleanPhone.startsWith(prefix));
 };
 exports.isValidRwandaPhone = isValidRwandaPhone;
 /**
  * Generate payment notification email template
  */
 const sendPaymentNotificationTemplate = (data) => {
-  const expirationTime = new Date();
-  expirationTime.setHours(expirationTime.getHours() + 8);
-  const walletDetailsHtml = data.walletDetails
-    ? `
+    const expirationTime = new Date();
+    expirationTime.setHours(expirationTime.getHours() + 8);
+    const walletDetailsHtml = data.walletDetails
+        ? `
     <p>Wallet Details:</p>
     <ul>
       <li>Previous Balance: ${data.walletDetails.previousBalance}</li>
@@ -53,8 +45,8 @@ const sendPaymentNotificationTemplate = (data) => {
       <li>Transaction ID: ${data.walletDetails.transactionId}</li>
     </ul>
   `
-    : "";
-  return `<!DOCTYPE html>
+        : "";
+    return `<!DOCTYPE html>
   <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -163,24 +155,20 @@ const sendPaymentNotificationTemplate = (data) => {
       <div class="content">
         <p>Dear ${data.customer.name},</p>
         
-        <p>We have received your order from <strong>${
-          data.restaurantName
-        }</strong> and are processing your payment request.</p>
+        <p>We have received your order from <strong>${data.restaurantName}</strong> and are processing your payment request.</p>
         
         <div class="products-list">
           <h2>🛒 Your Order</h2>
           ${data.products
-            .map(
-              (product) => `
+        .map((product) => `
             <div class="product-item">
               <div>
                 <strong>${product.name}</strong><br>
                 <small>Quantity: ${product.quantity}</small>
               </div>
               <div>Price: <strong>${product.unitPrice.toLocaleString()} RWF</strong></div>
-            </div>`
-            )
-            .join("")}
+            </div>`)
+        .join("")}
           <div class="product-item" style="border-top: 2px solid #22c55e; margin-top: 10px; padding-top: 10px;">
             <div><strong>Total Amount</strong></div>
             <div class="amount">${data.amount.toLocaleString()} RWF</div>
@@ -190,27 +178,20 @@ const sendPaymentNotificationTemplate = (data) => {
         <div class="payment-details">
           <h2>💳 Payment Information</h2>
           <p><span class="highlight">Order ID:</span> ${data.checkoutId}</p>
-          <p><span class="highlight">Phone Number:</span> ${
-            data.phoneNumber
-          }</p>
-          <p><span class="highlight">Payment Method:</span> ${
-            data.paymentMethod
-          }</p>
+          <p><span class="highlight">Phone Number:</span> ${data.phoneNumber}</p>
+          <p><span class="highlight">Payment Method:</span> ${data.paymentMethod}</p>
         </div>
 
         <div class="warning">
           <p>⚠️ Important: Complete your payment within 8 hours</p>
-          <p><strong>Expires:</strong> ${expirationTime.toLocaleString(
-            "en-RW",
-            {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }
-          )}</p>
+          <p><strong>Expires:</strong> ${expirationTime.toLocaleString("en-RW", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    })}</p>
         </div>
 
         <!-- ... -->
@@ -244,7 +225,7 @@ exports.sendPaymentNotificationTemplate = sendPaymentNotificationTemplate;
  * Generate payment confirmation email template
  */
 const sendPaymentConfirmationTemplate = (data) => {
-  return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
   <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -328,51 +309,38 @@ const sendPaymentConfirmationTemplate = (data) => {
       <div class="content">
         <div class="success-badge">
           🎉 Your payment has been confirmed!<br>
-          <small style="font-size: 14px; font-weight: normal;">Order #${
-            data.checkoutId
-          }</small>
+          <small style="font-size: 14px; font-weight: normal;">Order #${data.checkoutId}</small>
         </div>
         
         <p>Dear ${data.customer.name},</p>
         
-        <p>Thank you for your payment! Your order from <strong>${
-          data.restaurantName
-        }</strong> has been successfully processed and confirmed.</p>
+        <p>Thank you for your payment! Your order from <strong>${data.restaurantName}</strong> has been successfully processed and confirmed.</p>
         
         <div class="order-details">
           <h2>📋 Order Summary</h2>
           <p><span class="highlight">Order ID:</span> ${data.checkoutId}</p>
-          <p><span class="highlight">Transaction ID:</span> ${
-            data.transactionId
-          }</p>
+          <p><span class="highlight">Transaction ID:</span> ${data.transactionId}</p>
           <p><span class="highlight">Amount Paid:</span> <strong>${data.amount.toLocaleString()} RWF</strong></p>
-          ${
-            data.deliveryDate
-              ? `<p><span class="highlight">Delivery Date:</span> ${data.deliveryDate.toLocaleDateString(
-                  "en-RW",
-                  {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  }
-                )}</p>`
-              : ""
-          }
+          ${data.deliveryDate
+        ? `<p><span class="highlight">Delivery Date:</span> ${data.deliveryDate.toLocaleDateString("en-RW", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+        })}</p>`
+        : ""}
           
           <h3 style="margin-top: 20px;">🛒 Items Ordered:</h3>
           ${data.products
-            .map(
-              (product) => `
+        .map((product) => `
             <div class="product-item">
               <div>
                 <strong>${product.name}</strong><br>
                 <small>Quantity: ${product.quantity}</small>
               </div>
               <div><strong>${product.price.toLocaleString()} RWF</strong></div>
-            </div>`
-            )
-            .join("")}
+            </div>`)
+        .join("")}
         </div>
 
         <div class="tracking-info">
@@ -391,9 +359,7 @@ const sendPaymentConfirmationTemplate = (data) => {
           <ul style="margin: 10px 0; padding-left: 20px;">
             <li>Email: sales@food.rw</li>
             <li>Phone: +250 796 897 823</li>
-            <li>Reference your Order ID: <strong>${
-              data.checkoutId
-            }</strong></li>
+            <li>Reference your Order ID: <strong>${data.checkoutId}</strong></li>
           </ul>
         </div>
 
@@ -417,7 +383,7 @@ exports.sendPaymentConfirmationTemplate = sendPaymentConfirmationTemplate;
  * Generate payment failed email template
  */
 const sendPaymentFailedTemplate = (data) => {
-  return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
   <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -441,42 +407,32 @@ const sendPaymentFailedTemplate = (data) => {
       <div class="content">
         <div class="failure-badge">
           Unfortunately, your payment could not be processed.<br>
-          <small style="font-size: 14px; font-weight: normal;">Order #${
-            data.checkoutId
-          }</small>
+          <small style="font-size: 14px; font-weight: normal;">Order #${data.checkoutId}</small>
         </div>
 
         <p>Dear ${data.customer.name},</p>
-        <p>We attempted to process your payment for your order from <strong>${
-          data.restaurantName
-        }</strong>, but it was not successful.</p>
+        <p>We attempted to process your payment for your order from <strong>${data.restaurantName}</strong>, but it was not successful.</p>
 
         <div class="order-details">
           <h2>📋 Payment Details</h2>
           <p><span class="highlight">Order ID:</span> ${data.checkoutId}</p>
-          <p><span class="highlight">Transaction ID:</span> ${
-            data.transactionId
-          }</p>
+          <p><span class="highlight">Transaction ID:</span> ${data.transactionId}</p>
           <p><span class="highlight">Amount:</span> ${data.amount.toLocaleString()} RWF</p>
-          ${
-            data.failureReason
-              ? `<p><span class="highlight">Reason:</span> ${data.failureReason}</p>`
-              : ""
-          }
+          ${data.failureReason
+        ? `<p><span class="highlight">Reason:</span> ${data.failureReason}</p>`
+        : ""}
 
           <h3 style="margin-top: 20px;">🛒 Items Ordered:</h3>
           ${data.products
-            .map(
-              (product) => `
+        .map((product) => `
               <div class="product-item">
                 <div>
                   <strong>${product.name}</strong><br>
                   <small>Quantity: ${product.quantity}</small>
                 </div>
                 <div><strong>${product.price.toLocaleString()} RWF</strong></div>
-              </div>`
-            )
-            .join("")}
+              </div>`)
+        .join("")}
         </div>
 
         <p>You can try again by re-initiating the payment in your FoodBundles account or choosing a different payment method.</p>
@@ -504,17 +460,17 @@ exports.sendPaymentFailedTemplate = sendPaymentFailedTemplate;
  * Generate order status update email template
  */
 const generateOrderStatusTemplate = (data) => {
-  const statusColors = {
-    PENDING: { bg: "#fef3c7", text: "#92400e", emoji: "⏳" },
-    CONFIRMED: { bg: "#d1fae5", text: "#065f46", emoji: "✅" },
-    PREPARING: { bg: "#dbeafe", text: "#1e40af", emoji: "👨‍🍳" },
-    READY: { bg: "#e0e7ff", text: "#3730a3", emoji: "📦" },
-    OUT_FOR_DELIVERY: { bg: "#fed7d7", text: "#9b2c2c", emoji: "🚚" },
-    DELIVERED: { bg: "#c6f6d5", text: "#2f855a", emoji: "🎉" },
-    CANCELLED: { bg: "#fed7d7", text: "#c53030", emoji: "❌" },
-  };
-  const statusInfo = statusColors[data.status] || statusColors.PENDING;
-  return `<!DOCTYPE html>
+    const statusColors = {
+        PENDING: { bg: "#fef3c7", text: "#92400e", emoji: "⏳" },
+        CONFIRMED: { bg: "#d1fae5", text: "#065f46", emoji: "✅" },
+        PREPARING: { bg: "#dbeafe", text: "#1e40af", emoji: "👨‍🍳" },
+        READY: { bg: "#e0e7ff", text: "#3730a3", emoji: "📦" },
+        OUT_FOR_DELIVERY: { bg: "#fed7d7", text: "#9b2c2c", emoji: "🚚" },
+        DELIVERED: { bg: "#c6f6d5", text: "#2f855a", emoji: "🎉" },
+        CANCELLED: { bg: "#fed7d7", text: "#c53030", emoji: "❌" },
+    };
+    const statusInfo = statusColors[data.status] || statusColors.PENDING;
+    return `<!DOCTYPE html>
   <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -579,29 +535,23 @@ const generateOrderStatusTemplate = (data) => {
       <div class="content">
         <div class="status-badge">
           ${statusInfo.emoji} Your order is ${data.status
-    .toLowerCase()
-    .replace("_", " ")}
+        .toLowerCase()
+        .replace("_", " ")}
         </div>
         
         <p>Dear ${data.customer.name},</p>
         
-        <p>Your order from <strong>${
-          data.restaurantName
-        }</strong> has been updated.</p>
+        <p>Your order from <strong>${data.restaurantName}</strong> has been updated.</p>
         
         <div class="order-info">
           <p><strong>Order Number:</strong> ${data.orderNumber}</p>
           <p><strong>Status:</strong> ${data.status.replace("_", " ")}</p>
-          ${
-            data.estimatedDelivery
-              ? `<p><strong>Estimated Delivery:</strong> ${data.estimatedDelivery.toLocaleDateString()}</p>`
-              : ""
-          }
-          ${
-            data.trackingInfo
-              ? `<p><strong>Tracking Info:</strong> ${data.trackingInfo}</p>`
-              : ""
-          }
+          ${data.estimatedDelivery
+        ? `<p><strong>Estimated Delivery:</strong> ${data.estimatedDelivery.toLocaleDateString()}</p>`
+        : ""}
+          ${data.trackingInfo
+        ? `<p><strong>Tracking Info:</strong> ${data.trackingInfo}</p>`
+        : ""}
         </div>
 
         <p>Thank you for your patience!</p>
@@ -618,15 +568,15 @@ exports.generateOrderStatusTemplate = generateOrderStatusTemplate;
  * Generate wallet notification email template
  */
 const sendWalletNotificationTemplate = (data) => {
-  const transactionTypeMap = {
-    TOP_UP: { emoji: "💰", text: "Top-up" },
-    PAYMENT: { emoji: "💳", text: "Payment" },
-    REFUND: { emoji: "↩️", text: "Refund" },
-    ADJUSTMENT: { emoji: "⚖️", text: "Adjustment" },
-    WITHDRAWAL: { emoji: "💸", text: "Withdrawal" },
-  };
-  const typeInfo = transactionTypeMap[data.type] || transactionTypeMap.TOP_UP;
-  return `<!DOCTYPE html>
+    const transactionTypeMap = {
+        TOP_UP: { emoji: "💰", text: "Top-up" },
+        PAYMENT: { emoji: "💳", text: "Payment" },
+        REFUND: { emoji: "↩️", text: "Refund" },
+        ADJUSTMENT: { emoji: "⚖️", text: "Adjustment" },
+        WITHDRAWAL: { emoji: "💸", text: "Withdrawal" },
+    };
+    const typeInfo = transactionTypeMap[data.type] || transactionTypeMap.TOP_UP;
+    return `<!DOCTYPE html>
   <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -652,27 +602,21 @@ const sendWalletNotificationTemplate = (data) => {
         <p>Dear ${data.restaurantName},</p>
         
         <p>Your wallet has been ${data.type
-          .toLowerCase()
-          .replace("_", " ")}ed successfully.</p>
+        .toLowerCase()
+        .replace("_", " ")}ed successfully.</p>
         
         <div class="transaction-details">
           <h2>📊 Transaction Details</h2>
-          <p><span class="highlight">Transaction ID:</span> ${
-            data.transactionId
-          }</p>
+          <p><span class="highlight">Transaction ID:</span> ${data.transactionId}</p>
           <p><span class="highlight">Type:</span> ${typeInfo.text}</p>
           <p><span class="highlight">Amount:</span> <span class="amount">${data.amount.toLocaleString()} RWF</span></p>
           <p><span class="highlight">New Balance:</span> <strong>${data.newBalance.toLocaleString()} RWF</strong></p>
-          ${
-            data.paymentMethod
-              ? `<p><span class="highlight">Payment Method:</span> ${data.paymentMethod}</p>`
-              : ""
-          }
-          ${
-            data.description
-              ? `<p><span class="highlight">Description:</span> ${data.description}</p>`
-              : ""
-          }
+          ${data.paymentMethod
+        ? `<p><span class="highlight">Payment Method:</span> ${data.paymentMethod}</p>`
+        : ""}
+          ${data.description
+        ? `<p><span class="highlight">Description:</span> ${data.description}</p>`
+        : ""}
         </div>
 
         <p>If you did not initiate this transaction, please contact our support team immediately.</p>
@@ -688,123 +632,127 @@ const sendWalletNotificationTemplate = (data) => {
 exports.sendWalletNotificationTemplate = sendWalletNotificationTemplate;
 // Send payment notification email
 async function sendPaymentNotificationEmail(paymentData) {
-  if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
-  }
-  const config = {
-    service: "gmail",
-    auth: {
-      user: process.env.GOOGLE_EMAIL,
-      pass: process.env.GOOGLE_PASSWORD,
-    },
-    tls: {
-      rejectUnauthorized: false,
-    },
-  };
-  const transporter = nodemailer_1.default.createTransport(config);
-  const expirationTime = new Date();
-  expirationTime.setHours(expirationTime.getHours() + 8);
-  const paymentEmail = {
-    from: process.env.GOOGLE_EMAIL,
-    to: paymentData.customer.email,
-    subject: `FoodBundles Payment Request - ${paymentData.restaurantName}`,
-    html: `${(0, exports.sendPaymentNotificationTemplate)(paymentData)}`,
-  };
-  try {
-    await transporter.sendMail(paymentEmail);
-    console.log("Payment notification email sent successfully");
-  } catch (error) {
-    console.error("Failed to send payment notification email:", error);
-  }
+    if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+        console.log("Email credentials not configured");
+        return;
+    }
+    const config = {
+        service: "gmail",
+        auth: {
+            user: process.env.GOOGLE_EMAIL,
+            pass: process.env.GOOGLE_PASSWORD,
+        },
+        tls: {
+            rejectUnauthorized: false,
+        },
+    };
+    const transporter = nodemailer_1.default.createTransport(config);
+    const expirationTime = new Date();
+    expirationTime.setHours(expirationTime.getHours() + 8);
+    const paymentEmail = {
+        from: process.env.GOOGLE_EMAIL,
+        to: paymentData.customer.email,
+        subject: `FoodBundles Payment Request - ${paymentData.restaurantName}`,
+        html: `${(0, exports.sendPaymentNotificationTemplate)(paymentData)}`,
+    };
+    try {
+        await transporter.sendMail(paymentEmail);
+        console.log("Payment notification email sent successfully");
+    }
+    catch (error) {
+        console.error("Failed to send payment notification email:", error);
+    }
 }
 // Send payment confirmation email
 async function sendPaymentConfirmationEmail(paymentData) {
-  if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
-  }
-  const config = {
-    service: "gmail",
-    auth: {
-      user: process.env.GOOGLE_EMAIL,
-      pass: process.env.GOOGLE_PASSWORD,
-    },
-    tls: {
-      rejectUnauthorized: false,
-    },
-  };
-  const transporter = nodemailer_1.default.createTransport(config);
-  const confirmationEmail = {
-    from: process.env.GOOGLE_EMAIL,
-    to: paymentData.customer.email,
-    subject: `Payment Confirmed - FoodBundles Order #${paymentData.checkoutId}`,
-    html: `${(0, exports.sendPaymentConfirmationTemplate)(paymentData)}`,
-  };
-  try {
-    await transporter.sendMail(confirmationEmail);
-    console.log("Payment confirmation email sent successfully");
-  } catch (error) {
-    console.error("Failed to send payment confirmation email:", error);
-  }
+    if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+        console.log("Email credentials not configured");
+        return;
+    }
+    const config = {
+        service: "gmail",
+        auth: {
+            user: process.env.GOOGLE_EMAIL,
+            pass: process.env.GOOGLE_PASSWORD,
+        },
+        tls: {
+            rejectUnauthorized: false,
+        },
+    };
+    const transporter = nodemailer_1.default.createTransport(config);
+    const confirmationEmail = {
+        from: process.env.GOOGLE_EMAIL,
+        to: paymentData.customer.email,
+        subject: `Payment Confirmed - FoodBundles Order #${paymentData.checkoutId}`,
+        html: `${(0, exports.sendPaymentConfirmationTemplate)(paymentData)}`,
+    };
+    try {
+        await transporter.sendMail(confirmationEmail);
+        console.log("Payment confirmation email sent successfully");
+    }
+    catch (error) {
+        console.error("Failed to send payment confirmation email:", error);
+    }
 }
 /**
  * Send payment failed email
  */
 async function sendPaymentFailedEmail(paymentData) {
-  if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
-  }
-  const config = {
-    service: "gmail",
-    auth: {
-      user: process.env.GOOGLE_EMAIL,
-      pass: process.env.GOOGLE_PASSWORD,
-    },
-    tls: { rejectUnauthorized: false },
-  };
-  const transporter = nodemailer_1.default.createTransport(config);
-  const failedEmail = {
-    from: process.env.GOOGLE_EMAIL,
-    to: paymentData.customer.email,
-    subject: `Payment Failed - FoodBundles Order #${paymentData.checkoutId}`,
-    html: (0, exports.sendPaymentFailedTemplate)(paymentData),
-  };
-  try {
-    await transporter.sendMail(failedEmail);
-    console.log("Payment failed email sent successfully");
-  } catch (error) {
-    console.error("Failed to send payment failed email:", error);
-  }
+    if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+        console.log("Email credentials not configured");
+        return;
+    }
+    const config = {
+        service: "gmail",
+        auth: {
+            user: process.env.GOOGLE_EMAIL,
+            pass: process.env.GOOGLE_PASSWORD,
+        },
+        tls: { rejectUnauthorized: false },
+    };
+    const transporter = nodemailer_1.default.createTransport(config);
+    const failedEmail = {
+        from: process.env.GOOGLE_EMAIL,
+        to: paymentData.customer.email,
+        subject: `Payment Failed - FoodBundles Order #${paymentData.checkoutId}`,
+        html: (0, exports.sendPaymentFailedTemplate)(paymentData),
+    };
+    try {
+        await transporter.sendMail(failedEmail);
+        console.log("Payment failed email sent successfully");
+    }
+    catch (error) {
+        console.error("Failed to send payment failed email:", error);
+    }
 }
 // Send wallet notification email
 async function sendWalletNotificationEmail(data) {
-  if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
-  }
-  const config = {
-    service: "gmail",
-    auth: {
-      user: process.env.GOOGLE_EMAIL,
-      pass: process.env.GOOGLE_PASSWORD,
-    },
-    tls: {
-      rejectUnauthorized: false,
-    },
-  };
-  const transporter = nodemailer_1.default.createTransport(config);
-  const walletEmail = {
-    from: process.env.GOOGLE_EMAIL,
-    to: data.email,
-    subject: `Wallet ${data.type} - FoodBundles`,
-    html: (0, exports.sendWalletNotificationTemplate)(data),
-  };
-  try {
-    await transporter.sendMail(walletEmail);
-    console.log("Wallet notification email sent successfully");
-  } catch (error) {
-    console.error("Failed to send wallet notification email:", error);
-  }
+    if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+        console.log("Email credentials not configured");
+        return;
+    }
+    const config = {
+        service: "gmail",
+        auth: {
+            user: process.env.GOOGLE_EMAIL,
+            pass: process.env.GOOGLE_PASSWORD,
+        },
+        tls: {
+            rejectUnauthorized: false,
+        },
+    };
+    const transporter = nodemailer_1.default.createTransport(config);
+    const walletEmail = {
+        from: process.env.GOOGLE_EMAIL,
+        to: data.email,
+        subject: `Wallet ${data.type} - FoodBundles`,
+        html: (0, exports.sendWalletNotificationTemplate)(data),
+    };
+    try {
+        await transporter.sendMail(walletEmail);
+        console.log("Wallet notification email sent successfully");
+    }
+    catch (error) {
+        console.error("Failed to send wallet notification email:", error);
+    }
 }

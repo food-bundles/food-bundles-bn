@@ -8,6 +8,7 @@ import {
   sendPaymentNotificationEmail,
   cleanPhoneNumber,
   isValidRwandaPhone,
+  CheckoutItemData,
 } from "../utils/emailTemplates";
 import {
   BankTransferPaymentResult,
@@ -72,7 +73,11 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     include: {
       cartItems: {
         include: {
-          product: true,
+          product: {
+            include: {
+              category: true,
+            },
+          },
         },
       },
       restaurant: true,
@@ -109,6 +114,18 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     }
   }
 
+  // Create checkout items data from cart items
+  const checkoutItemsData: CheckoutItemData[] = cart.cartItems.map((item) => ({
+    productId: item.productId,
+    productName: item.product.productName,
+    quantity: item.quantity,
+    unitPrice: item.product.unitPrice,
+    subtotal: item.subtotal,
+    unit: item.product.unit,
+    images: item.product.images,
+    category: item.product.category?.name || undefined,
+  }));
+
   // Create new checkout
 
   // Generate transaction reference
@@ -117,28 +134,46 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     .toString(36)
     .substr(2, 9)}`;
 
-  // Create checkout
-  const checkout = await prisma.cHECKOUT.create({
-    data: {
-      cartId,
-      restaurantId,
-      totalAmount: cart.totalAmount,
-      paymentMethod,
-      billingName,
-      billingEmail,
-      billingPhone,
-      billingAddress,
-      notes,
-      deliveryDate,
-      paymentStatus: "PENDING",
-      txRef,
-      txOrderId,
-      currency,
-      clientIp,
-      deviceFingerprint,
-      narration: narration || `Payment for ${cart.restaurant.name} order`,
-    },
+  // Create checkout with items in transaction
+  const checkout = await prisma.$transaction(async (tx) => {
+    const newCheckout = await tx.cHECKOUT.create({
+      data: {
+        cartId,
+        restaurantId,
+        totalAmount: cart.totalAmount,
+        paymentMethod,
+        billingName,
+        billingEmail,
+        billingPhone,
+        billingAddress,
+        notes,
+        deliveryDate,
+        paymentStatus: "PENDING",
+        txRef,
+        txOrderId,
+        currency,
+        clientIp,
+        deviceFingerprint,
+        narration: narration || `Payment for ${cart.restaurant.name} order`,
+      },
+    });
+
+    // Create checkout items
+    await tx.checkoutItem.createMany({
+      data: checkoutItemsData.map((item) => ({
+        ...item,
+        checkoutId: newCheckout.id,
+      })),
+    });
+
+    return newCheckout;
+  });
+
+  // Include checkout items in the response
+  const checkoutWithItems = await prisma.cHECKOUT.findUnique({
+    where: { id: checkout.id },
     include: {
+      checkoutItems: true, // Include the stored items
       cart: {
         include: {
           cartItems: {
@@ -159,7 +194,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     },
   });
 
-  return checkout;
+  return checkoutWithItems;
 };
 
 /**
@@ -175,6 +210,7 @@ export const getCheckoutByIdService = async (
     return await prisma.cHECKOUT.findUnique({
       where: { id: checkoutId },
       include: {
+        checkoutItems: true,
         cart: {
           include: {
             cartItems: {
@@ -241,6 +277,7 @@ export const getRestaurantCheckoutsService = async (
       skip,
       take: limit,
       include: {
+        checkoutItems: true,
         cart: {
           include: {
             _count: {
@@ -300,6 +337,7 @@ export const getAllCheckoutsService = async ({
       skip,
       take: limit,
       include: {
+        checkoutItems: true,
         restaurant: {
           select: {
             id: true,
