@@ -13,7 +13,6 @@ import { PinManagementService } from "./pinManagement.service";
 import { ProfileManagementService } from "./profileManagement.service";
 import { SupportService } from "./support.service";
 import { comparePassword, hashPassword } from "../utils/password";
-import { ProductData } from "./productService";
 
 let ussdSessions: Record<string, ISessionData> = {};
 

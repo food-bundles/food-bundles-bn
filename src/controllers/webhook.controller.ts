@@ -75,7 +75,7 @@ async function processWalletTransaction(
     // Send notification
     try {
       await sendMessage(
-        `Payment completed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`,
+        `Dear ${walletTransaction.wallet.restaurant.name}, Payment completed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`,
         walletTransaction.wallet.restaurant.phone || ""
       );
     } catch (error) {
@@ -102,7 +102,7 @@ async function processWalletTransaction(
 
     try {
       await sendMessage(
-        `Payment failed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`,
+        `Dear ${walletTransaction.wallet.restaurant.name}, Payment failed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`,
         walletTransaction.wallet.restaurant.phone || ""
       );
     } catch (error) {
@@ -232,9 +232,11 @@ async function processCheckoutPayment(
     // Send notifications (these are not critical, so we don't retry them)
     try {
       await sendMessage(
-        `Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${
-          checkout.currency
-        }. Thank you!`,
+        `Dear ${
+          checkout.billingName || checkout.restaurant.name || ""
+        }, Payment completed: ${
+          checkout.chargedAmount || checkout.totalAmount
+        } ${checkout.currency}. Thank you!`,
         checkout.billingPhone || checkout.restaurant.phone || ""
       );
     } catch (smsError) {
@@ -300,7 +302,9 @@ async function processCheckoutPayment(
 
     try {
       await sendMessage(
-        `Payment failed: ${checkout.chargedAmount || checkout.totalAmount} ${
+        `Dear ${
+          checkout.billingName || checkout.restaurant.name || ""
+        }, Payment failed: ${checkout.chargedAmount || checkout.totalAmount} ${
           checkout.currency
         }. Please try again.`,
         checkout.billingPhone || checkout.restaurant.phone || ""
@@ -360,9 +364,11 @@ const handleChargeCompleted = async (data: any) => {
   try {
     console.log("Processing Flutterwave charge.completed webhook:", data);
 
-    const txRef = data.txRef || data.tx_ref;
-    const flwRef = data.flwRef || data.flw_ref;
-    const status = data.status;
+    const txRef =
+      data.tx_ref || data.txRef || data.data?.tx_ref || data.data?.txRef;
+    const flwRef =
+      data.flw_ref || data.flwRef || data.data?.flw_ref || data.data?.flwRef;
+    const status = data.status || data.data?.status;
     const eventType = data["event.type"] || data.event;
 
     if (!txRef) {

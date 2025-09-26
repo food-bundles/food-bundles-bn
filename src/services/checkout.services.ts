@@ -204,8 +204,6 @@ export const getCheckoutByIdService = async (
   checkoutId: string,
   restaurantId?: string
 ) => {
-  console.log("checkoutId", checkoutId, "restaurantId", restaurantId);
-
   const checkout = await retryDatabaseOperation(async () => {
     return await prisma.cHECKOUT.findUnique({
       where: { id: checkoutId },
@@ -232,8 +230,6 @@ export const getCheckoutByIdService = async (
       },
     });
   });
-
-  console.log("checkout by ID", checkout);
 
   if (!checkout) {
     throw new Error("Checkout not found");
@@ -490,7 +486,6 @@ export const processPaymentService = async (
   try {
     // Get checkout with retry logic
     checkout = await getCheckoutByIdService(checkoutId);
-    console.log("Processing payment for checkout:", checkout);
 
     if (checkout.paymentStatus === "COMPLETED") {
       throw new Error("Payment already completed");
@@ -937,11 +932,9 @@ async function processMobileMoneyPayment({
       );
     }
 
-    console.log(
-      `Processing mobile money payment: ${amount} ${currency} to ${cleanedPhoneNumber}`
-    );
+    console.log(`: ${amount} ${currency} to ${cleanedPhoneNumber}`);
 
-    // Primary: Try PayPack first
+    // Primary: Try PayPack firstProcessing mobile money payment
     try {
       const response = await paypack.cashin({
         number: cleanedPhoneNumber,

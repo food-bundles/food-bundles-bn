@@ -63,7 +63,7 @@ async function processWalletTransaction(txRef, flwRef, status, currency) {
         });
         // Send notification
         try {
-            await (0, sms_utility_1.sendMessage)(`Payment completed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`, walletTransaction.wallet.restaurant.phone || "");
+            await (0, sms_utility_1.sendMessage)(`Dear ${walletTransaction.wallet.restaurant.name}, Payment completed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`, walletTransaction.wallet.restaurant.phone || "");
         }
         catch (error) {
             console.error("Failed to send wallet notification:", error);
@@ -85,7 +85,7 @@ async function processWalletTransaction(txRef, flwRef, status, currency) {
             });
         });
         try {
-            await (0, sms_utility_1.sendMessage)(`Payment failed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`, walletTransaction.wallet.restaurant.phone || "");
+            await (0, sms_utility_1.sendMessage)(`Dear ${walletTransaction.wallet.restaurant.name}, Payment failed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`, walletTransaction.wallet.restaurant.phone || "");
         }
         catch (error) {
             console.error("Failed to send wallet failure notification:", error);
@@ -194,7 +194,7 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
         }
         // Send notifications (these are not critical, so we don't retry them)
         try {
-            await (0, sms_utility_1.sendMessage)(`Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${checkout.currency}. Thank you!`, checkout.billingPhone || checkout.restaurant.phone || "");
+            await (0, sms_utility_1.sendMessage)(`Dear ${checkout.billingName || checkout.restaurant.name || ""}, Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${checkout.currency}. Thank you!`, checkout.billingPhone || checkout.restaurant.phone || "");
         }
         catch (smsError) {
             console.error("Failed to send SMS notification:", smsError);
@@ -254,7 +254,7 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
             }
         }
         try {
-            await (0, sms_utility_1.sendMessage)(`Payment failed: ${checkout.chargedAmount || checkout.totalAmount} ${checkout.currency}. Please try again.`, checkout.billingPhone || checkout.restaurant.phone || "");
+            await (0, sms_utility_1.sendMessage)(`Dear ${checkout.billingName || checkout.restaurant.name || ""}, Payment failed: ${checkout.chargedAmount || checkout.totalAmount} ${checkout.currency}. Please try again.`, checkout.billingPhone || checkout.restaurant.phone || "");
         }
         catch (smsError) {
             console.error("Failed to send failure SMS notification:", smsError);
@@ -302,9 +302,9 @@ function detectPaymentProvider(body) {
 const handleChargeCompleted = async (data) => {
     try {
         console.log("Processing Flutterwave charge.completed webhook:", data);
-        const txRef = data.txRef || data.tx_ref;
-        const flwRef = data.flwRef || data.flw_ref;
-        const status = data.status;
+        const txRef = data.tx_ref || data.txRef || data.data?.tx_ref || data.data?.txRef;
+        const flwRef = data.flw_ref || data.flwRef || data.data?.flw_ref || data.data?.flwRef;
+        const status = data.status || data.data?.status;
         const eventType = data["event.type"] || data.event;
         if (!txRef) {
             console.error("No transaction reference found in Flutterwave webhook");

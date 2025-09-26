@@ -4,7 +4,7 @@ exports.retryDatabaseOperation = retryDatabaseOperation;
 /**
  * Retry function for database operations
  */
-async function retryDatabaseOperation(operation, maxRetries = 3, delay = 1000) {
+async function retryDatabaseOperation(operation, maxRetries = 5, delay = 1000) {
     let lastError;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {

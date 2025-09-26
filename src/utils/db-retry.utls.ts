@@ -3,7 +3,7 @@
  */
 export async function retryDatabaseOperation<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 3,
+  maxRetries: number = 5,
   delay: number = 1000
 ): Promise<T> {
   let lastError: any;
