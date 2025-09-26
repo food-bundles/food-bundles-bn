@@ -149,13 +149,10 @@ const sendPaymentNotificationTemplate = (data) => {
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <h1>🌱 FoodBundles Payment Request</h1>
-      </div>
       <div class="content">
         <p>Dear ${data.customer.name},</p>
         
-        <p>We have received your order from <strong>${data.restaurantName}</strong> and are processing your payment request.</p>
+        <p>We have received your order from <strong>Food Bundles Ltd</strong> and are processing your payment request.</p>
         
         <div class="products-list">
           <h2>🛒 Your Order</h2>
@@ -303,23 +300,14 @@ const sendPaymentConfirmationTemplate = (data) => {
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <h1>✅ Payment Successful!</h1>
-      </div>
       <div class="content">
-        <div class="success-badge">
-          🎉 Your payment has been confirmed!<br>
-          <small style="font-size: 14px; font-weight: normal;">Order #${data.checkoutId}</small>
-        </div>
         
         <p>Dear ${data.customer.name},</p>
         
-        <p>Thank you for your payment! Your order from <strong>${data.restaurantName}</strong> has been successfully processed and confirmed.</p>
+        <p>Thank you for your payment! Your order from <strong>Food Bundles Ltd</strong> has been successfully processed and confirmed.</p>
         
         <div class="order-details">
           <h2>📋 Order Summary</h2>
-          <p><span class="highlight">Order ID:</span> ${data.checkoutId}</p>
-          <p><span class="highlight">Transaction ID:</span> ${data.transactionId}</p>
           <p><span class="highlight">Amount Paid:</span> <strong>${data.amount.toLocaleString()} RWF</strong></p>
           ${data.deliveryDate
         ? `<p><span class="highlight">Delivery Date:</span> ${data.deliveryDate.toLocaleDateString("en-RW", {
@@ -359,12 +347,11 @@ const sendPaymentConfirmationTemplate = (data) => {
           <ul style="margin: 10px 0; padding-left: 20px;">
             <li>Email: sales@food.rw</li>
             <li>Phone: +250 796 897 823</li>
-            <li>Reference your Order ID: <strong>${data.checkoutId}</strong></li>
           </ul>
         </div>
 
         <p style="text-align: center; font-size: 16px; color: #16a34a; font-weight: bold;">
-          Thank you for supporting sustainable agriculture in Rwanda! 🇷🇼
+          Thank you for working with us! 🇷🇼
         </p>
       </div>
       <div class="footer">
@@ -403,20 +390,13 @@ const sendPaymentFailedTemplate = (data) => {
   </head>
   <body>
     <div class="container">
-      <div class="header"><h1>❌ Payment Failed</h1></div>
       <div class="content">
-        <div class="failure-badge">
-          Unfortunately, your payment could not be processed.<br>
-          <small style="font-size: 14px; font-weight: normal;">Order #${data.checkoutId}</small>
-        </div>
 
         <p>Dear ${data.customer.name},</p>
-        <p>We attempted to process your payment for your order from <strong>${data.restaurantName}</strong>, but it was not successful.</p>
+        <p>We attempted to process your payment for your order from <strong>Food Bundles Ltd</strong>, but it was not successful.</p>
 
         <div class="order-details">
           <h2>📋 Payment Details</h2>
-          <p><span class="highlight">Order ID:</span> ${data.checkoutId}</p>
-          <p><span class="highlight">Transaction ID:</span> ${data.transactionId}</p>
           <p><span class="highlight">Amount:</span> ${data.amount.toLocaleString()} RWF</p>
           ${data.failureReason
         ? `<p><span class="highlight">Reason:</span> ${data.failureReason}</p>`
@@ -442,7 +422,6 @@ const sendPaymentFailedTemplate = (data) => {
           <ul>
             <li>Email: sales@food.rw</li>
             <li>Phone: +250 796 897 823</li>
-            <li>Reference Order ID: <strong>${data.checkoutId}</strong></li>
           </ul>
         </div>
 
@@ -541,7 +520,7 @@ const generateOrderStatusTemplate = (data) => {
         
         <p>Dear ${data.customer.name},</p>
         
-        <p>Your order from <strong>${data.restaurantName}</strong> has been updated.</p>
+        <p>Your order from <strong>Food Bundles Ltd</strong> has been updated.</p>
         
         <div class="order-info">
           <p><strong>Order Number:</strong> ${data.orderNumber}</p>
@@ -650,7 +629,7 @@ async function sendPaymentNotificationEmail(paymentData) {
     const expirationTime = new Date();
     expirationTime.setHours(expirationTime.getHours() + 8);
     const paymentEmail = {
-        from: process.env.GOOGLE_EMAIL,
+        from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
         to: paymentData.customer.email,
         subject: `FoodBundles Payment Request - ${paymentData.restaurantName}`,
         html: `${(0, exports.sendPaymentNotificationTemplate)(paymentData)}`,
@@ -681,7 +660,7 @@ async function sendPaymentConfirmationEmail(paymentData) {
     };
     const transporter = nodemailer_1.default.createTransport(config);
     const confirmationEmail = {
-        from: process.env.GOOGLE_EMAIL,
+        from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
         to: paymentData.customer.email,
         subject: `Payment Confirmed - FoodBundles Order #${paymentData.checkoutId}`,
         html: `${(0, exports.sendPaymentConfirmationTemplate)(paymentData)}`,
@@ -712,7 +691,7 @@ async function sendPaymentFailedEmail(paymentData) {
     };
     const transporter = nodemailer_1.default.createTransport(config);
     const failedEmail = {
-        from: process.env.GOOGLE_EMAIL,
+        from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
         to: paymentData.customer.email,
         subject: `Payment Failed - FoodBundles Order #${paymentData.checkoutId}`,
         html: (0, exports.sendPaymentFailedTemplate)(paymentData),
@@ -743,7 +722,7 @@ async function sendWalletNotificationEmail(data) {
     };
     const transporter = nodemailer_1.default.createTransport(config);
     const walletEmail = {
-        from: process.env.GOOGLE_EMAIL,
+        from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
         to: data.email,
         subject: `Wallet ${data.type} - FoodBundles`,
         html: (0, exports.sendWalletNotificationTemplate)(data),

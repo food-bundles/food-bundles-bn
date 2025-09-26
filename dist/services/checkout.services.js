@@ -144,7 +144,6 @@ exports.createCheckoutService = createCheckoutService;
  * Enhanced service to get checkout by ID
  */
 const getCheckoutByIdService = async (checkoutId, restaurantId) => {
-    console.log("checkoutId", checkoutId, "restaurantId", restaurantId);
     const checkout = await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
         return await prisma_1.default.cHECKOUT.findUnique({
             where: { id: checkoutId },
@@ -171,7 +170,6 @@ const getCheckoutByIdService = async (checkoutId, restaurantId) => {
             },
         });
     });
-    console.log("checkout by ID", checkout);
     if (!checkout) {
         throw new Error("Checkout not found");
     }
@@ -361,7 +359,6 @@ const processPaymentService = async (checkoutId, paymentData) => {
     try {
         // Get checkout with retry logic
         checkout = await (0, exports.getCheckoutByIdService)(checkoutId);
-        console.log("Processing payment for checkout:", checkout);
         if (checkout.paymentStatus === "COMPLETED") {
             throw new Error("Payment already completed");
         }
@@ -753,8 +750,8 @@ async function processMobileMoneyPayment({ amount, phoneNumber, txRef, orderId, 
         if (!(0, emailTemplates_1.isValidRwandaPhone)(cleanedPhoneNumber)) {
             throw new Error("Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX");
         }
-        console.log(`Processing mobile money payment: ${amount} ${currency} to ${cleanedPhoneNumber}`);
-        // Primary: Try PayPack first
+        console.log(`: ${amount} ${currency} to ${cleanedPhoneNumber}`);
+        // Primary: Try PayPack firstProcessing mobile money payment
         try {
             const response = await paypack.cashin({
                 number: cleanedPhoneNumber,
