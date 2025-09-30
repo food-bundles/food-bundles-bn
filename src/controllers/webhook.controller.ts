@@ -213,9 +213,9 @@ async function processCheckoutPayment(
       await sendMessage(
         `Dear ${
           orderData.billingName || orderData.restaurant.name || ""
-        }, Payment completed: ${
-          orderData.chargedAmount || orderData.totalAmount
-        } ${orderData.currency}. Thank you!`,
+        }, Payment completed: ${orderData.totalAmount} ${
+          orderData.currency
+        }. Thank you!`,
         orderData.billingPhone || orderData.restaurant.phone || ""
       );
     } catch (smsError) {
@@ -224,7 +224,7 @@ async function processCheckoutPayment(
 
     try {
       await sendPaymentConfirmationEmail({
-        amount: orderData.chargedAmount || orderData.totalAmount,
+        amount: orderData.totalAmount,
         transactionId: data?.id?.toString() || flwRef,
         restaurantName: orderData.restaurant.name,
         products: orderData.orderItems.map((item) => ({
@@ -250,7 +250,6 @@ async function processCheckoutPayment(
         data: {
           paymentStatus: "FAILED",
           flwStatus: "failed",
-          flwMessage: `Payment failed via ${paymentProvider.toLowerCase()} webhook`,
           transactionId: data?.id?.toString() || flwRef,
           flwRef: flwRef,
           updatedAt: new Date(),
@@ -278,9 +277,9 @@ async function processCheckoutPayment(
       await sendMessage(
         `Dear ${
           orderData.billingName || orderData.restaurant.name || ""
-        }, Payment failed: ${
-          orderData.chargedAmount || orderData.totalAmount
-        } ${orderData.currency}. Please try again.`,
+        }, Payment failed: ${orderData.totalAmount} ${
+          orderData.currency
+        }. Please try again.`,
         orderData.billingPhone || orderData.restaurant.phone || ""
       );
     } catch (smsError) {
@@ -289,7 +288,7 @@ async function processCheckoutPayment(
 
     try {
       await sendPaymentFailedEmail({
-        amount: orderData.chargedAmount || orderData.totalAmount,
+        amount: orderData.totalAmount,
         transactionId: data?.id?.toString() || flwRef,
         restaurantName: orderData.restaurant.name,
         products: orderData.orderItems.map((item) => ({

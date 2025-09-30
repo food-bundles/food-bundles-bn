@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getOrderByNumber = exports.getOrderStatistics = exports.deleteOrder = exports.cancelOrder = exports.updateOrder = exports.getMyOrders = exports.getAllOrders = exports.getOrderById = exports.createDirectOrder = exports.createOrderFromCart = void 0;
+exports.getOrderByNumber = exports.getOrderStatistics = exports.deleteOrder = exports.reOrderFromExistingOrder = exports.cancelOrder = exports.updateOrder = exports.getMyOrders = exports.getAllOrders = exports.getOrderById = exports.createDirectOrder = exports.createOrderFromCart = void 0;
 const order_services_1 = require("../services/order.services");
 const client_1 = require("@prisma/client");
 const prisma_1 = __importDefault(require("../prisma"));
@@ -303,6 +303,89 @@ const cancelOrder = async (req, res) => {
     }
 };
 exports.cancelOrder = cancelOrder;
+/**
+ * Controller to re-order from an existing order
+ * @route POST /orders/:orderId/reorder
+ * @access Restaurant (own orders) or Admin (any order)
+ */
+const reOrderFromExistingOrder = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const restaurantId = req.user.id;
+        const paymentResult = await (0, order_services_1.reOrderFromExistingOrderService)(orderId, restaurantId);
+        if (paymentResult.success) {
+            // Handle different response types based on payment method
+            if (paymentResult.redirectUrl) {
+                // For payments requiring redirect (3DS, authorization pages)
+                res.status(200).json({
+                    message: "Payment initiated - redirect required",
+                    data: {
+                        checkout: paymentResult.checkout,
+                        transactionId: paymentResult.transactionId,
+                        redirectUrl: paymentResult.redirectUrl,
+                        status: paymentResult.status,
+                        requiresRedirect: true,
+                    },
+                });
+            }
+            else if (paymentResult.transferDetails) {
+                // For bank transfers with account details
+                res.status(200).json({
+                    message: "Bank transfer initiated",
+                    data: {
+                        checkout: paymentResult.checkout,
+                        transactionId: paymentResult.transactionId,
+                        transferDetails: paymentResult.transferDetails,
+                        status: paymentResult.status,
+                        message: "Please transfer funds to the provided account details",
+                    },
+                });
+            }
+            else {
+                // For completed payments or pending mobile money
+                res.status(200).json({
+                    message: paymentResult.message || "Payment processed successfully",
+                    data: {
+                        checkout: paymentResult.checkout,
+                        transactionId: paymentResult.transactionId,
+                        status: paymentResult.status,
+                    },
+                });
+            }
+        }
+        else {
+            res.status(400).json({
+                message: paymentResult.error || "Payment failed",
+                error: paymentResult.error,
+            });
+        }
+    }
+    catch (error) {
+        console.error("Error in reorderFromExistingOrder:", error);
+        if (error.message.includes("not found") ||
+            error.message.includes("no items")) {
+            return res.status(404).json({
+                message: error.message,
+            });
+        }
+        if (error.message.includes("Unauthorized")) {
+            return res.status(403).json({
+                message: error.message,
+            });
+        }
+        if (error.message.includes("available") ||
+            error.message.includes("stock")) {
+            return res.status(400).json({
+                message: error.message,
+            });
+        }
+        return res.status(500).json({
+            message: "Failed to re-order",
+            error: error.message,
+        });
+    }
+};
+exports.reOrderFromExistingOrder = reOrderFromExistingOrder;
 /**
  * Controller to delete order (Admin only)
  * DELETE /orders/:orderId

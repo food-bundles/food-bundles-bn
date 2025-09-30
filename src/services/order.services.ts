@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import { ProductData } from "./productService";
+import { processPaymentService } from "./checkout.services";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -8,12 +9,20 @@ interface CreateOrderFromCartData {
   restaurantId: string;
   status: OrderStatus;
   notes?: string;
+  clientIp?: string;
   requestedDelivery?: Date;
   paymentMethod?: PaymentMethod;
   billingName?: string;
   billingEmail?: string;
   billingPhone?: string;
   billingAddress?: string;
+  cardDetails?: {
+    cardNumber: string;
+    cvv: string;
+    expiryMonth: string;
+    expiryYear: string;
+    pin?: string;
+  };
 }
 
 interface CreateDirectOrderData {
@@ -73,12 +82,14 @@ export const createOrderFromCartService = async (
     cartId,
     restaurantId,
     notes,
+    clientIp,
     requestedDelivery,
     paymentMethod,
     billingName,
     billingEmail,
     billingPhone,
     billingAddress,
+    cardDetails,
   } = data;
 
   // Get cart and validate
@@ -183,10 +194,16 @@ export const createOrderFromCartService = async (
           paymentStatus: "PENDING",
           notes: notes,
           requestedDelivery: requestedDelivery,
-          billingName,
-          billingEmail,
-          billingPhone,
-          billingAddress,
+          billingName: billingName || cart.restaurant.name,
+          billingEmail: billingEmail || cart.restaurant.email,
+          billingPhone: billingPhone || cart.restaurant.phone,
+          billingAddress: billingAddress || cart.restaurant.location,
+          cardNumber: cardDetails?.cardNumber,
+          cardCVV: cardDetails?.cvv,
+          cardExpiryMonth: cardDetails?.expiryMonth,
+          cardExpiryYear: cardDetails?.expiryYear,
+          cardPIN: cardDetails?.pin,
+          clientIp,
           txRef,
           txOrderId,
           currency: "RWF",
@@ -421,6 +438,8 @@ export const getOrderByIdService = async (
     },
   });
 
+  console.log("Fetched order:", order);
+
   if (!order) {
     throw new Error("Order not found");
   }
@@ -487,7 +506,6 @@ export const getAllOrdersService = async ({
                 productName: true,
                 unitPrice: true,
                 unit: true,
-                category: true,
               },
             },
           },
@@ -613,6 +631,322 @@ export const cancelOrderService = async (
   });
 
   return { message: "Order cancelled successfully" };
+};
+
+/**
+ * Service to re-order from an existing order
+ * Creates a new checkout from any existing order (successful or failed)
+ */
+export const reOrderFromExistingOrderService = async (
+  orderId: string,
+  restaurantId: string
+) => {
+  console.log(
+    "Re-ordering from order ID:",
+    orderId,
+    "for restaurant ID:",
+    restaurantId
+  );
+  // Get the existing order
+  const existingOrder = await getOrderByIdService(orderId, restaurantId);
+
+  console.log("Existing order:", existingOrder);
+
+  if (!existingOrder) {
+    throw new Error("Order not found");
+  }
+
+  // Verify the order belongs to the restaurant (unless admin)
+  if (existingOrder.restaurantId !== restaurantId) {
+    throw new Error("Unauthorized: Order does not belong to this restaurant");
+  }
+
+  // Check if order has items
+  if (!existingOrder.orderItems || existingOrder.orderItems.length === 0) {
+    throw new Error("Order has no items to re-order");
+  }
+
+  // Validate restaurant exists
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+  });
+
+  if (!restaurant) {
+    throw new Error("Restaurant not found");
+  }
+
+  // Find or create active cart for the restaurant
+  let cart = await prisma.cart.findFirst({
+    where: {
+      restaurantId,
+      status: "ACTIVE",
+    },
+  });
+
+  if (!cart) {
+    // Create new cart if none exists
+    cart = await prisma.cart.create({
+      data: {
+        restaurantId,
+        status: "ACTIVE",
+      },
+    });
+  }
+
+  // Validate products availability and prepare cart items
+  const validatedItems: Array<{
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+    subtotal: number;
+    product: any;
+  }> = [];
+
+  let totalAmount = 0;
+  const unavailableProducts: string[] = [];
+  const insufficientStockProducts: Array<{
+    name: string;
+    available: number;
+    required: number;
+  }> = [];
+
+  for (const orderItem of existingOrder.orderItems) {
+    // Skip if no productId
+    if (!orderItem.productId) {
+      unavailableProducts.push(orderItem.productName);
+      continue;
+    }
+
+    // Check if product still exists and is active
+    const product = await prisma.product.findUnique({
+      where: { id: orderItem.productId },
+      include: {
+        category: true,
+      },
+    });
+
+    if (!product) {
+      unavailableProducts.push(orderItem.productName);
+      continue;
+    }
+
+    if (product.status !== "ACTIVE") {
+      unavailableProducts.push(orderItem.productName);
+      continue;
+    }
+
+    // Check if product has sufficient quantity
+    if (product.quantity < orderItem.quantity) {
+      insufficientStockProducts.push({
+        name: product.productName,
+        available: product.quantity,
+        required: orderItem.quantity,
+      });
+      continue;
+    }
+
+    const subtotal = orderItem.quantity * product.unitPrice;
+    totalAmount += subtotal;
+
+    validatedItems.push({
+      productId: orderItem.productId,
+      quantity: orderItem.quantity,
+      unitPrice: product.unitPrice,
+      subtotal,
+      product,
+    });
+  }
+
+  // Check if we have any valid items
+  if (validatedItems.length === 0) {
+    throw new Error(
+      "None of the products from this order are currently available"
+    );
+  }
+
+  // Provide warnings about unavailable items
+  const warnings: string[] = [];
+  if (unavailableProducts.length > 0) {
+    warnings.push(
+      `The following products are no longer available: ${unavailableProducts.join(
+        ", "
+      )}`
+    );
+  }
+  if (insufficientStockProducts.length > 0) {
+    const stockWarnings = insufficientStockProducts.map(
+      (p) => `${p.name} (Available: ${p.available}, Required: ${p.required})`
+    );
+    warnings.push(`Insufficient stock for: ${stockWarnings.join(", ")}`);
+  }
+
+  // Add items to cart using transaction
+  const cartItems = await prisma.$transaction(async (tx) => {
+    const items = [];
+
+    for (const item of validatedItems) {
+      // Check if item already exists in cart
+      const existingCartItem = await tx.cartItem.findUnique({
+        where: {
+          cartId_productId: {
+            cartId: cart!.id,
+            productId: item.productId,
+          },
+        },
+      });
+
+      if (existingCartItem) {
+        // Update existing cart item
+        const newQuantity = existingCartItem.quantity + item.quantity;
+
+        // Check total quantity doesn't exceed available stock
+        if (item.product.quantity < newQuantity) {
+          throw new Error(
+            `Insufficient stock for total quantity of ${item.product.productName}. Available: ${item.product.quantity}`
+          );
+        }
+
+        const updatedItem = await tx.cartItem.update({
+          where: { id: existingCartItem.id },
+          data: {
+            quantity: newQuantity,
+            subtotal: newQuantity * item.unitPrice,
+          },
+          include: {
+            product: {
+              select: {
+                id: true,
+                productName: true,
+                unitPrice: true,
+                images: true,
+                unit: true,
+                category: true,
+              },
+            },
+          },
+        });
+        items.push(updatedItem);
+      } else {
+        // Create new cart item
+        const newItem = await tx.cartItem.create({
+          data: {
+            cartId: cart!.id,
+            productId: item.productId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            subtotal: item.subtotal,
+          },
+          include: {
+            product: {
+              select: {
+                id: true,
+                productName: true,
+                unitPrice: true,
+                images: true,
+                unit: true,
+                category: true,
+              },
+            },
+          },
+        });
+        items.push(newItem);
+      }
+    }
+
+    // Update cart total amount
+    const cartItemsTotal = await tx.cartItem.aggregate({
+      where: { cartId: cart!.id },
+      _sum: {
+        subtotal: true,
+      },
+    });
+
+    const cartTotalAmount = cartItemsTotal._sum.subtotal || 0;
+
+    await tx.cart.update({
+      where: { id: cart!.id },
+      data: { totalAmount: cartTotalAmount },
+    });
+
+    return items;
+  });
+
+  // Get updated cart with all details
+  const updatedCart = await prisma.cart.findUnique({
+    where: { id: cart.id },
+    include: {
+      cartItems: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              productName: true,
+              unitPrice: true,
+              images: true,
+              unit: true,
+              category: true,
+              status: true,
+              quantity: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+      restaurant: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  const orderData = {
+    cartId: cart.id,
+    restaurantId: restaurantId,
+    status: OrderStatus.PENDING,
+    notes: existingOrder.notes!,
+    requestedDelivery: existingOrder.requestedDelivery!,
+    paymentMethod: existingOrder.paymentMethod!,
+    billingName: existingOrder.billingName!,
+    billingEmail: existingOrder.billingEmail!,
+    billingPhone: existingOrder.billingPhone!,
+    billingAddress: existingOrder.billingAddress!,
+    cardDetails: {
+      cardNumber: existingOrder.cardNumber || "",
+      cvv: existingOrder.cardCVV || "",
+      expiryMonth: existingOrder.cardExpiryMonth || "",
+      expiryYear: existingOrder.cardExpiryYear || "",
+      pin: existingOrder.cardPIN || "",
+    },
+    clientIp: existingOrder.clientIp || "",
+  };
+
+  const orderCreated = await createOrderFromCartService(orderData);
+
+  // Process immediate payment
+  const paymentResult = await processPaymentService(orderCreated.id!, {
+    paymentMethod: existingOrder.paymentMethod!,
+    phoneNumber: existingOrder.billingPhone!,
+    cardDetails: {
+      cardNumber: existingOrder.cardNumber || "",
+      cvv: existingOrder.cardCVV || "",
+      expiryMonth: existingOrder.cardExpiryMonth || "",
+      expiryYear: existingOrder.cardExpiryYear || "",
+      pin: existingOrder.cardPIN || "",
+    },
+    bankDetails: {
+      clientIp: existingOrder.clientIp || "",
+    },
+    processDirectly: true,
+  });
+
+  console.log("Payment Result:", paymentResult);
+
+  return paymentResult;
 };
 
 /**

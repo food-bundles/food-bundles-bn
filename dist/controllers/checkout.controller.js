@@ -10,7 +10,7 @@ const order_services_1 = require("../services/order.services");
  */
 const createCheckout = async (req, res) => {
     try {
-        const { cartId, paymentMethod, billingName, billingEmail, billingPhone, billingAddress, notes, deliveryDate, clientIp, deviceFingerprint, narration, currency, cardDetails, bankDetails, } = req.body;
+        const { cartId, paymentMethod, billingName, billingEmail, billingPhone, billingAddress, notes, deliveryDate, deviceFingerprint, narration, currency, cardDetails, bankDetails, } = req.body;
         const restaurantId = req.user.id;
         // Validate required fields
         if (!cartId || !paymentMethod) {
@@ -54,7 +54,7 @@ const createCheckout = async (req, res) => {
             billingAddress,
             notes,
             deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
-            clientIp: clientIp || req.ip,
+            clientIp: req.ip,
             deviceFingerprint,
             narration,
             currency,

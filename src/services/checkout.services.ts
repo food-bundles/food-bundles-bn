@@ -90,6 +90,14 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     billingEmail: data.billingEmail,
     billingPhone: data.billingPhone,
     billingAddress: data.billingAddress,
+    cardDetails: {
+      cardNumber: data.cardDetails?.cardNumber || "",
+      cvv: data.cardDetails?.cvv || "",
+      expiryMonth: data.cardDetails?.expiryMonth || "",
+      expiryYear: data.cardDetails?.expiryYear || "",
+      pin: data.cardDetails?.pin || "",
+    },
+    clientIp: data.clientIp || "",
   };
 
   const orderCreated = await createOrderFromCartService(orderData);
@@ -228,8 +236,7 @@ export const processPaymentService = async (
           email: order.billingEmail || order.restaurant.email,
           phoneNumber: paymentData.phoneNumber || order.billingPhone || "",
           currency: order.currency || "RWF",
-          clientIp:
-            paymentData.bankDetails?.clientIp || order.clientIp || "127.0.0.1",
+          clientIp: paymentData.bankDetails?.clientIp || order.clientIp || "",
           deviceFingerprint: order.deviceFingerprint || "62wd23423rq324323qew1",
           narration: order.narration || "Order payment",
         });
@@ -584,7 +591,6 @@ async function processMobileMoneyPayment({
             txRef: response.data.ref || txRef,
             flwRef: response.data.ref || txRef,
             network: response.data.provider,
-            flwMessage: "PayPack payment initiated",
             paymentType: "PAYPACK_MOBILE_MONEY",
             paymentProvider: "PAYPACK",
           },
@@ -840,7 +846,7 @@ async function processBankTransfer({
   email,
   phoneNumber,
   currency = "RWF",
-  clientIp = "127.0.0.1",
+  clientIp,
   deviceFingerprint = "62wd23423rq324323qew1",
   narration = "Order payment",
 }: {

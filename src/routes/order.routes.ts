@@ -10,6 +10,7 @@ import {
   deleteOrder,
   getOrderStatistics,
   getOrderByNumber,
+  reOrderFromExistingOrder,
 } from "../controllers/order.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -89,6 +90,17 @@ orderRoutes.post("/:orderId/cancel", isAuthenticated, cancelOrder);
  * Access: Restaurant (own orders) or Admin (any order)
  */
 orderRoutes.patch("/:orderId", isAuthenticated, updateOrder);
+
+/**
+ * Re-order from an existing order
+ * POST /orders/:orderId/reorder
+ * Access: Restaurant (own orders) or Admin (any order)
+ */
+orderRoutes.post(
+  "/:orderId/reorder",
+  isAuthenticated,
+  reOrderFromExistingOrder
+);
 
 /**
  * Get order by ID with complete details
