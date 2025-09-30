@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  createOrderFromCheckout,
+  createOrderFromCart,
   createDirectOrder,
   getOrderById,
   getAllOrders,
@@ -31,15 +31,15 @@ orderRoutes.get("/statistics", isAuthenticated, getOrderStatistics);
 // ========================================
 
 /**
- * Create order from completed checkout
- * POST /orders/from-checkout
+ * Create order from cart
+ * POST /orders/from-cart
  * Access: Restaurant only
  */
 orderRoutes.post(
-  "/from-checkout",
+  "/from-cart",
   isAuthenticated,
   checkPermission("RESTAURANT"),
-  createOrderFromCheckout
+  createOrderFromCart
 );
 
 /**

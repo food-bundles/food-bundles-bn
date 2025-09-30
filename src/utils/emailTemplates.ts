@@ -15,7 +15,7 @@ export interface PaymentNotificationData {
     email: string;
   };
   paymentMethod: string;
-  checkoutId: string;
+  orderId: string;
   walletDetails?: {
     previousBalance: number;
     newBalance: number;
@@ -32,7 +32,7 @@ export interface PaymentConfirmationData {
     name: string;
     email: string;
   };
-  checkoutId: string;
+  orderId: string;
   deliveryDate?: Date;
 }
 
@@ -241,7 +241,7 @@ export const sendPaymentNotificationTemplate = (
 
         <div class="payment-details">
           <h2>💳 Payment Information</h2>
-          <p><span class="highlight">Order ID:</span> ${data.checkoutId}</p>
+          <p><span class="highlight">Order ID:</span> ${data.orderId}</p>
           <p><span class="highlight">Phone Number:</span> ${
             data.phoneNumber
           }</p>
@@ -461,7 +461,7 @@ export const sendPaymentFailedTemplate = (data: {
     name: string;
     email: string;
   };
-  checkoutId: string;
+  orderId: string;
   failureReason?: string;
 }): string => {
   return `<!DOCTYPE html>
@@ -743,7 +743,7 @@ export async function sendPaymentNotificationEmail(paymentData: {
     email: string;
   };
   paymentMethod: string;
-  checkoutId: string;
+  orderId: string;
   walletDetails?: {
     previousBalance: number;
     newBalance: number;
@@ -797,7 +797,7 @@ export async function sendPaymentConfirmationEmail(paymentData: {
     name: string;
     email: string;
   };
-  checkoutId: string;
+  orderId: string;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
     console.log("Email credentials not configured");
@@ -820,7 +820,7 @@ export async function sendPaymentConfirmationEmail(paymentData: {
   const confirmationEmail = {
     from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
     to: paymentData.customer.email,
-    subject: `Payment Confirmed - FoodBundles Order #${paymentData.checkoutId}`,
+    subject: `Payment Confirmed - FoodBundles Order #${paymentData.orderId}`,
     html: `${sendPaymentConfirmationTemplate(paymentData)}`,
   };
 
@@ -844,7 +844,7 @@ export async function sendPaymentFailedEmail(paymentData: {
     name: string;
     email: string;
   };
-  checkoutId: string;
+  orderId: string;
   failureReason?: string;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
@@ -867,7 +867,7 @@ export async function sendPaymentFailedEmail(paymentData: {
     from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
 
     to: paymentData.customer.email,
-    subject: `Payment Failed - FoodBundles Order #${paymentData.checkoutId}`,
+    subject: `Payment Failed - FoodBundles Order #${paymentData.orderId}`,
     html: sendPaymentFailedTemplate(paymentData),
   };
 

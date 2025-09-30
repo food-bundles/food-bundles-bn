@@ -10,7 +10,7 @@ components:
         id:
           type: string
           description: Unique order identifier
-        checkoutId:
+        orderId:
           type: string
           nullable: true
           description: Associated checkout ID (if created from checkout)
@@ -153,9 +153,9 @@ components:
     CreateOrderFromCheckoutRequest:
       type: object
       required:
-        - checkoutId
+        - orderId
       properties:
-        checkoutId:
+        orderId:
           type: string
           description: ID of the completed checkout to convert to order
         notes:
@@ -329,7 +329,7 @@ components:
           type: string
 
 paths:
-  /orders/from-checkout:
+  /orders/from-cart:
     post:
       tags:
         - Order Management API

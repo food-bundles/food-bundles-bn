@@ -5,23 +5,6 @@ import {
   WalletTransactionType,
 } from "@prisma/client";
 
-// Enhanced interface for creating a checkout
-export interface CreateCheckoutData {
-  cartId: string;
-  restaurantId: string;
-  paymentMethod: PaymentMethod;
-  billingName?: string;
-  billingEmail?: string;
-  billingPhone?: string;
-  billingAddress?: string;
-  notes?: string;
-  deliveryDate?: Date;
-  clientIp?: string;
-  deviceFingerprint?: string;
-  narration?: string;
-  currency?: string;
-}
-
 // Enhanced interface for updating checkout
 export interface UpdateCheckoutData {
   paymentMethod?: PaymentMethod;
@@ -187,7 +170,7 @@ export interface DebitWalletData {
   amount: number;
   description?: string;
   reference?: string;
-  checkoutId?: string;
+  orderId?: string;
 }
 
 export interface WalletTransactionFilters {

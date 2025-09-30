@@ -68,11 +68,10 @@ model Restaurant {
   updatedAt DateTime @updatedAt
 
   // Relations
-  orders    Order[]
-  posSales  POSSale[]
-  Cart      Cart[]
-  checkouts CHECKOUT[] // Restaurant can have multiple checkouts
-  Wallet    Wallet?
+  orders   Order[]
+  posSales POSSale[]
+  Cart     Cart[]
+  Wallet   Wallet?
 }
 
 model FarmerSubmission {
@@ -307,7 +306,6 @@ model Product {
   CartItem          CartItem[]
   category          ProductCategory     @relation(fields: [categoryId], references: [id])
   FarmerPrimaryCrop FarmerPrimaryCrop[]
-  CheckoutItem      CheckoutItem[]
 }
 
 model ProductCategory {
@@ -340,7 +338,7 @@ model Cart {
   // Relations
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   cartItems  CartItem[] // One cart can have many cart items
-  checkouts  CHECKOUT[] @relation("CartToCheckout")
+  orders     Order[] // Cart can have multiple orders created from it
 
   // Indexes for better performance
   @@index([restaurantId])
@@ -368,17 +366,19 @@ model CartItem {
   @@index([productId])
 }
 
-// Enhanced CHECKOUT schema model with fields
-model CHECKOUT {
-  id              String        @id @default(uuid())
-  cartId          String
-  restaurantId    String
-  totalAmount     Float
-  paymentMethod   PaymentMethod
-  paymentStatus   PaymentStatus @default(PENDING)
-  paymentProvider String?       @default("FLUTTERWAVE")
+// ORDER model 
+model Order {
+  id           String      @id @default(uuid())
+  restaurantId String
+  logisticsId  String?
+  orderNumber  String      @unique
+  status       OrderStatus @default(PENDING)
+  totalAmount  Float
 
-  // Billing information
+  // Cart reference 
+  cartId String?
+
+  // Billing information 
   billingName    String?
   billingEmail   String?
   billingPhone   String?
@@ -392,7 +392,19 @@ model CHECKOUT {
   deliveryVillage  String?
   deliveryLocation String?
 
-  // Enhanced Payment Fields
+  // Order notes and dates
+  notes             String?
+  requestedDelivery DateTime?
+  estimatedDelivery DateTime?
+  actualDelivery    DateTime?
+
+  // Payment information
+  paymentMethod    PaymentMethod?
+  paymentStatus    PaymentStatus  @default(PENDING)
+  paymentReference String?
+  paymentProvider  String?        @default("FLUTTERWAVE")
+
+  // Enhanced Payment Fields 
   txRef             String? @unique
   flwRef            String?
   txOrderId         String?
@@ -414,7 +426,7 @@ model CHECKOUT {
   voucher     String? // Voucher code
   paymentCode String? // Payment code for USSD
 
-  // Card payment specific fields - UPDATED SECTION
+  // Card payment specific fields
   cardFirst6Digits String? // First 6 digits of card
   cardLast4Digits  String? // Last 4 digits of card
   cardType         String? // MASTERCARD, VISA, etc.
@@ -431,10 +443,9 @@ model CHECKOUT {
 
   // Transaction status and references
   transactionId     String?
-  paymentReference  String?
   processorResponse String?
 
-  // Response fields - ENHANCED
+  // Response fields
   flwStatus     String?
   flwMessage    String?
   chargedAmount Float?
@@ -454,22 +465,20 @@ model CHECKOUT {
   customerEmail String?
   customerPhone String?
 
-  notes        String?
-  deliveryDate DateTime?
-
+  // Timestamps
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   paidAt    DateTime?
 
-  cart       Cart       @relation("CartToCheckout", fields: [cartId], references: [id])
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
-
-  // Owning side of relation
-  orderId       String?        @unique
-  order         Order?         @relation(name: "CHECKOUTToOrder", fields: [orderId], references: [id])
-  checkoutItems CheckoutItem[]
+  // Relations
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+  orderItems OrderItem[]
+  logistics  Admin?      @relation("LOGISTICS", fields: [logisticsId], references: [id])
+  cart       Cart?       @relation(fields: [cartId], references: [id])
 
   @@index([restaurantId])
+  @@index([status])
+  @@index([orderNumber])
   @@index([paymentStatus])
   @@index([paymentMethod])
   @@index([txRef])
@@ -478,80 +487,30 @@ model CHECKOUT {
   @@index([flwStatus])
   @@index([fraudStatus])
   @@index([customerId])
+  @@index([cartId])
 }
 
-model CheckoutItem {
+// OrderItem model
+model OrderItem {
   id          String   @id @default(uuid())
-  checkoutId  String
+  orderId     String
   productId   String? // Make this optional to allow SetNull
-  productName String // Store product name at time of checkout
+  productName String // Store product name at time of order
   quantity    Float
-  unitPrice   Float // Store price at time of checkout
+  unitPrice   Float // Store price at time of order
   subtotal    Float // quantity * unitPrice
-  unit        String // Store unit at time of checkout
-  images      String[] // Store images array at time of checkout
-  category    String? // Store category name at time of checkout
+  unit        String // Store unit at time of order
+  images      String[] // Store images array at time of order
+  category    String? // Store category name at time of order
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
-  checkout CHECKOUT @relation(fields: [checkoutId], references: [id], onDelete: Cascade)
-  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
-  @@index([checkoutId])
+  @@index([orderId])
   @@index([productId])
-}
-
-model Order {
-  id           String      @id @default(uuid())
-  checkoutId   String?     @unique
-  restaurantId String
-  logisticsId  String?
-  orderNumber  String      @unique
-  status       OrderStatus @default(PENDING)
-  totalAmount  Float
-
-  notes             String?
-  requestedDelivery DateTime?
-  estimatedDelivery DateTime?
-  actualDelivery    DateTime?
-
-  deliveryProvince String?
-  deliveryDistrict String?
-  deliverySector   String?
-  deliveryCell     String?
-  deliveryVillage  String?
-  deliveryLocation String?
-
-  paymentMethod    PaymentMethod?
-  paymentStatus    PaymentStatus  @default(PENDING)
-  paymentReference String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Non-owning side — only relation name
-  checkout   CHECKOUT?   @relation(name: "CHECKOUTToOrder")
-  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
-  orderItems OrderItem[]
-
-  logistics Admin? @relation("LOGISTICS", fields: [logisticsId], references: [id])
-
-  @@index([restaurantId])
-  @@index([status])
-  @@index([orderNumber])
-}
-
-model OrderItem {
-  id        String   @id @default(uuid())
-  orderId   String
-  productId String
-  quantity  Float
-  unitPrice Float
-  order     Order    @relation(fields: [orderId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 // Wallet model for managing user account balances
@@ -581,7 +540,7 @@ model WalletTransaction {
   previousBalance Float
   newBalance      Float
   description     String?
-  reference       String? // Reference to related entity (checkout, order, etc.)
+  reference       String? // Reference to related entity (order, etc.)
 
   // Integration fields for top-ups
   flwTxRef      String? @unique

@@ -17,11 +17,11 @@ orderRoutes.get("/statistics", authMiddleware_1.isAuthenticated, order_controlle
 // RESTAURANT ORDER ROUTES
 // ========================================
 /**
- * Create order from completed checkout
- * POST /orders/from-checkout
+ * Create order from cart
+ * POST /orders/from-cart
  * Access: Restaurant only
  */
-orderRoutes.post("/from-checkout", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)("RESTAURANT"), order_controller_1.createOrderFromCheckout);
+orderRoutes.post("/from-cart", authMiddleware_1.isAuthenticated, (0, authMiddleware_1.checkPermission)("RESTAURANT"), order_controller_1.createOrderFromCart);
 /**
  * Create direct order (without checkout process)
  * POST /orders/direct

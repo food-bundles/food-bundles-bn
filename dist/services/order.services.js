@@ -3,41 +3,47 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getOrderStatisticsService = exports.deleteOrderService = exports.cancelOrderService = exports.updateOrderService = exports.getRestaurantOrdersService = exports.getAllOrdersService = exports.getOrderByIdService = exports.createDirectOrderService = exports.createOrderFromCheckoutService = void 0;
+exports.getOrderStatisticsService = exports.deleteOrderService = exports.cancelOrderService = exports.updateOrderService = exports.getRestaurantOrdersService = exports.getAllOrdersService = exports.getOrderByIdService = exports.createDirectOrderService = exports.createOrderFromCartService = void 0;
 exports.generateOrderNumber = generateOrderNumber;
 const prisma_1 = __importDefault(require("../prisma"));
-const client_1 = require("@prisma/client");
 /**
- * Service to create order from a completed checkout
+ * Service to create order directly from cart
  */
-const createOrderFromCheckoutService = async (data) => {
-    const { checkoutId, restaurantId, notes, requestedDelivery } = data;
-    // Get checkout and validate
-    const checkout = await prisma_1.default.cHECKOUT.findUnique({
-        where: { id: checkoutId },
+const createOrderFromCartService = async (data) => {
+    const { cartId, restaurantId, notes, requestedDelivery, paymentMethod, billingName, billingEmail, billingPhone, billingAddress, } = data;
+    // Get cart and validate
+    const cart = await prisma_1.default.cart.findUnique({
+        where: { id: cartId },
         include: {
-            checkoutItems: true,
-            cart: {
+            cartItems: {
                 include: {
-                    cartItems: {
+                    product: {
                         include: {
-                            product: true,
+                            category: true,
                         },
                     },
                 },
             },
             restaurant: true,
-            order: true, // Include existing order if any
         },
     });
-    if (!checkout) {
-        throw new Error("Checkout not found");
+    if (!cart) {
+        throw new Error("Cart not found");
     }
-    if (checkout.restaurantId !== restaurantId) {
-        throw new Error("Unauthorized: Checkout does not belong to this restaurant");
+    if (cart.restaurantId !== restaurantId) {
+        throw new Error("Unauthorized: Cart does not belong to this restaurant");
     }
-    // If order already exists, update it instead of throwing error
-    if (checkout.orderId && checkout.order) {
+    if (cart.status !== "ACTIVE") {
+        throw new Error("Cart is not active");
+    }
+    if (cart.cartItems.length === 0) {
+        throw new Error("Cart is empty");
+    }
+    // Check if order already exists for this cart
+    const existingOrder = await prisma_1.default.order.findFirst({
+        where: { cartId },
+    });
+    if (existingOrder) {
         const updateData = {};
         if (notes !== undefined)
             updateData.notes = notes;
@@ -45,22 +51,28 @@ const createOrderFromCheckoutService = async (data) => {
             updateData.requestedDelivery = requestedDelivery;
         if (data.status !== undefined)
             updateData.status = data.status;
-        // Only update if there's something to update
+        if (billingName !== undefined)
+            updateData.billingName = billingName;
+        if (billingEmail !== undefined)
+            updateData.billingEmail = billingEmail;
+        if (billingPhone !== undefined)
+            updateData.billingPhone = billingPhone;
+        if (billingAddress !== undefined)
+            updateData.billingAddress = billingAddress;
         if (Object.keys(updateData).length > 0) {
             const updatedOrder = await prisma_1.default.order.update({
-                where: { id: checkout.orderId },
+                where: { id: existingOrder.id },
                 data: updateData,
             });
             return await (0, exports.getOrderByIdService)(updatedOrder.id);
         }
-        // Return existing order if no updates needed
-        return await (0, exports.getOrderByIdService)(checkout.orderId);
+        return await (0, exports.getOrderByIdService)(existingOrder.id);
     }
     // Generate unique order number
     const orderNumber = await generateOrderNumber();
     // Validate product availability and calculate total
     let totalAmount = 0;
-    for (const item of checkout.cart.cartItems) {
+    for (const item of cart.cartItems) {
         if (item.product.status !== "ACTIVE") {
             throw new Error(`Product ${item.product.productName} is no longer available`);
         }
@@ -69,36 +81,52 @@ const createOrderFromCheckoutService = async (data) => {
         }
         totalAmount += item.subtotal;
     }
+    // Generate transaction reference
+    const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
+    const txOrderId = `ORDER_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
     // Create order with extended transaction timeout and optimized operations
     const order = await prisma_1.default.$transaction(async (tx) => {
         // Create order
         const newOrder = await tx.order.create({
             data: {
                 orderNumber,
-                checkoutId,
+                cartId,
                 restaurantId,
                 totalAmount,
                 status: data.status || "PENDING",
-                paymentMethod: checkout.paymentMethod,
-                paymentStatus: checkout.paymentStatus,
-                paymentReference: checkout.paymentReference,
-                notes: notes || checkout.notes,
-                requestedDelivery: requestedDelivery || checkout.deliveryDate,
+                paymentMethod: paymentMethod || "CASH",
+                paymentStatus: "PENDING",
+                notes: notes,
+                requestedDelivery: requestedDelivery,
+                billingName,
+                billingEmail,
+                billingPhone,
+                billingAddress,
+                txRef,
+                txOrderId,
+                currency: "RWF",
             },
         });
         // Prepare order items data
-        const orderItemsData = checkout.cart.cartItems.map((item) => ({
+        const orderItemsData = cart.cartItems.map((item) => ({
             orderId: newOrder.id,
             productId: item.productId,
+            productName: item.product.productName,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
+            subtotal: item.subtotal,
+            unit: item.product.unit,
+            images: item.product.images,
+            category: item.product.category?.name || null,
         }));
         // Batch create order items
         await tx.orderItem.createMany({
             data: orderItemsData,
         });
-        // Batch update product quantities - more efficient approach
-        const productUpdates = checkout.cart.cartItems.map((item) => tx.product.update({
+        // Batch update product quantities
+        const productUpdates = cart.cartItems.map((item) => tx.product.update({
             where: { id: item.productId },
             data: {
                 quantity: {
@@ -108,44 +136,26 @@ const createOrderFromCheckoutService = async (data) => {
         }));
         // Execute all product updates in parallel
         await Promise.all(productUpdates);
-        // Update checkout and cart in parallel
-        await Promise.all([
-            tx.cHECKOUT.update({
-                where: { id: checkoutId },
-                data: {
-                    orderId: newOrder.id,
-                    paymentStatus: data.status === "CANCELLED"
-                        ? client_1.PaymentStatus.CANCELLED
-                        : data.status === "CONFIRMED"
-                            ? client_1.PaymentStatus.COMPLETED
-                            : client_1.PaymentStatus.PENDING,
-                },
-            }),
-            // Delete cart items
-            tx.cartItem.deleteMany({
-                where: { cartId: checkout.cartId },
-            }),
-        ]);
+        // Update cart status
+        await tx.cart.update({
+            where: { id: cartId },
+            data: {
+                status: "CHECKED_OUT",
+            },
+        });
         return newOrder;
     }, {
-        // Increase transaction timeout to 15 seconds
         timeout: 15000,
-    });
-    // Update cart outside of transaction to avoid timeout
-    await prisma_1.default.cart.update({
-        where: { id: checkout.cartId },
-        data: { totalAmount: 0 },
     });
     // Return complete order with relations
     return await (0, exports.getOrderByIdService)(order.id);
 };
-exports.createOrderFromCheckoutService = createOrderFromCheckoutService;
+exports.createOrderFromCartService = createOrderFromCartService;
 /**
- * Service to create direct order (without checkout process)
- * Useful for admin or phone orders
+ * Service to create direct order
  */
 const createDirectOrderService = async (data) => {
-    const { restaurantId, items, paymentMethod, notes, requestedDelivery } = data;
+    const { restaurantId, items, paymentMethod, notes, requestedDelivery, billingName, billingEmail, billingPhone, billingAddress, } = data;
     if (!items || items.length === 0) {
         throw new Error("Order must contain at least one item");
     }
@@ -162,6 +172,9 @@ const createDirectOrderService = async (data) => {
     for (const item of items) {
         const product = await prisma_1.default.product.findUnique({
             where: { id: item.productId },
+            include: {
+                category: true,
+            },
         });
         if (!product) {
             throw new Error(`Product with ID ${item.productId} not found`);
@@ -181,8 +194,12 @@ const createDirectOrderService = async (data) => {
             product,
         });
     }
-    // Generate order number
+    // Generate order number and transaction references
     const orderNumber = await generateOrderNumber();
+    const txRef = `${restaurantId}_DIRECT_${Date.now()}`;
+    const txOrderId = `ORDER_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
     // Create order with transaction
     const order = await prisma_1.default.$transaction(async (tx) => {
         // Create order
@@ -196,14 +213,26 @@ const createDirectOrderService = async (data) => {
                 paymentStatus: "PENDING",
                 notes,
                 requestedDelivery,
+                billingName,
+                billingEmail,
+                billingPhone,
+                billingAddress,
+                txRef,
+                txOrderId,
+                currency: "RWF",
             },
         });
         // Create order items
         const orderItemsData = validatedItems.map((item) => ({
             orderId: newOrder.id,
             productId: item.productId,
+            productName: item.product.productName,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
+            subtotal: item.quantity * item.unitPrice,
+            unit: item.product.unit,
+            images: item.product.images,
+            category: item.product.category?.name || null,
         }));
         await tx.orderItem.createMany({
             data: orderItemsData,
@@ -225,7 +254,7 @@ const createDirectOrderService = async (data) => {
 };
 exports.createDirectOrderService = createDirectOrderService;
 /**
- * Service to get order by ID with complete details
+ * Enhanced service to get order by ID
  */
 const getOrderByIdService = async (orderId, restaurantId) => {
     const order = await prisma_1.default.order.findUnique({
@@ -254,13 +283,13 @@ const getOrderByIdService = async (orderId, restaurantId) => {
                     },
                 },
             },
-            checkout: {
-                select: {
-                    id: true,
-                    billingName: true,
-                    billingEmail: true,
-                    billingPhone: true,
-                    billingAddress: true,
+            cart: {
+                include: {
+                    cartItems: {
+                        include: {
+                            product: true,
+                        },
+                    },
                 },
             },
         },

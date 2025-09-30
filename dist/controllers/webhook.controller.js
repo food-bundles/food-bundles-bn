@@ -8,7 +8,6 @@ const crypto_1 = __importDefault(require("crypto"));
 const prisma_1 = __importDefault(require("../prisma"));
 const emailTemplates_1 = require("../utils/emailTemplates");
 const sms_utility_1 = require("../utils/sms.utility");
-const order_services_1 = require("../services/order.services");
 const cart_service_1 = require("../services/cart.service");
 const db_retry_utls_1 = require("../utils/db-retry.utls");
 // Shared function to process wallet transactions with retry logic
@@ -97,17 +96,17 @@ async function processWalletTransaction(txRef, flwRef, status, currency) {
     }
     return walletTransaction;
 }
-// Shared function to process checkout payments with retry logic
+// Shared function to process order payments with retry logic
 async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "FLUTTERWAVE", eventType, data) {
     const whereClause = paymentProvider === "PAYPACK"
         ? { paymentReference: txRef, paymentProvider: "PAYPACK" }
         : { OR: [{ txRef: txRef }, { paymentReference: txRef }] };
-    const checkout = await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
-        return await prisma_1.default.cHECKOUT.findFirst({
+    const orderData = await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
+        return await prisma_1.default.order.findFirst({
             where: whereClause,
             include: {
                 restaurant: true,
-                checkoutItems: true,
+                orderItems: true,
                 cart: {
                     include: {
                         cartItems: {
@@ -115,16 +114,15 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
                         },
                     },
                 },
-                order: true,
             },
         });
     });
-    if (!checkout) {
-        console.log("No matching checkout found for txRef:", txRef);
+    if (!orderData) {
+        console.log("No matching order found for txRef:", txRef);
         return null;
     }
-    console.log("Found matching checkout:", checkout.id);
-    if (status === "successful" && checkout.paymentStatus !== "COMPLETED") {
+    console.log("Found matching order:", orderData.id);
+    if (status === "successful" && orderData.paymentStatus !== "COMPLETED") {
         const updateData = {
             paymentStatus: "COMPLETED",
             flwStatus: "successful",
@@ -142,50 +140,32 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
             updateData.appFee = data?.data?.fee;
         }
         await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
-            return await prisma_1.default.cHECKOUT.update({
-                where: { id: checkout.id },
+            return await prisma_1.default.order.update({
+                where: { id: orderData.id },
                 data: updateData,
             });
         });
-        // Create order if it doesn't exist
-        if (!checkout.order && !checkout.orderId) {
-            try {
-                const order = await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
-                    return await (0, order_services_1.createOrderFromCheckoutService)({
-                        checkoutId: checkout.id,
-                        restaurantId: checkout.restaurantId,
-                        status: "CONFIRMED",
-                    });
-                });
-                console.log(`Order created from checkout: ${order.id}`);
-            }
-            catch (orderError) {
-                console.error("Failed to create order from checkout:", orderError);
-            }
-        }
         // Update existing order if it exists
-        if (checkout.order || checkout.orderId) {
-            try {
-                await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
-                    return await prisma_1.default.order.update({
-                        where: { id: checkout.orderId || checkout.order?.id },
-                        data: {
-                            paymentStatus: "COMPLETED",
-                            status: "CONFIRMED",
-                            updatedAt: new Date(),
-                        },
-                    });
+        try {
+            await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
+                return await prisma_1.default.order.update({
+                    where: { id: orderData.id },
+                    data: {
+                        paymentStatus: "COMPLETED",
+                        status: "CONFIRMED",
+                        updatedAt: new Date(),
+                    },
                 });
-            }
-            catch (orderUpdateError) {
-                console.error("Failed to update order status:", orderUpdateError);
-            }
+            });
         }
-        // Clear cart if checkout is completed
-        if (checkout.cart.cartItems.length > 0) {
+        catch (orderUpdateError) {
+            console.error("Failed to update order status:", orderUpdateError);
+        }
+        // Clear cart if order is completed
+        if (orderData.cartId && (orderData.cart?.cartItems?.length ?? 0) > 0) {
             try {
                 await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
-                    return await (0, cart_service_1.clearCartService)(checkout.cartId);
+                    return await (0, cart_service_1.clearCartService)(orderData.cartId);
                 });
             }
             catch (clearCartError) {
@@ -194,37 +174,37 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
         }
         // Send notifications (these are not critical, so we don't retry them)
         try {
-            await (0, sms_utility_1.sendMessage)(`Dear ${checkout.billingName || checkout.restaurant.name || ""}, Payment completed: ${checkout.chargedAmount || checkout.totalAmount} ${checkout.currency}. Thank you!`, checkout.billingPhone || checkout.restaurant.phone || "");
+            await (0, sms_utility_1.sendMessage)(`Dear ${orderData.billingName || orderData.restaurant.name || ""}, Payment completed: ${orderData.chargedAmount || orderData.totalAmount} ${orderData.currency}. Thank you!`, orderData.billingPhone || orderData.restaurant.phone || "");
         }
         catch (smsError) {
             console.error("Failed to send SMS notification:", smsError);
         }
         try {
             await (0, emailTemplates_1.sendPaymentConfirmationEmail)({
-                amount: checkout.chargedAmount || checkout.totalAmount,
+                amount: orderData.chargedAmount || orderData.totalAmount,
                 transactionId: data?.id?.toString() || flwRef,
-                restaurantName: checkout.restaurant.name,
-                products: checkout.checkoutItems.map((item) => ({
+                restaurantName: orderData.restaurant.name,
+                products: orderData.orderItems.map((item) => ({
                     name: item.productName,
                     quantity: item.quantity,
                     price: item.unitPrice,
                 })),
                 customer: {
-                    name: checkout.billingName || checkout.restaurant.name || "",
-                    email: checkout.billingEmail || checkout.restaurant.email || "",
+                    name: orderData.billingName || orderData.restaurant.name || "",
+                    email: orderData.billingEmail || orderData.restaurant.email || "",
                 },
-                checkoutId: checkout.id,
+                orderId: orderData.id,
             });
         }
         catch (emailError) {
             console.error("Failed to send confirmation email:", emailError);
         }
-        console.log(`Checkout payment completed: ${checkout.id}`);
+        console.log(`Checkout payment completed: ${orderData.id}`);
     }
     else if (status === "failed") {
         await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
-            return await prisma_1.default.cHECKOUT.update({
-                where: { id: checkout.id },
+            return await prisma_1.default.order.update({
+                where: { id: orderData.id },
                 data: {
                     paymentStatus: "FAILED",
                     flwStatus: "failed",
@@ -236,52 +216,50 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
             });
         });
         // Update order status to failed/cancelled
-        if (checkout.order || checkout.orderId) {
-            try {
-                await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
-                    return await prisma_1.default.order.update({
-                        where: { id: checkout.orderId || checkout.order?.id },
-                        data: {
-                            paymentStatus: "FAILED",
-                            status: "CANCELLED",
-                            updatedAt: new Date(),
-                        },
-                    });
+        try {
+            await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
+                return await prisma_1.default.order.update({
+                    where: { id: orderData.id },
+                    data: {
+                        paymentStatus: "FAILED",
+                        status: "CANCELLED",
+                        updatedAt: new Date(),
+                    },
                 });
-            }
-            catch (orderUpdateError) {
-                console.error("Failed to update failed order status:", orderUpdateError);
-            }
+            });
+        }
+        catch (orderUpdateError) {
+            console.error("Failed to update failed order status:", orderUpdateError);
         }
         try {
-            await (0, sms_utility_1.sendMessage)(`Dear ${checkout.billingName || checkout.restaurant.name || ""}, Payment failed: ${checkout.chargedAmount || checkout.totalAmount} ${checkout.currency}. Please try again.`, checkout.billingPhone || checkout.restaurant.phone || "");
+            await (0, sms_utility_1.sendMessage)(`Dear ${orderData.billingName || orderData.restaurant.name || ""}, Payment failed: ${orderData.chargedAmount || orderData.totalAmount} ${orderData.currency}. Please try again.`, orderData.billingPhone || orderData.restaurant.phone || "");
         }
         catch (smsError) {
             console.error("Failed to send failure SMS notification:", smsError);
         }
         try {
             await (0, emailTemplates_1.sendPaymentFailedEmail)({
-                amount: checkout.chargedAmount || checkout.totalAmount,
+                amount: orderData.chargedAmount || orderData.totalAmount,
                 transactionId: data?.id?.toString() || flwRef,
-                restaurantName: checkout.restaurant.name,
-                products: checkout.checkoutItems.map((item) => ({
+                restaurantName: orderData.restaurant.name,
+                products: orderData.orderItems.map((item) => ({
                     name: item.productName,
                     quantity: item.quantity,
                     price: item.unitPrice,
                 })),
                 customer: {
-                    name: checkout.billingName || checkout.restaurant.name || "",
-                    email: checkout.billingEmail || checkout.restaurant.email || "",
+                    name: orderData.billingName || orderData.restaurant.name || "",
+                    email: orderData.billingEmail || orderData.restaurant.email || "",
                 },
-                checkoutId: checkout.id,
+                orderId: orderData.id,
             });
         }
         catch (emailError) {
             console.error("Failed to send payment failed email:", emailError);
         }
-        console.log(`Checkout payment failed: ${checkout.id}`);
+        console.log(`Checkout payment failed: ${orderData.id}`);
     }
-    return checkout;
+    return orderData;
 }
 // Helper function to detect payment provider based on request body structure
 function detectPaymentProvider(body) {
@@ -316,7 +294,7 @@ const handleChargeCompleted = async (data) => {
             await processWalletTransaction(txRef, flwRef, status, data.currency);
         }
         else {
-            // Process as regular checkout payment
+            // Process as regular order payment
             await processCheckoutPayment(txRef, flwRef, status, "FLUTTERWAVE", eventType, data);
         }
     }
@@ -383,7 +361,7 @@ const handlePaymentWebhook = async (req, res) => {
                 await processWalletTransaction(txRef, flwRef, paymentStatus);
             }
             else {
-                // Process as regular checkout payment
+                // Process as regular order payment
                 await processCheckoutPayment(txRef, flwRef, paymentStatus, "PAYPACK");
             }
         }
