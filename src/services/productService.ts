@@ -5,6 +5,7 @@ export interface ProductData {
   unitPrice: number;
   purchasePrice: number;
   categoryId: string;
+  category?: Category;
   bonus?: number;
   sku: string;
   quantity: number;
@@ -12,6 +13,12 @@ export interface ProductData {
   expiryDate: Date | null;
   unit: string;
   createdBy: string;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  description: string | null;
 }
 
 export const createProductService = async (productData: ProductData) => {

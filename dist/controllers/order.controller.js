@@ -3,26 +3,26 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getOrderByNumber = exports.getOrderStatistics = exports.deleteOrder = exports.cancelOrder = exports.updateOrder = exports.getMyOrders = exports.getAllOrders = exports.getOrderById = exports.createDirectOrder = exports.createOrderFromCheckout = void 0;
+exports.getOrderByNumber = exports.getOrderStatistics = exports.deleteOrder = exports.cancelOrder = exports.updateOrder = exports.getMyOrders = exports.getAllOrders = exports.getOrderById = exports.createDirectOrder = exports.createOrderFromCart = void 0;
 const order_services_1 = require("../services/order.services");
 const client_1 = require("@prisma/client");
 const prisma_1 = __importDefault(require("../prisma"));
 /**
- * Controller to create order from checkout
- * POST /orders/from-checkout
+ * Controller to create order from cart
+ * POST /orders/from-cart
  */
-const createOrderFromCheckout = async (req, res) => {
+const createOrderFromCart = async (req, res) => {
     try {
-        const { checkoutId, notes, requestedDelivery } = req.body;
+        const { cartId, notes, requestedDelivery } = req.body;
         const restaurantId = req.user.id;
         // Validate required fields
-        if (!checkoutId) {
+        if (!cartId) {
             return res.status(400).json({
                 message: "Checkout ID is required",
             });
         }
-        const order = await (0, order_services_1.createOrderFromCheckoutService)({
-            checkoutId,
+        const order = await (0, order_services_1.createOrderFromCartService)({
+            cartId,
             restaurantId,
             notes,
             status: client_1.OrderStatus.PENDING,
@@ -31,17 +31,17 @@ const createOrderFromCheckout = async (req, res) => {
                 : undefined,
         });
         res.status(201).json({
-            message: "Order created from checkout successfully",
+            message: "Order created from cart successfully",
             data: order,
         });
     }
     catch (error) {
         res.status(500).json({
-            message: error.message || "Failed to create order from checkout",
+            message: error.message || "Failed to create order from cart",
         });
     }
 };
-exports.createOrderFromCheckout = createOrderFromCheckout;
+exports.createOrderFromCart = createOrderFromCart;
 /**
  * Controller to create direct order
  * POST /orders/direct
@@ -385,15 +385,6 @@ const getOrderByNumber = async (req, res) => {
                                 status: true,
                             },
                         },
-                    },
-                },
-                checkout: {
-                    select: {
-                        id: true,
-                        billingName: true,
-                        billingEmail: true,
-                        billingPhone: true,
-                        billingAddress: true,
                     },
                 },
             },

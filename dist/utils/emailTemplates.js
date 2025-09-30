@@ -174,7 +174,7 @@ const sendPaymentNotificationTemplate = (data) => {
 
         <div class="payment-details">
           <h2>💳 Payment Information</h2>
-          <p><span class="highlight">Order ID:</span> ${data.checkoutId}</p>
+          <p><span class="highlight">Order ID:</span> ${data.orderId}</p>
           <p><span class="highlight">Phone Number:</span> ${data.phoneNumber}</p>
           <p><span class="highlight">Payment Method:</span> ${data.paymentMethod}</p>
         </div>
@@ -662,7 +662,7 @@ async function sendPaymentConfirmationEmail(paymentData) {
     const confirmationEmail = {
         from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
         to: paymentData.customer.email,
-        subject: `Payment Confirmed - FoodBundles Order #${paymentData.checkoutId}`,
+        subject: `Payment Confirmed - FoodBundles Order #${paymentData.orderId}`,
         html: `${(0, exports.sendPaymentConfirmationTemplate)(paymentData)}`,
     };
     try {
@@ -693,7 +693,7 @@ async function sendPaymentFailedEmail(paymentData) {
     const failedEmail = {
         from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
         to: paymentData.customer.email,
-        subject: `Payment Failed - FoodBundles Order #${paymentData.checkoutId}`,
+        subject: `Payment Failed - FoodBundles Order #${paymentData.orderId}`,
         html: (0, exports.sendPaymentFailedTemplate)(paymentData),
     };
     try {

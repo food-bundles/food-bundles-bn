@@ -300,7 +300,7 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
  * Debit wallet for payments (CASH payment method)
  */
 export const debitWalletService = async (data: DebitWalletData) => {
-  const { walletId, amount, description, reference, checkoutId } = data;
+  const { walletId, amount, description, reference, orderId } = data;
 
   // Validate amount
   if (amount <= 0) {
@@ -342,7 +342,7 @@ export const debitWalletService = async (data: DebitWalletData) => {
         description: description || "Payment deduction",
         reference,
         status: "COMPLETED",
-        metadata: checkoutId ? { checkoutId } : undefined,
+        metadata: orderId ? { orderId } : undefined,
       },
     }),
   ]);

@@ -255,7 +255,7 @@ exports.topUpWalletService = topUpWalletService;
  * Debit wallet for payments (CASH payment method)
  */
 const debitWalletService = async (data) => {
-    const { walletId, amount, description, reference, checkoutId } = data;
+    const { walletId, amount, description, reference, orderId } = data;
     // Validate amount
     if (amount <= 0) {
         throw new Error("Debit amount must be greater than 0");
@@ -289,7 +289,7 @@ const debitWalletService = async (data) => {
                 description: description || "Payment deduction",
                 reference,
                 status: "COMPLETED",
-                metadata: checkoutId ? { checkoutId } : undefined,
+                metadata: orderId ? { orderId } : undefined,
             },
         }),
     ]);

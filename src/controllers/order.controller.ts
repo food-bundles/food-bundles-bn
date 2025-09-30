@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import {
-  createOrderFromCheckoutService,
   createDirectOrderService,
   getOrderByIdService,
   getAllOrdersService,
@@ -9,28 +8,29 @@ import {
   cancelOrderService,
   deleteOrderService,
   getOrderStatisticsService,
+  createOrderFromCartService,
 } from "../services/order.services";
 import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import prisma from "../prisma";
 
 /**
- * Controller to create order from checkout
- * POST /orders/from-checkout
+ * Controller to create order from cart
+ * POST /orders/from-cart
  */
-export const createOrderFromCheckout = async (req: Request, res: Response) => {
+export const createOrderFromCart = async (req: Request, res: Response) => {
   try {
-    const { checkoutId, notes, requestedDelivery } = req.body;
+    const { cartId, notes, requestedDelivery } = req.body;
     const restaurantId = (req as any).user.id;
 
     // Validate required fields
-    if (!checkoutId) {
+    if (!cartId) {
       return res.status(400).json({
         message: "Checkout ID is required",
       });
     }
 
-    const order = await createOrderFromCheckoutService({
-      checkoutId,
+    const order = await createOrderFromCartService({
+      cartId,
       restaurantId,
       notes,
       status: OrderStatus.PENDING,
@@ -40,12 +40,12 @@ export const createOrderFromCheckout = async (req: Request, res: Response) => {
     });
 
     res.status(201).json({
-      message: "Order created from checkout successfully",
+      message: "Order created from cart successfully",
       data: order,
     });
   } catch (error: any) {
     res.status(500).json({
-      message: error.message || "Failed to create order from checkout",
+      message: error.message || "Failed to create order from cart",
     });
   }
 };
@@ -457,15 +457,6 @@ export const getOrderByNumber = async (req: Request, res: Response) => {
                 status: true,
               },
             },
-          },
-        },
-        checkout: {
-          select: {
-            id: true,
-            billingName: true,
-            billingEmail: true,
-            billingPhone: true,
-            billingAddress: true,
           },
         },
       },

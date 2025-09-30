@@ -265,117 +265,44 @@ components:
           type: string
           description: Currency code
           example: "RWF"
+        cardDetails:
+          $ref: "#/components/schemas/CardDetails"
+        bankDetails:
+          $ref: "#/components/schemas/BankDetails"
 
-    UpdateCheckoutRequest:
+    CardDetails:
       type: object
+      description: Card details (required for CARD payments)
       properties:
-        paymentMethod:
+        cardNumber:
           type: string
-          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
-          description: Payment method
-        billingName:
+          description: Card number
+          example: "5531886652142950"
+        cvv:
           type: string
-          description: Billing name
-        billingEmail:
+          description: CVV code
+          example: "564"
+        expiryMonth:
           type: string
-          format: email
-          description: Billing email
-        billingPhone:
+          description: Expiry month (MM)
+          example: "09"
+        expiryYear:
           type: string
-          description: Billing phone number
-        billingAddress:
+          description: Expiry year (YYYY)
+          example: "29"
+        pin:
           type: string
-          description: Billing address
-        notes:
-          type: string
-          description: Special notes or instructions
-        deliveryDate:
-          type: string
-          format: date-time
-          description: Requested delivery date
-        paymentStatus:
-          type: string
-          enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
-          description: Payment status (Admin only)
-        paymentReference:
-          type: string
-          description: Payment reference (Admin only)
-        transactionId:
-          type: string
-          description: Transaction ID (Admin only)
-        txRef:
-          type: string
-          description: Transaction reference
-        flwRef:
-          type: string
-          description: Reference
-        txOrderId:
-          type: string
-          description: Transaction order ID
-        currency:
-          type: string
-          description: Currency code
+          description: PIN (optional for some payments)
+          example: "3310"
+
+    BankDetails:
+      type: object
+      description: Bank details (optional for BANK_TRANSFER payments)
+      properties:
         clientIp:
           type: string
           description: Client IP address
-        deviceFingerprint:
-          type: string
-          description: Device fingerprint
-        narration:
-          type: string
-          description: Payment narration
-        transferReference:
-          type: string
-          description: Transfer reference
-        transferAccount:
-          type: string
-          description: Transfer account
-        transferBank:
-          type: string
-          description: Transfer bank
-        accountExpiration:
-          type: string
-          format: date-time
-          description: Account expiration
-        transferNote:
-          type: string
-          description: Transfer note
-        transferAmount:
-          type: number
-          description: Transfer amount
-        network:
-          type: string
-          description: Network provider
-        voucher:
-          type: string
-          description: Voucher code
-        paymentCode:
-          type: string
-          description: Payment code
-        redirectUrl:
-          type: string
-          description: Redirect URL
-        authorizationMode:
-          type: string
-          description: Authorization mode
-        authorizationUrl:
-          type: string
-          description: Authorization URL
-        flwStatus:
-          type: string
-          description: Status
-        flwMessage:
-          type: string
-          description: Message
-        chargedAmount:
-          type: number
-          description: Charged amount
-        appFee:
-          type: number
-          description: Application fee
-        merchantFee:
-          type: number
-          description: Merchant fee
+          example: "192.168.1.100"
 
     ProcessPaymentRequest:
       type: object
@@ -389,45 +316,15 @@ components:
         phoneNumber:
           type: string
           description: Phone number (required for MOBILE_MONEY)
+
         cardDetails:
-          type: object
-          description: Card details (required for CARD)
-          properties:
-            cardNumber:
-              type: string
-              description: Card number
-            cvv:
-              type: string
-              description: CVV code
-            expiryMonth:
-              type: string
-              description: Expiry month (MM)
-            expiryYear:
-              type: string
-              description: Expiry year (YYYY)
-            pin:
-              type: string
-              description: PIN (optional)
+          $ref: "#/components/schemas/CardDetails"
         bankDetails:
-          type: object
-          description: Bank details (optional for BANK_TRANSFER)
-          properties:
-            clientIp:
-              type: string
-              description: Client IP address
+          $ref: "#/components/schemas/BankDetails"
         processDirectly:
           type: boolean
           description: Whether to process payment immediately
           default: true
-
-    PaymentVerificationRequest:
-      type: object
-      required:
-        - transactionId
-      properties:
-        transactionId:
-          type: string
-          description: Transaction ID to verify
 
     PaymentVerificationResponse:
       type: object
@@ -597,6 +494,12 @@ paths:
                   billingName: "John Doe"
                   billingPhone: "250788123456"
                   billingAddress: "123 Main St"
+                  cardDetails:
+                    cardNumber: "5531886652142950"
+                    cvv: "564"
+                    expiryMonth: "09"
+                    expiryYear: "29"
+                    pin: "3310"
                   notes: "Special instructions"
                   deliveryDate: "2023-06-30"
                   currency: "RWF"
@@ -611,22 +514,17 @@ paths:
                   notes: "Special instructions"
                   deliveryDate: "2023-06-30"
                   currency: "RWF"
-                  clientIp: "192.168.1.100"
+                  bankDetails:
+                    clientIp: "192.168.1.100"
                   deviceFingerprint: "62wd23423rq324323qew1"
                   narration: "Payment for order 123"
       responses:
         201:
-          description: Checkout created successfully integration
+          description: Checkout created and payment processed successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Checkout created successfully"
-                  data:
-                    $ref: "#/components/schemas/Checkout"
+                $ref: "#/components/schemas/PaymentResponse"
         400:
           description: Bad request - Invalid input or cart issues
           content:
@@ -726,265 +624,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /checkouts/my-checkouts:
-    get:
-      tags:
-        - Checkout API Management
-      summary: Get restaurant's checkouts with enhanced fields
-      description: Retrieve checkouts for the authenticated restaurant integration details
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-            minimum: 1
-          description: Page number for pagination
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 10
-            minimum: 1
-            maximum: 100
-          description: Number of checkouts per page
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
-          description: Filter by payment status
-        - name: paymentMethod
-          in: query
-          schema:
-            type: string
-            enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
-          description: Filter by payment method
-      responses:
-        200:
-          description: Checkouts retrieved successfully with enhanced fields
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CheckoutPaginationResponse"
-        401:
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        403:
-          description: Forbidden - Restaurant access required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        500:
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /checkouts/{checkoutId}:
-    get:
-      tags:
-        - Checkout API Management
-      summary: Get checkout by ID with enhanced fields
-      description: Retrieve a specific checkout by ID with detailed integration information
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: checkoutId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique checkout identifier
-      responses:
-        200:
-          description: Checkout retrieved successfully with enhanced fields
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Checkout retrieved successfully"
-                  data:
-                    $ref: "#/components/schemas/Checkout"
-        401:
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        403:
-          description: Forbidden - Unauthorized access to checkout
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                message: "Unauthorized: Checkout does not belong to this restaurant"
-        404:
-          description: Checkout not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        500:
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    patch:
-      tags:
-        - Checkout API Management
-      summary: Update checkout with enhanced fields
-      description: Update checkout details including payment fields before payment completion
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: checkoutId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique checkout identifier
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateCheckoutRequest"
-      responses:
-        200:
-          description: Checkout updated successfully with enhanced fields
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Checkout updated successfully"
-                  data:
-                    $ref: "#/components/schemas/Checkout"
-        400:
-          description: Bad request - Invalid input or checkout cannot be updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                invalid_payment_method:
-                  value:
-                    message: "Invalid payment method"
-                payment_completed:
-                  value:
-                    message: "Cannot update checkout after payment is completed"
-        401:
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        403:
-          description: Forbidden - Unauthorized access or admin-only fields
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                admin_only:
-                  value:
-                    message: "Only admins can update payment status"
-                unauthorized_checkout:
-                  value:
-                    message: "Unauthorized: Checkout does not belong to this restaurant"
-        404:
-          description: Checkout not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        500:
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    delete:
-      tags:
-        - Checkout API Management
-      summary: Cancel checkout
-      description: Cancel checkout and revert cart to active status
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: checkoutId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Unique checkout identifier
-      responses:
-        200:
-          description: Checkout cancelled successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Checkout cancelled successfully"
-        400:
-          description: Bad request - Cannot cancel checkout
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                payment_completed:
-                  value:
-                    message: "Cannot cancel completed checkout"
-                order_exists:
-                  value:
-                    message: "Cannot cancel checkout that has been converted to order"
-        401:
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        403:
-          description: Forbidden - Unauthorized access to checkout
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        404:
-          description: Checkout not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        500:
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /checkouts/{checkoutId}/payment:
+  /checkouts/{orderId}/payment:
     post:
       tags:
         - Checkout API Management
@@ -993,7 +633,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: checkoutId
+        - name: orderId
           in: path
           required: true
           schema:
@@ -1084,7 +724,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /checkouts/{checkoutId}/verify-payment:
+  /checkouts/{orderId}/verify-payment:
     get:
       tags:
         - Checkout API Management
@@ -1093,7 +733,7 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: checkoutId
+        - name: orderId
           in: path
           required: true
           schema:
