@@ -174,14 +174,14 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
         }
         // Send notifications (these are not critical, so we don't retry them)
         try {
-            await (0, sms_utility_1.sendMessage)(`Dear ${orderData.billingName || orderData.restaurant.name || ""}, Payment completed: ${orderData.chargedAmount || orderData.totalAmount} ${orderData.currency}. Thank you!`, orderData.billingPhone || orderData.restaurant.phone || "");
+            await (0, sms_utility_1.sendMessage)(`Dear ${orderData.billingName || orderData.restaurant.name || ""}, Payment completed: ${orderData.totalAmount} ${orderData.currency}. Thank you!`, orderData.billingPhone || orderData.restaurant.phone || "");
         }
         catch (smsError) {
             console.error("Failed to send SMS notification:", smsError);
         }
         try {
             await (0, emailTemplates_1.sendPaymentConfirmationEmail)({
-                amount: orderData.chargedAmount || orderData.totalAmount,
+                amount: orderData.totalAmount,
                 transactionId: data?.id?.toString() || flwRef,
                 restaurantName: orderData.restaurant.name,
                 products: orderData.orderItems.map((item) => ({
@@ -208,7 +208,6 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
                 data: {
                     paymentStatus: "FAILED",
                     flwStatus: "failed",
-                    flwMessage: `Payment failed via ${paymentProvider.toLowerCase()} webhook`,
                     transactionId: data?.id?.toString() || flwRef,
                     flwRef: flwRef,
                     updatedAt: new Date(),
@@ -232,14 +231,14 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
             console.error("Failed to update failed order status:", orderUpdateError);
         }
         try {
-            await (0, sms_utility_1.sendMessage)(`Dear ${orderData.billingName || orderData.restaurant.name || ""}, Payment failed: ${orderData.chargedAmount || orderData.totalAmount} ${orderData.currency}. Please try again.`, orderData.billingPhone || orderData.restaurant.phone || "");
+            await (0, sms_utility_1.sendMessage)(`Dear ${orderData.billingName || orderData.restaurant.name || ""}, Payment failed: ${orderData.totalAmount} ${orderData.currency}. Please try again.`, orderData.billingPhone || orderData.restaurant.phone || "");
         }
         catch (smsError) {
             console.error("Failed to send failure SMS notification:", smsError);
         }
         try {
             await (0, emailTemplates_1.sendPaymentFailedEmail)({
-                amount: orderData.chargedAmount || orderData.totalAmount,
+                amount: orderData.totalAmount,
                 transactionId: data?.id?.toString() || flwRef,
                 restaurantName: orderData.restaurant.name,
                 products: orderData.orderItems.map((item) => ({

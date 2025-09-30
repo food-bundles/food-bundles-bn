@@ -731,6 +731,160 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orders/{orderId}/reorder:
+    post:
+      tags:
+        - Order Management API
+      summary: Re-order from existing order
+      description: |
+        Create a new checkout by adding items from an existing order to the cart.
+        Works with any order regardless of its status (successful, failed, cancelled, etc.).
+        - Validates product availability and stock levels
+        - Adds available items to the active cart (creates cart if needed)
+        - Provides warnings for unavailable or out-of-stock items
+        - Updates quantities if products already exist in cart
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID of the order to re-order from
+          example: "order-abc-123"
+      responses:
+        200:
+          description: Items from order added to cart successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Items from order added to cart successfully"
+                  data:
+                    type: object
+                    properties:
+                      cart:
+                        $ref: "#/components/schemas/Cart"
+                      addedItems:
+                        type: integer
+                        description: Number of items added to cart
+                        example: 5
+                      totalItems:
+                        type: integer
+                        description: Total number of items now in cart
+                        example: 8
+                      warnings:
+                        type: array
+                        nullable: true
+                        items:
+                          type: string
+                        description: Warnings about unavailable or low stock items
+                        example:
+                          - "The following products are no longer available: Tomatoes, Onions"
+                          - "Insufficient stock for: Carrots (Available: 5, Required: 10)"
+                      originalOrderNumber:
+                        type: string
+                        description: Order number of the original order
+                        example: "ORD240120001"
+              examples:
+                full_success:
+                  summary: All items added successfully
+                  value:
+                    message: "Items from order added to cart successfully"
+                    data:
+                      cart:
+                        id: "cart-123"
+                        restaurantId: "rest-456"
+                        totalAmount: 15000
+                        status: "ACTIVE"
+                        cartItems:
+                          - id: "item-1"
+                            productId: "prod-789"
+                            quantity: 5
+                            unitPrice: 1000
+                            subtotal: 5000
+                      addedItems: 3
+                      totalItems: 3
+                      originalOrderNumber: "ORD240120001"
+                partial_success:
+                  summary: Some items unavailable
+                  value:
+                    message: "Items from order added to cart successfully"
+                    data:
+                      cart:
+                        id: "cart-123"
+                        restaurantId: "rest-456"
+                        totalAmount: 10000
+                        status: "ACTIVE"
+                      addedItems: 2
+                      totalItems: 2
+                      warnings:
+                        - "The following products are no longer available: Tomatoes"
+                        - "Insufficient stock for: Carrots (Available: 5, Required: 10)"
+                      originalOrderNumber: "ORD240120001"
+        400:
+          description: Bad request - None of the products are available or stock issues
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                no_available_products:
+                  value:
+                    message: "None of the products from this order are currently available"
+                no_items:
+                  value:
+                    message: "Order has no items to re-order"
+                insufficient_total_stock:
+                  value:
+                    message: "Insufficient stock for total quantity of Product Name. Available: 10"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Authentication required"
+        403:
+          description: Forbidden - Unauthorized access to order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Unauthorized: Order does not belong to this restaurant"
+        404:
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                order_not_found:
+                  value:
+                    message: "Order not found"
+                restaurant_not_found:
+                  value:
+                    message: "Restaurant not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Failed to re-order"
+                  error:
+                    type: string
+                    example: "Database connection error"
+
   /orders/{orderId}:
     get:
       tags:

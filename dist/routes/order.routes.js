@@ -59,6 +59,12 @@ orderRoutes.post("/:orderId/cancel", authMiddleware_1.isAuthenticated, order_con
  */
 orderRoutes.patch("/:orderId", authMiddleware_1.isAuthenticated, order_controller_1.updateOrder);
 /**
+ * Re-order from an existing order
+ * POST /orders/:orderId/reorder
+ * Access: Restaurant (own orders) or Admin (any order)
+ */
+orderRoutes.post("/:orderId/reorder", authMiddleware_1.isAuthenticated, order_controller_1.reOrderFromExistingOrder);
+/**
  * Get order by ID with complete details
  * GET /orders/:orderId
  * Access: Restaurant (own orders) or Admin (any order)

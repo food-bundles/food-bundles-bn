@@ -6,6 +6,7 @@ import {
   getRestaurantOrdersService,
   updateOrderService,
   cancelOrderService,
+  reOrderFromExistingOrderService,
   deleteOrderService,
   getOrderStatisticsService,
   createOrderFromCartService,
@@ -365,6 +366,99 @@ export const cancelOrder = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to cancel order",
+    });
+  }
+};
+
+/**
+ * Controller to re-order from an existing order
+ * @route POST /orders/:orderId/reorder
+ * @access Restaurant (own orders) or Admin (any order)
+ */
+export const reOrderFromExistingOrder = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+
+    const restaurantId = (req as any).user.id;
+
+    const paymentResult = await reOrderFromExistingOrderService(
+      orderId,
+      restaurantId
+    );
+
+    if (paymentResult.success) {
+      // Handle different response types based on payment method
+      if (paymentResult.redirectUrl) {
+        // For payments requiring redirect (3DS, authorization pages)
+        res.status(200).json({
+          message: "Payment initiated - redirect required",
+          data: {
+            checkout: paymentResult.checkout,
+            transactionId: paymentResult.transactionId,
+            redirectUrl: paymentResult.redirectUrl,
+            status: paymentResult.status,
+            requiresRedirect: true,
+          },
+        });
+      } else if (paymentResult.transferDetails) {
+        // For bank transfers with account details
+        res.status(200).json({
+          message: "Bank transfer initiated",
+          data: {
+            checkout: paymentResult.checkout,
+            transactionId: paymentResult.transactionId,
+            transferDetails: paymentResult.transferDetails,
+            status: paymentResult.status,
+            message: "Please transfer funds to the provided account details",
+          },
+        });
+      } else {
+        // For completed payments or pending mobile money
+        res.status(200).json({
+          message: paymentResult.message || "Payment processed successfully",
+          data: {
+            checkout: paymentResult.checkout,
+            transactionId: paymentResult.transactionId,
+            status: paymentResult.status,
+          },
+        });
+      }
+    } else {
+      res.status(400).json({
+        message: paymentResult.error || "Payment failed",
+        error: paymentResult.error,
+      });
+    }
+  } catch (error: any) {
+    console.error("Error in reorderFromExistingOrder:", error);
+
+    if (
+      error.message.includes("not found") ||
+      error.message.includes("no items")
+    ) {
+      return res.status(404).json({
+        message: error.message,
+      });
+    }
+
+    if (error.message.includes("Unauthorized")) {
+      return res.status(403).json({
+        message: error.message,
+      });
+    }
+
+    if (
+      error.message.includes("available") ||
+      error.message.includes("stock")
+    ) {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      message: "Failed to re-order",
+      error: error.message,
     });
   }
 };

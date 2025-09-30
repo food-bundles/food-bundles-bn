@@ -37,6 +37,14 @@ const createCheckoutService = async (data) => {
         billingEmail: data.billingEmail,
         billingPhone: data.billingPhone,
         billingAddress: data.billingAddress,
+        cardDetails: {
+            cardNumber: data.cardDetails?.cardNumber || "",
+            cvv: data.cardDetails?.cvv || "",
+            expiryMonth: data.cardDetails?.expiryMonth || "",
+            expiryYear: data.cardDetails?.expiryYear || "",
+            pin: data.cardDetails?.pin || "",
+        },
+        clientIp: data.clientIp || "",
     };
     const orderCreated = await (0, order_services_1.createOrderFromCartService)(orderData);
     // Process immediate payment
@@ -145,7 +153,7 @@ const processPaymentService = async (orderId, paymentData) => {
                     email: order.billingEmail || order.restaurant.email,
                     phoneNumber: paymentData.phoneNumber || order.billingPhone || "",
                     currency: order.currency || "RWF",
-                    clientIp: paymentData.bankDetails?.clientIp || order.clientIp || "127.0.0.1",
+                    clientIp: paymentData.bankDetails?.clientIp || order.clientIp || "",
                     deviceFingerprint: order.deviceFingerprint || "62wd23423rq324323qew1",
                     narration: order.narration || "Order payment",
                 });
@@ -453,7 +461,6 @@ async function processMobileMoneyPayment({ amount, phoneNumber, txRef, orderId, 
                         txRef: response.data.ref || txRef,
                         flwRef: response.data.ref || txRef,
                         network: response.data.provider,
-                        flwMessage: "PayPack payment initiated",
                         paymentType: "PAYPACK_MOBILE_MONEY",
                         paymentProvider: "PAYPACK",
                     },
@@ -670,7 +677,7 @@ async function processCardPayment({ amount, txRef, email, fullname, phoneNumber,
 /**
  * Process Bank Transfer
  */
-async function processBankTransfer({ amount, txRef, email, phoneNumber, currency = "RWF", clientIp = "127.0.0.1", deviceFingerprint = "62wd23423rq324323qew1", narration = "Order payment", }) {
+async function processBankTransfer({ amount, txRef, email, phoneNumber, currency = "RWF", clientIp, deviceFingerprint = "62wd23423rq324323qew1", narration = "Order payment", }) {
     try {
         console.log(`Processing bank transfer: ${amount} ${currency} for ${email}`);
         const payload = {

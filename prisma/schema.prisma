@@ -384,14 +384,6 @@ model Order {
   billingPhone   String?
   billingAddress String?
 
-  // Delivery information
-  deliveryProvince String?
-  deliveryDistrict String?
-  deliverySector   String?
-  deliveryCell     String?
-  deliveryVillage  String?
-  deliveryLocation String?
-
   // Order notes and dates
   notes             String?
   requestedDelivery DateTime?
@@ -403,6 +395,7 @@ model Order {
   paymentStatus    PaymentStatus  @default(PENDING)
   paymentReference String?
   paymentProvider  String?        @default("FLUTTERWAVE")
+  paymentType      String?
 
   // Enhanced Payment Fields 
   txRef             String? @unique
@@ -417,53 +410,32 @@ model Order {
   transferReference String?
   transferAccount   String?
   transferBank      String?
-  accountExpiration DateTime?
   transferNote      String?
   transferAmount    Float?
 
   // Mobile money specific fields
-  network     String? // Network provider (MTN, Airtel, etc.)
-  voucher     String? // Voucher code
-  paymentCode String? // Payment code for USSD
+  network String? // Network provider (MTN, Airtel, etc.)
+  voucher String? // Voucher code
 
   // Card payment specific fields
-  cardFirst6Digits String? // First 6 digits of card
-  cardLast4Digits  String? // Last 4 digits of card
-  cardType         String? // MASTERCARD, VISA, etc.
-  cardExpiry       String? // Card expiry (MM/YY format)
-  cardCountry      String? // Card issuing country
-  authModel        String? // PIN, NOAUTH, OTP, etc.
-  encryptionKey    String? // Encryption key for card payments
+  cardNumber      String?
+  cardCVV         String?
+  cardType        String?
+  cardExpiryMonth String?
+  cardExpiryYear  String?
+  cardPIN         String?
 
   // Authorization and redirect information
-  redirectUrl          String?
-  authorizationMode    String?
-  authorizationUrl     String?
-  validateInstructions String?
+  redirectUrl       String?
+  authorizationMode String?
 
   // Transaction status and references
-  transactionId     String?
-  processorResponse String?
+  transactionId String?
 
   // Response fields
-  flwStatus     String?
-  flwMessage    String?
-  chargedAmount Float?
-  appFee        Float?
-  merchantFee   Float?
-
-  // Additional metadata
-  paymentPlan String?
-  fraudStatus String?
-  riskAction  String?
-  chargeType  String?
-  paymentType String?
-
-  // Customer information from response
-  customerId    String?
-  customerName  String?
-  customerEmail String?
-  customerPhone String?
+  flwStatus   String?
+  appFee      Float?
+  merchantFee Float?
 
   // Timestamps
   createdAt DateTime  @default(now())
@@ -485,8 +457,6 @@ model Order {
   @@index([flwRef])
   @@index([transactionId])
   @@index([flwStatus])
-  @@index([fraudStatus])
-  @@index([customerId])
   @@index([cartId])
 }
 
