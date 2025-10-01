@@ -34,6 +34,7 @@
     "swagger-ui-express": "^5.0.1",
     "twilio": "^5.8.0",
     "uuid": "^11.1.0",
+    "ws": "^8.18.3",
     "yamljs": "^0.3.0"
   },
   "devDependencies": {
@@ -48,6 +49,7 @@
     "@types/nodemailer": "^6.4.17",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
+    "@types/ws": "^8.18.1",
     "@types/yamljs": "^0.2.34",
     "ngrok": "^5.0.0-beta.2",
     "nodemon": "^3.1.10",

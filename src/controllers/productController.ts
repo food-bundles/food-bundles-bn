@@ -14,6 +14,7 @@ import {
 import { uploadImages } from "../utils/imageUpload";
 import prisma from "../prisma";
 import cloudinary from "../utils/cloudinary.utility";
+import { wsManager } from "../index";
 
 export const createProduct = async (req: Request, res: Response) => {
   try {
@@ -63,6 +64,9 @@ export const createProduct = async (req: Request, res: Response) => {
       createdBy: adminId,
     });
 
+    // ✅ BROADCAST NEW PRODUCT VIA WEBSOCKET
+    wsManager.broadcastNewProduct(product);
+
     res.status(201).json({
       message: "Product created successfully",
       data: product,
@@ -94,6 +98,15 @@ export const updateProductQuantityFromSubmission = async (
     const result = await updateProductQuantityFromSubmissionService({
       submissionId,
       productId,
+    });
+
+    // ✅ BROADCAST PRODUCT UPDATE VIA WEBSOCKET
+    wsManager.broadcastProductUpdate({
+      productId: result.product.id,
+      productName: result.product.productName,
+      action: "UPDATED",
+      timestamp: new Date().toISOString(),
+      data: result,
     });
 
     res.status(200).json({
@@ -161,6 +174,9 @@ export const createProductFromSubmission = async (
       },
     });
 
+    // ✅ BROADCAST NEW PRODUCT VIA WEBSOCKET
+    wsManager.broadcastNewProduct(result.product);
+
     res.status(201).json({
       message: "Product created and submission approved successfully",
       data: result,
@@ -206,6 +222,15 @@ export const updateProduct = async (req: Request, res: Response) => {
 
     const result = await updateProductService(productId, updateData, adminId);
 
+    // ✅ BROADCAST PRODUCT UPDATE VIA WEBSOCKET
+    wsManager.broadcastProductUpdate({
+      productId: result.id,
+      productName: result.productName,
+      action: "UPDATED",
+      timestamp: new Date().toISOString(),
+      data: result,
+    });
+
     res.status(200).json({
       message: "Product updated successfully",
       data: result,
@@ -224,6 +249,14 @@ export const deleteProduct = async (req: Request, res: Response) => {
     const { productId } = req.params;
 
     await deleteProductService(productId);
+
+    // ✅ BROADCAST PRODUCT DELETION VIA WEBSOCKET
+    wsManager.broadcastProductUpdate({
+      productId,
+      productName: "Deleted Product",
+      action: "DELETED",
+      timestamp: new Date().toISOString(),
+    });
 
     res.status(200).json({
       message: "Product deleted successfully",
@@ -343,6 +376,9 @@ export const approveSubmission = async (req: Request, res: Response) => {
     const { submissionId } = req.params;
 
     const result = await approveSubmissionService(submissionId);
+
+    // NEW PRODUCT VIA WEBSOCKET
+    wsManager.broadcastNewProduct(result);
 
     res.status(200).json({
       message: "Submission approved successfully",

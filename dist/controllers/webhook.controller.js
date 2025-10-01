@@ -10,7 +10,8 @@ const emailTemplates_1 = require("../utils/emailTemplates");
 const sms_utility_1 = require("../utils/sms.utility");
 const cart_service_1 = require("../services/cart.service");
 const db_retry_utls_1 = require("../utils/db-retry.utls");
-// Shared function to process wallet transactions with retry logic
+const index_1 = require("../index");
+// Process wallet transactions with WebSocket notification
 async function processWalletTransaction(txRef, flwRef, status, currency) {
     console.log("Processing wallet transaction for reference:", txRef);
     const walletTransaction = await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
@@ -91,12 +92,9 @@ async function processWalletTransaction(txRef, flwRef, status, currency) {
         }
         console.log(`Wallet top-up failed: ${walletTransaction.id}`);
     }
-    else {
-        console.log(`Transaction already processed or status unchanged: ${walletTransaction.status}`);
-    }
     return walletTransaction;
 }
-// Shared function to process order payments with retry logic
+// Process checkout payment with WebSocket notification
 async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "FLUTTERWAVE", eventType, data) {
     const whereClause = paymentProvider === "PAYPACK"
         ? { paymentReference: txRef, paymentProvider: "PAYPACK" }
@@ -145,7 +143,7 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
                 data: updateData,
             });
         });
-        // Update existing order if it exists
+        // Update order status
         try {
             await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
                 return await prisma_1.default.order.update({
@@ -157,11 +155,19 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
                     },
                 });
             });
+            // ✅ BROADCAST ORDER STATUS UPDATE VIA WEBSOCKET
+            index_1.wsManager.broadcastOrderUpdate({
+                orderId: orderData.id,
+                status: "CONFIRMED",
+                paymentStatus: "COMPLETED",
+                timestamp: new Date().toISOString(),
+                restaurantId: orderData.restaurantId,
+            });
         }
         catch (orderUpdateError) {
             console.error("Failed to update order status:", orderUpdateError);
         }
-        // Clear cart if order is completed
+        // Clear cart
         if (orderData.cartId && (orderData.cart?.cartItems?.length ?? 0) > 0) {
             try {
                 await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
@@ -172,7 +178,7 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
                 console.error("Failed to clear cart:", clearCartError);
             }
         }
-        // Send notifications (these are not critical, so we don't retry them)
+        // Send notifications
         try {
             await (0, sms_utility_1.sendMessage)(`Dear ${orderData.billingName || orderData.restaurant.name || ""}, Payment completed: ${orderData.totalAmount} ${orderData.currency}. Thank you!`, orderData.billingPhone || orderData.restaurant.phone || "");
         }
@@ -214,7 +220,7 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
                 },
             });
         });
-        // Update order status to failed/cancelled
+        // Update order status
         try {
             await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
                 return await prisma_1.default.order.update({
@@ -225,6 +231,14 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
                         updatedAt: new Date(),
                     },
                 });
+            });
+            // ✅ BROADCAST ORDER STATUS UPDATE VIA WEBSOCKET
+            index_1.wsManager.broadcastOrderUpdate({
+                orderId: orderData.id,
+                status: "CANCELLED",
+                paymentStatus: "FAILED",
+                timestamp: new Date().toISOString(),
+                restaurantId: orderData.restaurantId,
             });
         }
         catch (orderUpdateError) {
@@ -260,20 +274,16 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
     }
     return orderData;
 }
-// Helper function to detect payment provider based on request body structure
 function detectPaymentProvider(body) {
-    // PayPack has nested structure with info?.data?.status and info.data?.ref
     if (body?.data?.status !== undefined && body?.data?.ref !== undefined) {
         return "PAYPACK";
     }
-    // Flutterwave has flat structure with data.txRef, data["event.type"] and data.status
     if (body?.txRef !== undefined ||
         body?.tx_ref !== undefined ||
         body?.["event.type"] !== undefined ||
         body?.event !== undefined) {
         return "FLUTTERWAVE";
     }
-    // Default to Flutterwave if structure is unclear
     return "FLUTTERWAVE";
 }
 const handleChargeCompleted = async (data) => {
@@ -288,12 +298,10 @@ const handleChargeCompleted = async (data) => {
             return;
         }
         console.log(`Processing transaction: txRef=${txRef}, flwRef=${flwRef}, status=${status}`);
-        // Check if this is a wallet top-up transaction
         if (txRef && (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))) {
             await processWalletTransaction(txRef, flwRef, status, data.currency);
         }
         else {
-            // Process as regular order payment
             await processCheckoutPayment(txRef, flwRef, status, "FLUTTERWAVE", eventType, data);
         }
     }
@@ -307,9 +315,7 @@ const handlePaymentWebhook = async (req, res) => {
         const payload = req.body;
         const paymentProvider = detectPaymentProvider(payload);
         console.log(`${paymentProvider} Webhook received:`, JSON.stringify(payload, null, 2));
-        // Handle Flutterwave webhook
         if (paymentProvider === "FLUTTERWAVE") {
-            // Verify webhook signature
             const secretHash = process.env.FLW_SECRET_HASH;
             const signature = req.headers["verif-hash"];
             if (!signature || signature !== secretHash) {
@@ -317,9 +323,7 @@ const handlePaymentWebhook = async (req, res) => {
             }
             await handleChargeCompleted(payload);
         }
-        // Handle PayPack webhook
         else if (paymentProvider === "PAYPACK") {
-            // Verify PayPack webhook signature
             const paypackSignature = req.headers["x-paypack-signature"];
             const paypackSecret = process.env.PAYPACK_WEBHOOK_SECRET;
             if (!paypackSecret) {
@@ -328,13 +332,10 @@ const handlePaymentWebhook = async (req, res) => {
             if (!paypackSignature) {
                 return res.status(401).json({ error: "Missing signature header" });
             }
-            // Use raw body for signature verification
             let rawBody;
-            // Check if we have access to raw body
             if (req.rawBody) {
                 rawBody = req.rawBody;
             }
-            // If raw body not available, convert payload back to string
             else {
                 rawBody = JSON.stringify(payload);
             }
@@ -354,13 +355,11 @@ const handlePaymentWebhook = async (req, res) => {
                     .status(400)
                     .json({ error: "No transaction reference provided" });
             }
-            // Check if this is a wallet top-up transaction
             if (txRef &&
                 (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))) {
                 await processWalletTransaction(txRef, flwRef, paymentStatus);
             }
             else {
-                // Process as regular order payment
                 await processCheckoutPayment(txRef, flwRef, paymentStatus, "PAYPACK");
             }
         }
@@ -368,7 +367,6 @@ const handlePaymentWebhook = async (req, res) => {
     }
     catch (error) {
         console.error("Payment webhook processing error:", error);
-        // Check if it's a database connection issue
         if (error.message?.includes("timeout") || error.code === "P1017") {
             return res.status(503).json({
                 error: "Service temporarily unavailable",

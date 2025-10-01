@@ -8,8 +8,9 @@ import {
 import { sendMessage } from "../utils/sms.utility";
 import { clearCartService } from "../services/cart.service";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
+import { wsManager } from "../index";
 
-// Shared function to process wallet transactions with retry logic
+// Process wallet transactions with WebSocket notification
 async function processWalletTransaction(
   txRef: string,
   flwRef: string,
@@ -109,16 +110,12 @@ async function processWalletTransaction(
     }
 
     console.log(`Wallet top-up failed: ${walletTransaction.id}`);
-  } else {
-    console.log(
-      `Transaction already processed or status unchanged: ${walletTransaction.status}`
-    );
   }
 
   return walletTransaction;
 }
 
-// Shared function to process order payments with retry logic
+// Process checkout payment with WebSocket notification
 async function processCheckoutPayment(
   txRef: string,
   flwRef: string,
@@ -181,7 +178,7 @@ async function processCheckoutPayment(
       });
     });
 
-    // Update existing order if it exists
+    // Update order status
     try {
       await retryDatabaseOperation(async () => {
         return await prisma.order.update({
@@ -193,11 +190,20 @@ async function processCheckoutPayment(
           },
         });
       });
+
+      // ✅ BROADCAST ORDER STATUS UPDATE VIA WEBSOCKET
+      wsManager.broadcastOrderUpdate({
+        orderId: orderData.id,
+        status: "CONFIRMED",
+        paymentStatus: "COMPLETED",
+        timestamp: new Date().toISOString(),
+        restaurantId: orderData.restaurantId,
+      });
     } catch (orderUpdateError) {
       console.error("Failed to update order status:", orderUpdateError);
     }
 
-    // Clear cart if order is completed
+    // Clear cart
     if (orderData.cartId && (orderData.cart?.cartItems?.length ?? 0) > 0) {
       try {
         await retryDatabaseOperation(async () => {
@@ -208,7 +214,7 @@ async function processCheckoutPayment(
       }
     }
 
-    // Send notifications (these are not critical, so we don't retry them)
+    // Send notifications
     try {
       await sendMessage(
         `Dear ${
@@ -257,7 +263,7 @@ async function processCheckoutPayment(
       });
     });
 
-    // Update order status to failed/cancelled
+    // Update order status
     try {
       await retryDatabaseOperation(async () => {
         return await prisma.order.update({
@@ -268,6 +274,15 @@ async function processCheckoutPayment(
             updatedAt: new Date(),
           },
         });
+      });
+
+      // ✅ BROADCAST ORDER STATUS UPDATE VIA WEBSOCKET
+      wsManager.broadcastOrderUpdate({
+        orderId: orderData.id,
+        status: "CANCELLED",
+        paymentStatus: "FAILED",
+        timestamp: new Date().toISOString(),
+        restaurantId: orderData.restaurantId,
       });
     } catch (orderUpdateError) {
       console.error("Failed to update failed order status:", orderUpdateError);
@@ -312,14 +327,11 @@ async function processCheckoutPayment(
   return orderData;
 }
 
-// Helper function to detect payment provider based on request body structure
 function detectPaymentProvider(body: any): "FLUTTERWAVE" | "PAYPACK" {
-  // PayPack has nested structure with info?.data?.status and info.data?.ref
   if (body?.data?.status !== undefined && body?.data?.ref !== undefined) {
     return "PAYPACK";
   }
 
-  // Flutterwave has flat structure with data.txRef, data["event.type"] and data.status
   if (
     body?.txRef !== undefined ||
     body?.tx_ref !== undefined ||
@@ -329,7 +341,6 @@ function detectPaymentProvider(body: any): "FLUTTERWAVE" | "PAYPACK" {
     return "FLUTTERWAVE";
   }
 
-  // Default to Flutterwave if structure is unclear
   return "FLUTTERWAVE";
 }
 
@@ -353,11 +364,9 @@ const handleChargeCompleted = async (data: any) => {
       `Processing transaction: txRef=${txRef}, flwRef=${flwRef}, status=${status}`
     );
 
-    // Check if this is a wallet top-up transaction
     if (txRef && (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))) {
       await processWalletTransaction(txRef, flwRef, status, data.currency);
     } else {
-      // Process as regular order payment
       await processCheckoutPayment(
         txRef,
         flwRef,
@@ -383,9 +392,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       JSON.stringify(payload, null, 2)
     );
 
-    // Handle Flutterwave webhook
     if (paymentProvider === "FLUTTERWAVE") {
-      // Verify webhook signature
       const secretHash = process.env.FLW_SECRET_HASH;
       const signature = req.headers["verif-hash"];
 
@@ -394,10 +401,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       }
 
       await handleChargeCompleted(payload);
-    }
-    // Handle PayPack webhook
-    else if (paymentProvider === "PAYPACK") {
-      // Verify PayPack webhook signature
+    } else if (paymentProvider === "PAYPACK") {
       const paypackSignature = req.headers["x-paypack-signature"] as string;
       const paypackSecret = process.env.PAYPACK_WEBHOOK_SECRET;
 
@@ -409,15 +413,11 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
         return res.status(401).json({ error: "Missing signature header" });
       }
 
-      // Use raw body for signature verification
       let rawBody: string;
 
-      // Check if we have access to raw body
       if ((req as any).rawBody) {
         rawBody = (req as any).rawBody;
-      }
-      // If raw body not available, convert payload back to string
-      else {
+      } else {
         rawBody = JSON.stringify(payload);
       }
 
@@ -441,14 +441,12 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
           .json({ error: "No transaction reference provided" });
       }
 
-      // Check if this is a wallet top-up transaction
       if (
         txRef &&
         (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))
       ) {
         await processWalletTransaction(txRef, flwRef, paymentStatus);
       } else {
-        // Process as regular order payment
         await processCheckoutPayment(txRef, flwRef, paymentStatus, "PAYPACK");
       }
     }
@@ -456,7 +454,6 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("Payment webhook processing error:", error);
 
-    // Check if it's a database connection issue
     if (error.message?.includes("timeout") || error.code === "P1017") {
       return res.status(503).json({
         error: "Service temporarily unavailable",
