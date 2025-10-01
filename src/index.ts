@@ -1,4 +1,5 @@
 import express from "express";
+import http from "http";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import swaggerJSDoc from "swagger-jsdoc";
@@ -6,6 +7,7 @@ import YAML from "yamljs";
 import { IncomingMessage } from "http";
 import routes from "./routes";
 import { ENV } from "./config";
+import WebSocketManager from "./utils/websocket_manager";
 
 interface CustomIncomingMessage extends IncomingMessage {
   rawBody: Buffer;
@@ -28,6 +30,13 @@ const specs = swaggerJSDoc(options);
 
 const app = express();
 
+// Create HTTP server
+const httpServer = http.createServer(app);
+
+// Initialize WebSocket Manager
+export const wsManager = new WebSocketManager();
+wsManager.initialize(httpServer);
+
 app.use(
   cors({
     origin: "*",
@@ -45,7 +54,6 @@ app.use(
   })
 );
 app.use(express.urlencoded({ extended: false }));
-// Remove cookieParser middleware
 
 app.use("/", routes);
 
@@ -59,7 +67,36 @@ app.get("/", (_req, res) => {
   res.status(200).json({ message: "FoodBundles Backend API is running!!!" });
 });
 
+// WebSocket stats endpoint
+app.get("/ws/stats", (_req, res) => {
+  const stats = wsManager.getStats();
+  res.status(200).json(stats);
+});
+
 const PORT = ENV.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+
+httpServer.listen(PORT, () => {
+  console.log(`
+====================================
+🚀 FoodBundles API Server running on port ${PORT}
+📡 WebSocket endpoint: ws://localhost:${PORT}/api/ws
+📚 API Documentation: http://localhost:${PORT}/api-docs
+====================================
+  `);
+});
+
+// Graceful shutdown
+process.on("SIGINT", () => {
+  wsManager.cleanup();
+  httpServer.close(() => {
+    console.log("Server shut down gracefully");
+    process.exit(0);
+  });
+});
+
+process.on("SIGTERM", () => {
+  wsManager.cleanup();
+  httpServer.close(() => {
+    process.exit(0);
+  });
 });
