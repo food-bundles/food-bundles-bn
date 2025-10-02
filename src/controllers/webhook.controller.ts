@@ -9,6 +9,7 @@ import { sendMessage } from "../utils/sms.utility";
 import { clearCartService } from "../services/cart.service";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { wsManager } from "../index";
+import { OrderStatus, PaymentStatus } from "@prisma/client";
 
 // Process wallet transactions with WebSocket notification
 async function processWalletTransaction(
@@ -151,13 +152,12 @@ async function processCheckoutPayment(
     return null;
   }
 
-  console.log("Found matching order:", orderData.id);
+  console.log("Found matching order:", orderData);
 
   if (status === "successful" && orderData.paymentStatus !== "COMPLETED") {
     const updateData: any = {
-      paymentStatus: "COMPLETED",
+      paymentStatus: PaymentStatus.COMPLETED,
       flwStatus: "successful",
-      flwMessage: `Payment completed via ${paymentProvider.toLowerCase()} webhook`,
       transactionId: data?.id?.toString() || flwRef,
       flwRef: flwRef,
       paidAt: new Date(),
@@ -165,10 +165,10 @@ async function processCheckoutPayment(
     };
 
     if (paymentProvider === "FLUTTERWAVE") {
-      updateData.appFee = data?.appfee;
-      updateData.merchantFee = data?.merchantfee;
+      updateData.appFee = data?.appfee || data?.data?.fee;
+      updateData.merchantFee = data?.merchantfee || data?.data?.merchantfee;
     } else if (paymentProvider === "PAYPACK") {
-      updateData.appFee = data?.data?.fee;
+      updateData.appFee = data?.appfee || data?.data?.fee;
     }
 
     await retryDatabaseOperation(async () => {
@@ -184,8 +184,8 @@ async function processCheckoutPayment(
         return await prisma.order.update({
           where: { id: orderData.id },
           data: {
-            paymentStatus: "COMPLETED",
-            status: "CONFIRMED",
+            paymentStatus: PaymentStatus.COMPLETED,
+            status: OrderStatus.CONFIRMED,
             updatedAt: new Date(),
           },
         });
@@ -254,7 +254,7 @@ async function processCheckoutPayment(
       return await prisma.order.update({
         where: { id: orderData.id },
         data: {
-          paymentStatus: "FAILED",
+          paymentStatus: PaymentStatus.FAILED,
           flwStatus: "failed",
           transactionId: data?.id?.toString() || flwRef,
           flwRef: flwRef,
@@ -269,8 +269,8 @@ async function processCheckoutPayment(
         return await prisma.order.update({
           where: { id: orderData.id },
           data: {
-            paymentStatus: "FAILED",
-            status: "CANCELLED",
+            paymentStatus: PaymentStatus.FAILED,
+            status: OrderStatus.CANCELLED,
             updatedAt: new Date(),
           },
         });

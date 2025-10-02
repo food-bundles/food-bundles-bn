@@ -438,8 +438,6 @@ export const getOrderByIdService = async (
     },
   });
 
-  console.log("Fetched order:", order);
-
   if (!order) {
     throw new Error("Order not found");
   }
