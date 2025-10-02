@@ -289,19 +289,6 @@ async function processCheckoutPayment(
     }
 
     try {
-      await sendMessage(
-        `Dear ${
-          orderData.billingName || orderData.restaurant.name || ""
-        }, Payment failed: ${orderData.totalAmount} ${
-          orderData.currency
-        }. Please try again.`,
-        orderData.billingPhone || orderData.restaurant.phone || ""
-      );
-    } catch (smsError) {
-      console.error("Failed to send failure SMS notification:", smsError);
-    }
-
-    try {
       await sendPaymentFailedEmail({
         amount: orderData.totalAmount,
         transactionId: data?.id?.toString() || flwRef,

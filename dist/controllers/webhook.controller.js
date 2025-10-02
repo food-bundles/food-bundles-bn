@@ -245,12 +245,6 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
             console.error("Failed to update failed order status:", orderUpdateError);
         }
         try {
-            await (0, sms_utility_1.sendMessage)(`Dear ${orderData.billingName || orderData.restaurant.name || ""}, Payment failed: ${orderData.totalAmount} ${orderData.currency}. Please try again.`, orderData.billingPhone || orderData.restaurant.phone || "");
-        }
-        catch (smsError) {
-            console.error("Failed to send failure SMS notification:", smsError);
-        }
-        try {
             await (0, emailTemplates_1.sendPaymentFailedEmail)({
                 amount: orderData.totalAmount,
                 transactionId: data?.id?.toString() || flwRef,
