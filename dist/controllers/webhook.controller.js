@@ -11,6 +11,7 @@ const sms_utility_1 = require("../utils/sms.utility");
 const cart_service_1 = require("../services/cart.service");
 const db_retry_utls_1 = require("../utils/db-retry.utls");
 const index_1 = require("../index");
+const client_1 = require("@prisma/client");
 // Process wallet transactions with WebSocket notification
 async function processWalletTransaction(txRef, flwRef, status, currency) {
     console.log("Processing wallet transaction for reference:", txRef);
@@ -119,23 +120,22 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
         console.log("No matching order found for txRef:", txRef);
         return null;
     }
-    console.log("Found matching order:", orderData.id);
+    console.log("Found matching order:", orderData);
     if (status === "successful" && orderData.paymentStatus !== "COMPLETED") {
         const updateData = {
-            paymentStatus: "COMPLETED",
+            paymentStatus: client_1.PaymentStatus.COMPLETED,
             flwStatus: "successful",
-            flwMessage: `Payment completed via ${paymentProvider.toLowerCase()} webhook`,
             transactionId: data?.id?.toString() || flwRef,
             flwRef: flwRef,
             paidAt: new Date(),
             updatedAt: new Date(),
         };
         if (paymentProvider === "FLUTTERWAVE") {
-            updateData.appFee = data?.appfee;
-            updateData.merchantFee = data?.merchantfee;
+            updateData.appFee = data?.appfee || data?.data?.fee;
+            updateData.merchantFee = data?.merchantfee || data?.data?.merchantfee;
         }
         else if (paymentProvider === "PAYPACK") {
-            updateData.appFee = data?.data?.fee;
+            updateData.appFee = data?.appfee || data?.data?.fee;
         }
         await (0, db_retry_utls_1.retryDatabaseOperation)(async () => {
             return await prisma_1.default.order.update({
@@ -149,8 +149,8 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
                 return await prisma_1.default.order.update({
                     where: { id: orderData.id },
                     data: {
-                        paymentStatus: "COMPLETED",
-                        status: "CONFIRMED",
+                        paymentStatus: client_1.PaymentStatus.COMPLETED,
+                        status: client_1.OrderStatus.CONFIRMED,
                         updatedAt: new Date(),
                     },
                 });
@@ -212,7 +212,7 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
             return await prisma_1.default.order.update({
                 where: { id: orderData.id },
                 data: {
-                    paymentStatus: "FAILED",
+                    paymentStatus: client_1.PaymentStatus.FAILED,
                     flwStatus: "failed",
                     transactionId: data?.id?.toString() || flwRef,
                     flwRef: flwRef,
@@ -226,8 +226,8 @@ async function processCheckoutPayment(txRef, flwRef, status, paymentProvider = "
                 return await prisma_1.default.order.update({
                     where: { id: orderData.id },
                     data: {
-                        paymentStatus: "FAILED",
-                        status: "CANCELLED",
+                        paymentStatus: client_1.PaymentStatus.FAILED,
+                        status: client_1.OrderStatus.CANCELLED,
                         updatedAt: new Date(),
                     },
                 });
