@@ -37,7 +37,6 @@ export interface UpdateCheckoutData {
   authorizationMode?: string;
   authorizationUrl?: string;
   flwStatus?: string;
-  flwMessage?: string;
   chargedAmount?: number;
   appFee?: number;
   merchantFee?: number;

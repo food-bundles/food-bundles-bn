@@ -57,7 +57,6 @@ export interface UpdateOrderData {
   flwRef?: string;
   transactionId?: string;
   flwStatus?: string;
-  flwMessage?: string;
   chargedAmount?: number;
   appFee?: number;
   merchantFee?: number;

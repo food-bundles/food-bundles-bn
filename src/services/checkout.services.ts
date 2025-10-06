@@ -309,7 +309,6 @@ export const processPaymentService = async (
         paymentReference: paymentResult.reference,
         flwRef: paymentResult.flwRef,
         flwStatus: paymentResult.status,
-        flwMessage: paymentResult.message,
       };
 
       // Add card payment specific data if applicable
@@ -454,7 +453,6 @@ export const processPaymentService = async (
           updateOrderService(orderId, {
             paymentStatus: "FAILED",
             flwStatus: "failed",
-            flwMessage: paymentResult.error || "Payment failed",
           }),
           order &&
             order.id &&
@@ -486,7 +484,6 @@ export const processPaymentService = async (
         updateOrderService(orderId, {
           paymentStatus: "FAILED",
           flwStatus: "failed",
-          flwMessage: error.message,
         }).catch(console.error),
         order &&
           order.id &&

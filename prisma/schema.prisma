@@ -68,10 +68,11 @@ model Restaurant {
   updatedAt DateTime @updatedAt
 
   // Relations
-  orders   Order[]
-  posSales POSSale[]
-  Cart     Cart[]
-  Wallet   Wallet?
+  orders        Order[]
+  posSales      POSSale[]
+  Cart          Cart[]
+  Wallet        Wallet?
+  subscriptions RestaurantSubscription[]
 }
 
 model FarmerSubmission {
@@ -546,6 +547,106 @@ model POSSale {
   restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
 }
 
+// Subscription Plan model
+model SubscriptionPlan {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  price       Float
+  duration    Int // Duration in days
+  features    Json? // Array of features included in the plan
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  subscriptions RestaurantSubscription[]
+
+  @@index([isActive])
+  @@index([name])
+}
+
+// Restaurant Subscription model
+model RestaurantSubscription {
+  id            String             @id @default(uuid())
+  restaurantId  String
+  planId        String
+  status        SubscriptionStatus @default(ACTIVE)
+  startDate     DateTime           @default(now())
+  endDate       DateTime
+  autoRenew     Boolean            @default(true)
+  paymentMethod PaymentMethod?
+  paymentStatus PaymentStatus      @default(PENDING)
+
+  // Payment tracking
+  txRef         String? @unique
+  flwRef        String?
+  transactionId String?
+  amountPaid    Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  restaurant Restaurant            @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  plan       SubscriptionPlan      @relation(fields: [planId], references: [id])
+  payments   SubscriptionPayment[]
+  history    SubscriptionHistory[]
+
+  @@index([restaurantId])
+  @@index([planId])
+  @@index([status])
+  @@index([endDate])
+}
+
+// Subscription Payment model
+model SubscriptionPayment {
+  id             String        @id @default(uuid())
+  subscriptionId String
+  amount         Float
+  paymentMethod  PaymentMethod
+  paymentStatus  PaymentStatus @default(PENDING)
+
+  // Payment integration fields
+  txRef         String? @unique
+  flwRef        String?
+  transactionId String?
+  flwStatus     String?
+  flwMessage    String?
+
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  subscription RestaurantSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([paymentStatus])
+  @@index([txRef])
+}
+
+// Subscription History model for tracking changes
+model SubscriptionHistory {
+  id             String              @id @default(uuid())
+  subscriptionId String
+  action         SubscriptionAction
+  oldStatus      SubscriptionStatus?
+  newStatus      SubscriptionStatus?
+  oldPlanId      String?
+  newPlanId      String?
+  reason         String?
+  performedBy    String? // Admin ID who performed the action
+  createdAt      DateTime            @default(now())
+
+  // Relations
+  subscription RestaurantSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([action])
+  @@index([createdAt])
+}
+
 enum Role {
   FARMER
   RESTAURANT
@@ -627,4 +728,23 @@ enum TransactionStatus {
   FAILED
   CANCELLED
   REFUNDED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  SUSPENDED
+  PENDING
+}
+
+enum SubscriptionAction {
+  CREATED
+  RENEWED
+  UPGRADED
+  DOWNGRADED
+  CANCELLED
+  SUSPENDED
+  REACTIVATED
+  EXPIRED
 }
