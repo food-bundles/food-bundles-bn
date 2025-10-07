@@ -1,0 +1,1680 @@
+tags:
+  - name: Voucher Management
+    description: Operations for managing vouchers, credit limits, and discount applications
+  - name: Loan Management
+    description: Loan application, approval, and disbursement workflows
+  - name: Voucher Payments
+    description: Voucher payment processing during checkout
+  - name: Repayment & Penalties
+    description: Repayment processing and penalty management
+  - name: Credit Analytics
+    description: Credit summary and outstanding balance tracking
+
+components:
+  schemas:
+    # Voucher Schemas
+    Voucher:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique voucher identifier
+          example: "vch-12345-abcde"
+        voucherCode:
+          type: string
+          description: Unique human-readable voucher code
+          example: "VCH-20241201-ABC123"
+        voucherType:
+          type: string
+          enum: [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80]
+          description: Voucher discount type
+        discountPercentage:
+          type: number
+          format: float
+          description: Actual discount percentage
+          example: 20.0
+        creditLimit:
+          type: number
+          format: float
+          description: Total credit limit
+          example: 500000
+        totalCredit:
+          type: number
+          format: float
+          description: Original credit amount
+          example: 500000
+        usedCredit:
+          type: number
+          format: float
+          description: Amount used so far
+          example: 150000
+        remainingCredit:
+          type: number
+          format: float
+          description: Available credit balance
+          example: 350000
+        minTransactionAmount:
+          type: number
+          format: float
+          description: Minimum transaction amount
+          example: 10000
+        maxTransactionAmount:
+          type: number
+          format: float
+          nullable: true
+          description: Maximum transaction amount
+          example: 100000
+        status:
+          type: string
+          enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
+          description: Current voucher status
+        expiryDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Voucher expiration date
+        serviceFeeRate:
+          type: number
+          format: float
+          description: Service fee percentage
+          example: 10.0
+        restaurant:
+          $ref: "#/components/schemas/RestaurantInfo"
+        loan:
+          $ref: "#/components/schemas/LoanInfo"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoucherTransaction"
+        penalties:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoucherPenalty"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateVoucherRequest:
+      type: object
+      required:
+        - restaurantId
+        - voucherType
+        - creditLimit
+      properties:
+        restaurantId:
+          type: string
+          description: Restaurant ID to assign voucher to
+          example: "rest-12345"
+        voucherType:
+          type: string
+          enum: [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80]
+          description: Type of discount voucher
+        creditLimit:
+          type: number
+          format: float
+          minimum: 1000
+          description: Total credit limit
+          example: 500000
+        minTransactionAmount:
+          type: number
+          format: float
+          default: 0
+          description: Minimum transaction amount
+          example: 10000
+        maxTransactionAmount:
+          type: number
+          format: float
+          nullable: true
+          description: Maximum transaction amount
+          example: 100000
+        expiryDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Voucher expiration date
+        loanId:
+          type: string
+          nullable: true
+          description: Associated loan ID (if created from loan)
+
+    VoucherTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+        voucherId:
+          type: string
+        orderId:
+          type: string
+        originalAmount:
+          type: number
+          format: float
+          description: Original order amount before discount
+          example: 50000
+        discountPercentage:
+          type: number
+          format: float
+          description: Applied discount percentage
+          example: 20.0
+        discountAmount:
+          type: number
+          format: float
+          description: Discount amount deducted
+          example: 10000
+        amountCharged:
+          type: number
+          format: float
+          description: Amount charged to voucher (after discount)
+          example: 40000
+        serviceFee:
+          type: number
+          format: float
+          description: Service fee (10% of amount charged)
+          example: 4000
+        totalDeducted:
+          type: number
+          format: float
+          description: Total deducted from voucher (amount + fee)
+          example: 44000
+        transactionDate:
+          type: string
+          format: date-time
+        order:
+          type: object
+          properties:
+            id:
+              type: string
+            orderNumber:
+              type: string
+            totalAmount:
+              type: number
+              format: float
+            status:
+              type: string
+
+    # Loan Schemas
+    LoanApplication:
+      type: object
+      properties:
+        id:
+          type: string
+        restaurantId:
+          type: string
+        requestedAmount:
+          type: number
+          format: float
+          description: Original requested amount
+          example: 1000000
+        approvedAmount:
+          type: number
+          format: float
+          nullable: true
+          description: Approved amount by admin
+          example: 800000
+        purpose:
+          type: string
+          nullable: true
+          description: Loan purpose/justification
+        status:
+          type: string
+          enum: [PENDING, APPROVED, DISBURSED, REJECTED, SETTLED]
+          description: Loan application status
+        repaymentDueDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Due date for repayment
+        disbursementDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date when loan was disbursed
+        restaurant:
+          $ref: "#/components/schemas/RestaurantInfo"
+        approver:
+          $ref: "#/components/schemas/AdminInfo"
+        vouchers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Voucher"
+        repayments:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoucherRepayment"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateLoanApplicationRequest:
+      type: object
+      required:
+        - requestedAmount
+      properties:
+        requestedAmount:
+          type: number
+          format: float
+          minimum: 10000
+          description: Loan amount requested
+          example: 1000000
+        purpose:
+          type: string
+          description: Purpose/justification for the loan
+          example: "Inventory purchase for peak season"
+        terms:
+          type: string
+          description: Additional terms or notes
+          example: "Prefer 60-day repayment period"
+
+    ApproveLoanRequest:
+      type: object
+      required:
+        - approvedAmount
+        - voucherType
+      properties:
+        approvedAmount:
+          type: number
+          format: float
+          minimum: 1000
+          description: Approved loan amount
+          example: 800000
+        repaymentDays:
+          type: integer
+          default: 30
+          description: Repayment period in days
+          example: 30
+        voucherType:
+          type: string
+          enum: [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80]
+          description: Type of voucher to create
+        notes:
+          type: string
+          description: Approval notes or conditions
+
+    # Payment & Repayment Schemas
+    VoucherPaymentRequest:
+      type: object
+      required:
+        - voucherId
+        - orderId
+        - originalAmount
+      properties:
+        voucherId:
+          type: string
+          description: Voucher ID to use for payment
+        orderId:
+          type: string
+          description: Order ID to apply voucher to
+        originalAmount:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Original order total before discount
+          example: 50000
+
+    VoucherPaymentResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            transaction:
+              $ref: "#/components/schemas/VoucherTransaction"
+            voucher:
+              $ref: "#/components/schemas/Voucher"
+
+    RepaymentRequest:
+      type: object
+      required:
+        - loanId
+        - amount
+        - paymentMethod
+      properties:
+        loanId:
+          type: string
+          description: Loan ID to make repayment for
+        amount:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Repayment amount
+          example: 100000
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Payment method for repayment
+        paymentReference:
+          type: string
+          nullable: true
+          description: Payment reference from gateway
+        voucherId:
+          type: string
+          nullable: true
+          description: Specific voucher ID (optional)
+
+    VoucherRepayment:
+      type: object
+      properties:
+        id:
+          type: string
+        amount:
+          type: number
+          format: float
+        paymentMethod:
+          type: string
+        allocatedToPrincipal:
+          type: number
+          format: float
+        allocatedToServiceFee:
+          type: number
+          format: float
+        allocatedToPenalty:
+          type: number
+          format: float
+        paymentDate:
+          type: string
+          format: date-time
+        voucher:
+          $ref: "#/components/schemas/Voucher"
+        loan:
+          $ref: "#/components/schemas/LoanApplication"
+
+    # Penalty Schemas
+    VoucherPenalty:
+      type: object
+      properties:
+        id:
+          type: string
+        penaltyAmount:
+          type: number
+          format: float
+          description: Penalty amount
+          example: 5000
+        daysOverdue:
+          type: integer
+          description: Number of days overdue
+          example: 15
+        penaltyRate:
+          type: number
+          format: float
+          description: Penalty rate percentage
+          example: 2.0
+        reason:
+          type: string
+          description: Penalty reason description
+        status:
+          type: string
+          enum: [PENDING, PAID, WAIVED]
+        appliedDate:
+          type: string
+          format: date-time
+        paidDate:
+          type: string
+          format: date-time
+          nullable: true
+
+    # Analytics & Summary Schemas
+    OutstandingBalance:
+      type: object
+      properties:
+        totalCredit:
+          type: number
+          format: float
+          description: Total credit issued
+        totalUsed:
+          type: number
+          format: float
+          description: Total credit used
+        totalServiceFees:
+          type: number
+          format: float
+          description: Total service fees accumulated
+        totalPenalties:
+          type: number
+          format: float
+          description: Total penalties applied
+        totalRepayments:
+          type: number
+          format: float
+          description: Total repayments made
+        outstandingPrincipal:
+          type: number
+          format: float
+          description: Outstanding principal amount
+        outstandingServiceFees:
+          type: number
+          format: float
+          description: Outstanding service fees
+        outstandingPenalties:
+          type: number
+          format: float
+          description: Outstanding penalties
+        total:
+          type: number
+          format: float
+          description: Total outstanding balance
+        transactions:
+          type: integer
+          description: Number of transactions
+        repayments:
+          type: integer
+          description: Number of repayments
+        penalties:
+          type: integer
+          description: Number of penalties
+
+    CreditSummary:
+      type: object
+      properties:
+        totalCreditIssued:
+          type: number
+          format: float
+          description: Total credit issued across all vouchers
+        totalUsed:
+          type: number
+          format: float
+          description: Total credit used
+        totalRemaining:
+          type: number
+          format: float
+          description: Total remaining credit
+        totalServiceFees:
+          type: number
+          format: float
+          description: Total service fees paid/accrued
+        totalPenalties:
+          type: number
+          format: float
+          description: Total penalties applied
+        totalRepayments:
+          type: number
+          format: float
+          description: Total repayments made
+        outstanding:
+          type: number
+          format: float
+          description: Current outstanding balance
+        activeVouchers:
+          type: integer
+          description: Number of active vouchers
+        totalVouchers:
+          type: integer
+          description: Total number of vouchers
+        vouchers:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              voucherCode:
+                type: string
+              status:
+                type: string
+              remainingCredit:
+                type: number
+                format: float
+              discountPercentage:
+                type: number
+                format: float
+
+    # Common Schemas
+    RestaurantInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+
+    AdminInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+
+    LoanInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        requestedAmount:
+          type: number
+          format: float
+        approvedAmount:
+          type: number
+          format: float
+        status:
+          type: string
+
+    ApiResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        error:
+          type: string
+          nullable: true
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ========================================
+  # VOUCHER MANAGEMENT ENDPOINTS
+  # ========================================
+
+  /vouchers:
+    post:
+      tags: [Voucher Management]
+      summary: Create new voucher (Admin only)
+      description: Create a new voucher with specified credit limit and discount type
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVoucherRequest"
+            examples:
+              discount_20:
+                summary: 20% Discount Voucher
+                value:
+                  restaurantId: "rest-12345"
+                  voucherType: "DISCOUNT_20"
+                  creditLimit: 500000
+                  minTransactionAmount: 10000
+                  maxTransactionAmount: 100000
+                  expiryDate: "2024-12-31T23:59:59Z"
+              discount_50:
+                summary: 50% Discount Voucher
+                value:
+                  restaurantId: "rest-67890"
+                  voucherType: "DISCOUNT_50"
+                  creditLimit: 1000000
+                  minTransactionAmount: 50000
+                  expiryDate: "2024-06-30T23:59:59Z"
+      responses:
+        201:
+          description: Voucher created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Voucher created successfully"
+                  data:
+                    $ref: "#/components/schemas/Voucher"
+        400:
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_fields:
+                  value:
+                    message: "Restaurant ID, voucher type, and credit limit are required"
+                invalid_type:
+                  value:
+                    message: "Invalid voucher type"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        500:
+          description: Internal server error
+
+    get:
+      tags: [Voucher Management]
+      summary: Get all vouchers (Admin only)
+      description: Retrieve all vouchers with filtering and pagination
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
+          description: Filter by voucher status
+        - name: restaurantId
+          in: query
+          schema:
+            type: string
+          description: Filter by restaurant ID
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Items per page
+      responses:
+        200:
+          description: Vouchers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Vouchers retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Voucher"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        500:
+          description: Internal server error
+
+  /vouchers/{id}:
+    get:
+      tags: [Voucher Management]
+      summary: Get voucher by ID
+      description: Retrieve detailed voucher information
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Voucher ID
+      responses:
+        200:
+          description: Voucher retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Voucher retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Voucher"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to voucher
+        404:
+          description: Voucher not found
+        500:
+          description: Internal server error
+
+    patch:
+      tags: [Voucher Management]
+      summary: Update voucher (Admin only)
+      description: Update voucher properties like status, limits, or expiry
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Voucher ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
+                expiryDate:
+                  type: string
+                  format: date-time
+                maxTransactionAmount:
+                  type: number
+                  format: float
+                minTransactionAmount:
+                  type: number
+                  format: float
+      responses:
+        200:
+          description: Voucher updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Voucher updated successfully"
+                  data:
+                    $ref: "#/components/schemas/Voucher"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        404:
+          description: Voucher not found
+        500:
+          description: Internal server error
+
+    delete:
+      tags: [Voucher Management]
+      summary: Deactivate voucher (Admin only)
+      description: Deactivate/suspend a voucher
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Voucher ID
+        - name: reason
+          in: query
+          schema:
+            type: string
+          description: Reason for deactivation
+      responses:
+        200:
+          description: Voucher deactivated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Voucher deactivated successfully"
+                  data:
+                    $ref: "#/components/schemas/Voucher"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        404:
+          description: Voucher not found
+        500:
+          description: Internal server error
+
+  /vouchers/restaurant/{restaurantId}:
+    get:
+      tags: [Voucher Management]
+      summary: Get restaurant's vouchers
+      description: Retrieve all vouchers for a specific restaurant
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Restaurant ID
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
+          description: Filter by voucher status
+        - name: activeOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Return only active, non-expired vouchers
+      responses:
+        200:
+          description: Vouchers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Vouchers retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Voucher"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to restaurant data
+        500:
+          description: Internal server error
+
+  /vouchers/available:
+    get:
+      tags: [Voucher Management]
+      summary: Get available vouchers for checkout
+      description: Retrieve vouchers available for current checkout based on order amount
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: amount
+          in: query
+          required: true
+          schema:
+            type: number
+            format: float
+            minimum: 0.01
+          description: Order total amount
+      responses:
+        200:
+          description: Available vouchers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Available vouchers retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Voucher"
+        400:
+          description: Order amount required
+        401:
+          description: Unauthorized
+        500:
+          description: Internal server error
+
+  /vouchers/code/{voucherCode}:
+    get:
+      tags: [Voucher Management]
+      summary: Get voucher by code
+      description: Retrieve voucher details using voucher code
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: voucherCode
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Voucher code
+      responses:
+        200:
+          description: Voucher retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Voucher retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Voucher"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to voucher
+        404:
+          description: Voucher not found
+        500:
+          description: Internal server error
+
+  /vouchers/{id}/transactions:
+    get:
+      tags: [Voucher Management]
+      summary: Get voucher transaction history
+      description: Retrieve transaction history for a specific voucher
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Voucher ID
+      responses:
+        200:
+          description: Transaction history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Transaction history retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VoucherTransaction"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to voucher
+        404:
+          description: Voucher not found
+        500:
+          description: Internal server error
+
+  # ========================================
+  # LOAN MANAGEMENT ENDPOINTS
+  # ========================================
+
+  /vouchers/loans/apply:
+    post:
+      tags: [Loan Management]
+      summary: Submit loan application (Restaurant)
+      description: Submit a new loan application for credit facility
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLoanApplicationRequest"
+            examples:
+              inventory_purchase:
+                summary: Inventory Purchase Loan
+                value:
+                  requestedAmount: 1000000
+                  purpose: "Purchase bulk inventory for upcoming season"
+                  terms: "Prefer 60-day repayment period"
+              equipment_upgrade:
+                summary: Equipment Upgrade Loan
+                value:
+                  requestedAmount: 2000000
+                  purpose: "Purchase new kitchen equipment"
+                  terms: "Can provide equipment as collateral"
+      responses:
+        201:
+          description: Loan application submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Loan application submitted successfully"
+                  data:
+                    $ref: "#/components/schemas/LoanApplication"
+        400:
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_amount:
+                  value:
+                    message: "Requested amount is required"
+                pending_application:
+                  value:
+                    message: "You already have a pending loan application"
+        401:
+          description: Unauthorized
+        403:
+          description: Restaurant access required
+        500:
+          description: Internal server error
+
+  /vouchers/loans/my-applications:
+    get:
+      tags: [Loan Management]
+      summary: Get restaurant's loan applications
+      description: Retrieve all loan applications for the authenticated restaurant
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Loan applications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Loan applications retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LoanApplication"
+        401:
+          description: Unauthorized
+        403:
+          description: Restaurant access required
+        500:
+          description: Internal server error
+
+  /vouchers/loans/applications:
+    get:
+      tags: [Loan Management]
+      summary: Get all loan applications (Admin only)
+      description: Retrieve all loan applications with filtering
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, DISBURSED, REJECTED, SETTLED]
+          description: Filter by application status
+        - name: restaurantId
+          in: query
+          schema:
+            type: string
+          description: Filter by restaurant ID
+      responses:
+        200:
+          description: Loan applications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Loan applications retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LoanApplication"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        500:
+          description: Internal server error
+
+  /vouchers/loans/{id}:
+    get:
+      tags: [Loan Management]
+      summary: Get loan application by ID
+      description: Retrieve detailed loan application information
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Loan application ID
+      responses:
+        200:
+          description: Loan application retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Loan application retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/LoanApplication"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to loan
+        404:
+          description: Loan application not found
+        500:
+          description: Internal server error
+
+  /vouchers/loans/{id}/approve:
+    patch:
+      tags: [Loan Management]
+      summary: Approve loan application (Admin only)
+      description: Approve a pending loan application with specified terms
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Loan application ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveLoanRequest"
+            examples:
+              partial_approval:
+                summary: Partial Approval
+                value:
+                  approvedAmount: 800000
+                  repaymentDays: 45
+                  voucherType: "DISCOUNT_20"
+                  notes: "Approved partial amount based on business history"
+      responses:
+        200:
+          description: Loan approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Loan approved successfully"
+                  data:
+                    $ref: "#/components/schemas/LoanApplication"
+        400:
+          description: Invalid approval data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        404:
+          description: Loan application not found
+        500:
+          description: Internal server error
+
+  /vouchers/loans/{id}/disburse:
+    post:
+      tags: [Loan Management]
+      summary: Disburse approved loan (Admin only)
+      description: Disburse an approved loan by creating vouchers
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Loan application ID
+      responses:
+        200:
+          description: Loan disbursed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Loan disbursed successfully"
+                  data:
+                    type: object
+                    properties:
+                      loan:
+                        $ref: "#/components/schemas/LoanApplication"
+                      voucher:
+                        $ref: "#/components/schemas/Voucher"
+        400:
+          description: Cannot disburse loan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        404:
+          description: Loan application not found
+        500:
+          description: Internal server error
+
+  /vouchers/loans/{id}/reject:
+    patch:
+      tags: [Loan Management]
+      summary: Reject loan application (Admin only)
+      description: Reject a pending loan application
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Loan application ID
+        - name: reason
+          in: query
+          schema:
+            type: string
+          description: Reason for rejection
+      responses:
+        200:
+          description: Loan rejected successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Loan rejected successfully"
+                  data:
+                    $ref: "#/components/schemas/LoanApplication"
+        400:
+          description: Cannot reject loan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        404:
+          description: Loan application not found
+        500:
+          description: Internal server error
+
+  # ========================================
+  # VOUCHER PAYMENT ENDPOINTS
+  # ========================================
+
+  /vouchers/checkout/voucher:
+    post:
+      tags: [Voucher Payments]
+      summary: Process voucher payment during checkout
+      description: Apply voucher to order and process payment using voucher credit
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoucherPaymentRequest"
+            examples:
+              standard_payment:
+                summary: Standard Voucher Payment
+                value:
+                  voucherId: "vch-12345-abcde"
+                  orderId: "order-67890-fghij"
+                  originalAmount: 50000
+      responses:
+        200:
+          description: Voucher payment processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoucherPaymentResponse"
+        400:
+          description: Voucher payment failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                insufficient_credit:
+                  value:
+                    message: "Insufficient voucher credit"
+                voucher_expired:
+                  value:
+                    message: "Voucher has expired"
+                invalid_transaction:
+                  value:
+                    message: "Transaction amount outside voucher limits"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to voucher
+        500:
+          description: Internal server error
+
+  # ========================================
+  # REPAYMENT & PENALTY ENDPOINTS
+  # ========================================
+
+  /vouchers/{id}/repay:
+    post:
+      tags: [Repayment & Penalties]
+      summary: Make repayment (Restaurant)
+      description: Make a repayment towards outstanding balance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Voucher ID (optional but recommended)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepaymentRequest"
+            examples:
+              mobile_money_repayment:
+                summary: Mobile Money Repayment
+                value:
+                  loanId: "loan-12345"
+                  amount: 100000
+                  paymentMethod: "MOBILE_MONEY"
+                  paymentReference: "MM123456789"
+              bank_transfer_repayment:
+                summary: Bank Transfer Repayment
+                value:
+                  loanId: "loan-12345"
+                  amount: 200000
+                  paymentMethod: "BANK_TRANSFER"
+                  paymentReference: "BT987654321"
+      responses:
+        200:
+          description: Repayment processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Repayment processed successfully"
+                  data:
+                    type: object
+                    properties:
+                      repayment:
+                        $ref: "#/components/schemas/VoucherRepayment"
+                      newOutstanding:
+                        $ref: "#/components/schemas/OutstandingBalance"
+        400:
+          description: Invalid repayment data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to loan
+        500:
+          description: Internal server error
+
+  /vouchers/{id}/outstanding:
+    get:
+      tags: [Repayment & Penalties]
+      summary: Get outstanding balance
+      description: Retrieve detailed outstanding balance information
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Voucher ID
+      responses:
+        200:
+          description: Outstanding balance retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Outstanding balance retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/OutstandingBalance"
+        400:
+          description: Voucher not associated with loan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to voucher
+        404:
+          description: Voucher not found
+        500:
+          description: Internal server error
+
+  /vouchers/{id}/penalties:
+    get:
+      tags: [Repayment & Penalties]
+      summary: Get penalties for voucher
+      description: Retrieve penalty details for a specific voucher/loan
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Voucher ID
+      responses:
+        200:
+          description: Penalties retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Penalties retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      total:
+                        type: number
+                        format: float
+                      pending:
+                        type: number
+                        format: float
+                      paid:
+                        type: number
+                        format: float
+                      penalties:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/VoucherPenalty"
+        400:
+          description: Voucher not associated with loan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to voucher
+        404:
+          description: Voucher not found
+        500:
+          description: Internal server error
+
+  /vouchers/penalties/calculate:
+    post:
+      tags: [Repayment & Penalties]
+      summary: Calculate penalties (Admin/System)
+      description: Trigger penalty calculation for overdue loans
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                loanId:
+                  type: string
+                  nullable: true
+                  description: Specific loan ID (optional - calculates all if not provided)
+                penaltyRatePerMonth:
+                  type: number
+                  format: float
+                  default: 2.0
+                  description: Penalty rate percentage per month
+      responses:
+        200:
+          description: Penalties calculated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Penalties calculated successfully"
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        loanId:
+                          type: string
+                        voucherId:
+                          type: string
+                        penalty:
+                          $ref: "#/components/schemas/VoucherPenalty"
+                        daysOverdue:
+                          type: integer
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        500:
+          description: Internal server error
+
+  /vouchers/penalties/{id}/waive:
+    post:
+      tags: [Repayment & Penalties]
+      summary: Waive penalty (Admin only)
+      description: Waive a penalty for a specific voucher/loan
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Penalty ID
+        - name: reason
+          in: query
+          schema:
+            type: string
+          description: Reason for waiving penalty
+      responses:
+        200:
+          description: Penalty waived successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Penalty waived successfully"
+                  data:
+                    $ref: "#/components/schemas/VoucherPenalty"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        404:
+          description: Penalty not found
+        500:
+          description: Internal server error
+
+  # ========================================
+  # CREDIT ANALYTICS ENDPOINTS
+  # ========================================
+
+  /vouchers/credit-summary:
+    get:
+      tags: [Credit Analytics]
+      summary: Get restaurant credit summary
+      description: Retrieve comprehensive credit summary for the authenticated restaurant
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Credit summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Credit summary retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/CreditSummary"
+        401:
+          description: Unauthorized
+        403:
+          description: Restaurant access required
+        500:
+          description: Internal server error

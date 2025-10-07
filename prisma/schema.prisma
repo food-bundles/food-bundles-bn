@@ -68,11 +68,16 @@ model Restaurant {
   updatedAt DateTime @updatedAt
 
   // Relations
-  orders        Order[]
-  posSales      POSSale[]
-  Cart          Cart[]
-  Wallet        Wallet?
-  subscriptions RestaurantSubscription[]
+  orders             Order[]
+  posSales           POSSale[]
+  Cart               Cart[]
+  Wallet             Wallet?
+  subscriptions      RestaurantSubscription[]
+  Voucher            Voucher[]
+  LoanApplication    LoanApplication[]
+  VoucherTransaction VoucherTransaction[]
+  VoucherRepayment   VoucherRepayment[]
+  VoucherPenalty     VoucherPenalty[]
 }
 
 model FarmerSubmission {
@@ -278,6 +283,7 @@ model Admin {
   logisticsAssignments  Order[]            @relation("LOGISTICS")
   products              Product[]
   productCategories     ProductCategory[]
+  LoanApplication       LoanApplication[]
 }
 
 model Product {
@@ -444,10 +450,11 @@ model Order {
   paidAt    DateTime?
 
   // Relations
-  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
-  orderItems OrderItem[]
-  logistics  Admin?      @relation("LOGISTICS", fields: [logisticsId], references: [id])
-  cart       Cart?       @relation(fields: [cartId], references: [id])
+  restaurant         Restaurant           @relation(fields: [restaurantId], references: [id])
+  orderItems         OrderItem[]
+  logistics          Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
+  cart               Cart?                @relation(fields: [cartId], references: [id])
+  VoucherTransaction VoucherTransaction[]
 
   @@index([restaurantId])
   @@index([status])
@@ -647,6 +654,176 @@ model SubscriptionHistory {
   @@index([createdAt])
 }
 
+model Voucher {
+  id                 String      @id @default(uuid())
+  voucherCode        String      @unique
+  voucherType        VoucherType
+  discountPercentage Float // 10, 20, 50, 80
+
+  // Credit limits
+  creditLimit          Float
+  minTransactionAmount Float  @default(0)
+  maxTransactionAmount Float?
+
+  // Credit tracking
+  totalCredit     Float
+  usedCredit      Float @default(0)
+  remainingCredit Float
+
+  // Status and dates
+  status     VoucherStatus @default(ACTIVE)
+  expiryDate DateTime?
+  issuedDate DateTime      @default(now())
+
+  // Relations
+  restaurantId String
+  loanId       String?
+
+  // Service fee
+  serviceFeeRate Float @default(10) // 10% service fee
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  restaurant   Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  loan         LoanApplication?     @relation(fields: [loanId], references: [id])
+  transactions VoucherTransaction[]
+  repayments   VoucherRepayment[]
+  penalties    VoucherPenalty[]
+
+  @@index([restaurantId])
+  @@index([status])
+  @@index([voucherCode])
+  @@index([loanId])
+}
+
+model LoanApplication {
+  id              String  @id @default(uuid())
+  restaurantId    String
+  requestedAmount Float
+  purpose         String?
+
+  // Approval workflow
+  status         LoanStatus @default(PENDING)
+  approvedAmount Float?
+  approvedBy     String? // Admin ID
+
+  // Dates
+  disbursementDate DateTime?
+  repaymentDueDate DateTime? // 30 days from disbursement
+
+  // Additional info
+  terms String?
+  notes String?
+
+  // Timestamps
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  approvedAt DateTime?
+
+  // Relations
+  restaurant Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  approver   Admin?             @relation(fields: [approvedBy], references: [id])
+  vouchers   Voucher[]
+  repayments VoucherRepayment[]
+
+  @@index([restaurantId])
+  @@index([status])
+  @@index([approvedBy])
+}
+
+model VoucherTransaction {
+  id           String @id @default(uuid())
+  voucherId    String
+  orderId      String
+  restaurantId String
+
+  // Transaction amounts
+  originalAmount     Float
+  discountPercentage Float
+  discountAmount     Float
+  amountCharged      Float // After discount
+  serviceFee         Float // 10% of amountCharged
+  totalDeducted      Float // amountCharged + serviceFee
+
+  // Timestamps
+  transactionDate DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  // Relations
+  voucher    Voucher    @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([voucherId])
+  @@index([orderId])
+  @@index([restaurantId])
+  @@index([transactionDate])
+}
+
+model VoucherRepayment {
+  id           String  @id @default(uuid())
+  voucherId    String?
+  restaurantId String
+  loanId       String
+
+  // Payment details
+  amount           Float
+  paymentMethod    PaymentMethod
+  paymentReference String?
+
+  // Allocation breakdown
+  allocatedToPrincipal  Float
+  allocatedToServiceFee Float
+  allocatedToPenalty    Float
+
+  // Timestamps
+  paymentDate DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  voucher    Voucher?        @relation(fields: [voucherId], references: [id])
+  restaurant Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([voucherId])
+  @@index([restaurantId])
+  @@index([loanId])
+  @@index([paymentDate])
+}
+
+model VoucherPenalty {
+  id           String @id @default(uuid())
+  voucherId    String
+  restaurantId String
+
+  // Penalty details
+  penaltyAmount Float
+  daysOverdue   Int
+  penaltyRate   Float // e.g., 2% per month
+  reason        String?
+
+  // Status
+  status PenaltyStatus @default(PENDING)
+
+  // Timestamps
+  appliedDate DateTime  @default(now())
+  paidDate    DateTime?
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  voucher    Voucher    @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([voucherId])
+  @@index([restaurantId])
+  @@index([status])
+  @@index([appliedDate])
+}
+
 enum Role {
   FARMER
   RESTAURANT
@@ -747,4 +924,34 @@ enum SubscriptionAction {
   SUSPENDED
   REACTIVATED
   EXPIRED
+}
+
+enum VoucherType {
+  DISCOUNT_10
+  DISCOUNT_20
+  DISCOUNT_50
+  DISCOUNT_80
+  DISCOUNT_100
+}
+
+enum VoucherStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  SUSPENDED
+  SETTLED
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  DISBURSED
+  REJECTED
+  SETTLED
+}
+
+enum PenaltyStatus {
+  PENDING
+  PAID
+  WAIVED
 }

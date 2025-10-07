@@ -242,14 +242,6 @@ export const createOrderFromCartService = async (
       // Execute all product updates in parallel
       await Promise.all(productUpdates);
 
-      // Update cart status
-      await tx.cart.update({
-        where: { id: cartId },
-        data: {
-          status: "CHECKED_OUT",
-        },
-      });
-
       return newOrder;
     },
     {
