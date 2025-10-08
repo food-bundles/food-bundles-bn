@@ -64,7 +64,6 @@ async function processWalletTransaction(
             status: "COMPLETED",
             newBalance,
             flwStatus: "successful",
-            flwMessage: "Payment completed via webhook",
             externalTxId: flwRef,
             flwRef: flwRef,
             updatedAt: new Date(),
@@ -93,7 +92,6 @@ async function processWalletTransaction(
         data: {
           status: "FAILED",
           flwStatus: "failed",
-          flwMessage: "Payment failed via webhook",
           externalTxId: flwRef,
           flwRef: flwRef,
           updatedAt: new Date(),
@@ -286,19 +284,6 @@ async function processCheckoutPayment(
       });
     } catch (orderUpdateError) {
       console.error("Failed to update failed order status:", orderUpdateError);
-    }
-
-    try {
-      await sendMessage(
-        `Dear ${
-          orderData.billingName || orderData.restaurant.name || ""
-        }, Payment failed: ${orderData.totalAmount} ${
-          orderData.currency
-        }. Please try again.`,
-        orderData.billingPhone || orderData.restaurant.phone || ""
-      );
-    } catch (smsError) {
-      console.error("Failed to send failure SMS notification:", smsError);
     }
 
     try {

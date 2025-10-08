@@ -24,6 +24,7 @@ import {
   updateOrderService,
 } from "./order.services";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
+import { encryptSecretData } from "../utils/password";
 
 dotenv.config();
 
@@ -90,13 +91,23 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     billingEmail: data.billingEmail,
     billingPhone: data.billingPhone,
     billingAddress: data.billingAddress,
-    cardDetails: {
-      cardNumber: data.cardDetails?.cardNumber || "",
-      cvv: data.cardDetails?.cvv || "",
-      expiryMonth: data.cardDetails?.expiryMonth || "",
-      expiryYear: data.cardDetails?.expiryYear || "",
-      pin: data.cardDetails?.pin || "",
-    },
+    cardDetails: data.cardDetails
+      ? {
+          cardNumber: await encryptSecretData(data.cardDetails.cardNumber),
+          cvv: await encryptSecretData(data.cardDetails.cvv),
+          expiryMonth: await encryptSecretData(data.cardDetails.expiryMonth),
+          expiryYear: await encryptSecretData(data.cardDetails.expiryYear),
+          pin: data.cardDetails.pin
+            ? await encryptSecretData(data.cardDetails.pin)
+            : "",
+        }
+      : {
+          cardNumber: "",
+          cvv: "",
+          expiryMonth: "",
+          expiryYear: "",
+          pin: "",
+        },
     clientIp: data.clientIp || "",
   };
 
@@ -309,7 +320,6 @@ export const processPaymentService = async (
         paymentReference: paymentResult.reference,
         flwRef: paymentResult.flwRef,
         flwStatus: paymentResult.status,
-        flwMessage: paymentResult.message,
       };
 
       // Add card payment specific data if applicable
@@ -454,7 +464,6 @@ export const processPaymentService = async (
           updateOrderService(orderId, {
             paymentStatus: "FAILED",
             flwStatus: "failed",
-            flwMessage: paymentResult.error || "Payment failed",
           }),
           order &&
             order.id &&
@@ -486,7 +495,6 @@ export const processPaymentService = async (
         updateOrderService(orderId, {
           paymentStatus: "FAILED",
           flwStatus: "failed",
-          flwMessage: error.message,
         }).catch(console.error),
         order &&
           order.id &&

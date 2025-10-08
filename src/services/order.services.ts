@@ -2,6 +2,7 @@ import prisma from "../prisma";
 import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import { ProductData } from "./productService";
 import { processPaymentService } from "./checkout.services";
+import { decryptSecretData, encryptSecretData } from "../utils/password";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -57,7 +58,6 @@ export interface UpdateOrderData {
   flwRef?: string;
   transactionId?: string;
   flwStatus?: string;
-  flwMessage?: string;
   chargedAmount?: number;
   appFee?: number;
   merchantFee?: number;
@@ -198,11 +198,18 @@ export const createOrderFromCartService = async (
           billingEmail: billingEmail || cart.restaurant.email,
           billingPhone: billingPhone || cart.restaurant.phone,
           billingAddress: billingAddress || cart.restaurant.location,
-          cardNumber: cardDetails?.cardNumber,
-          cardCVV: cardDetails?.cvv,
-          cardExpiryMonth: cardDetails?.expiryMonth,
-          cardExpiryYear: cardDetails?.expiryYear,
-          cardPIN: cardDetails?.pin,
+
+          cardNumber: cardDetails?.cardNumber
+            ? encryptSecretData(cardDetails.cardNumber)
+            : null,
+          cardCVV: cardDetails?.cvv ? encryptSecretData(cardDetails.cvv) : null,
+          cardExpiryMonth: cardDetails?.expiryMonth
+            ? encryptSecretData(cardDetails.expiryMonth)
+            : null,
+          cardExpiryYear: cardDetails?.expiryYear
+            ? encryptSecretData(cardDetails.expiryYear)
+            : null,
+          cardPIN: cardDetails?.pin ? encryptSecretData(cardDetails.pin) : null,
           clientIp,
           txRef,
           txOrderId,
@@ -242,14 +249,6 @@ export const createOrderFromCartService = async (
 
       // Execute all product updates in parallel
       await Promise.all(productUpdates);
-
-      // Update cart status
-      await tx.cart.update({
-        where: { id: cartId },
-        data: {
-          status: "CHECKED_OUT",
-        },
-      });
 
       return newOrder;
     },
@@ -913,12 +912,23 @@ export const reOrderFromExistingOrderService = async (
     billingEmail: existingOrder.billingEmail!,
     billingPhone: existingOrder.billingPhone!,
     billingAddress: existingOrder.billingAddress!,
+
     cardDetails: {
-      cardNumber: existingOrder.cardNumber || "",
-      cvv: existingOrder.cardCVV || "",
-      expiryMonth: existingOrder.cardExpiryMonth || "",
-      expiryYear: existingOrder.cardExpiryYear || "",
-      pin: existingOrder.cardPIN || "",
+      cardNumber: existingOrder.cardNumber
+        ? decryptSecretData(existingOrder.cardNumber)
+        : "",
+      cvv: existingOrder.cardCVV
+        ? decryptSecretData(existingOrder.cardCVV)
+        : "",
+      expiryMonth: existingOrder.cardExpiryMonth
+        ? decryptSecretData(existingOrder.cardExpiryMonth)
+        : "",
+      expiryYear: existingOrder.cardExpiryYear
+        ? decryptSecretData(existingOrder.cardExpiryYear)
+        : "",
+      pin: existingOrder.cardPIN
+        ? decryptSecretData(existingOrder.cardPIN)
+        : "",
     },
     clientIp: existingOrder.clientIp || "",
   };
@@ -930,11 +940,21 @@ export const reOrderFromExistingOrderService = async (
     paymentMethod: existingOrder.paymentMethod!,
     phoneNumber: existingOrder.billingPhone!,
     cardDetails: {
-      cardNumber: existingOrder.cardNumber || "",
-      cvv: existingOrder.cardCVV || "",
-      expiryMonth: existingOrder.cardExpiryMonth || "",
-      expiryYear: existingOrder.cardExpiryYear || "",
-      pin: existingOrder.cardPIN || "",
+      cardNumber: existingOrder.cardNumber
+        ? decryptSecretData(existingOrder.cardNumber)
+        : "",
+      cvv: existingOrder.cardCVV
+        ? decryptSecretData(existingOrder.cardCVV)
+        : "",
+      expiryMonth: existingOrder.cardExpiryMonth
+        ? decryptSecretData(existingOrder.cardExpiryMonth)
+        : "",
+      expiryYear: existingOrder.cardExpiryYear
+        ? decryptSecretData(existingOrder.cardExpiryYear)
+        : "",
+      pin: existingOrder.cardPIN
+        ? decryptSecretData(existingOrder.cardPIN)
+        : "",
     },
     bankDetails: {
       clientIp: existingOrder.clientIp || "",

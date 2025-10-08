@@ -167,9 +167,6 @@ components:
         flwStatus:
           type: string
           description: Status
-        flwMessage:
-          type: string
-          description: Message
         chargedAmount:
           type: number
           description: Charged amount

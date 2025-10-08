@@ -24,6 +24,16 @@ interface ProductUpdate {
   data?: any;
 }
 
+interface SubscriptionUpdate {
+  subscriptionId: string;
+  status: string;
+  paymentStatus?: string;
+  timestamp: string;
+  restaurantId: string;
+  planId?: string;
+  action?: string;
+}
+
 class WebSocketManager {
   private wss: WebSocketServer | null = null;
   private clients: Map<string, WebSocketClient> = new Map();
@@ -166,6 +176,25 @@ class WebSocketManager {
 
     console.log(
       `Product update broadcasted: ${productUpdate.action} - ${productUpdate.productName}`
+    );
+  }
+
+  /**
+   * Broadcast subscription updates to subscribed clients
+   */
+  broadcastSubscriptionUpdate(subscriptionUpdate: SubscriptionUpdate) {
+    if (!this.wss) return;
+
+    const subscription = `subscriptions:${subscriptionUpdate.restaurantId}`;
+    const message = {
+      type: "SUBSCRIPTION_UPDATE",
+      data: subscriptionUpdate,
+    };
+
+    this.broadcastToSubscription(subscription, message);
+
+    console.log(
+      `Subscription update broadcasted for subscription ${subscriptionUpdate.subscriptionId}`
     );
   }
 

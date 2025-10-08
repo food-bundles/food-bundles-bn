@@ -1,4 +1,3 @@
-// src/services/userServices.ts
 import prisma from "../prisma";
 import {
   ICreateAdminData,

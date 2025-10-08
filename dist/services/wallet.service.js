@@ -179,7 +179,6 @@ const topUpWalletService = async (data) => {
             data: {
                 flwRef: paymentResult.flwRef,
                 flwStatus: paymentResult.status,
-                flwMessage: paymentResult.message,
                 externalTxId: paymentResult.transactionId,
                 status: paymentResult.success
                     ? paymentResult.status === "successful"
@@ -244,7 +243,6 @@ const topUpWalletService = async (data) => {
             where: { id: pendingTransaction.id },
             data: {
                 status: "FAILED",
-                flwMessage: error.message,
             },
         });
         throw new Error(`Wallet top-up failed: ${error.message}`);
@@ -571,7 +569,6 @@ const verifyWalletTopUpService = async (transactionId) => {
                             status: "COMPLETED",
                             newBalance,
                             flwStatus: "successful",
-                            flwMessage: "Payment verified and completed",
                             externalTxId: response.data.id?.toString(),
                             flwRef: response.data.flw_ref,
                         },
@@ -611,7 +608,6 @@ const verifyWalletTopUpService = async (transactionId) => {
                 data: {
                     status: "FAILED",
                     flwStatus: response.data?.status || "failed",
-                    flwMessage: response.message || "Payment verification failed",
                 },
             });
         }

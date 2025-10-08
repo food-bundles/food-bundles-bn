@@ -1,0 +1,980 @@
+tags:
+  - name: Subscription Management API
+    description: Comprehensive subscription management for restaurants including plans, subscriptions, payments, and lifecycle management
+
+components:
+  schemas:
+    SubscriptionPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique plan identifier
+        name:
+          type: string
+          description: Plan name
+        description:
+          type: string
+          nullable: true
+          description: Plan description
+        price:
+          type: number
+          format: float
+          description: Plan price
+        duration:
+          type: integer
+          description: Duration in days
+        features:
+          type: object
+          nullable: true
+          description: JSON object containing plan features
+        isActive:
+          type: boolean
+          description: Whether plan is active
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        _count:
+          type: object
+          properties:
+            subscriptions:
+              type: integer
+              description: Number of active subscriptions
+
+    RestaurantSubscription:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique subscription identifier
+        restaurantId:
+          type: string
+          description: Restaurant ID
+        planId:
+          type: string
+          description: Subscription plan ID
+        status:
+          type: string
+          enum: [ACTIVE, EXPIRED, CANCELLED, SUSPENDED, PENDING]
+          description: Subscription status
+        startDate:
+          type: string
+          format: date-time
+          description: Subscription start date
+        endDate:
+          type: string
+          format: date-time
+          description: Subscription end date
+        autoRenew:
+          type: boolean
+          description: Auto-renewal enabled
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          nullable: true
+          description: Payment method
+        paymentStatus:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Payment status
+        txRef:
+          type: string
+          nullable: true
+          description: Transaction reference
+        flwRef:
+          type: string
+          nullable: true
+          description: Flutterwave reference
+        transactionId:
+          type: string
+          nullable: true
+          description: Transaction ID
+        amountPaid:
+          type: number
+          format: float
+          nullable: true
+          description: Amount paid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        restaurant:
+          $ref: "#/components/schemas/RestaurantInfo"
+        plan:
+          $ref: "#/components/schemas/SubscriptionPlan"
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubscriptionPayment"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubscriptionHistory"
+
+    RestaurantInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+
+    SubscriptionPayment:
+      type: object
+      properties:
+        id:
+          type: string
+        subscriptionId:
+          type: string
+        amount:
+          type: number
+          format: float
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+        paymentStatus:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+        txRef:
+          type: string
+          nullable: true
+        flwRef:
+          type: string
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    SubscriptionHistory:
+      type: object
+      properties:
+        id:
+          type: string
+        subscriptionId:
+          type: string
+        action:
+          type: string
+          enum:
+            [
+              CREATED,
+              RENEWED,
+              UPGRADED,
+              DOWNGRADED,
+              CANCELLED,
+              SUSPENDED,
+              REACTIVATED,
+              EXPIRED,
+            ]
+        oldStatus:
+          type: string
+          enum: [ACTIVE, EXPIRED, CANCELLED, SUSPENDED, PENDING]
+          nullable: true
+        newStatus:
+          type: string
+          enum: [ACTIVE, EXPIRED, CANCELLED, SUSPENDED, PENDING]
+          nullable: true
+        oldPlanId:
+          type: string
+          nullable: true
+        newPlanId:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        performedBy:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateSubscriptionPlanRequest:
+      type: object
+      required:
+        - name
+        - price
+        - duration
+      properties:
+        name:
+          type: string
+          description: Plan name (must be unique)
+          example: "Premium Plan"
+        description:
+          type: string
+          description: Plan description
+          example: "Premium features for restaurants"
+        price:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Plan price
+          example: 50000
+        duration:
+          type: integer
+          minimum: 1
+          description: Duration in days
+          example: 30
+        features:
+          type: object
+          description: Plan features as JSON object
+          example:
+            maxOrders: 1000
+            support: "24/7"
+            analytics: true
+
+    UpdateSubscriptionPlanRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Plan name (must be unique)
+        description:
+          type: string
+          description: Plan description
+        price:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Plan price
+        duration:
+          type: integer
+          minimum: 1
+          description: Duration in days
+        features:
+          type: object
+          description: Plan features as JSON object
+        isActive:
+          type: boolean
+          description: Whether plan is active
+
+    CreateRestaurantSubscriptionRequest:
+      type: object
+      required:
+        - planId
+      properties:
+        restaurantId:
+          type: string
+          description: Restaurant ID (required for admin users)
+        planId:
+          type: string
+          description: Subscription plan ID
+        autoRenew:
+          type: boolean
+          default: true
+          description: Enable auto-renewal
+        paymentMethod:
+          type: string
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Payment method
+
+    UpdateSubscriptionRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ACTIVE, EXPIRED, CANCELLED, SUSPENDED, PENDING]
+          description: Subscription status (Admin only)
+        autoRenew:
+          type: boolean
+          description: Enable/disable auto-renewal
+        endDate:
+          type: string
+          format: date-time
+          description: Update end date
+
+    CancelSubscriptionRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Reason for cancellation
+          example: "Not using the service"
+
+    UpgradeSubscriptionRequest:
+      type: object
+      required:
+        - newPlanId
+      properties:
+        newPlanId:
+          type: string
+          description: ID of the plan to upgrade to
+
+    PaginationResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    ApiResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+paths:
+  /subscriptions/plans:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Create subscription plan
+      description: Create a new subscription plan (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionPlanRequest"
+      responses:
+        201:
+          description: Subscription plan created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Subscription plan created successfully"
+                  data:
+                    $ref: "#/components/schemas/SubscriptionPlan"
+        400:
+          description: Bad request - Invalid input or plan name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Internal server error
+
+    get:
+      tags:
+        - Subscription Management API
+      summary: Get all subscription plans
+      description: Retrieve all subscription plans with pagination
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+      responses:
+        200:
+          description: Plans retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SubscriptionPlan"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationResponse"
+        500:
+          description: Internal server error
+
+  /subscriptions/plans/{planId}:
+    get:
+      tags:
+        - Subscription Management API
+      summary: Get subscription plan by ID
+      description: Retrieve a specific subscription plan
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Plan retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/SubscriptionPlan"
+        404:
+          description: Plan not found
+        500:
+          description: Internal server error
+
+    patch:
+      tags:
+        - Subscription Management API
+      summary: Update subscription plan
+      description: Update an existing subscription plan (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubscriptionPlanRequest"
+      responses:
+        200:
+          description: Plan updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/SubscriptionPlan"
+        400:
+          description: Bad request
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin access required
+        404:
+          description: Plan not found
+        500:
+          description: Internal server error
+
+    delete:
+      tags:
+        - Subscription Management API
+      summary: Delete subscription plan
+      description: Delete a subscription plan (Admin only, only if no active subscriptions)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Plan deleted successfully
+        400:
+          description: Cannot delete plan with active subscriptions
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin access required
+        404:
+          description: Plan not found
+        500:
+          description: Internal server error
+
+  /subscriptions/restaurant:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Create restaurant subscription
+      description: Create a new subscription for a restaurant
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRestaurantSubscriptionRequest"
+      responses:
+        201:
+          description: Subscription created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/RestaurantSubscription"
+        400:
+          description: Bad request - Invalid plan or restaurant already has active subscription
+        401:
+          description: Unauthorized
+        500:
+          description: Internal server error
+
+  /subscriptions/my-subscriptions:
+    get:
+      tags:
+        - Subscription Management API
+      summary: Get restaurant's subscriptions
+      description: Get all subscriptions for the authenticated restaurant
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, EXPIRED, CANCELLED, SUSPENDED, PENDING]
+      responses:
+        200:
+          description: Subscriptions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RestaurantSubscription"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationResponse"
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Restaurant access required
+        500:
+          description: Internal server error
+
+  /subscriptions/{subscriptionId}:
+    get:
+      tags:
+        - Subscription Management API
+      summary: Get subscription by ID
+      description: Get detailed subscription information
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Subscription retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/RestaurantSubscription"
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+        404:
+          description: Subscription not found
+        500:
+          description: Internal server error
+
+    patch:
+      tags:
+        - Subscription Management API
+      summary: Update subscription
+      description: Update subscription details (Admin can update status, Restaurant can update autoRenew)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubscriptionRequest"
+      responses:
+        200:
+          description: Subscription updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/RestaurantSubscription"
+        400:
+          description: Bad request
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+        404:
+          description: Subscription not found
+        500:
+          description: Internal server error
+
+  /subscriptions/{subscriptionId}/cancel:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Cancel subscription
+      description: Cancel an active subscription
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelSubscriptionRequest"
+      responses:
+        200:
+          description: Subscription cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/RestaurantSubscription"
+        400:
+          description: Subscription already cancelled
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+        404:
+          description: Subscription not found
+        500:
+          description: Internal server error
+
+  /subscriptions/{subscriptionId}/renew:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Renew subscription
+      description: Renew an expired subscription
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Subscription renewed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/RestaurantSubscription"
+        400:
+          description: Subscription already active
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+        404:
+          description: Subscription not found
+        500:
+          description: Internal server error
+
+  /subscriptions/{subscriptionId}/upgrade:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Upgrade subscription
+      description: Upgrade to a higher-tier plan
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpgradeSubscriptionRequest"
+      responses:
+        200:
+          description: Subscription upgraded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/RestaurantSubscription"
+        400:
+          description: Invalid upgrade - New plan must be higher priced
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+        404:
+          description: Subscription or plan not found
+        500:
+          description: Internal server error
+
+  /subscriptions/{subscriptionId}/downgrade:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Downgrade subscription
+      description: Downgrade to a lower-tier plan (effective at next billing cycle)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpgradeSubscriptionRequest"
+      responses:
+        200:
+          description: Subscription will be downgraded at next billing cycle
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/RestaurantSubscription"
+        400:
+          description: Invalid downgrade - New plan must be lower priced
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+        404:
+          description: Subscription or plan not found
+        500:
+          description: Internal server error
+
+  /subscriptions/{subscriptionId}/history:
+    get:
+      tags:
+        - Subscription Management API
+      summary: Get subscription history
+      description: Get the history of all changes to a subscription
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: History retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SubscriptionHistory"
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+        404:
+          description: Subscription not found
+        500:
+          description: Internal server error
+
+  /subscriptions:
+    get:
+      tags:
+        - Subscription Management API
+      summary: Get all subscriptions
+      description: Get all subscriptions with filtering (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, EXPIRED, CANCELLED, SUSPENDED, PENDING]
+        - name: restaurantId
+          in: query
+          schema:
+            type: string
+      responses:
+        200:
+          description: Subscriptions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RestaurantSubscription"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationResponse"
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Internal server error
+
+  /subscriptions/check-expired:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Check expired subscriptions
+      description: Manually trigger check for expired subscriptions (Admin only, typically run by cron)
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Expired subscriptions checked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "5 subscriptions expired"
+                  count:
+                    type: integer
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Internal server error
+
+  /subscriptions/webhook:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Subscription payment webhook
+      description: Webhook endpoint for payment provider callbacks (Flutterwave/PayPack)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Payment provider webhook payload
+      responses:
+        200:
+          description: Webhook processed successfully
+        401:
+          description: Unauthorized - Invalid signature
+        400:
+          description: Bad request - Invalid payload
+        500:
+          description: Internal server error

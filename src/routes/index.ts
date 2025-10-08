@@ -16,6 +16,8 @@ import productCategoryRoutes from "./product_category.routes";
 import walletRoutes from "./wallet.routes";
 import paymentsRoutes from "./payments.route";
 import locationRoutes from "./location.routes";
+import subscriptionRoutes from "./subscription.routes";
+import voucherRoutes from "./voucher.routes";
 
 const routes = Router();
 
@@ -32,6 +34,8 @@ routes.use("/orders", orderRoutes);
 routes.use("/wallets", walletRoutes);
 routes.use("/payments", paymentsRoutes);
 routes.use("/locations", locationRoutes);
+routes.use("/subscriptions", subscriptionRoutes);
+routes.use("/vouchers", voucherRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

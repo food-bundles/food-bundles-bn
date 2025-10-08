@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.loginService = exports.deleteAdminService = exports.updateAdminService = exports.getAdminByIdService = exports.getAllAdminsService = exports.createAdminService = exports.deleteRestaurantService = exports.updateRestaurantService = exports.getRestaurantByIdService = exports.getAllRestaurantsService = exports.createRestaurantService = exports.deleteFarmerService = exports.updateFarmerService = exports.getFarmerByIdService = exports.getAllFarmersService = exports.createFarmerService = void 0;
-// src/services/userServices.ts
 const prisma_1 = __importDefault(require("../prisma"));
 const password_1 = require("../utils/password");
 const paginationService_1 = require("./paginationService");
