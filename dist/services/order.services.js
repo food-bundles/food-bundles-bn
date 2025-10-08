@@ -8,6 +8,7 @@ exports.generateOrderNumber = generateOrderNumber;
 const prisma_1 = __importDefault(require("../prisma"));
 const client_1 = require("@prisma/client");
 const checkout_services_1 = require("./checkout.services");
+const password_1 = require("../utils/password");
 /**
  * Service to create order directly from cart
  */
@@ -106,11 +107,17 @@ const createOrderFromCartService = async (data) => {
                 billingEmail: billingEmail || cart.restaurant.email,
                 billingPhone: billingPhone || cart.restaurant.phone,
                 billingAddress: billingAddress || cart.restaurant.location,
-                cardNumber: cardDetails?.cardNumber,
-                cardCVV: cardDetails?.cvv,
-                cardExpiryMonth: cardDetails?.expiryMonth,
-                cardExpiryYear: cardDetails?.expiryYear,
-                cardPIN: cardDetails?.pin,
+                cardNumber: cardDetails?.cardNumber
+                    ? (0, password_1.encryptSecretData)(cardDetails.cardNumber)
+                    : null,
+                cardCVV: cardDetails?.cvv ? (0, password_1.encryptSecretData)(cardDetails.cvv) : null,
+                cardExpiryMonth: cardDetails?.expiryMonth
+                    ? (0, password_1.encryptSecretData)(cardDetails.expiryMonth)
+                    : null,
+                cardExpiryYear: cardDetails?.expiryYear
+                    ? (0, password_1.encryptSecretData)(cardDetails.expiryYear)
+                    : null,
+                cardPIN: cardDetails?.pin ? (0, password_1.encryptSecretData)(cardDetails.pin) : null,
                 clientIp,
                 txRef,
                 txOrderId,
@@ -144,13 +151,6 @@ const createOrderFromCartService = async (data) => {
         }));
         // Execute all product updates in parallel
         await Promise.all(productUpdates);
-        // Update cart status
-        await tx.cart.update({
-            where: { id: cartId },
-            data: {
-                status: "CHECKED_OUT",
-            },
-        });
         return newOrder;
     }, {
         timeout: 15000,
@@ -679,11 +679,21 @@ const reOrderFromExistingOrderService = async (orderId, restaurantId) => {
         billingPhone: existingOrder.billingPhone,
         billingAddress: existingOrder.billingAddress,
         cardDetails: {
-            cardNumber: existingOrder.cardNumber || "",
-            cvv: existingOrder.cardCVV || "",
-            expiryMonth: existingOrder.cardExpiryMonth || "",
-            expiryYear: existingOrder.cardExpiryYear || "",
-            pin: existingOrder.cardPIN || "",
+            cardNumber: existingOrder.cardNumber
+                ? (0, password_1.decryptSecretData)(existingOrder.cardNumber)
+                : "",
+            cvv: existingOrder.cardCVV
+                ? (0, password_1.decryptSecretData)(existingOrder.cardCVV)
+                : "",
+            expiryMonth: existingOrder.cardExpiryMonth
+                ? (0, password_1.decryptSecretData)(existingOrder.cardExpiryMonth)
+                : "",
+            expiryYear: existingOrder.cardExpiryYear
+                ? (0, password_1.decryptSecretData)(existingOrder.cardExpiryYear)
+                : "",
+            pin: existingOrder.cardPIN
+                ? (0, password_1.decryptSecretData)(existingOrder.cardPIN)
+                : "",
         },
         clientIp: existingOrder.clientIp || "",
     };
@@ -693,11 +703,21 @@ const reOrderFromExistingOrderService = async (orderId, restaurantId) => {
         paymentMethod: existingOrder.paymentMethod,
         phoneNumber: existingOrder.billingPhone,
         cardDetails: {
-            cardNumber: existingOrder.cardNumber || "",
-            cvv: existingOrder.cardCVV || "",
-            expiryMonth: existingOrder.cardExpiryMonth || "",
-            expiryYear: existingOrder.cardExpiryYear || "",
-            pin: existingOrder.cardPIN || "",
+            cardNumber: existingOrder.cardNumber
+                ? (0, password_1.decryptSecretData)(existingOrder.cardNumber)
+                : "",
+            cvv: existingOrder.cardCVV
+                ? (0, password_1.decryptSecretData)(existingOrder.cardCVV)
+                : "",
+            expiryMonth: existingOrder.cardExpiryMonth
+                ? (0, password_1.decryptSecretData)(existingOrder.cardExpiryMonth)
+                : "",
+            expiryYear: existingOrder.cardExpiryYear
+                ? (0, password_1.decryptSecretData)(existingOrder.cardExpiryYear)
+                : "",
+            pin: existingOrder.cardPIN
+                ? (0, password_1.decryptSecretData)(existingOrder.cardPIN)
+                : "",
         },
         bankDetails: {
             clientIp: existingOrder.clientIp || "",

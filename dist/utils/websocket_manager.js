@@ -125,6 +125,20 @@ class WebSocketManager {
         console.log(`Product update broadcasted: ${productUpdate.action} - ${productUpdate.productName}`);
     }
     /**
+     * Broadcast subscription updates to subscribed clients
+     */
+    broadcastSubscriptionUpdate(subscriptionUpdate) {
+        if (!this.wss)
+            return;
+        const subscription = `subscriptions:${subscriptionUpdate.restaurantId}`;
+        const message = {
+            type: "SUBSCRIPTION_UPDATE",
+            data: subscriptionUpdate,
+        };
+        this.broadcastToSubscription(subscription, message);
+        console.log(`Subscription update broadcasted for subscription ${subscriptionUpdate.subscriptionId}`);
+    }
+    /**
      * Broadcast new product creation
      */
     broadcastNewProduct(product) {

@@ -11,6 +11,7 @@ const emailTemplates_1 = require("../utils/emailTemplates");
 const client_1 = require("@prisma/client");
 const order_services_1 = require("./order.services");
 const db_retry_utls_1 = require("../utils/db-retry.utls");
+const password_1 = require("../utils/password");
 dotenv_1.default.config();
 // Payment Integration
 const PaypackJs = require("paypack-js").default;
@@ -37,13 +38,23 @@ const createCheckoutService = async (data) => {
         billingEmail: data.billingEmail,
         billingPhone: data.billingPhone,
         billingAddress: data.billingAddress,
-        cardDetails: {
-            cardNumber: data.cardDetails?.cardNumber || "",
-            cvv: data.cardDetails?.cvv || "",
-            expiryMonth: data.cardDetails?.expiryMonth || "",
-            expiryYear: data.cardDetails?.expiryYear || "",
-            pin: data.cardDetails?.pin || "",
-        },
+        cardDetails: data.cardDetails
+            ? {
+                cardNumber: await (0, password_1.encryptSecretData)(data.cardDetails.cardNumber),
+                cvv: await (0, password_1.encryptSecretData)(data.cardDetails.cvv),
+                expiryMonth: await (0, password_1.encryptSecretData)(data.cardDetails.expiryMonth),
+                expiryYear: await (0, password_1.encryptSecretData)(data.cardDetails.expiryYear),
+                pin: data.cardDetails.pin
+                    ? await (0, password_1.encryptSecretData)(data.cardDetails.pin)
+                    : "",
+            }
+            : {
+                cardNumber: "",
+                cvv: "",
+                expiryMonth: "",
+                expiryYear: "",
+                pin: "",
+            },
         clientIp: data.clientIp || "",
     };
     const orderCreated = await (0, order_services_1.createOrderFromCartService)(orderData);
@@ -215,7 +226,6 @@ const processPaymentService = async (orderId, paymentData) => {
                 paymentReference: paymentResult.reference,
                 flwRef: paymentResult.flwRef,
                 flwStatus: paymentResult.status,
-                flwMessage: paymentResult.message,
             };
             // Add card payment specific data if applicable
             if (paymentData.paymentMethod === "CARD" &&
@@ -340,7 +350,6 @@ const processPaymentService = async (orderId, paymentData) => {
                     (0, order_services_1.updateOrderService)(orderId, {
                         paymentStatus: "FAILED",
                         flwStatus: "failed",
-                        flwMessage: paymentResult.error || "Payment failed",
                     }),
                     order &&
                         order.id &&
@@ -372,7 +381,6 @@ const processPaymentService = async (orderId, paymentData) => {
                 (0, order_services_1.updateOrderService)(orderId, {
                     paymentStatus: "FAILED",
                     flwStatus: "failed",
-                    flwMessage: error.message,
                 }).catch(console.error),
                 order &&
                     order.id &&

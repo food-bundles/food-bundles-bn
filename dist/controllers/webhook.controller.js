@@ -54,7 +54,6 @@ async function processWalletTransaction(txRef, flwRef, status, currency) {
                         status: "COMPLETED",
                         newBalance,
                         flwStatus: "successful",
-                        flwMessage: "Payment completed via webhook",
                         externalTxId: flwRef,
                         flwRef: flwRef,
                         updatedAt: new Date(),
@@ -78,7 +77,6 @@ async function processWalletTransaction(txRef, flwRef, status, currency) {
                 data: {
                     status: "FAILED",
                     flwStatus: "failed",
-                    flwMessage: "Payment failed via webhook",
                     externalTxId: flwRef,
                     flwRef: flwRef,
                     updatedAt: new Date(),
