@@ -1,7 +1,10 @@
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 
-const ENCRYPTION_KEY = crypto.randomBytes(32); // Must be 32 bytes
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY
+  ? Buffer.from(process.env.ENCRYPTION_KEY, "hex")
+  : crypto.randomBytes(32);
+
 const ALGORITHM = "aes-256-gcm";
 
 export const hashPassword = async (password: string): Promise<string> => {
@@ -16,8 +19,12 @@ export const comparePassword = async (
   return await bcrypt.compare(password, hashedPassword);
 };
 
-// Encrypt data (reversible)
+/**
+ * Encrypt sensitive data (reversible)
+ */
 export const encryptSecretData = (data: string): string => {
+  if (!data) return "";
+
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
 
@@ -26,22 +33,35 @@ export const encryptSecretData = (data: string): string => {
 
   const authTag = cipher.getAuthTag();
 
-  // Return iv + authTag + encrypted data
+  // Return iv + authTag + encrypted data (all hex encoded, separated by colons)
   return iv.toString("hex") + ":" + authTag.toString("hex") + ":" + encrypted;
 };
 
-// Decrypt data (get original back)
+/**
+ * Decrypt sensitive data (get original back)
+ */
 export const decryptSecretData = (encryptedData: string): string => {
-  const parts = encryptedData.split(":");
-  const iv = Buffer.from(parts[0], "hex");
-  const authTag = Buffer.from(parts[1], "hex");
-  const encrypted = parts[2];
+  if (!encryptedData) return "";
 
-  const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
-  decipher.setAuthTag(authTag);
+  try {
+    const parts = encryptedData.split(":");
+    if (parts.length !== 3) {
+      throw new Error("Invalid encrypted data format");
+    }
 
-  let decrypted = decipher.update(encrypted, "hex", "utf8");
-  decrypted += decipher.final("utf8");
+    const iv = Buffer.from(parts[0], "hex");
+    const authTag = Buffer.from(parts[1], "hex");
+    const encrypted = parts[2];
 
-  return decrypted;
+    const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+    decipher.setAuthTag(authTag);
+
+    let decrypted = decipher.update(encrypted, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+
+    return decrypted;
+  } catch (error) {
+    console.error("Decryption error:", error);
+    return "";
+  }
 };
