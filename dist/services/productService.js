@@ -371,14 +371,14 @@ const deleteProductService = async (productId) => {
 };
 exports.deleteProductService = deleteProductService;
 // Get all products with filtering and pagination
-const getAllProductsService = async ({ category, search, page = 1, limit = 10, }) => {
+const getAllProductsService = async ({ categoryId, search, page = 1, limit = 10, }) => {
     const skip = (page - 1) * limit;
     const where = {
         status: "ACTIVE", // Only active products
         quantity: { gt: 0 }, // Only products with quantity > 0
     };
-    if (category) {
-        where.category = category;
+    if (categoryId) {
+        where.categoryId = categoryId;
     }
     if (search) {
         where.OR = [

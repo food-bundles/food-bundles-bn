@@ -447,12 +447,12 @@ export const deleteProductService = async (productId: string) => {
 
 // Get all products with filtering and pagination
 export const getAllProductsService = async ({
-  category,
+  categoryId,
   search,
   page = 1,
   limit = 10,
 }: {
-  category?: string;
+  categoryId?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -464,8 +464,8 @@ export const getAllProductsService = async ({
     quantity: { gt: 0 }, // Only products with quantity > 0
   };
 
-  if (category) {
-    where.category = category;
+  if (categoryId) {
+    where.categoryId = categoryId;
   }
 
   if (search) {
