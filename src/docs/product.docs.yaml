@@ -320,11 +320,11 @@ paths:
       summary: Get all products
       description: Retrieve all products with optional filtering and pagination
       parameters:
-        - name: category
+        - name: categoryId
           in: query
           schema:
             type: string
-          description: Filter by product category
+          description: Filter by product category ID
         - name: search
           in: query
           schema:

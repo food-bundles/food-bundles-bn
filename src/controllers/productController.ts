@@ -271,10 +271,10 @@ export const deleteProduct = async (req: Request, res: Response) => {
 // Get all products
 export const getAllProducts = async (req: Request, res: Response) => {
   try {
-    const { category, search, page = 1, limit = 10 } = req.query;
+    const { categoryId, search, page = 1, limit = 10 } = req.query;
 
     const result = await getAllProductsService({
-      category: category as string,
+      categoryId: categoryId as string,
       search: search as string,
       page: parseInt(page as string),
       limit: parseInt(limit as string),
