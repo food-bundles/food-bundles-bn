@@ -30,6 +30,7 @@ const createOrderFromCartService = async (data) => {
             restaurant: true,
         },
     });
+    console.log("Cart retrieved", cart);
     if (!cart) {
         throw new Error("Cart not found");
     }
@@ -62,6 +63,9 @@ const createOrderFromCartService = async (data) => {
             updateData.billingPhone = billingPhone;
         if (billingAddress !== undefined)
             updateData.billingAddress = billingAddress;
+        if (cart.totalAmount !== existingOrder.totalAmount) {
+            updateData.totalAmount = cart.totalAmount;
+        }
         if (Object.keys(updateData).length > 0) {
             const updatedOrder = await prisma_1.default.order.update({
                 where: { id: existingOrder.id },
@@ -73,17 +77,6 @@ const createOrderFromCartService = async (data) => {
     }
     // Generate unique order number
     const orderNumber = await generateOrderNumber();
-    // Validate product availability and calculate total
-    let totalAmount = 0;
-    for (const item of cart.cartItems) {
-        if (item.product.status !== "ACTIVE") {
-            throw new Error(`Product ${item.product.productName} is no longer available`);
-        }
-        if (item.product.quantity < item.quantity) {
-            throw new Error(`Insufficient stock for ${item.product.productName}. Available: ${item.product.quantity}, Required: ${item.quantity}`);
-        }
-        totalAmount += item.subtotal;
-    }
     // Generate transaction reference
     const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
     const txOrderId = `ORDER_${Date.now()}_${Math.random()
@@ -97,10 +90,10 @@ const createOrderFromCartService = async (data) => {
                 orderNumber,
                 cartId,
                 restaurantId,
-                totalAmount,
+                totalAmount: cart.totalAmount,
                 status: data.status || "PENDING",
                 paymentMethod: paymentMethod || "CASH",
-                paymentStatus: "PENDING",
+                paymentStatus: client_1.PaymentStatus.PENDING,
                 notes: notes,
                 requestedDelivery: requestedDelivery,
                 billingName: billingName || cart.restaurant.name,

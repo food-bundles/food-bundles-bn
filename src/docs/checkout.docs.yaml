@@ -145,9 +145,6 @@ components:
         authorizationMode:
           type: string
           description: Authorization mode
-        authorizationUrl:
-          type: string
-          description: Authorization URL
         validateInstructions:
           type: string
           description: Validation instructions

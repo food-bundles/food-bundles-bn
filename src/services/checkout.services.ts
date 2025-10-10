@@ -17,7 +17,7 @@ import {
   MobileMoneyPaymentSubmissionData,
   UpdateCheckoutData,
 } from "../types/paymentTypes";
-import { OrderStatus, PaymentMethod } from "@prisma/client";
+import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import {
   createOrderFromCartService,
   getOrderByIdService,
@@ -25,6 +25,7 @@ import {
 } from "./order.services";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { encryptSecretData } from "../utils/password";
+import { clearCartService } from "./cart.service";
 
 dotenv.config();
 
@@ -122,7 +123,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     processDirectly: true,
   });
 
-  console.log("Payment Result:", paymentResult);
+  await clearCartService(data.restaurantId);
 
   return paymentResult;
 };
@@ -204,7 +205,7 @@ export const processPaymentService = async (
   // Update payment status to processing with retry
   try {
     await updateOrderService(orderId, {
-      paymentStatus: "PROCESSING",
+      paymentStatus: PaymentStatus.PROCESSING,
       paymentMethod: paymentData.paymentMethod,
     });
   } catch (error: any) {
@@ -315,7 +316,9 @@ export const processPaymentService = async (
     if (paymentResult.success) {
       const updateData: UpdateCheckoutData = {
         paymentStatus:
-          paymentResult.status === "successful" ? "COMPLETED" : "PROCESSING",
+          paymentResult.status === "successful"
+            ? PaymentStatus.COMPLETED
+            : PaymentStatus.PROCESSING,
         transactionId: paymentResult.transactionId,
         paymentReference: paymentResult.reference,
         flwRef: paymentResult.flwRef,
@@ -361,8 +364,6 @@ export const processPaymentService = async (
       ) {
         updateData.authorizationMode = paymentResult.authorizationDetails.mode;
         updateData.redirectUrl = paymentResult.authorizationDetails.redirectUrl;
-        updateData.authorizationUrl =
-          paymentResult.authorizationDetails.redirectUrl;
       }
 
       let updatedCheckout;
@@ -387,8 +388,8 @@ export const processPaymentService = async (
               data: {
                 paymentStatus:
                   paymentResult.status === "successful"
-                    ? "COMPLETED"
-                    : "PROCESSING",
+                    ? PaymentStatus.COMPLETED
+                    : PaymentStatus.PROCESSING,
                 paymentReference: paymentResult.reference,
                 status:
                   paymentResult.status === "successful"
@@ -462,7 +463,7 @@ export const processPaymentService = async (
       try {
         await Promise.all([
           updateOrderService(orderId, {
-            paymentStatus: "FAILED",
+            paymentStatus: PaymentStatus.FAILED,
             flwStatus: "failed",
           }),
           order &&
@@ -471,7 +472,7 @@ export const processPaymentService = async (
               return await prisma.order.update({
                 where: { id: order!.id },
                 data: {
-                  paymentStatus: "FAILED",
+                  paymentStatus: PaymentStatus.FAILED,
                   status: "CANCELLED",
                 },
               });
@@ -707,7 +708,7 @@ async function processCardPayment({
   fullname: string;
   phoneNumber: string;
   currency?: string;
-  cardDetails: {
+  cardDetails?: {
     cardNumber: string;
     cvv: string;
     expiryMonth: string;
@@ -718,117 +719,202 @@ async function processCardPayment({
   try {
     console.log(`Processing card payment: ${amount} ${currency} for ${email}`);
 
-    const payload = {
-      card_number: cardDetails.cardNumber,
-      cvv: cardDetails.cvv,
-      expiry_month: cardDetails.expiryMonth,
-      expiry_year: cardDetails.expiryYear,
-      currency: currency,
-      amount: amount.toString(),
-      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
-      fullname: fullname,
-      email: email,
-      phone_number: phoneNumber,
-      enckey: process.env.FLW_ENCRYPTION_KEY,
-      tx_ref: txRef,
-    };
+    // PRIMARY: Try Flutterwave Standard (Hosted Checkout)
+    // This method doesn't require PCI DSS certification and is generally enabled by default
+    try {
+      console.log("Attempting Flutterwave Standard payment...");
 
-    // Add PIN if provided
-    if (cardDetails.pin) {
-      (payload as any).authorization = {
-        mode: "pin",
-        pin: cardDetails.pin,
+      const standardPayload = {
+        tx_ref: txRef,
+        amount: amount.toString(),
+        currency: currency,
+        redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+        customer: {
+          email: email,
+          name: fullname,
+          phonenumber: phoneNumber,
+        },
+        customizations: {
+          title: "Food Bundles Payment",
+          description: `Payment for order ${txRef}`,
+          logo: `https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png`, // Add your logo URL
+        },
+        payment_options: "card", // Specify card payment only
+        meta: {
+          order_ref: txRef,
+          payment_method: "CARD",
+        },
       };
-    }
 
-    const response = await flw.Charge.card(payload);
-    console.log("Card Payment Response:", response);
+      const axios = require("axios");
+      const standardResponse = await axios.post(
+        "https://api.flutterwave.com/v3/payments",
+        standardPayload,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    if (response.status === "success") {
-      let authorizationDetails:
-        | { mode: string; redirectUrl: string; message?: string }
-        | undefined = undefined;
+      if (
+        standardResponse.data?.status === "success" &&
+        standardResponse.data?.data?.link
+      ) {
+        console.log("Flutterwave Standard payment link generated successfully");
 
-      // Handle different authorization modes
-      if (response.meta?.authorization?.mode === "pin") {
-        authorizationDetails = {
+        // Update order with payment details
+        await prisma.order.update({
+          where: { txRef: txRef },
+          data: {
+            paymentType: "FLUTTERWAVE_STANDARD_CARD",
+            paymentProvider: "FLUTTERWAVE",
+            paymentReference: txRef,
+          },
+        });
+
+        return {
+          success: true,
+          transactionId: txRef,
+          reference: txRef,
+          flwRef: txRef,
+          status: "pending",
+          message: "Redirect to complete card payment",
+          authorizationDetails: {
+            mode: "redirect",
+            redirectUrl: standardResponse.data.data.link,
+            message: "Redirecting to Flutterwave secure checkout",
+          },
+        };
+      } else {
+        throw new Error("Flutterwave Standard payment link generation failed");
+      }
+    } catch (standardError: any) {
+      console.log(
+        "Flutterwave Standard payment failed:",
+        standardError.message
+      );
+      console.log("Attempting fallback to direct card charge...");
+
+      // FALLBACK: Try Direct Card Charge (requires PCI DSS certification)
+      // Only attempt if cardDetails are provided
+      if (!cardDetails) {
+        throw new Error(
+          "Card details required for direct charge. Please use the payment link or provide card details."
+        );
+      }
+
+      const payload = {
+        card_number: cardDetails.cardNumber,
+        cvv: cardDetails.cvv,
+        expiry_month: cardDetails.expiryMonth,
+        expiry_year: cardDetails.expiryYear,
+        currency: currency,
+        amount: amount.toString(),
+        redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+        fullname: fullname,
+        email: email,
+        phone_number: phoneNumber,
+        enckey: process.env.FLW_ENCRYPTION_KEY,
+        tx_ref: txRef,
+      };
+
+      // Add PIN if provided
+      if (cardDetails.pin) {
+        (payload as any).authorization = {
           mode: "pin",
-          redirectUrl: "",
-          message: "Please enter your card PIN",
-        };
-      } else if (response.meta?.authorization?.mode === "redirect") {
-        authorizationDetails = {
-          mode: "redirect",
-          redirectUrl: response.meta.authorization.redirect,
-          message: "Redirecting to bank for authorization",
-        };
-      } else if (response.meta?.authorization?.mode === "otp") {
-        authorizationDetails = {
-          mode: "otp",
-          redirectUrl: response.meta.authorization.endpoint,
-          message: "Please enter the OTP sent to your phone/email",
+          pin: cardDetails.pin,
         };
       }
 
-      // Update order to indicate fallback to Flutterwave
-      await prisma.order.update({
-        where: { txRef: txRef },
-        data: {
-          paymentType: "FLUTTERWAVE_CARD",
-          paymentProvider: "FLUTTERWAVE",
-        },
-      });
-      return {
-        success: true,
-        transactionId:
-          response.data?.id?.toString() || response.data?.flw_ref || txRef,
-        reference: response.data?.tx_ref || txRef,
-        flwRef: response.data?.flw_ref || txRef,
-        status: response.data?.status || "pending",
-        message: response.message || "Card payment initiated",
-        authorizationDetails,
-        // Additional data to store in database
-        cardPaymentData: {
-          transactionId: response.data?.id,
-          flwRef: response.data?.flw_ref,
-          deviceFingerprint: response.data?.device_fingerprint,
-          amount: response.data?.amount,
-          chargedAmount: response.data?.charged_amount,
-          appFee: response.data?.app_fee,
-          merchantFee: response.data?.merchant_fee,
-          processorResponse: response.data?.processor_response,
-          authModel: response.data?.auth_model,
-          currency: response.data?.currency,
-          ip: response.data?.ip,
-          narration: response.data?.narration,
-          status: response.data?.status,
-          authUrl: response.data?.auth_url,
-          paymentType: response.data?.payment_type,
-          fraudStatus: response.data?.fraud_status,
-          chargeType: response.data?.charge_type,
-          // Card specific data
-          cardFirst6Digits: response.data?.card?.first_6digits,
-          cardLast4Digits: response.data?.card?.last_4digits,
-          cardCountry: response.data?.card?.country,
-          cardType: response.data?.card?.type,
-          cardExpiry: response.data?.card?.expiry,
-          // Customer data
-          customerId: response.data?.customer?.id,
-          customerName: response.data?.customer?.name,
-          customerEmail: response.data?.customer?.email,
-          customerPhone: response.data?.customer?.phone_number,
-        },
-      };
-    } else {
-      return {
-        success: false,
-        error: response.message || "Card payment initialization failed",
-        transactionId: "",
-        reference: "",
-        flwRef: "",
-        status: "failed",
-        message: "Card payment initialization failed",
-      };
+      const response = await flw.Charge.card(payload);
+      console.log("Direct Card Charge Response:", response);
+
+      if (response.status === "success") {
+        let authorizationDetails:
+          | { mode: string; redirectUrl: string; message?: string }
+          | undefined = undefined;
+
+        // Handle different authorization modes
+        if (response.meta?.authorization?.mode === "pin") {
+          authorizationDetails = {
+            mode: "pin",
+            redirectUrl: "",
+            message: "Please enter your card PIN",
+          };
+        } else if (response.meta?.authorization?.mode === "redirect") {
+          authorizationDetails = {
+            mode: "redirect",
+            redirectUrl: response.meta.authorization.redirect,
+            message: "Redirecting to bank for authorization",
+          };
+        } else if (response.meta?.authorization?.mode === "otp") {
+          authorizationDetails = {
+            mode: "otp",
+            redirectUrl: response.meta.authorization.endpoint,
+            message: "Please enter the OTP sent to your phone/email",
+          };
+        }
+
+        // Update order to indicate direct card charge
+        await prisma.order.update({
+          where: { txRef: txRef },
+          data: {
+            paymentType: "FLUTTERWAVE_DIRECT_CARD",
+            paymentProvider: "FLUTTERWAVE",
+          },
+        });
+
+        return {
+          success: true,
+          transactionId:
+            response.data?.id?.toString() || response.data?.flw_ref || txRef,
+          reference: response.data?.tx_ref || txRef,
+          flwRef: response.data?.flw_ref || txRef,
+          status: response.data?.status || "pending",
+          message: response.message || "Card payment initiated",
+          authorizationDetails,
+          cardPaymentData: {
+            transactionId: response.data?.id,
+            flwRef: response.data?.flw_ref,
+            deviceFingerprint: response.data?.device_fingerprint,
+            amount: response.data?.amount,
+            chargedAmount: response.data?.charged_amount,
+            appFee: response.data?.app_fee,
+            merchantFee: response.data?.merchant_fee,
+            processorResponse: response.data?.processor_response,
+            authModel: response.data?.auth_model,
+            currency: response.data?.currency,
+            ip: response.data?.ip,
+            narration: response.data?.narration,
+            status: response.data?.status,
+            authUrl: response.data?.auth_url,
+            paymentType: response.data?.payment_type,
+            fraudStatus: response.data?.fraud_status,
+            chargeType: response.data?.charge_type,
+            cardFirst6Digits: response.data?.card?.first_6digits,
+            cardLast4Digits: response.data?.card?.last_4digits,
+            cardCountry: response.data?.card?.country,
+            cardType: response.data?.card?.type,
+            cardExpiry: response.data?.card?.expiry,
+            customerId: response.data?.customer?.id,
+            customerName: response.data?.customer?.name,
+            customerEmail: response.data?.customer?.email,
+            customerPhone: response.data?.customer?.phone_number,
+          },
+        };
+      } else {
+        return {
+          success: false,
+          error: response.message || "Card payment initialization failed",
+          transactionId: "",
+          reference: "",
+          flwRef: "",
+          status: "failed",
+          message: "Card payment initialization failed",
+        };
+      }
     }
   } catch (error: any) {
     console.log("Card payment failed:", error.message);
