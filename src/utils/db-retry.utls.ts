@@ -22,15 +22,9 @@ export async function retryDatabaseOperation<T>(
         error.message?.includes("connection") ||
         error.message?.includes("timeout")
       ) {
-        console.log(
-          `Database operation failed (attempt ${attempt}/${maxRetries}):`,
-          error.message
-        );
-
         if (attempt < maxRetries) {
           // Wait before retrying with exponential backoff
           const waitTime = delay * Math.pow(2, attempt - 1);
-          console.log(`Retrying in ${waitTime}ms...`);
           await new Promise((resolve) => setTimeout(resolve, waitTime));
           continue;
         }

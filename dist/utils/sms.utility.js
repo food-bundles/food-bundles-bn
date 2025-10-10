@@ -26,7 +26,6 @@ async function sendMessage(messageBody, phoneNumber) {
         from: process.env.TWILIO_TRIAL_PHONE_NUMBER,
         to: process.env.TWILIO_SENDER_PHONE_NUMBER,
     });
-    console.log(message);
 }
 async function makeCall(messageBody, phoneNumber) {
     const call = await twilio.calls.create({

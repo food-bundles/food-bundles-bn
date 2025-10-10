@@ -26,8 +26,6 @@ export async function sendMessage(messageBody: string, phoneNumber: string) {
     from: process.env.TWILIO_TRIAL_PHONE_NUMBER,
     to: process.env.TWILIO_SENDER_PHONE_NUMBER,
   });
-
-  console.log(message);
 }
 
 export async function makeCall(messageBody: string, phoneNumber: string) {

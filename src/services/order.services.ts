@@ -109,6 +109,8 @@ export const createOrderFromCartService = async (
     },
   });
 
+  console.log("Cart retrieved", cart);
+
   if (!cart) {
     throw new Error("Cart not found");
   }
@@ -142,6 +144,10 @@ export const createOrderFromCartService = async (
     if (billingAddress !== undefined)
       updateData.billingAddress = billingAddress;
 
+    if (cart.totalAmount !== existingOrder.totalAmount) {
+      updateData.totalAmount = cart.totalAmount;
+    }
+
     if (Object.keys(updateData).length > 0) {
       const updatedOrder = await prisma.order.update({
         where: { id: existingOrder.id },
@@ -156,22 +162,6 @@ export const createOrderFromCartService = async (
 
   // Generate unique order number
   const orderNumber = await generateOrderNumber();
-
-  // Validate product availability and calculate total
-  let totalAmount = 0;
-  for (const item of cart.cartItems) {
-    if (item.product.status !== "ACTIVE") {
-      throw new Error(
-        `Product ${item.product.productName} is no longer available`
-      );
-    }
-    if (item.product.quantity < item.quantity) {
-      throw new Error(
-        `Insufficient stock for ${item.product.productName}. Available: ${item.product.quantity}, Required: ${item.quantity}`
-      );
-    }
-    totalAmount += item.subtotal;
-  }
 
   // Generate transaction reference
   const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
@@ -188,10 +178,10 @@ export const createOrderFromCartService = async (
           orderNumber,
           cartId,
           restaurantId,
-          totalAmount,
+          totalAmount: cart.totalAmount,
           status: data.status || "PENDING",
           paymentMethod: paymentMethod || "CASH",
-          paymentStatus: "PENDING",
+          paymentStatus: PaymentStatus.PENDING,
           notes: notes,
           requestedDelivery: requestedDelivery,
           billingName: billingName || cart.restaurant.name,
