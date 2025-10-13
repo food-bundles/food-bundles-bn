@@ -11,6 +11,7 @@ export interface ICreateRestaurantData extends UserLocationData {
   name: string;
   email: string;
   phone?: string;
+  tin: string;
   password: string;
 }
 
@@ -51,6 +52,7 @@ export interface ILoginData {
   phone?: string;
   email?: string;
   password: string;
+  tin?: string;
 }
 
 export interface IPaginationQuery {

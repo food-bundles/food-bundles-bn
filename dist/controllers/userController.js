@@ -294,20 +294,16 @@ UserController.deleteAdmin = async (req, res) => {
 };
 UserController.login = async (req, res) => {
     try {
-        const { phone, email, password } = req.body;
-        if (!password || (!phone && !email)) {
+        const { phone, email, tin, password } = req.body;
+        if (!password || (!phone && !email && !tin)) {
             return res.status(400).json({
                 success: false,
-                message: "Phone/Email and password are required",
+                message: "TIN/Phone/Email and password are required",
             });
         }
-        const result = await (0, userServices_1.loginService)({ phone, email, password });
+        const result = await (0, userServices_1.loginService)({ phone, email, tin, password });
         const user = result.user;
-        const payload = {
-            id: user.id,
-        };
-        const token = (0, jwt_1.generateToken)(payload);
-        // Remove all cookie-related code
+        const token = (0, jwt_1.generateToken)({ id: user.id });
         res.status(200).json({
             success: true,
             message: "Login successful",

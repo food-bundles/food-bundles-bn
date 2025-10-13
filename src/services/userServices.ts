@@ -12,6 +12,7 @@ import {
 import { comparePassword, hashPassword } from "../utils/password";
 import { PaginationService } from "./paginationService";
 import { LocationValidationService } from "./location.service";
+import { validateTIN } from "../utils/validateTin";
 
 // Helper function to check for existing phone/email across all user types
 const checkExistingUser = async (phone?: string, email?: string) => {
@@ -299,6 +300,7 @@ export const createRestaurantService = async (
     email,
     phone,
     password,
+    tin,
     location,
     province,
     district,
@@ -307,17 +309,37 @@ export const createRestaurantService = async (
     village,
   } = restaurantData;
 
+  // ✅ Require fields
   if (!name || !email || !password) {
-    throw new Error("Name, email, password are required for restaurants");
+    throw new Error("Name, email, and password are required for restaurants");
   }
 
-  // Check if phone/email exists in any user table
+  if (!tin) {
+    throw new Error("TIN (Tax Identification Number) is required");
+  }
+
+  // ✅ Validate TIN format
+  if (!validateTIN(tin)) {
+    throw new Error(
+      "Invalid TIN format. TIN must be a 9-digit number (not all zeros)"
+    );
+  }
+
+  // ✅ Check unique TIN
+  const existingTIN = await prisma.restaurant.findUnique({
+    where: { tin },
+  });
+  if (existingTIN) {
+    throw new Error("A restaurant with this TIN already exists");
+  }
+
+  // ✅ Check phone/email uniqueness across user tables
   const existingUser = await checkExistingUser(phone || undefined, email);
   if (existingUser) {
     throw new Error("User with this phone/email already exists");
   }
 
-  // Validate location data if provided
+  // ✅ Validate location if provided
   if (province || district || sector || cell || village) {
     const locationValidation =
       LocationValidationService.validateLocationHierarchy({
@@ -343,6 +365,7 @@ export const createRestaurantService = async (
         name,
         email,
         phone,
+        tin, // ✅ Save TIN
         password: hashedPassword,
         location,
         province,
@@ -359,6 +382,7 @@ export const createRestaurantService = async (
     throw new Error(`Failed to create restaurant: ${error.message}`);
   }
 };
+
 export const getAllRestaurantsService = async (query: IPaginationQuery) => {
   const normalizedQuery = PaginationService.validatePaginationParams(
     query.page,
@@ -790,11 +814,12 @@ export const deleteAdminService = async (id: string) => {
 
 // LOGIN SERVICE
 export const loginService = async (loginData: ILoginData) => {
-  const { phone, email, password } = loginData;
+  const { phone, email, tin, password } = loginData;
 
   let user: any = null;
   let foundUserType = "";
 
+  // Farmer login
   user = await prisma.farmer.findFirst({
     where: {
       OR: [{ phone: phone || undefined }, { email: email || undefined }],
@@ -802,15 +827,21 @@ export const loginService = async (loginData: ILoginData) => {
   });
   if (user) foundUserType = "farmer";
 
+  // Restaurant login
   if (!user) {
     user = await prisma.restaurant.findFirst({
       where: {
-        OR: [{ phone: phone || undefined }, { email: email || undefined }],
+        OR: [
+          { phone: phone || undefined },
+          { email: email || undefined },
+          { tin: tin || undefined },
+        ],
       },
     });
     if (user) foundUserType = "restaurant";
   }
 
+  // Admin login
   if (!user) {
     user = await prisma.admin.findFirst({
       where: { email: email || undefined },
@@ -818,18 +849,12 @@ export const loginService = async (loginData: ILoginData) => {
     if (user) foundUserType = "admin";
   }
 
-  if (!user) {
-    throw new Error("User not found");
-  }
+  if (!user) throw new Error("User not found");
 
-  if (!user.password) {
-    throw new Error("Password not set for this user");
-  }
+  if (!user.password) throw new Error("Password not set for this user");
 
   const isPasswordValid = await comparePassword(password, user.password);
-  if (!isPasswordValid) {
-    throw new Error("Invalid password");
-  }
+  if (!isPasswordValid) throw new Error("Invalid password");
 
   const { password: _, ...userWithoutPassword } = user;
 

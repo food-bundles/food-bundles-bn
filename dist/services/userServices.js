@@ -8,6 +8,7 @@ const prisma_1 = __importDefault(require("../prisma"));
 const password_1 = require("../utils/password");
 const paginationService_1 = require("./paginationService");
 const location_service_1 = require("./location.service");
+const validateTin_1 = require("../utils/validateTin");
 // Helper function to check for existing phone/email across all user types
 const checkExistingUser = async (phone, email) => {
     if (!phone && !email)
@@ -214,16 +215,31 @@ const deleteFarmerService = async (id) => {
 exports.deleteFarmerService = deleteFarmerService;
 // RESTAURANT SERVICES
 const createRestaurantService = async (restaurantData) => {
-    const { name, email, phone, password, location, province, district, sector, cell, village, } = restaurantData;
+    const { name, email, phone, password, tin, location, province, district, sector, cell, village, } = restaurantData;
+    // ✅ Require fields
     if (!name || !email || !password) {
-        throw new Error("Name, email, password are required for restaurants");
+        throw new Error("Name, email, and password are required for restaurants");
     }
-    // Check if phone/email exists in any user table
+    if (!tin) {
+        throw new Error("TIN (Tax Identification Number) is required");
+    }
+    // ✅ Validate TIN format
+    if (!(0, validateTin_1.validateTIN)(tin)) {
+        throw new Error("Invalid TIN format. TIN must be a 9-digit number (not all zeros)");
+    }
+    // ✅ Check unique TIN
+    const existingTIN = await prisma_1.default.restaurant.findUnique({
+        where: { tin },
+    });
+    if (existingTIN) {
+        throw new Error("A restaurant with this TIN already exists");
+    }
+    // ✅ Check phone/email uniqueness across user tables
     const existingUser = await checkExistingUser(phone || undefined, email);
     if (existingUser) {
         throw new Error("User with this phone/email already exists");
     }
-    // Validate location data if provided
+    // ✅ Validate location if provided
     if (province || district || sector || cell || village) {
         const locationValidation = location_service_1.LocationValidationService.validateLocationHierarchy({
             province: province,
@@ -243,6 +259,7 @@ const createRestaurantService = async (restaurantData) => {
                 name,
                 email,
                 phone,
+                tin, // ✅ Save TIN
                 password: hashedPassword,
                 location,
                 province,
@@ -594,9 +611,10 @@ const deleteAdminService = async (id) => {
 exports.deleteAdminService = deleteAdminService;
 // LOGIN SERVICE
 const loginService = async (loginData) => {
-    const { phone, email, password } = loginData;
+    const { phone, email, tin, password } = loginData;
     let user = null;
     let foundUserType = "";
+    // Farmer login
     user = await prisma_1.default.farmer.findFirst({
         where: {
             OR: [{ phone: phone || undefined }, { email: email || undefined }],
@@ -604,15 +622,21 @@ const loginService = async (loginData) => {
     });
     if (user)
         foundUserType = "farmer";
+    // Restaurant login
     if (!user) {
         user = await prisma_1.default.restaurant.findFirst({
             where: {
-                OR: [{ phone: phone || undefined }, { email: email || undefined }],
+                OR: [
+                    { phone: phone || undefined },
+                    { email: email || undefined },
+                    { tin: tin || undefined },
+                ],
             },
         });
         if (user)
             foundUserType = "restaurant";
     }
+    // Admin login
     if (!user) {
         user = await prisma_1.default.admin.findFirst({
             where: { email: email || undefined },
@@ -620,16 +644,13 @@ const loginService = async (loginData) => {
         if (user)
             foundUserType = "admin";
     }
-    if (!user) {
+    if (!user)
         throw new Error("User not found");
-    }
-    if (!user.password) {
+    if (!user.password)
         throw new Error("Password not set for this user");
-    }
     const isPasswordValid = await (0, password_1.comparePassword)(password, user.password);
-    if (!isPasswordValid) {
+    if (!isPasswordValid)
         throw new Error("Invalid password");
-    }
     const { password: _, ...userWithoutPassword } = user;
     return {
         user: userWithoutPassword,
