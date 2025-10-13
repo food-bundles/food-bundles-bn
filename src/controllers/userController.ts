@@ -334,24 +334,20 @@ export class UserController {
 
   static login = async (req: Request, res: Response) => {
     try {
-      const { phone, email, password } = req.body;
+      const { phone, email, tin, password } = req.body;
 
-      if (!password || (!phone && !email)) {
+      if (!password || (!phone && !email && !tin)) {
         return res.status(400).json({
           success: false,
-          message: "Phone/Email and password are required",
+          message: "TIN/Phone/Email and password are required",
         });
       }
 
-      const result = await loginService({ phone, email, password });
+      const result = await loginService({ phone, email, tin, password });
       const user = result.user;
-      const payload: JwtPayload = {
-        id: user.id,
-      };
 
-      const token = generateToken(payload);
+      const token = generateToken({ id: user.id });
 
-      // Remove all cookie-related code
       res.status(200).json({
         success: true,
         message: "Login successful",
@@ -414,5 +410,4 @@ export class UserController {
       return res.status(500).json({ message: error.message });
     }
   };
-
 }
