@@ -75,6 +75,7 @@ interface validatedItemsData {
 /**
  * Service to create order directly from cart
  */
+
 export const createOrderFromCartService = async (
   data: CreateOrderFromCartData
 ) => {
@@ -127,49 +128,41 @@ export const createOrderFromCartService = async (
     throw new Error("Cart is empty");
   }
 
-  // Check if order already exists for this cart
-  const existingOrder = await prisma.order.findFirst({
-    where: { cartId },
-  });
+  // REMOVED: Check for existing order - always create new order
+  // This ensures each checkout attempt creates a fresh order
 
-  if (existingOrder) {
-    const updateData: any = {};
-    if (notes !== undefined) updateData.notes = notes;
-    if (requestedDelivery !== undefined)
-      updateData.requestedDelivery = requestedDelivery;
-    if (data.status !== undefined) updateData.status = data.status;
-    if (billingName !== undefined) updateData.billingName = billingName;
-    if (billingEmail !== undefined) updateData.billingEmail = billingEmail;
-    if (billingPhone !== undefined) updateData.billingPhone = billingPhone;
-    if (billingAddress !== undefined)
-      updateData.billingAddress = billingAddress;
+  // Validate product availability and quantities
+  for (const cartItem of cart.cartItems) {
+    const product = await prisma.product.findUnique({
+      where: { id: cartItem.productId },
+    });
 
-    if (cart.totalAmount !== existingOrder.totalAmount) {
-      updateData.totalAmount = cart.totalAmount;
+    if (!product) {
+      throw new Error(`Product ${cartItem.productId} not found`);
     }
 
-    if (Object.keys(updateData).length > 0) {
-      const updatedOrder = await prisma.order.update({
-        where: { id: existingOrder.id },
-        data: updateData,
-      });
-
-      return await getOrderByIdService(updatedOrder.id);
+    if (product.status !== "ACTIVE") {
+      throw new Error(`Product ${product.productName} is not available`);
     }
 
-    return await getOrderByIdService(existingOrder.id);
+    if (product.quantity < cartItem.quantity) {
+      throw new Error(
+        `Insufficient stock for ${product.productName}. Available: ${product.quantity}, Required: ${cartItem.quantity}`
+      );
+    }
   }
 
   // Generate unique order number
   const orderNumber = await generateOrderNumber();
 
-  // Generate transaction reference
-  const txRef = `${restaurantId}_${cartId}_${Date.now()}`;
-  const txOrderId = `ORDER_${Date.now()}_${Math.random()
+  // Generate transaction reference with timestamp to ensure uniqueness
+  const timestamp = Date.now();
+  const txRef = `${restaurantId}_${cartId}_${timestamp}`;
+  const txOrderId = `ORDER_${timestamp}_${Math.random()
     .toString(36)
     .substr(2, 9)}`;
 
-  // Create order with extended transaction timeout and optimized operations
+  // Create NEW order with extended transaction timeout and optimized operations
   const order = await prisma.$transaction(
     async (tx) => {
       // Create order
@@ -188,7 +181,6 @@ export const createOrderFromCartService = async (
           billingEmail: billingEmail || cart.restaurant.email,
           billingPhone: billingPhone || cart.restaurant.phone,
           billingAddress: billingAddress || cart.restaurant.location,
-
           cardNumber: cardDetails?.cardNumber
             ? encryptSecretData(cardDetails.cardNumber)
             : null,
@@ -634,6 +626,7 @@ export const reOrderFromExistingOrderService = async (
     "for restaurant ID:",
     restaurantId
   );
+
   // Get the existing order
   const existingOrder = await getOrderByIdService(orderId, restaurantId);
 
@@ -643,7 +636,7 @@ export const reOrderFromExistingOrderService = async (
     throw new Error("Order not found");
   }
 
-  // Verify the order belongs to the restaurant (unless admin)
+  // Verify the order belongs to the restaurant
   if (existingOrder.restaurantId !== restaurantId) {
     throw new Error("Unauthorized: Order does not belong to this restaurant");
   }
@@ -662,7 +655,7 @@ export const reOrderFromExistingOrderService = async (
     throw new Error("Restaurant not found");
   }
 
-  // Find or create active cart for the restaurant
+  // IMPROVED: Find or create active cart, then clear it to start fresh
   let cart = await prisma.cart.findFirst({
     where: {
       restaurantId,
@@ -676,8 +669,22 @@ export const reOrderFromExistingOrderService = async (
       data: {
         restaurantId,
         status: "ACTIVE",
+        totalAmount: 0,
       },
     });
+    console.log("Created new cart:", cart.id);
+  } else {
+    // Clear existing cart items to start fresh
+    await prisma.cartItem.deleteMany({
+      where: { cartId: cart.id },
+    });
+
+    // Reset cart total
+    await prisma.cart.update({
+      where: { id: cart.id },
+      data: { totalAmount: 0 },
+    });
+    console.log("Cleared existing cart:", cart.id);
   }
 
   // Validate products availability and prepare cart items
@@ -732,13 +739,14 @@ export const reOrderFromExistingOrderService = async (
       continue;
     }
 
+    // FIXED: Use current product price, calculate fresh subtotal
     const subtotal = orderItem.quantity * product.unitPrice;
     totalAmount += subtotal;
 
     validatedItems.push({
       productId: orderItem.productId,
       quantity: orderItem.quantity,
-      unitPrice: product.unitPrice,
+      unitPrice: product.unitPrice, // Use current price
       subtotal,
       product,
     });
@@ -767,96 +775,29 @@ export const reOrderFromExistingOrderService = async (
     warnings.push(`Insufficient stock for: ${stockWarnings.join(", ")}`);
   }
 
-  // Add items to cart using transaction
-  const cartItems = await prisma.$transaction(async (tx) => {
-    const items = [];
-
+  // Add items to the existing cart using transaction
+  await prisma.$transaction(async (tx) => {
+    // Create all cart items fresh
     for (const item of validatedItems) {
-      // Check if item already exists in cart
-      const existingCartItem = await tx.cartItem.findUnique({
-        where: {
-          cartId_productId: {
-            cartId: cart!.id,
-            productId: item.productId,
-          },
+      await tx.cartItem.create({
+        data: {
+          cartId: cart!.id,
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          subtotal: item.subtotal,
         },
       });
-
-      if (existingCartItem) {
-        // Update existing cart item
-        const newQuantity = existingCartItem.quantity + item.quantity;
-
-        // Check total quantity doesn't exceed available stock
-        if (item.product.quantity < newQuantity) {
-          throw new Error(
-            `Insufficient stock for total quantity of ${item.product.productName}. Available: ${item.product.quantity}`
-          );
-        }
-
-        const updatedItem = await tx.cartItem.update({
-          where: { id: existingCartItem.id },
-          data: {
-            quantity: newQuantity,
-            subtotal: newQuantity * item.unitPrice,
-          },
-          include: {
-            product: {
-              select: {
-                id: true,
-                productName: true,
-                unitPrice: true,
-                images: true,
-                unit: true,
-                category: true,
-              },
-            },
-          },
-        });
-        items.push(updatedItem);
-      } else {
-        // Create new cart item
-        const newItem = await tx.cartItem.create({
-          data: {
-            cartId: cart!.id,
-            productId: item.productId,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            subtotal: item.subtotal,
-          },
-          include: {
-            product: {
-              select: {
-                id: true,
-                productName: true,
-                unitPrice: true,
-                images: true,
-                unit: true,
-                category: true,
-              },
-            },
-          },
-        });
-        items.push(newItem);
-      }
     }
 
-    // Update cart total amount
-    const cartItemsTotal = await tx.cartItem.aggregate({
-      where: { cartId: cart!.id },
-      _sum: {
-        subtotal: true,
-      },
-    });
-
-    const cartTotalAmount = cartItemsTotal._sum.subtotal || 0;
-
+    // Update cart total amount with the freshly calculated total
     await tx.cart.update({
       where: { id: cart!.id },
-      data: { totalAmount: cartTotalAmount },
+      data: { totalAmount: totalAmount },
     });
-
-    return items;
   });
+
+  console.log(`Cart updated with total amount: ${totalAmount}`);
 
   // Get updated cart with all details
   const updatedCart = await prisma.cart.findUnique({
@@ -891,6 +832,25 @@ export const reOrderFromExistingOrderService = async (
     },
   });
 
+  // Prepare card details if they exist
+  let cardDetailsDecrypted = undefined;
+  if (existingOrder.cardNumber && existingOrder.cardCVV) {
+    cardDetailsDecrypted = {
+      cardNumber: decryptSecretData(existingOrder.cardNumber),
+      cvv: decryptSecretData(existingOrder.cardCVV),
+      expiryMonth: existingOrder.cardExpiryMonth
+        ? decryptSecretData(existingOrder.cardExpiryMonth)
+        : "",
+      expiryYear: existingOrder.cardExpiryYear
+        ? decryptSecretData(existingOrder.cardExpiryYear)
+        : "",
+      pin: existingOrder.cardPIN
+        ? decryptSecretData(existingOrder.cardPIN)
+        : "",
+    };
+  }
+
+  // Create order data from existing cart (now cleared and updated)
   const orderData = {
     cartId: cart.id,
     restaurantId: restaurantId,
@@ -902,50 +862,25 @@ export const reOrderFromExistingOrderService = async (
     billingEmail: existingOrder.billingEmail!,
     billingPhone: existingOrder.billingPhone!,
     billingAddress: existingOrder.billingAddress!,
-
-    cardDetails: {
-      cardNumber: existingOrder.cardNumber
-        ? decryptSecretData(existingOrder.cardNumber)
-        : "",
-      cvv: existingOrder.cardCVV
-        ? decryptSecretData(existingOrder.cardCVV)
-        : "",
-      expiryMonth: existingOrder.cardExpiryMonth
-        ? decryptSecretData(existingOrder.cardExpiryMonth)
-        : "",
-      expiryYear: existingOrder.cardExpiryYear
-        ? decryptSecretData(existingOrder.cardExpiryYear)
-        : "",
-      pin: existingOrder.cardPIN
-        ? decryptSecretData(existingOrder.cardPIN)
-        : "",
-    },
+    cardDetails: cardDetailsDecrypted,
     clientIp: existingOrder.clientIp || "",
   };
 
+  // Create NEW order from the cleared and updated cart
   const orderCreated = await createOrderFromCartService(orderData);
 
-  // Process immediate payment
+  console.log(
+    "New order created:",
+    orderCreated.id,
+    "Amount:",
+    orderCreated.totalAmount
+  );
+
+  // Process payment
   const paymentResult = await processPaymentService(orderCreated.id!, {
     paymentMethod: existingOrder.paymentMethod!,
     phoneNumber: existingOrder.billingPhone!,
-    cardDetails: {
-      cardNumber: existingOrder.cardNumber
-        ? decryptSecretData(existingOrder.cardNumber)
-        : "",
-      cvv: existingOrder.cardCVV
-        ? decryptSecretData(existingOrder.cardCVV)
-        : "",
-      expiryMonth: existingOrder.cardExpiryMonth
-        ? decryptSecretData(existingOrder.cardExpiryMonth)
-        : "",
-      expiryYear: existingOrder.cardExpiryYear
-        ? decryptSecretData(existingOrder.cardExpiryYear)
-        : "",
-      pin: existingOrder.cardPIN
-        ? decryptSecretData(existingOrder.cardPIN)
-        : "",
-    },
+    cardDetails: cardDetailsDecrypted,
     bankDetails: {
       clientIp: existingOrder.clientIp || "",
     },
@@ -953,6 +888,14 @@ export const reOrderFromExistingOrderService = async (
   });
 
   console.log("Payment Result:", paymentResult);
+
+  // Include warnings in the response if any
+  if (warnings.length > 0) {
+    return {
+      ...paymentResult,
+      warnings,
+    };
+  }
 
   return paymentResult;
 };

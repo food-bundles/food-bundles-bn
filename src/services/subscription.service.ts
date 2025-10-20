@@ -6,7 +6,7 @@ interface CreateSubscriptionPlanData {
   description?: string;
   price: number;
   duration: number;
-  features?: any;
+  features?: string[];
 }
 
 interface UpdateSubscriptionPlanData {

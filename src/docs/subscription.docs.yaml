@@ -25,9 +25,15 @@ components:
           type: integer
           description: Duration in days
         features:
-          type: object
+          type: array
+          items:
+            type: string
           nullable: true
-          description: JSON object containing plan features
+          description: List of plan features
+          example:
+            - "Receive EBM Purchase Orders"
+            - "Stable Price"
+            - "Free Delivery"
         isActive:
           type: boolean
           description: Whether plan is active
@@ -229,12 +235,14 @@ components:
           description: Duration in days
           example: 30
         features:
-          type: object
-          description: Plan features as JSON object
+          type: array
+          items:
+            type: string
+          description: List of plan features
           example:
-            maxOrders: 1000
-            support: "24/7"
-            analytics: true
+            - "Receive EBM Purchase Orders"
+            - "Stable Price"
+            - "Free Delivery"
 
     UpdateSubscriptionPlanRequest:
       type: object
@@ -255,8 +263,14 @@ components:
           minimum: 1
           description: Duration in days
         features:
-          type: object
-          description: Plan features as JSON object
+          type: array
+          items:
+            type: string
+          description: List of plan features
+          example:
+            - "Receive EBM Purchase Orders"
+            - "Stable Price"
+            - "Free Delivery"
         isActive:
           type: boolean
           description: Whether plan is active

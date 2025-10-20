@@ -311,6 +311,7 @@ components:
           required:
             - name
             - email
+            - tin
             - password
           properties:
             name:
@@ -322,6 +323,10 @@ components:
               format: email
               description: Restaurant email (required)
               example: "restaurant@food.rw"
+            tin:
+              type: string
+              description: Restaurant tin number
+              example: "123456789"
             phone:
               type: string
               description: Restaurant phone number
@@ -348,6 +353,10 @@ components:
           type: string
           description: Restaurant phone number
           example: "+250788123456"
+        tin:
+          type: string
+          description: Restaurant tin number
+          example: "123456789"
         location:
           type: string
           description: Location name
