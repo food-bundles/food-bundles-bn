@@ -562,7 +562,7 @@ model SubscriptionPlan {
   description String?
   price       Float
   duration    Int // Duration in days
-  features    Json? // Array of features included in the plan
+  features    String[] // Array of features included in the plan
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
