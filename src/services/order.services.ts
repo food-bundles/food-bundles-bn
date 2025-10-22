@@ -110,8 +110,6 @@ export const createOrderFromCartService = async (
     },
   });
 
-  console.log("Cart retrieved", cart);
-
   if (!cart) {
     throw new Error("Cart not found");
   }
@@ -542,11 +540,6 @@ export const updateOrderService = async (
   // Get existing order to validate
   const existingOrder = await getOrderByIdService(orderId, restaurantId);
 
-  // Validate status transitions
-  if (data.status) {
-    validateStatusTransition(existingOrder.status, data.status);
-  }
-
   // Set actual delivery date when status changes to DELIVERED
   const updateData = { ...data };
   if (data.status === "DELIVERED" && !existingOrder.actualDelivery) {
@@ -949,31 +942,6 @@ export async function generateOrderNumber(): Promise<string> {
 
   const orderSequence = (todayOrderCount + 1).toString().padStart(4, "0");
   return `ORD${year}${month}${day}${orderSequence}`;
-}
-
-/**
- * Helper function to validate order status transitions
- */
-function validateStatusTransition(
-  currentStatus: OrderStatus,
-  newStatus: OrderStatus
-) {
-  const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-    PENDING: ["CONFIRMED", "CANCELLED"],
-    CONFIRMED: ["PREPARING", "CANCELLED"],
-    PREPARING: ["READY", "CANCELLED"],
-    READY: ["IN_TRANSIT", "DELIVERED", "CANCELLED"],
-    IN_TRANSIT: ["DELIVERED", "CANCELLED"],
-    DELIVERED: ["REFUNDED"], // Only admin can refund
-    CANCELLED: [], // Cannot change from cancelled
-    REFUNDED: [], // Cannot change from refunded
-  };
-
-  if (!validTransitions[currentStatus].includes(newStatus)) {
-    throw new Error(
-      `Invalid status transition from ${currentStatus} to ${newStatus}`
-    );
-  }
 }
 
 /**

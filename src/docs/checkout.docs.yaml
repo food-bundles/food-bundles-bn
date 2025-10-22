@@ -225,6 +225,14 @@ components:
           type: string
           enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
           description: Selected payment method
+        voucherCode:
+          type: string
+          description: Voucher code (required for VOUCHER payment method)
+          example: "VCH-ABC123"
+        fallbackPaymentMethod:
+          type: string
+          enum: [MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Fallback payment method for partial voucher payments
         billingName:
           type: string
           description: Billing name
@@ -446,6 +454,117 @@ components:
         error:
           type: string
 
+    VoucherValidationRequest:
+      type: object
+      required:
+        - voucherCode
+        - orderAmount
+      properties:
+        voucherCode:
+          type: string
+          description: Voucher code to validate
+          example: "VCH-ABC123"
+        orderAmount:
+          type: number
+          description: Order amount to validate against
+          example: 50000
+
+    VoucherValidationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        valid:
+          type: boolean
+        data:
+          type: object
+          properties:
+            voucher:
+              type: object
+              properties:
+                id:
+                  type: string
+                code:
+                  type: string
+                discountPercentage:
+                  type: number
+                remainingCredit:
+                  type: number
+                loanId:
+                  type: string
+            coverage:
+              type: object
+              properties:
+                orderAmount:
+                  type: number
+                discountAmount:
+                  type: number
+                amountAfterDiscount:
+                  type: number
+                serviceFee:
+                  type: number
+                totalRequired:
+                  type: number
+                voucherCovers:
+                  type: number
+                coversFullAmount:
+                  type: boolean
+                requiresAdditionalPayment:
+                  type: boolean
+                additionalPaymentRequired:
+                  type: number
+            warning:
+              type: string
+              nullable: true
+
+    VoucherPaymentResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            checkout:
+              $ref: "#/components/schemas/Checkout"
+            transactionId:
+              type: string
+            status:
+              type: string
+            voucherApplied:
+              type: boolean
+            voucherDetails:
+              type: object
+              properties:
+                voucherCode:
+                  type: string
+                discountPercentage:
+                  type: number
+                amountCovered:
+                  type: number
+                remainingAmount:
+                  type: number
+                creditUsed:
+                  type: number
+                remainingCredit:
+                  type: number
+            creditRemaining:
+              type: number
+            paymentDeadline:
+              type: string
+              format: date-time
+              nullable: true
+            paymentDeadlineMessage:
+              type: string
+              nullable: true
+            requiresAdditionalPayment:
+              type: boolean
+            additionalPaymentAmount:
+              type: number
+            redirectUrl:
+              type: string
+              description: For additional payment redirect if needed
+
 paths:
   /checkouts:
     post:
@@ -512,13 +631,94 @@ paths:
                     clientIp: "192.168.1.100"
                   deviceFingerprint: "62wd23423rq324323qew1"
                   narration: "Payment for order 123"
+              voucher_100_percent:
+                summary: 100% Discount Voucher Payment
+                value:
+                  cartId: "cart123"
+                  paymentMethod: "VOUCHER"
+                  voucherCode: "VCH-100DISC"
+                  billingPhone: "250788123456"
+                  billingAddress: "123 Main St"
+                  notes: "Using 100% discount voucher"
+              voucher_partial_mobile:
+                summary: Partial Voucher + Mobile Money
+                value:
+                  cartId: "cart123"
+                  paymentMethod: "VOUCHER"
+                  voucherCode: "VCH-20PERCENT"
+                  fallbackPaymentMethod: "MOBILE_MONEY"
+                  billingPhone: "250788123456"
+                  billingAddress: "123 Main St"
+                  notes: "Using voucher with mobile money fallback"
+              voucher_partial_card:
+                summary: Partial Voucher + Card
+                value:
+                  cartId: "cart123"
+                  paymentMethod: "VOUCHER"
+                  voucherCode: "VCH-50DISC"
+                  fallbackPaymentMethod: "CARD"
+                  billingEmail: "customer@example.com"
+                  billingName: "John Doe"
+                  billingPhone: "250788123456"
+                  cardDetails:
+                    cardNumber: "5531886652142950"
+                    cvv: "564"
+                    expiryMonth: "09"
+                    expiryYear: "29"
+                  notes: "Using voucher with card fallback"
+
       responses:
         201:
           description: Checkout created and payment processed successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PaymentResponse"
+                $ref: "#/components/schemas/VoucherPaymentResponse"
+              examples:
+                full_voucher_payment:
+                  summary: Full payment with 100% voucher
+                  value:
+                    message: "Payment completed using 100% discount voucher"
+                    data:
+                      checkout:
+                        id: "checkout123"
+                        totalAmount: 50000
+                        paymentStatus: "COMPLETED"
+                      transactionId: "vtxn_123"
+                      status: "successful"
+                      voucherApplied: true
+                      voucherDetails:
+                        voucherCode: "VCH-100DISC"
+                        discountPercentage: 100
+                        amountCovered: 0
+                        remainingAmount: 0
+                        creditUsed: 0
+                        remainingCredit: 50000
+                      creditRemaining: 50000
+                      paymentDeadline: "2024-12-30T00:00:00Z"
+                      paymentDeadlineMessage: "You have 30 days to repay the credit used. Penalties may apply after the deadline."
+                partial_voucher_payment:
+                  summary: Partial voucher with additional payment
+                  value:
+                    message: "Voucher applied with 20% discount. Additional payment of 58000 RWF processed."
+                    data:
+                      checkout:
+                        id: "checkout123"
+                        totalAmount: 100000
+                        paymentStatus: "PROCESSING"
+                      transactionId: "combined_txn_123"
+                      status: "pending"
+                      voucherApplied: true
+                      voucherDetails:
+                        voucherCode: "VCH-20PERCENT"
+                        discountPercentage: 20
+                        amountCovered: 30000
+                        remainingAmount: 58000
+                        creditUsed: 30000
+                        remainingCredit: 0
+                      requiresAdditionalPayment: true
+                      additionalPaymentAmount: 58000
+                      redirectUrl: "https://payment.provider.com/auth"
         400:
           description: Bad request - Invalid input or cart issues
           content:
@@ -526,6 +726,17 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples:
+                voucher_required:
+                  value:
+                    message: "Voucher code is required for voucher payments"
+                voucher_already_used:
+                  value:
+                    message: "Voucher has already been used"
+                    error: "Voucher VCH-ABC123 was already used on 2024-11-15"
+                insufficient_voucher:
+                  value:
+                    message: "Voucher credit insufficient. Available: 20000, Required: 50000. Please provide an additional payment method."
+                    error: "Insufficient voucher credit"
                 missing_fields:
                   value:
                     message: "Cart ID and payment method are required"
@@ -772,3 +983,99 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /checkouts/validate-voucher:
+    post:
+      tags:
+        - Checkout API Management
+      summary: Validate voucher for checkout
+      description: Validate if a voucher can be used for a specific order amount
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoucherValidationRequest"
+            example:
+              voucherCode: "VCH-ABC123"
+              orderAmount: 50000
+      responses:
+        200:
+          description: Voucher validation completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoucherValidationResponse"
+              examples:
+                valid_full_coverage:
+                  summary: Valid voucher with full coverage
+                  value:
+                    message: "Voucher validated successfully"
+                    valid: true
+                    data:
+                      voucher:
+                        id: "voucher123"
+                        code: "VCH-ABC123"
+                        discountPercentage: 100
+                        remainingCredit: 60000
+                        loanId: "loan123"
+                      coverage:
+                        orderAmount: 50000
+                        discountAmount: 50000
+                        amountAfterDiscount: 0
+                        serviceFee: 0
+                        totalRequired: 0
+                        voucherCovers: 0
+                        coversFullAmount: true
+                        requiresAdditionalPayment: false
+                        additionalPaymentRequired: 0
+                      warning: null
+                valid_partial_coverage:
+                  summary: Valid voucher requiring additional payment
+                  value:
+                    message: "Voucher validated successfully"
+                    valid: true
+                    data:
+                      voucher:
+                        id: "voucher123"
+                        code: "VCH-20PERCENT"
+                        discountPercentage: 20
+                        remainingCredit: 30000
+                        loanId: "loan123"
+                      coverage:
+                        orderAmount: 100000
+                        discountAmount: 20000
+                        amountAfterDiscount: 80000
+                        serviceFee: 8000
+                        totalRequired: 88000
+                        voucherCovers: 30000
+                        coversFullAmount: false
+                        requiresAdditionalPayment: true
+                        additionalPaymentRequired: 58000
+                      warning: "Voucher will cover 30000 RWF. Additional payment of 58000 required."
+        400:
+          description: Invalid voucher or validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  valid:
+                    type: boolean
+              examples:
+                already_used:
+                  value:
+                    message: "Voucher has already been used"
+                    valid: false
+                insufficient_credit:
+                  value:
+                    message: "Voucher has no remaining credit"
+                    valid: false
+                expired:
+                  value:
+                    message: "Voucher has expired"
+                    valid: false

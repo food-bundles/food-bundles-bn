@@ -1,4 +1,5 @@
 import {
+  OrderStatus,
   PaymentMethod,
   PaymentStatus,
   TransactionStatus,
@@ -52,10 +53,17 @@ export interface UpdateCheckoutData {
   cardCountry?: string;
   encryptionKey?: string;
 
+  voucherCode?: string;
+  voucherId?: string;
+  voucherDiscountPercentage?: number;
+  voucherCreditUsed?: number;
+
   customerId?: string;
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
+
+  status?: OrderStatus;
 }
 
 export interface BasePaymentResult {
@@ -178,4 +186,55 @@ export interface WalletTransactionFilters {
   endDate?: Date;
   page?: number;
   limit?: number;
+}
+
+
+
+export interface VoucherPaymentSubmissionData {
+  voucherCode: string;
+  orderId: string;
+  restaurantId: string;
+  originalAmount: number;
+  fallbackPaymentMethod?: "MOBILE_MONEY" | "CARD" | "BANK_TRANSFER";
+  fallbackPaymentData?: {
+    phoneNumber?: string;
+    cardDetails?: {
+      cardNumber: string;
+      cvv: string;
+      expiryMonth: string;
+      expiryYear: string;
+      pin?: string;
+    };
+    bankDetails?: {
+      clientIp?: string;
+    };
+  };
+}
+
+export interface VoucherPaymentResult {
+  success: boolean;
+  transactionId: string;
+  reference: string;
+  flwRef: string;
+  status: string;
+  message: string;
+  voucherDetails?: {
+    voucherCode: string;
+    discountPercentage: number;
+    amountCovered: number;
+    remainingAmount: number;
+    creditUsed: number;
+    remainingCredit: number;
+    loanId?: string;
+    repaymentDueDate?: Date;
+  };
+  requiresAdditionalPayment?: boolean;
+  additionalPaymentAmount?: number;
+  authorizationDetails?: {
+    mode: string;
+    redirectUrl: string;
+    message?: string;
+  };
+  error?: string;
+  details?: string;
 }

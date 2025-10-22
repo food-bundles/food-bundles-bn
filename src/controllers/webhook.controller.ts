@@ -189,14 +189,58 @@ async function processCheckoutPayment(
         });
       });
 
-      // ✅ BROADCAST ORDER STATUS UPDATE VIA WEBSOCKET
-      wsManager.broadcastOrderUpdate({
-        orderId: orderData.id,
-        status: "CONFIRMED",
-        paymentStatus: "COMPLETED",
-        timestamp: new Date().toISOString(),
-        restaurantId: orderData.restaurantId,
-      });
+      // ✅ BROADCAST ORDER PAYMENT SUCCESS
+      try {
+        wsManager.broadcastOrderUpdate({
+          orderId: orderData.id,
+          status: "CONFIRMED",
+          paymentStatus: "COMPLETED",
+          timestamp: new Date().toISOString(),
+          restaurantId: orderData.restaurantId,
+          data: {
+            orderNumber: orderData.orderNumber,
+            totalAmount: orderData.totalAmount,
+            currency: orderData.currency || "",
+            paymentMethod: orderData.paymentMethod || "",
+            transactionId: data?.id?.toString() || flwRef,
+            items: orderData.orderItems.map((item) => ({
+              productId: item.productId,
+              productName: item.productName,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              subtotal: item.subtotal,
+            })),
+          },
+        });
+
+        console.log(`✅ Broadcasted order payment success: ${orderData.id}`);
+      } catch (wsError) {
+        console.error("Failed to broadcast order update:", wsError);
+      }
+
+      // ✅ If voucher was used, broadcast voucher transaction
+      if (orderData.voucherId && orderData.voucher) {
+        try {
+          wsManager.broadcastVoucherTransactionUpdate({
+            transactionId: orderData.id,
+            voucherId: orderData.voucherId,
+            orderId: orderData.id,
+            action: "PAYMENT_PROCESSED",
+            timestamp: new Date().toISOString(),
+            restaurantId: orderData.restaurantId,
+            data: {
+              orderAmount: orderData.totalAmount,
+              voucherCode: orderData.voucherCode || "",
+            },
+          });
+
+          console.log(
+            `✅ Broadcasted voucher transaction: ${orderData.voucherId}`
+          );
+        } catch (wsError) {
+          console.error("Failed to broadcast voucher transaction:", wsError);
+        }
+      }
     } catch (orderUpdateError) {
       console.error("Failed to update order status:", orderUpdateError);
     }
@@ -274,14 +318,28 @@ async function processCheckoutPayment(
         });
       });
 
-      // ✅ BROADCAST ORDER STATUS UPDATE VIA WEBSOCKET
-      wsManager.broadcastOrderUpdate({
-        orderId: orderData.id,
-        status: "CANCELLED",
-        paymentStatus: "FAILED",
-        timestamp: new Date().toISOString(),
-        restaurantId: orderData.restaurantId,
-      });
+      // ✅ BROADCAST ORDER PAYMENT FAILURE
+      try {
+        wsManager.broadcastOrderUpdate({
+          orderId: orderData.id,
+          status: "CANCELLED",
+          paymentStatus: "FAILED",
+          timestamp: new Date().toISOString(),
+          restaurantId: orderData.restaurantId,
+          data: {
+            orderNumber: orderData.orderNumber,
+            totalAmount: orderData.totalAmount,
+            currency: orderData.currency || "",
+            paymentMethod: orderData.paymentMethod || "",
+            transactionId: data?.id?.toString() || flwRef,
+            error: "Payment failed",
+          },
+        });
+
+        console.log(`✅ Broadcasted order payment failure: ${orderData.id}`);
+      } catch (wsError) {
+        console.error("Failed to broadcast order failure:", wsError);
+      }
     } catch (orderUpdateError) {
       console.error("Failed to update failed order status:", orderUpdateError);
     }

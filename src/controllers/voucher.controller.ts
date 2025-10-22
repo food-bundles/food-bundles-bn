@@ -58,6 +58,7 @@ export const createVoucher = async (req: Request, res: Response) => {
       "DISCOUNT_20",
       "DISCOUNT_50",
       "DISCOUNT_80",
+      "DISCOUNT_100",
     ];
     if (!validTypes.includes(voucherType)) {
       return res.status(400).json({
