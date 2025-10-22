@@ -14,6 +14,15 @@ interface OrderUpdate {
   paymentStatus?: string;
   timestamp: string;
   restaurantId: string;
+  data?: {
+    orderNumber?: string;
+    totalAmount?: number;
+    currency?: string;
+    paymentMethod?: string;
+    transactionId?: string;
+    error?: string;
+    items?: any[];
+  };
 }
 
 interface ProductUpdate {
@@ -32,6 +41,79 @@ interface SubscriptionUpdate {
   restaurantId: string;
   planId?: string;
   action?: string;
+}
+
+// Voucher-related interfaces
+interface VoucherUpdate {
+  voucherId: string;
+  voucherCode: string;
+  action: "CREATED" | "USED" | "SUSPENDED" | "SETTLED" | "EXPIRED";
+  timestamp: string;
+  restaurantId: string;
+  data?: {
+    remainingCredit?: number;
+    totalCredit?: number;
+    discountPercentage?: number;
+    status?: string;
+  };
+}
+
+interface LoanUpdate {
+  loanId: string;
+  action: "SUBMITTED" | "APPROVED" | "REJECTED" | "DISBURSED" | "SETTLED";
+  timestamp: string;
+  restaurantId: string;
+  data?: {
+    requestedAmount?: number;
+    approvedAmount?: number;
+    status?: string;
+    voucherId?: string;
+  };
+}
+
+interface RepaymentUpdate {
+  repaymentId: string;
+  loanId: string;
+  voucherId?: string;
+  action: "PROCESSED" | "FAILED";
+  timestamp: string;
+  restaurantId: string;
+  data?: {
+    amount?: number;
+    paymentMethod?: string;
+    newOutstanding?: number;
+  };
+}
+
+interface PenaltyUpdate {
+  penaltyId: string;
+  loanId: string;
+  voucherId: string;
+  action: "APPLIED" | "WAIVED" | "PAID";
+  timestamp: string;
+  restaurantId: string;
+  data?: {
+    penaltyAmount?: number;
+    reason?: string;
+    daysOverdue?: number;
+  };
+}
+
+interface VoucherTransactionUpdate {
+  transactionId: string;
+  voucherId: string;
+  orderId: string;
+  action: "PAYMENT_PROCESSED";
+  timestamp: string;
+  restaurantId: string;
+  data?: {
+    originalAmount?: number;
+    discountAmount?: number;
+    amountCharged?: number;
+    remainingCredit?: number;
+    orderAmount?: number;
+    voucherCode?: string;
+  };
 }
 
 class WebSocketManager {
@@ -91,7 +173,6 @@ class WebSocketManager {
 
     switch (message.type) {
       case "AUTHENTICATE":
-        // Authenticate user and store their info
         if (message.userId && message.role) {
           client.userId = message.userId;
           client.role = message.role;
@@ -106,7 +187,6 @@ class WebSocketManager {
         break;
 
       case "SUBSCRIBE_ORDERS":
-        // Subscribe to order updates for a specific restaurant
         if (message.restaurantId) {
           client.subscriptions.add(`orders:${message.restaurantId}`);
 
@@ -119,7 +199,6 @@ class WebSocketManager {
         break;
 
       case "SUBSCRIBE_PRODUCTS":
-        // Subscribe to product updates (for admins/aggregators)
         client.subscriptions.add("products");
 
         this.sendMessage(client.ws, {
@@ -127,6 +206,57 @@ class WebSocketManager {
           subscription: "products",
           timestamp: new Date().toISOString(),
         });
+        break;
+
+      // Subscribe to vouchers
+      case "SUBSCRIBE_VOUCHERS":
+        if (message.restaurantId) {
+          client.subscriptions.add(`vouchers:${message.restaurantId}`);
+
+          this.sendMessage(client.ws, {
+            type: "SUBSCRIPTION_CONFIRMED",
+            subscription: `vouchers:${message.restaurantId}`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        break;
+
+      // Subscribe to loans
+      case "SUBSCRIBE_LOANS":
+        if (message.restaurantId) {
+          client.subscriptions.add(`loans:${message.restaurantId}`);
+
+          this.sendMessage(client.ws, {
+            type: "SUBSCRIPTION_CONFIRMED",
+            subscription: `loans:${message.restaurantId}`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        break;
+
+      // Subscribe to all loans (Admin only)
+      case "SUBSCRIBE_ALL_LOANS":
+        if (client.role === "ADMIN") {
+          client.subscriptions.add("loans:all");
+
+          this.sendMessage(client.ws, {
+            type: "SUBSCRIPTION_CONFIRMED",
+            subscription: "loans:all",
+            timestamp: new Date().toISOString(),
+          });
+        }
+        break;
+
+      case "SUBSCRIBE_SUBSCRIPTIONS":
+        if (message.restaurantId) {
+          client.subscriptions.add(`subscriptions:${message.restaurantId}`);
+
+          this.sendMessage(client.ws, {
+            type: "SUBSCRIPTION_CONFIRMED",
+            subscription: `subscriptions:${message.restaurantId}`,
+            timestamp: new Date().toISOString(),
+          });
+        }
         break;
 
       case "UNSUBSCRIBE":
@@ -195,6 +325,115 @@ class WebSocketManager {
 
     console.log(
       `Subscription update broadcasted for subscription ${subscriptionUpdate.subscriptionId}`
+    );
+  }
+
+  /**
+   * Broadcast voucher updates
+   */
+  broadcastVoucherUpdate(voucherUpdate: VoucherUpdate) {
+    if (!this.wss) return;
+
+    const subscription = `vouchers:${voucherUpdate.restaurantId}`;
+    const message = {
+      type: "VOUCHER_UPDATE",
+      data: voucherUpdate,
+    };
+
+    this.broadcastToSubscription(subscription, message);
+
+    console.log(
+      `Voucher update broadcasted: ${voucherUpdate.action} - ${voucherUpdate.voucherCode}`
+    );
+  }
+
+  /**
+   * Broadcast loan updates
+   */
+  broadcastLoanUpdate(loanUpdate: LoanUpdate) {
+    if (!this.wss) return;
+
+    // Broadcast to specific restaurant
+    const restaurantSubscription = `loans:${loanUpdate.restaurantId}`;
+    const message = {
+      type: "LOAN_UPDATE",
+      data: loanUpdate,
+    };
+
+    this.broadcastToSubscription(restaurantSubscription, message);
+
+    // Also broadcast to all admins subscribed to all loans
+    this.broadcastToSubscription("loans:all", message);
+
+    console.log(
+      `Loan update broadcasted: ${loanUpdate.action} - ${loanUpdate.loanId}`
+    );
+  }
+
+  /**
+   * Broadcast repayment updates
+   */
+  broadcastRepaymentUpdate(repaymentUpdate: RepaymentUpdate) {
+    if (!this.wss) return;
+
+    const subscription = `loans:${repaymentUpdate.restaurantId}`;
+    const message = {
+      type: "REPAYMENT_UPDATE",
+      data: repaymentUpdate,
+    };
+
+    this.broadcastToSubscription(subscription, message);
+
+    // Also to voucher subscribers
+    const voucherSubscription = `vouchers:${repaymentUpdate.restaurantId}`;
+    this.broadcastToSubscription(voucherSubscription, message);
+
+    console.log(
+      `Repayment update broadcasted for loan ${repaymentUpdate.loanId}`
+    );
+  }
+
+  /**
+   * Broadcast penalty updates
+   */
+  broadcastPenaltyUpdate(penaltyUpdate: PenaltyUpdate) {
+    if (!this.wss) return;
+
+    const subscription = `loans:${penaltyUpdate.restaurantId}`;
+    const message = {
+      type: "PENALTY_UPDATE",
+      data: penaltyUpdate,
+    };
+
+    this.broadcastToSubscription(subscription, message);
+
+    // Also to voucher subscribers
+    const voucherSubscription = `vouchers:${penaltyUpdate.restaurantId}`;
+    this.broadcastToSubscription(voucherSubscription, message);
+
+    console.log(
+      `Penalty update broadcasted: ${penaltyUpdate.action} - ${penaltyUpdate.penaltyId}`
+    );
+  }
+
+  /**
+   * Broadcast voucher transaction updates
+   */
+  broadcastVoucherTransactionUpdate(
+    transactionUpdate: VoucherTransactionUpdate
+  ) {
+    if (!this.wss) return;
+
+    const subscription = `vouchers:${transactionUpdate.restaurantId}`;
+    const message = {
+      type: "VOUCHER_TRANSACTION_UPDATE",
+      data: transactionUpdate,
+    };
+
+    this.broadcastToSubscription(subscription, message);
+
+    console.log(
+      `Voucher transaction update broadcasted for voucher ${transactionUpdate.voucherId}`
     );
   }
 

@@ -5,6 +5,7 @@ import {
   PaymentMethod,
   PenaltyStatus,
 } from "@prisma/client";
+import { wsManager } from "../index";
 
 // ============================================
 // TYPES AND INTERFACES
@@ -129,6 +130,25 @@ export const createVoucherService = async (data: CreateVoucherData) => {
       loan: true,
     },
   });
+
+  // ✅ BROADCAST VOUCHER CREATION
+  try {
+    wsManager.broadcastVoucherUpdate({
+      voucherId: voucher.id,
+      voucherCode: voucher.voucherCode,
+      action: "CREATED",
+      timestamp: new Date().toISOString(),
+      restaurantId: voucher.restaurantId,
+      data: {
+        remainingCredit: voucher.remainingCredit,
+        totalCredit: voucher.totalCredit,
+        discountPercentage: voucher.discountPercentage,
+        status: voucher.status,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast voucher creation:", error);
+  }
 
   return voucher;
 };
@@ -298,6 +318,22 @@ export const deactivateVoucherService = async (
     },
   });
 
+  // ✅ BROADCAST VOUCHER SUSPENSION
+  try {
+    wsManager.broadcastVoucherUpdate({
+      voucherId: voucher.id,
+      voucherCode: voucher.voucherCode,
+      action: "SUSPENDED",
+      timestamp: new Date().toISOString(),
+      restaurantId: voucher.restaurantId,
+      data: {
+        status: voucher.status,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast voucher deactivation:", error);
+  }
+
   return voucher;
 };
 
@@ -353,6 +389,22 @@ export const submitLoanApplicationService = async (
       },
     },
   });
+
+  // ✅ BROADCAST LOAN APPLICATION SUBMISSION
+  try {
+    wsManager.broadcastLoanUpdate({
+      loanId: loanApplication.id,
+      action: "SUBMITTED",
+      timestamp: new Date().toISOString(),
+      restaurantId: loanApplication.restaurantId,
+      data: {
+        requestedAmount: loanApplication.requestedAmount,
+        status: loanApplication.status,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast loan submission:", error);
+  }
 
   return loanApplication;
 };
@@ -488,6 +540,23 @@ export const approveLoanApplicationService = async (
     },
   });
 
+  // ✅ BROADCAST LOAN APPROVAL
+  try {
+    wsManager.broadcastLoanUpdate({
+      loanId: updatedLoan.id,
+      action: "APPROVED",
+      timestamp: new Date().toISOString(),
+      restaurantId: updatedLoan.restaurantId,
+      data: {
+        requestedAmount: updatedLoan.requestedAmount,
+        approvedAmount: updatedLoan.approvedAmount ?? 0,
+        status: updatedLoan.status,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast loan approval:", error);
+  }
+
   return updatedLoan;
 };
 
@@ -545,6 +614,23 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
     return { loan: updatedLoan, voucher };
   });
 
+  // ✅ BROADCAST LOAN DISBURSEMENT
+  try {
+    wsManager.broadcastLoanUpdate({
+      loanId: result.loan.id,
+      action: "DISBURSED",
+      timestamp: new Date().toISOString(),
+      restaurantId: result.loan.restaurantId,
+      data: {
+        approvedAmount: result.loan.approvedAmount ?? 0,
+        status: result.loan.status,
+        voucherId: result.voucher.id,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast loan disbursement:", error);
+  }
+
   return result;
 };
 
@@ -574,6 +660,22 @@ export const rejectLoanApplicationService = async (
       restaurant: true,
     },
   });
+
+  // ✅ BROADCAST LOAN REJECTION
+  try {
+    wsManager.broadcastLoanUpdate({
+      loanId: updatedLoan.id,
+      action: "REJECTED",
+      timestamp: new Date().toISOString(),
+      restaurantId: updatedLoan.restaurantId,
+      data: {
+        requestedAmount: updatedLoan.requestedAmount,
+        status: updatedLoan.status,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast loan rejection:", error);
+  }
 
   return updatedLoan;
 };
@@ -664,6 +766,41 @@ export const processVoucherPaymentService = async (
 
     return { transaction, voucher: updatedVoucher };
   });
+
+  // ✅ BROADCAST VOUCHER USAGE
+  try {
+    wsManager.broadcastVoucherUpdate({
+      voucherId: result.voucher.id,
+      voucherCode: result.voucher.voucherCode,
+      action: "USED",
+      timestamp: new Date().toISOString(),
+      restaurantId: result.voucher.restaurantId,
+      data: {
+        remainingCredit: result.voucher.remainingCredit,
+        totalCredit: result.voucher.totalCredit,
+        discountPercentage: result.voucher.discountPercentage,
+        status: result.voucher.status,
+      },
+    });
+
+    // ✅ BROADCAST VOUCHER TRANSACTION
+    wsManager.broadcastVoucherTransactionUpdate({
+      transactionId: result.transaction.id,
+      voucherId: result.voucher.id,
+      orderId: orderId,
+      action: "PAYMENT_PROCESSED",
+      timestamp: new Date().toISOString(),
+      restaurantId: restaurantId,
+      data: {
+        originalAmount: result.transaction.originalAmount,
+        discountAmount: result.transaction.discountAmount,
+        amountCharged: result.transaction.amountCharged,
+        remainingCredit: result.voucher.remainingCredit,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast voucher payment:", error);
+  }
 
   return result;
 };
@@ -814,6 +951,52 @@ export const processRepaymentService = async (data: RepaymentData) => {
         data: { status: VoucherStatus.SETTLED },
       });
     }
+  }
+
+  // ✅ BROADCAST REPAYMENT
+  try {
+    wsManager.broadcastRepaymentUpdate({
+      repaymentId: repayment.id,
+      loanId: loanId,
+      voucherId: voucherId,
+      action: "PROCESSED",
+      timestamp: new Date().toISOString(),
+      restaurantId: restaurantId,
+      data: {
+        amount: amount,
+        paymentMethod: paymentMethod,
+        newOutstanding: newOutstanding.total,
+      },
+    });
+
+    // If loan is settled, broadcast loan update
+    if (newOutstanding.total <= 0) {
+      wsManager.broadcastLoanUpdate({
+        loanId: loanId,
+        action: "SETTLED",
+        timestamp: new Date().toISOString(),
+        restaurantId: restaurantId,
+        data: {
+          status: "SETTLED",
+        },
+      });
+
+      // Also broadcast voucher settlement
+      if (voucherId) {
+        wsManager.broadcastVoucherUpdate({
+          voucherId: voucherId,
+          voucherCode: repayment.voucher?.voucherCode || "",
+          action: "SETTLED",
+          timestamp: new Date().toISOString(),
+          restaurantId: restaurantId,
+          data: {
+            status: "SETTLED",
+          },
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Failed to broadcast repayment:", error);
   }
 
   return { repayment, newOutstanding };
@@ -1013,6 +1196,25 @@ export const calculatePenaltiesService = async (
         penalty,
         daysOverdue,
       });
+
+      // ✅ BROADCAST PENALTY APPLICATION
+      try {
+        wsManager.broadcastPenaltyUpdate({
+          penaltyId: penalty.id,
+          loanId: loan.id,
+          voucherId: voucher.id,
+          action: "APPLIED",
+          timestamp: new Date().toISOString(),
+          restaurantId: loan.restaurantId,
+          data: {
+            penaltyAmount: penalty.penaltyAmount,
+            reason: penalty.reason || "",
+            daysOverdue: daysOverdue,
+          },
+        });
+      } catch (error) {
+        console.error("Failed to broadcast penalty application:", error);
+      }
     }
 
     // Check for severe delinquency (>60 days) and suspend vouchers
@@ -1021,6 +1223,24 @@ export const calculatePenaltiesService = async (
         where: { loanId: loan.id },
         data: { status: VoucherStatus.SUSPENDED },
       });
+
+      // ✅ BROADCAST VOUCHER SUSPENSION
+      try {
+        for (const voucher of loan.vouchers) {
+          wsManager.broadcastVoucherUpdate({
+            voucherId: voucher.id,
+            voucherCode: voucher.voucherCode,
+            action: "SUSPENDED",
+            timestamp: new Date().toISOString(),
+            restaurantId: loan.restaurantId,
+            data: {
+              status: VoucherStatus.SUSPENDED,
+            },
+          });
+        }
+      } catch (error) {
+        console.error("Failed to broadcast voucher suspension:", error);
+      }
     }
   }
 
@@ -1063,12 +1283,46 @@ export const waivePenaltyService = async (
   adminId: string,
   reason?: string
 ) => {
+  // First get the penalty to access restaurant info
+  const existingPenalty = await prisma.voucherPenalty.findUnique({
+    where: { id: penaltyId },
+    include: {
+      voucher: {
+        select: {
+          restaurantId: true,
+        },
+      },
+    },
+  });
+
+  if (!existingPenalty) {
+    throw new Error("Penalty not found");
+  }
+
   const penalty = await prisma.voucherPenalty.update({
     where: { id: penaltyId },
     data: {
       status: PenaltyStatus.WAIVED,
     },
   });
+
+  // ✅ BROADCAST PENALTY WAIVER
+  try {
+    wsManager.broadcastPenaltyUpdate({
+      penaltyId: penalty.id,
+      loanId: existingPenalty.voucher.restaurantId, // This should be loanId from voucher
+      voucherId: penalty.voucherId,
+      action: "WAIVED",
+      timestamp: new Date().toISOString(),
+      restaurantId: existingPenalty.voucher.restaurantId,
+      data: {
+        penaltyAmount: penalty.penaltyAmount,
+        reason: reason || "Waived by admin",
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast penalty waiver:", error);
+  }
 
   return penalty;
 };
