@@ -9,6 +9,7 @@ import {
   getOrderByIdService,
   updateOrderService,
 } from "../services/order.services";
+import { validateVoucherForCheckoutService } from "../services/voucher.service";
 
 /**
  * Enhanced controller to create a new order from cart
@@ -28,9 +29,12 @@ export const createCheckout = async (req: Request, res: Response) => {
       deviceFingerprint,
       narration,
       currency,
+      voucherCode,
+      fallbackPaymentMethod,
       cardDetails,
       bankDetails,
     } = req.body;
+
     const restaurantId = (req as any).user.id;
 
     // Validate required fields
@@ -51,6 +55,13 @@ export const createCheckout = async (req: Request, res: Response) => {
     if (paymentMethod === "MOBILE_MONEY" && !billingPhone) {
       return res.status(400).json({
         message: "Phone number is required for mobile money payments",
+      });
+    }
+
+    // Validate voucher-specific requirements
+    if (paymentMethod === "VOUCHER" && !voucherCode) {
+      return res.status(400).json({
+        message: "Voucher code is required for voucher payments",
       });
     }
 
@@ -85,14 +96,52 @@ export const createCheckout = async (req: Request, res: Response) => {
       deviceFingerprint,
       narration,
       currency,
+      voucherCode,
+      fallbackPaymentMethod,
       cardDetails,
       bankDetails,
     });
 
     if (paymentResult.success) {
-      // Handle different response types based on payment method
-      if (paymentResult.redirectUrl) {
-        // For payments requiring redirect (3DS, authorization pages)
+      // Handle voucher payment response
+      if (paymentMethod === "VOUCHER" && "voucherDetails" in paymentResult) {
+        const voucherInfo = paymentResult.voucherDetails;
+
+        if (voucherInfo && paymentResult.requiresAdditionalPayment) {
+          res.status(200).json({
+            message: paymentResult.message,
+            data: {
+              checkout: paymentResult.checkout,
+              transactionId: paymentResult.transactionId,
+              status: paymentResult.status,
+              voucherApplied: true,
+              voucherDetails: voucherInfo,
+              requiresAdditionalPayment: true,
+              additionalPaymentAmount: paymentResult.additionalPaymentAmount,
+              redirectUrl: paymentResult.redirectUrl,
+            },
+          });
+        } else if (voucherInfo) {
+          res.status(200).json({
+            message: paymentResult.message,
+            data: {
+              checkout: paymentResult.checkout,
+              transactionId: paymentResult.transactionId,
+              status: paymentResult.status,
+              voucherApplied: true,
+              voucherDetails: voucherInfo,
+              creditRemaining: voucherInfo.remainingCredit,
+              paymentDeadline:
+                voucherInfo.remainingCredit > 0
+                  ? new Date(
+                      Date.now() + 30 * 24 * 60 * 60 * 1000
+                    ).toISOString()
+                  : null,
+            },
+          });
+        }
+      } else if (paymentResult.redirectUrl) {
+        // For payments requiring redirect
         res.status(200).json({
           message: "Payment initiated - redirect required",
           data: {
@@ -104,7 +153,7 @@ export const createCheckout = async (req: Request, res: Response) => {
           },
         });
       } else if (paymentResult.transferDetails) {
-        // For bank transfers with account details
+        // For bank transfers
         res.status(200).json({
           message: "Bank transfer initiated",
           data: {
@@ -116,7 +165,7 @@ export const createCheckout = async (req: Request, res: Response) => {
           },
         });
       } else {
-        // For completed payments or pending mobile money
+        // For other completed payments
         res.status(200).json({
           message: paymentResult.message || "Payment processed successfully",
           data: {
@@ -134,7 +183,7 @@ export const createCheckout = async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     res.status(500).json({
-      message: error.message || "Failed to create checkout",
+      message: error.message || "Failed to process payment",
       error: error.message,
     });
   }
@@ -152,6 +201,8 @@ export const processPayment = async (req: Request, res: Response) => {
       phoneNumber,
       cardDetails,
       bankDetails,
+      voucherCode,
+      fallbackPaymentMethod,
       processDirectly = true,
     } = req.body;
 
@@ -191,6 +242,8 @@ export const processPayment = async (req: Request, res: Response) => {
       phoneNumber,
       cardDetails,
       bankDetails,
+      voucherCode,
+      fallbackPaymentMethod,
       processDirectly,
     });
 
@@ -246,7 +299,7 @@ export const processPayment = async (req: Request, res: Response) => {
 };
 
 /**
- * New controller to verify payment status
+ * Controller to verify payment status
  * GET /checkouts/:orderId/verify-payment
  */
 export const verifyPayment = async (req: Request, res: Response) => {
@@ -305,6 +358,48 @@ export const verifyPayment = async (req: Request, res: Response) => {
     res.status(500).json({
       message: error.message || "Failed to verify payment",
       error: error.message,
+    });
+  }
+};
+
+/**
+ * POST /checkouts/validate-voucher
+ */
+export const validateVoucherForCheckout = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { voucherCode, orderAmount } = req.body;
+    const restaurantId = (req as any).user.id;
+
+    if (!voucherCode || !orderAmount) {
+      return res.status(400).json({
+        message: "Voucher code and order amount are required",
+      });
+    }
+
+    const validation = await validateVoucherForCheckoutService(
+      voucherCode,
+      restaurantId,
+      parseFloat(orderAmount)
+    );
+
+    if (!validation.valid) {
+      return res.status(400).json({
+        message: validation.error,
+        valid: false,
+      });
+    }
+
+    res.status(200).json({
+      message: "Voucher validated successfully",
+      valid: true,
+      data: validation,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to validate voucher",
     });
   }
 };

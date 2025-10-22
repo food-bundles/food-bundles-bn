@@ -422,8 +422,10 @@ model Order {
   transferAmount    Float?
 
   // Mobile money specific fields
-  network String? // Network provider (MTN, Airtel, etc.)
-  voucher String? // Voucher code
+  network     String? // Network provider (MTN, Airtel, etc.)
+  voucherCode String?
+  voucherId   String?
+  voucher     String? // Voucher code
 
   // Card payment specific fields
   cardNumber      String?
@@ -456,6 +458,7 @@ model Order {
   logistics          Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
   cart               Cart?                @relation(fields: [cartId], references: [id])
   VoucherTransaction VoucherTransaction[]
+  Voucher            Voucher?             @relation(fields: [voucherId], references: [id])
 
   @@index([restaurantId])
   @@index([status])
@@ -659,7 +662,7 @@ model Voucher {
   id                 String      @id @default(uuid())
   voucherCode        String      @unique
   voucherType        VoucherType
-  discountPercentage Float // 10, 20, 50, 80
+  discountPercentage Float // 10, 20, 50, 80, 100
 
   // Credit limits
   creditLimit          Float
@@ -684,8 +687,9 @@ model Voucher {
   serviceFeeRate Float @default(10) // 10% service fee
 
   // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   // Relations
   restaurant   Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -693,6 +697,7 @@ model Voucher {
   transactions VoucherTransaction[]
   repayments   VoucherRepayment[]
   penalties    VoucherPenalty[]
+  orders       Order[]
 
   @@index([restaurantId])
   @@index([status])
@@ -865,6 +870,7 @@ enum PaymentMethod {
   MOBILE_MONEY // Mobile money for Rwanda
   BANK_TRANSFER
   CARD
+  VOUCHER
 }
 
 // Payment status enum

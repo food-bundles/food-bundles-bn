@@ -12,7 +12,12 @@ import {
 
 interface CreateVoucherData {
   restaurantId: string;
-  voucherType: "DISCOUNT_10" | "DISCOUNT_20" | "DISCOUNT_50" | "DISCOUNT_80";
+  voucherType:
+    | "DISCOUNT_10"
+    | "DISCOUNT_20"
+    | "DISCOUNT_50"
+    | "DISCOUNT_80"
+    | "DISCOUNT_100";
   creditLimit: number;
   minTransactionAmount?: number;
   maxTransactionAmount?: number;
@@ -31,7 +36,12 @@ interface ApproveLoanData {
   approvedAmount: number;
   approvedBy: string;
   repaymentDays?: number; // Default 30 days
-  voucherType: "DISCOUNT_10" | "DISCOUNT_20" | "DISCOUNT_50" | "DISCOUNT_80";
+  voucherType:
+    | "DISCOUNT_10"
+    | "DISCOUNT_20"
+    | "DISCOUNT_50"
+    | "DISCOUNT_80"
+    | "DISCOUNT_100";
   notes?: string;
 }
 
@@ -87,6 +97,7 @@ export const createVoucherService = async (data: CreateVoucherData) => {
     DISCOUNT_20: 20,
     DISCOUNT_50: 50,
     DISCOUNT_80: 80,
+    DISCOUNT_100: 100,
   };
 
   const discountPercentage = discountMap[voucherType];
@@ -593,10 +604,14 @@ export const processVoucherPaymentService = async (
 
   // Check sufficient credit
   if (voucher.remainingCredit < totalDeducted) {
-    throw new Error(
-      `Insufficient voucher credit. Available: ${voucher.remainingCredit}, Required: ${totalDeducted}`
+    // Allow using all remaining credit even if insufficient
+    console.log(
+      `Using remaining voucher credit: ${voucher.remainingCredit} (Required: ${totalDeducted})`
     );
   }
+
+  // Use minimum of totalDeducted or remaining credit
+  const actualDeduction = Math.min(totalDeducted, voucher.remainingCredit);
 
   // Process payment in transaction
   const result = await prisma.$transaction(async (tx) => {
@@ -611,22 +626,41 @@ export const processVoucherPaymentService = async (
         discountAmount,
         amountCharged,
         serviceFee,
-        totalDeducted,
+        totalDeducted: actualDeduction, // Use actual deduction
       },
     });
 
-    // Update voucher balance
+    // Calculate new remaining credit
+    const newRemainingCredit = voucher.remainingCredit - actualDeduction;
+
+    // Update voucher balance and mark as USED (one-time use)
     const updatedVoucher = await tx.voucher.update({
       where: { id: voucherId },
       data: {
-        usedCredit: { increment: totalDeducted },
-        remainingCredit: { decrement: totalDeducted },
-        status:
-          voucher.remainingCredit - totalDeducted <= 0
-            ? VoucherStatus.USED
-            : VoucherStatus.ACTIVE,
+        usedCredit: { increment: actualDeduction },
+        remainingCredit: newRemainingCredit,
+        // Mark as USED after first use regardless of remaining credit
+        status: VoucherStatus.USED,
+        usedAt: new Date(), // Track when voucher was used
       },
     });
+
+    // If there's a loan associated, create repayment record for credit tracking
+    if (voucher.loanId && actualDeduction > 0) {
+      await tx.voucherRepayment.create({
+        data: {
+          voucherId,
+          restaurantId,
+          loanId: voucher.loanId,
+          amount: actualDeduction,
+          paymentMethod: "VOUCHER", // Add VOUCHER as payment method in Prisma schema
+          paymentReference: transaction.id,
+          allocatedToPrincipal: amountCharged,
+          allocatedToServiceFee: serviceFee,
+          allocatedToPenalty: 0,
+        },
+      });
+    }
 
     return { transaction, voucher: updatedVoucher };
   });
@@ -1156,5 +1190,194 @@ export const getRestaurantCreditSummaryService = async (
       remainingCredit: v.remainingCredit,
       discountPercentage: v.discountPercentage,
     })),
+  };
+};
+
+/**
+ * Get voucher transaction history
+ */
+export const getRestaurantTransactionHistoryService = async (
+  restaurantId: string
+) => {
+  const transactions = await prisma.voucherTransaction.findMany({
+    where: {
+      voucher: {
+        restaurantId,
+      },
+    },
+    include: {
+      voucher: {
+        select: {
+          id: true,
+          voucherCode: true,
+          status: true,
+        },
+      },
+      order: {
+        select: {
+          id: true,
+          orderNumber: true,
+          totalAmount: true,
+          status: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return transactions;
+};
+
+/**
+ * Get restaurant's vouchers
+ */
+export const validateVoucherForCheckoutService = async (
+  voucherCode: string,
+  restaurantId: string,
+  orderAmount: number
+) => {
+  try {
+    const voucher = await getVoucherByCodeService(voucherCode);
+
+    // Check ownership
+    if (voucher.restaurantId !== restaurantId) {
+      return {
+        valid: false,
+        error: "Voucher does not belong to this restaurant",
+      };
+    }
+
+    // Check if already used
+    if (voucher.status === VoucherStatus.USED) {
+      return {
+        valid: false,
+        error: "Voucher has already been used",
+      };
+    }
+
+    // Check status
+    if (voucher.status !== VoucherStatus.ACTIVE) {
+      return {
+        valid: false,
+        error: `Voucher is ${voucher.status.toLowerCase()}`,
+      };
+    }
+
+    // Check expiry
+    if (voucher.expiryDate && new Date() > new Date(voucher.expiryDate)) {
+      return {
+        valid: false,
+        error: "Voucher has expired",
+      };
+    }
+
+    // Check min/max transaction amounts
+    if (orderAmount < voucher.minTransactionAmount) {
+      return {
+        valid: false,
+        error: `Minimum order amount is ${voucher.minTransactionAmount}`,
+      };
+    }
+
+    if (
+      voucher.maxTransactionAmount &&
+      orderAmount > voucher.maxTransactionAmount
+    ) {
+      return {
+        valid: false,
+        error: `Maximum order amount is ${voucher.maxTransactionAmount}`,
+      };
+    }
+
+    // Check remaining credit
+    if (voucher.remainingCredit <= 0) {
+      return {
+        valid: false,
+        error: "Voucher has no remaining credit",
+      };
+    }
+
+    // Calculate coverage
+    const discountAmount = orderAmount * (voucher.discountPercentage / 100);
+    const amountCharged = orderAmount - discountAmount;
+    const serviceFee = amountCharged * (voucher.serviceFeeRate / 100);
+    const totalRequired = amountCharged + serviceFee;
+
+    const coversFullAmount = totalRequired <= voucher.remainingCredit;
+    const requiresAdditionalPayment = !coversFullAmount;
+    const additionalPaymentRequired = requiresAdditionalPayment
+      ? totalRequired - voucher.remainingCredit
+      : 0;
+
+    return {
+      valid: true,
+      voucher: {
+        id: voucher.id,
+        code: voucher.voucherCode,
+        discountPercentage: voucher.discountPercentage,
+        remainingCredit: voucher.remainingCredit,
+        loanId: voucher.loanId,
+      },
+      coverage: {
+        orderAmount,
+        discountAmount,
+        amountAfterDiscount: amountCharged,
+        serviceFee,
+        totalRequired,
+        voucherCovers: Math.min(totalRequired, voucher.remainingCredit),
+        coversFullAmount,
+        requiresAdditionalPayment,
+        additionalPaymentRequired,
+      },
+      warning: requiresAdditionalPayment
+        ? `Voucher will cover ${voucher.remainingCredit} RWF. Additional payment of ${additionalPaymentRequired} required.`
+        : null,
+    };
+  } catch (error: any) {
+    return {
+      valid: false,
+      error: error.message || "Failed to validate voucher",
+    };
+  }
+};
+
+/**
+ * Get loan repayment info
+ */
+export const getLoanRepaymentInfoService = async (loanId: string) => {
+  const loan = await getLoanApplicationByIdService(loanId);
+
+  if (!loan.repaymentDueDate) {
+    return {
+      hasDeadline: false,
+      message: "No repayment deadline set",
+    };
+  }
+
+  const now = new Date();
+  const dueDate = new Date(loan.repaymentDueDate);
+  const daysRemaining = Math.ceil(
+    (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  const isOverdue = daysRemaining < 0;
+  const isPendingPenalty = isOverdue && daysRemaining > -60; // Before severe delinquency
+
+  return {
+    hasDeadline: true,
+    repaymentDueDate: loan.repaymentDueDate,
+    daysRemaining: Math.abs(daysRemaining),
+    isOverdue,
+    isPendingPenalty,
+    status: isOverdue
+      ? daysRemaining < -60
+        ? "SEVERELY_OVERDUE"
+        : "OVERDUE"
+      : daysRemaining <= 7
+      ? "DUE_SOON"
+      : "ACTIVE",
+    message: isOverdue
+      ? `Payment is ${Math.abs(daysRemaining)} days overdue`
+      : `Payment due in ${daysRemaining} days`,
   };
 };

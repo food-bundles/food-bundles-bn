@@ -26,7 +26,8 @@ components:
           example: "VCH-20241201-ABC123"
         voucherType:
           type: string
-          enum: [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80]
+          enum:
+            [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80, DISCOUNT_100]
           description: Voucher discount type
         discountPercentage:
           type: number
@@ -110,7 +111,8 @@ components:
           example: "rest-12345"
         voucherType:
           type: string
-          enum: [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80]
+          enum:
+            [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80, DISCOUNT_100]
           description: Type of discount voucher
         creditLimit:
           type: number
@@ -290,7 +292,8 @@ components:
           example: 30
         voucherType:
           type: string
-          enum: [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80]
+          enum:
+            [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80, DISCOUNT_100]
           description: Type of voucher to create
         notes:
           type: string
