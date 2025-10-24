@@ -11,3 +11,4 @@ uploads
 
 ngrok_recovery_codes.txt
 twilio_2FA_recovery_code.txt
+*.html
