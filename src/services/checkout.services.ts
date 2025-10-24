@@ -12,6 +12,7 @@ import {
   sendPaymentNotificationEmail,
   cleanPhoneNumber,
   isValidRwandaPhone,
+  sendPaymentFailedEmail,
 } from "../utils/emailTemplates";
 import {
   BankTransferPaymentResult,
@@ -31,6 +32,7 @@ import {
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { encryptSecretData } from "../utils/password";
 import { clearCartService } from "./cart.service";
+import { sendMessage } from "../utils/sms.utility";
 
 dotenv.config();
 
@@ -437,7 +439,10 @@ export const processPaymentService = async (
       }
 
       // Send notification email for successful payments
-      if (paymentResult.status === "successful" && order.billingEmail) {
+      if (
+        paymentResult.status === "successful" &&
+        (order.billingEmail || order.restaurant.email)
+      ) {
         try {
           const products = order.orderItems.map((item) => ({
             name: item.productName,
@@ -465,6 +470,30 @@ export const processPaymentService = async (
         } catch (emailError) {
           console.log("Error sending notification email:", emailError);
           // Don't fail the payment process if email fails
+        }
+
+        // Send notification
+        try {
+          await sendMessage(
+            `Dear ${
+              order.billingName || order.restaurant.name
+            }, your order has been placed successfully. Please check your email for more details.`,
+            order.billingPhone || order.restaurant.phone || ""
+          );
+        } catch (error) {
+          console.error("Failed to send wallet notification:", error);
+        }
+      } else {
+        // Send notification
+        try {
+          await sendMessage(
+            `Dear ${
+              order.billingName || order.restaurant.name
+            }, your order has been placed successfully. Please check your email for more details.`,
+            order.billingPhone || order.restaurant.phone || ""
+          );
+        } catch (error) {
+          console.error("Failed to send wallet notification:", error);
         }
       }
 
@@ -522,6 +551,57 @@ export const processPaymentService = async (
         ]);
       } catch (updateError) {
         console.log("Error updating failed payment status:", updateError);
+      }
+
+      if (order.billingEmail || order.restaurant.email) {
+        try {
+          const products = order.orderItems.map((item) => ({
+            name: item.productName,
+            quantity: item.quantity,
+            price: item.unitPrice * item.quantity,
+            unitPrice: item.unitPrice,
+          }));
+
+          sendPaymentFailedEmail({
+            amount: order.totalAmount,
+            transactionId: paymentResult.transactionId,
+            restaurantName: order.restaurant.name,
+            products,
+            customer: {
+              name: order.billingName || order.restaurant.name,
+              email: order.billingEmail!,
+            },
+            orderId: orderId,
+            failureReason: paymentResult.error,
+          });
+        } catch (emailError) {
+          console.log("Error sending notification email:", emailError);
+          // Don't fail the payment process if email fails
+        }
+
+        // Send notification
+        try {
+          await sendMessage(
+            `Dear ${
+              order.billingName || order.restaurant.name
+            }, your order has failed. Please check your email for more details.`,
+            order.billingPhone || order.restaurant.phone || ""
+          );
+        } catch (error) {
+          console.error("Failed to send wallet notification:", error);
+        }
+      } else {
+        // Send notification
+        try {
+          await sendMessage(
+            `Dear ${
+              order.billingName || order.restaurant.name
+            }, your order has failed.`,
+            order.billingPhone || order.restaurant.phone || ""
+          );
+        } catch (error) {
+          console.error("Failed to send wallet notification:", error);
+        }
       }
 
       return {

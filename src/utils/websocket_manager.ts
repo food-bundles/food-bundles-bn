@@ -68,6 +68,7 @@ interface LoanUpdate {
     approvedAmount?: number;
     status?: string;
     voucherId?: string;
+    voucherCode?: string;
   };
 }
 

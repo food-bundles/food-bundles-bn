@@ -4,6 +4,7 @@ import {
   LoanStatus,
   PaymentMethod,
   PenaltyStatus,
+  SubscriptionStatus,
 } from "@prisma/client";
 import { wsManager } from "../index";
 
@@ -80,6 +81,9 @@ export const createVoucherService = async (data: CreateVoucherData) => {
     loanId,
   } = data;
 
+  // ✅ CHECK SUBSCRIPTION FIRST
+  await checkRestaurantSubscription(restaurantId);
+
   // Validate restaurant exists
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: restaurantId },
@@ -131,7 +135,7 @@ export const createVoucherService = async (data: CreateVoucherData) => {
     },
   });
 
-  // ✅ BROADCAST VOUCHER CREATION
+  // Broadcast voucher creation
   try {
     wsManager.broadcastVoucherUpdate({
       voucherId: voucher.id,
@@ -211,6 +215,7 @@ export const getVoucherByCodeService = async (voucherCode: string) => {
 /**
  * Get restaurant's vouchers
  */
+
 export const getRestaurantVouchersService = async (
   restaurantId: string,
   filters?: {
@@ -218,6 +223,14 @@ export const getRestaurantVouchersService = async (
     activeOnly?: boolean;
   }
 ) => {
+  // Check subscription status (don't throw error, just return info)
+  let subscriptionStatus;
+  try {
+    subscriptionStatus = await checkRestaurantSubscription(restaurantId);
+  } catch (error: any) {
+    subscriptionStatus = null;
+  }
+
   const where: any = { restaurantId };
 
   if (filters?.status) {
@@ -246,7 +259,19 @@ export const getRestaurantVouchersService = async (
     orderBy: { createdAt: "desc" },
   });
 
-  return vouchers;
+  return {
+    vouchers,
+    subscription: subscriptionStatus
+      ? {
+          isActive: true,
+          planName: subscriptionStatus.plan.name,
+          endDate: subscriptionStatus.endDate,
+        }
+      : {
+          isActive: false,
+          message: "No active subscription. Subscribe to create new vouchers.",
+        },
+  };
 };
 
 /**
@@ -349,6 +374,9 @@ export const submitLoanApplicationService = async (
 ) => {
   const { restaurantId, requestedAmount, purpose, terms } = data;
 
+  // ✅ CHECK SUBSCRIPTION FIRST
+  const subscription = await checkRestaurantSubscription(restaurantId);
+
   // Validate restaurant
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: restaurantId },
@@ -368,6 +396,14 @@ export const submitLoanApplicationService = async (
 
   if (pendingApplication) {
     throw new Error("You already have a pending loan application");
+  }
+
+  // Optional: Set loan limits based on subscription plan
+  const maxLoanAmount = getMaxLoanAmountForPlan(subscription.plan.name);
+  if (requestedAmount > maxLoanAmount) {
+    throw new Error(
+      `Your subscription plan allows a maximum loan of ${maxLoanAmount} RWF. Requested: ${requestedAmount} RWF. Please upgrade your plan for higher limits.`
+    );
   }
 
   // Create loan application
@@ -390,7 +426,7 @@ export const submitLoanApplicationService = async (
     },
   });
 
-  // ✅ BROADCAST LOAN APPLICATION SUBMISSION
+  // Broadcast loan application submission
   try {
     wsManager.broadcastLoanUpdate({
       loanId: loanApplication.id,
@@ -500,7 +536,7 @@ export const getAllLoanApplicationsService = async (filters?: {
 };
 
 /**
- * Approve loan application
+ * Approve loan application and create voucher immediately
  */
 export const approveLoanApplicationService = async (
   loanId: string,
@@ -514,50 +550,93 @@ export const approveLoanApplicationService = async (
     notes,
   } = approvalData;
 
-  // Get loan application
+  // ✅ Get loan details
   const loan = await getLoanApplicationByIdService(loanId);
+
+  if (!loan) throw new Error("Loan not found");
 
   if (loan.status !== LoanStatus.PENDING) {
     throw new Error(`Cannot approve loan with status: ${loan.status}`);
   }
 
-  // Update loan to approved
+  // ✅ Prepare loan update data
   const disbursementDate = new Date();
   const repaymentDueDate = new Date();
   repaymentDueDate.setDate(repaymentDueDate.getDate() + repaymentDays);
 
-  const updatedLoan = await prisma.loanApplication.update({
-    where: { id: loanId },
-    data: {
-      status: LoanStatus.APPROVED,
-      approvedAmount,
-      approvedBy,
-      approvedAt: new Date(),
-      notes,
-    },
-    include: {
-      restaurant: true,
-    },
+  // ✅ Set default expiry: 3 months from now
+  const expiryDate = new Date();
+  expiryDate.setMonth(expiryDate.getMonth() + 3);
+
+  // ✅ Approve loan + create voucher in a transaction
+  const result = await prisma.$transaction(async (tx) => {
+    // Update loan to approved
+    const updatedLoan = await tx.loanApplication.update({
+      where: { id: loanId },
+      data: {
+        status: LoanStatus.APPROVED,
+        approvedAmount,
+        approvedBy,
+        approvedAt: new Date(),
+        notes,
+        disbursementDate,
+        repaymentDueDate,
+      },
+      include: {
+        restaurant: true,
+      },
+    });
+
+    // ✅ Create a voucher automatically for the approved loan
+    const voucher = await createVoucherService({
+      restaurantId: updatedLoan.restaurantId,
+      voucherType,
+      creditLimit: approvedAmount,
+      expiryDate,
+      loanId: updatedLoan.id,
+    });
+
+    return { updatedLoan, voucher };
   });
 
   // ✅ BROADCAST LOAN APPROVAL
   try {
     wsManager.broadcastLoanUpdate({
-      loanId: updatedLoan.id,
+      loanId: result.updatedLoan.id,
       action: "APPROVED",
       timestamp: new Date().toISOString(),
-      restaurantId: updatedLoan.restaurantId,
+      restaurantId: result.updatedLoan.restaurantId,
       data: {
-        requestedAmount: updatedLoan.requestedAmount,
-        approvedAmount: updatedLoan.approvedAmount ?? 0,
-        status: updatedLoan.status,
+        requestedAmount: result.updatedLoan.requestedAmount,
+        approvedAmount: result.updatedLoan.approvedAmount ?? 0,
+        status: result.updatedLoan.status,
+        voucherId: result.voucher.id,
+        voucherCode: result.voucher.voucherCode,
+      },
+    });
+
+    // ✅ BROADCAST VOUCHER CREATION
+    wsManager.broadcastVoucherUpdate({
+      voucherId: result.voucher.id,
+      voucherCode: result.voucher.voucherCode,
+      action: "CREATED",
+      timestamp: new Date().toISOString(),
+      restaurantId: result.voucher.restaurantId,
+      data: {
+        remainingCredit: result.voucher.remainingCredit,
+        totalCredit: result.voucher.totalCredit,
+        discountPercentage: result.voucher.discountPercentage,
+        status: result.voucher.status,
       },
     });
   } catch (error) {
-    console.error("Failed to broadcast loan approval:", error);
+    console.error("Failed to broadcast approval or voucher creation:", error);
   }
 
-  return updatedLoan;
+  return {
+    loan: result.updatedLoan,
+    voucher: result.voucher,
+  };
 };
 
 /**
@@ -1491,6 +1570,9 @@ export const validateVoucherForCheckoutService = async (
   orderAmount: number
 ) => {
   try {
+    // ✅ CHECK SUBSCRIPTION
+    await checkRestaurantSubscription(restaurantId);
+
     const voucher = await getVoucherByCodeService(voucherCode);
 
     // Check ownership
@@ -1635,3 +1717,71 @@ export const getLoanRepaymentInfoService = async (loanId: string) => {
       : `Payment due in ${daysRemaining} days`,
   };
 };
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Check if restaurant has active subscription
+ */
+export const checkRestaurantSubscription = async (restaurantId: string) => {
+  const activeSubscription = await prisma.restaurantSubscription.findFirst({
+    where: {
+      restaurantId,
+      status: SubscriptionStatus.ACTIVE,
+      endDate: {
+        gte: new Date(), // Subscription end date must be in the future
+      },
+    },
+    include: {
+      plan: {
+        select: {
+          name: true,
+          features: true,
+        },
+      },
+    },
+  });
+
+  if (!activeSubscription) {
+    throw new Error(
+      "Restaurant does not have an active subscription. Please subscribe to access voucher and loan features."
+    );
+  }
+
+  // Optional: Check if the plan includes voucher/loan features
+  const features = activeSubscription.plan.features as any;
+  if (features && Array.isArray(features)) {
+    const hasVoucherFeature = features.some(
+      (f: string) =>
+        f.toLowerCase().includes("voucher") ||
+        f.toLowerCase().includes("loan") ||
+        f.toLowerCase().includes("credit")
+    );
+
+    if (!hasVoucherFeature) {
+      throw new Error(
+        `Your current subscription plan (${activeSubscription.plan.name}) does not include voucher/loan features. Please upgrade your plan.`
+      );
+    }
+  }
+
+  return activeSubscription;
+};
+
+/**
+ * Get maximum loan amount based on subscription plan
+ */
+function getMaxLoanAmountForPlan(planName: string): number {
+  // Define loan limits per plan tier
+  const loanLimits: Record<string, number> = {
+    Basic: 500000, // 500K RWF
+    Standard: 2000000, // 2M RWF
+    Premium: 5000000, // 5M RWF
+    Enterprise: 10000000, // 10M RWF
+  };
+
+  // Default limit if plan not found
+  return loanLimits[planName] || 1000000; // 1M RWF default
+}
