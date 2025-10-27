@@ -45,15 +45,22 @@ app.use(
   })
 );
 
-app.use(express.json());
-app.use(
-  express.json({
-    verify: (req: CustomIncomingMessage, res, buf) => {
-      req.rawBody = buf;
-    },
-  })
-);
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+
+// JSON error handler
+app.use((err: any, req: any, res: any, next: any) => {
+  if (err instanceof SyntaxError && 'body' in err) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid JSON format in request body'
+    });
+  }
+  next(err);
+});
+
+// Raw body for webhooks
+app.use('/webhooks', express.raw({ type: 'application/json' }));
 
 app.use("/", routes);
 

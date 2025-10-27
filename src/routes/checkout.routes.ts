@@ -3,6 +3,7 @@ import {
   createCheckout,
   processPayment,
   verifyPayment,
+  verifyVoucherOTPAndCreateOrder,
 } from "../controllers/checkout.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -37,5 +38,17 @@ checkoutRoutes.post("/:orderId/payment", isAuthenticated, processPayment);
  * Access: Restaurant (own checkouts) or Admin (any checkout)
  */
 checkoutRoutes.get("/:orderId/verify-payment", isAuthenticated, verifyPayment);
+
+/**
+ * Verify OTP and create order for voucher payment
+ * POST /checkouts/verify-voucher-otp
+ * Access: Restaurant only
+ */
+checkoutRoutes.post(
+  "/verify-voucher-otp",
+  isAuthenticated,
+  checkPermission("RESTAURANT"),
+  verifyVoucherOTPAndCreateOrder
+);
 
 export default checkoutRoutes;
