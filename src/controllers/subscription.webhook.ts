@@ -52,6 +52,7 @@ async function processSubscriptionPayment(
       updateData.merchantFee = data?.merchantfee || data?.data?.merchantfee;
     }
 
+    // Update subscription and create history in transaction
     await retryDatabaseOperation(async () => {
       return await prisma.$transaction([
         prisma.restaurantSubscription.update({
@@ -64,19 +65,35 @@ async function processSubscriptionPayment(
             action: "CREATED",
             newStatus: "ACTIVE",
             newPlanId: subscription.planId,
+            reason: "Payment completed successfully",
           },
         }),
       ]);
     });
 
-    // Send notification
+    // Send success notification
     try {
       await sendMessage(
-        `Dear ${subscription.restaurant.name}, Your subscription to ${subscription.plan.name} has been activated. Thank you!`,
+        `Dear ${subscription.restaurant.name}, Your subscription to ${subscription.plan.name} has been activated successfully. Thank you!`,
         subscription.restaurant.phone || ""
       );
     } catch (error) {
       console.error("Failed to send subscription notification:", error);
+    }
+
+    // Broadcast subscription update via WebSocket
+    try {
+      wsManager.broadcastSubscriptionUpdate({
+        subscriptionId: subscription.id,
+        status: "ACTIVE",
+        paymentStatus: "COMPLETED",
+        timestamp: new Date().toISOString(),
+        restaurantId: subscription.restaurantId,
+      });
+
+      console.log(`✅ Broadcasted subscription activation: ${subscription.id}`);
+    } catch (wsError) {
+      console.error("Failed to broadcast subscription update:", wsError);
     }
 
     console.log(`Subscription payment completed: ${subscription.id}`);
@@ -103,16 +120,17 @@ async function processSubscriptionPayment(
       ]);
     });
 
+    // Send failure notification
     try {
       await sendMessage(
-        `Dear ${subscription.restaurant.name}, Your subscription payment failed. Please try again.`,
+        `Dear ${subscription.restaurant.name}, Your subscription payment failed. Please try again or contact support.`,
         subscription.restaurant.phone || ""
       );
     } catch (error) {
       console.error("Failed to send subscription failure notification:", error);
     }
 
-    // Broadcast subscription update via WebSocket
+    // Broadcast subscription payment failure via WebSocket
     try {
       wsManager.broadcastSubscriptionUpdate({
         subscriptionId: subscription.id,
@@ -121,8 +139,12 @@ async function processSubscriptionPayment(
         timestamp: new Date().toISOString(),
         restaurantId: subscription.restaurantId,
       });
-    } catch (error) {
-      console.error("Failed to broadcast subscription update:", error);
+
+      console.log(
+        `✅ Broadcasted subscription payment failure: ${subscription.id}`
+      );
+    } catch (wsError) {
+      console.error("Failed to broadcast subscription failure:", wsError);
     }
 
     console.log(`Subscription payment failed: ${subscription.id}`);
@@ -153,6 +175,7 @@ export const handleSubscriptionWebhook = async (
       const signature = req.headers["verif-hash"];
 
       if (!signature || signature !== secretHash) {
+        console.log("Unauthorized webhook - invalid signature");
         return res.status(401).json({ error: "Unauthorized webhook" });
       }
 
@@ -175,6 +198,7 @@ export const handleSubscriptionWebhook = async (
 
       // Check if this is a subscription payment (contains SUB_ prefix)
       if (txRef.includes("SUB_")) {
+        console.log("Processing subscription payment webhook");
         await processSubscriptionPayment(
           txRef,
           flwRef,
@@ -182,16 +206,20 @@ export const handleSubscriptionWebhook = async (
           "FLUTTERWAVE",
           payload
         );
+      } else {
+        console.log("Not a subscription payment, skipping");
       }
     } else if (paymentProvider === "PAYPACK") {
       const paypackSignature = req.headers["x-paypack-signature"] as string;
       const paypackSecret = process.env.PAYPACK_WEBHOOK_SECRET;
 
       if (!paypackSecret) {
+        console.error("PayPack webhook secret not configured");
         return res.status(500).json({ error: "Webhook configuration error" });
       }
 
       if (!paypackSignature) {
+        console.log("Missing PayPack signature header");
         return res.status(401).json({ error: "Missing signature header" });
       }
 
@@ -208,6 +236,7 @@ export const handleSubscriptionWebhook = async (
         .digest("base64");
 
       if (paypackSignature !== expectedSignature) {
+        console.log("Invalid PayPack webhook signature");
         return res.status(401).json({ error: "Invalid webhook signature" });
       }
 
@@ -222,6 +251,7 @@ export const handleSubscriptionWebhook = async (
 
       // Check if this is a subscription payment
       if (txRef.includes("SUB_")) {
+        console.log("Processing PayPack subscription payment webhook");
         await processSubscriptionPayment(
           txRef,
           flwRef,
@@ -229,6 +259,8 @@ export const handleSubscriptionWebhook = async (
           "PAYPACK",
           payload
         );
+      } else {
+        console.log("Not a subscription payment, skipping");
       }
     }
 
@@ -245,15 +277,23 @@ export const handleSubscriptionWebhook = async (
       });
     }
 
-    res.status(500).json({ error: "Webhook processing failed" });
+    res.status(500).json({
+      error: "Webhook processing failed",
+      details: error.message,
+    });
   }
 };
 
+/**
+ * Detect payment provider from webhook payload
+ */
 function detectPaymentProvider(body: any): "FLUTTERWAVE" | "PAYPACK" {
+  // PayPack webhook structure
   if (body?.data?.status !== undefined && body?.data?.ref !== undefined) {
     return "PAYPACK";
   }
 
+  // Flutterwave webhook structure
   if (
     body?.txRef !== undefined ||
     body?.tx_ref !== undefined ||
@@ -263,5 +303,6 @@ function detectPaymentProvider(body: any): "FLUTTERWAVE" | "PAYPACK" {
     return "FLUTTERWAVE";
   }
 
+  // Default to Flutterwave
   return "FLUTTERWAVE";
 }

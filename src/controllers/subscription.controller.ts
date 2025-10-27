@@ -13,6 +13,7 @@ import {
   renewSubscriptionService,
   getAllSubscriptionsService,
   checkExpiredSubscriptionsService,
+  processSubscriptionPaymentService,
 } from "../services/subscription.service";
 import { SubscriptionStatus, PaymentMethod } from "@prisma/client";
 import prisma from "../prisma";
@@ -156,7 +157,7 @@ export const deleteSubscriptionPlan = async (req: Request, res: Response) => {
 // ==================== RESTAURANT SUBSCRIPTION CONTROLLERS ====================
 
 /**
- * Controller to create restaurant subscription
+ * Controller to create restaurant subscription with payment
  * POST /subscriptions/restaurant
  */
 export const createRestaurantSubscription = async (
@@ -164,7 +165,14 @@ export const createRestaurantSubscription = async (
   res: Response
 ) => {
   try {
-    const { planId, autoRenew, paymentMethod } = req.body;
+    const {
+      planId,
+      autoRenew,
+      paymentMethod,
+      phoneNumber,
+      cardDetails,
+      bankDetails,
+    } = req.body;
     const userRole = (req as any).user.role;
     const restaurantId =
       userRole === "RESTAURANT" ? (req as any).user.id : req.body.restaurantId;
@@ -190,16 +198,36 @@ export const createRestaurantSubscription = async (
       });
     }
 
-    const subscription = await createRestaurantSubscriptionService({
+    // Validate payment method specific requirements
+    if (paymentMethod === "MOBILE_MONEY" && !phoneNumber) {
+      return res.status(400).json({
+        message: "Phone number is required for mobile money payment",
+      });
+    }
+
+    if (paymentMethod === "CARD" && !cardDetails) {
+      return res.status(400).json({
+        message:
+          "Card details are required for card payment (or will use hosted checkout)",
+      });
+    }
+
+    const result = await createRestaurantSubscriptionService({
       restaurantId,
       planId,
       autoRenew,
       paymentMethod,
+      phoneNumber,
+      cardDetails,
+      bankDetails,
     });
 
     res.status(201).json({
-      message: "Subscription created successfully",
-      data: subscription,
+      message: result.payment
+        ? "Subscription created and payment initiated"
+        : "Subscription created successfully",
+      data: result.subscription,
+      payment: result.payment,
     });
   } catch (error: any) {
     res.status(500).json({
@@ -209,7 +237,83 @@ export const createRestaurantSubscription = async (
 };
 
 /**
- * Controller to get restaurant subscriptions
+ * Controller to process subscription payment
+ * POST /subscriptions/:subscriptionId/pay
+ */
+export const processSubscriptionPayment = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { subscriptionId } = req.params;
+    const { paymentMethod, phoneNumber, cardDetails, bankDetails } = req.body;
+    const userRole = (req as any).user.role;
+    const restaurantId =
+      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+
+    if (!paymentMethod) {
+      return res.status(400).json({
+        message: "Payment method is required",
+      });
+    }
+
+    if (!Object.values(PaymentMethod).includes(paymentMethod)) {
+      return res.status(400).json({
+        message: "Invalid payment method",
+      });
+    }
+
+    // Validate payment method specific requirements
+    if (paymentMethod === "MOBILE_MONEY" && !phoneNumber) {
+      return res.status(400).json({
+        message: "Phone number is required for mobile money payment",
+      });
+    }
+
+    // Verify subscription belongs to restaurant (if not admin)
+    if (restaurantId) {
+      const subscription = await getSubscriptionByIdService(
+        subscriptionId,
+        restaurantId
+      );
+      if (!subscription) {
+        return res.status(403).json({
+          message: "Unauthorized to process payment for this subscription",
+        });
+      }
+    }
+
+    const result = await processSubscriptionPaymentService(subscriptionId, {
+      paymentMethod,
+      phoneNumber,
+      cardDetails,
+      bankDetails,
+    });
+
+    if (result.success) {
+      res.status(200).json({
+        message: result.message || "Payment processed successfully",
+        data: result.subscription,
+        transactionId: result.transactionId,
+        redirectUrl: result.redirectUrl,
+        transferDetails: result.transferDetails,
+        status: result.status,
+      });
+    } else {
+      res.status(400).json({
+        message: result.error || "Payment processing failed",
+        error: result.error,
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to process payment",
+    });
+  }
+};
+
+/**
+ * Controller to get restaurant's subscriptions
  * GET /subscriptions/my-subscriptions
  */
 export const getMySubscriptions = async (req: Request, res: Response) => {
@@ -372,7 +476,7 @@ export const renewSubscription = async (req: Request, res: Response) => {
     );
 
     res.status(200).json({
-      message: "Subscription renewed successfully",
+      message: "Subscription renewed successfully. Please complete payment.",
       data: subscription,
     });
   } catch (error: any) {
@@ -488,7 +592,7 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
         where: { id: subscriptionId },
         data: {
           planId: newPlanId,
-          status: "PENDING", // Requires payment for upgrade
+          status: "PENDING",
           paymentStatus: "PENDING",
         },
         include: {

@@ -7,6 +7,7 @@ import {
   updateSubscriptionPlan,
   deleteSubscriptionPlan,
   createRestaurantSubscription,
+  processSubscriptionPayment,
   getMySubscriptions,
   getSubscriptionById,
   updateRestaurantSubscription,
@@ -82,7 +83,7 @@ subscriptionRoutes.delete(
 // ========================================
 
 /**
- * Create restaurant subscription
+ * Create restaurant subscription with payment
  * POST /subscriptions/restaurant
  * Access: Restaurant (own subscription) or Admin (any restaurant)
  */
@@ -113,6 +114,17 @@ subscriptionRoutes.get(
   "/:subscriptionId",
   isAuthenticated,
   getSubscriptionById
+);
+
+/**
+ * Process subscription payment
+ * POST /subscriptions/:subscriptionId/pay
+ * Access: Restaurant (own subscription) or Admin (any subscription)
+ */
+subscriptionRoutes.post(
+  "/:subscriptionId/pay",
+  isAuthenticated,
+  processSubscriptionPayment
 );
 
 /**
