@@ -1,5 +1,56 @@
+import dotenv from "dotenv";
 import prisma from "../prisma";
-import { SubscriptionStatus, PaymentMethod } from "@prisma/client";
+import {
+  SubscriptionStatus,
+  PaymentMethod,
+  PaymentStatus,
+} from "@prisma/client";
+import { retryDatabaseOperation } from "../utils/db-retry.utls";
+import { sendMessage } from "../utils/sms.utility";
+import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
+
+dotenv.config();
+
+// Payment Integration
+const PaypackJs = require("paypack-js").default;
+const Flutterwave = require("flutterwave-node-v3");
+
+// Initialize Paypack
+const paypack = PaypackJs.config({
+  client_id: process.env.PAYPACK_APPLICATION_ID,
+  client_secret: process.env.PAYPACK_APPLICATION_SECRET,
+});
+
+// Initialize Flutterwave
+const flw = new Flutterwave(
+  process.env.FLW_PUBLIC_KEY,
+  process.env.FLW_SECRET_KEY
+);
+
+// Types for payment results
+interface SubscriptionPaymentResult {
+  success: boolean;
+  transactionId: string;
+  reference: string;
+  flwRef: string;
+  status: string;
+  message: string;
+  error?: string;
+  authorizationDetails?: {
+    mode: string;
+    redirectUrl: string;
+    message?: string;
+  };
+  transferDetails?: {
+    transferReference: string;
+    transferAccount: string;
+    transferBank: string;
+    transferAmount: number;
+    transferNote: string;
+    accountExpiration: Date | null;
+  };
+  cardPaymentData?: any;
+}
 
 interface CreateSubscriptionPlanData {
   name: string;
@@ -23,6 +74,17 @@ interface CreateRestaurantSubscriptionData {
   planId: string;
   autoRenew?: boolean;
   paymentMethod?: PaymentMethod;
+  phoneNumber?: string;
+  cardDetails?: {
+    cardNumber: string;
+    cvv: string;
+    expiryMonth: string;
+    expiryYear: string;
+    pin?: string;
+  };
+  bankDetails?: {
+    clientIp?: string;
+  };
 }
 
 interface UpdateRestaurantSubscriptionData {
@@ -39,7 +101,6 @@ export const createSubscriptionPlanService = async (
 ) => {
   const { name, description, price, duration, features } = data;
 
-  // Check if plan with same name exists
   const existingPlan = await prisma.subscriptionPlan.findUnique({
     where: { name },
   });
@@ -48,7 +109,6 @@ export const createSubscriptionPlanService = async (
     throw new Error("Subscription plan with this name already exists");
   }
 
-  // Validate price and duration
   if (price <= 0) {
     throw new Error("Price must be greater than 0");
   }
@@ -154,7 +214,6 @@ export const updateSubscriptionPlanService = async (
     throw new Error("Subscription plan not found");
   }
 
-  // Check if name is being changed and if it conflicts
   if (data.name && data.name !== existingPlan.name) {
     const nameConflict = await prisma.subscriptionPlan.findUnique({
       where: { name: data.name },
@@ -165,7 +224,6 @@ export const updateSubscriptionPlanService = async (
     }
   }
 
-  // Validate price and duration if provided
   if (data.price !== undefined && data.price <= 0) {
     throw new Error("Price must be greater than 0");
   }
@@ -201,7 +259,6 @@ export const deleteSubscriptionPlanService = async (planId: string) => {
     throw new Error("Subscription plan not found");
   }
 
-  // Check if plan has active subscriptions
   if (plan.subscriptions.length > 0) {
     throw new Error("Cannot delete plan with active subscriptions");
   }
@@ -214,12 +271,20 @@ export const deleteSubscriptionPlanService = async (planId: string) => {
 };
 
 /**
- * Service to create restaurant subscription
+ * Service to create restaurant subscription with payment processing
  */
 export const createRestaurantSubscriptionService = async (
   data: CreateRestaurantSubscriptionData
 ) => {
-  const { restaurantId, planId, autoRenew = true, paymentMethod } = data;
+  const {
+    restaurantId,
+    planId,
+    autoRenew = true,
+    paymentMethod,
+    phoneNumber,
+    cardDetails,
+    bankDetails,
+  } = data;
 
   // Validate restaurant exists
   const restaurant = await prisma.restaurant.findUnique({
@@ -269,12 +334,12 @@ export const createRestaurantSubscriptionService = async (
       data: {
         restaurantId,
         planId,
-        status: "PENDING",
+        status: SubscriptionStatus.PENDING,
         startDate,
         endDate,
         autoRenew,
-        paymentMethod: paymentMethod || "CASH",
-        paymentStatus: "PENDING",
+        paymentMethod: paymentMethod || "MOBILE_MONEY",
+        paymentStatus: PaymentStatus.PENDING,
         txRef,
       },
       include: {
@@ -303,12 +368,543 @@ export const createRestaurantSubscriptionService = async (
     return newSubscription;
   });
 
-  return subscription;
+  // Process payment if payment method is provided
+  if (paymentMethod && paymentMethod !== "CASH") {
+    const paymentResult = await processSubscriptionPaymentService(
+      subscription.id,
+      {
+        paymentMethod,
+        phoneNumber,
+        cardDetails,
+        bankDetails,
+      }
+    );
+
+    return {
+      subscription,
+      payment: paymentResult,
+    };
+  }
+
+  return { subscription };
 };
 
 /**
- * Service to get restaurant subscriptions
+ * Service to process subscription payment
  */
+export const processSubscriptionPaymentService = async (
+  subscriptionId: string,
+  paymentData: {
+    paymentMethod: PaymentMethod;
+    phoneNumber?: string;
+    cardDetails?: {
+      cardNumber: string;
+      cvv: string;
+      expiryMonth: string;
+      expiryYear: string;
+      pin?: string;
+    };
+    bankDetails?: {
+      clientIp?: string;
+    };
+  }
+) => {
+  // Get subscription with retry logic
+  let subscription: any;
+
+  try {
+    subscription = await retryDatabaseOperation(async () => {
+      return await prisma.restaurantSubscription.findUnique({
+        where: { id: subscriptionId },
+        include: {
+          restaurant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+          plan: true,
+        },
+      });
+    });
+
+    if (!subscription) {
+      throw new Error("Subscription not found");
+    }
+
+    if (subscription.paymentStatus === "COMPLETED") {
+      throw new Error("Payment already completed");
+    }
+  } catch (error: any) {
+    console.log("Error in initial subscription operations:", error);
+    if (error.message.includes("timeout") || error.code === "P1017") {
+      throw new Error("Database connection issue. Please try again.");
+    }
+    throw error;
+  }
+
+  // Update payment status to processing
+  try {
+    await retryDatabaseOperation(async () => {
+      return await prisma.restaurantSubscription.update({
+        where: { id: subscriptionId },
+        data: {
+          paymentStatus: PaymentStatus.PROCESSING,
+          paymentMethod: paymentData.paymentMethod,
+        },
+      });
+    });
+  } catch (error: any) {
+    console.log("Error updating subscription to processing:", error);
+  }
+
+  try {
+    let paymentResult: SubscriptionPaymentResult;
+
+    switch (paymentData.paymentMethod) {
+      case "MOBILE_MONEY":
+        if (!paymentData.phoneNumber) {
+          throw new Error("Phone number is required for mobile money payment");
+        }
+        paymentResult = await processSubscriptionMobileMoneyPayment({
+          amount: subscription.plan.price,
+          phoneNumber: paymentData.phoneNumber,
+          txRef: subscription.txRef!,
+          email: subscription.restaurant.email,
+          fullname: subscription.restaurant.name,
+          currency: "RWF",
+        });
+        break;
+
+      case "CARD":
+        paymentResult = await processSubscriptionCardPayment({
+          amount: subscription.plan.price,
+          txRef: subscription.txRef!,
+          email: subscription.restaurant.email,
+          fullname: subscription.restaurant.name,
+          phoneNumber:
+            paymentData.phoneNumber || subscription.restaurant.phone || "",
+          currency: "RWF",
+          cardDetails: paymentData.cardDetails,
+        });
+        break;
+
+      case "BANK_TRANSFER":
+        paymentResult = await processSubscriptionBankTransfer({
+          amount: subscription.plan.price,
+          txRef: subscription.txRef!,
+          email: subscription.restaurant.email,
+          phoneNumber:
+            paymentData.phoneNumber || subscription.restaurant.phone || "",
+          currency: "RWF",
+          clientIp: paymentData.bankDetails?.clientIp || "",
+          narration: `Subscription payment for ${subscription.plan.name}`,
+        });
+        break;
+
+      default:
+        throw new Error("Unsupported payment method");
+    }
+
+    // Handle payment result
+    if (paymentResult.success) {
+      const updateData: any = {
+        paymentStatus:
+          paymentResult.status === "successful"
+            ? PaymentStatus.COMPLETED
+            : PaymentStatus.PROCESSING,
+        transactionId: paymentResult.transactionId,
+        flwRef: paymentResult.flwRef,
+        flwStatus: paymentResult.status,
+        status:
+          paymentResult.status === "successful"
+            ? SubscriptionStatus.ACTIVE
+            : SubscriptionStatus.PENDING,
+      };
+
+      // Update subscription with payment details
+      await retryDatabaseOperation(async () => {
+        return await prisma.restaurantSubscription.update({
+          where: { id: subscriptionId },
+          data: updateData,
+        });
+      });
+
+      // Create subscription history entry
+      if (paymentResult.status === "successful") {
+        await retryDatabaseOperation(async () => {
+          return await prisma.subscriptionHistory.create({
+            data: {
+              subscriptionId,
+              action: "CREATED",
+              newStatus: "ACTIVE",
+              reason: "Payment completed successfully",
+            },
+          });
+        });
+
+        // Send success notification
+        try {
+          await sendMessage(
+            `Dear ${subscription.restaurant.name}, Your subscription to ${subscription.plan.name} has been activated successfully. Thank you!`,
+            subscription.restaurant.phone || ""
+          );
+        } catch (error) {
+          console.error("Failed to send subscription notification:", error);
+        }
+      }
+
+      return {
+        success: true,
+        subscription,
+        transactionId: paymentResult.transactionId,
+        redirectUrl: paymentResult.authorizationDetails?.redirectUrl,
+        transferDetails: paymentResult.transferDetails,
+        status: paymentResult.status,
+        message: paymentResult.message,
+      };
+    } else {
+      // Handle failed payment
+      await retryDatabaseOperation(async () => {
+        return await prisma.restaurantSubscription.update({
+          where: { id: subscriptionId },
+          data: {
+            paymentStatus: PaymentStatus.FAILED,
+            status: SubscriptionStatus.CANCELLED,
+          },
+        });
+      });
+
+      // Send failure notification
+      try {
+        await sendMessage(
+          `Dear ${subscription.restaurant.name}, Your subscription payment failed. Please try again or contact support.`,
+          subscription.restaurant.phone || ""
+        );
+      } catch (error) {
+        console.error("Failed to send failure notification:", error);
+      }
+
+      return {
+        success: false,
+        error: paymentResult.error || "Payment failed",
+      };
+    }
+  } catch (error: any) {
+    console.log("Error processing subscription payment:", error);
+
+    // Update subscription to failed status
+    try {
+      await retryDatabaseOperation(async () => {
+        return await prisma.restaurantSubscription.update({
+          where: { id: subscriptionId },
+          data: {
+            paymentStatus: PaymentStatus.FAILED,
+            status: SubscriptionStatus.CANCELLED,
+          },
+        });
+      });
+    } catch (updateError) {
+      console.log("Error updating payment failure status:", updateError);
+    }
+
+    throw new Error(`Payment processing failed: ${error.message}`);
+  }
+};
+
+/**
+ * Process Mobile Money Payment for Subscription
+ */
+async function processSubscriptionMobileMoneyPayment({
+  amount,
+  phoneNumber,
+  txRef,
+  email,
+  fullname,
+  currency = "RWF",
+}: {
+  amount: number;
+  phoneNumber: string;
+  txRef: string;
+  email: string;
+  fullname: string;
+  currency?: string;
+}): Promise<SubscriptionPaymentResult> {
+  try {
+    const cleanedPhoneNumber = cleanPhoneNumber(phoneNumber);
+
+    if (!isValidRwandaPhone(cleanedPhoneNumber)) {
+      throw new Error(
+        "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX"
+      );
+    }
+
+    console.log(
+      `Processing subscription mobile money payment: ${amount} ${currency}`
+    );
+
+    // Try PayPack first
+    try {
+      const response = await paypack.cashin({
+        number: cleanedPhoneNumber,
+        amount: amount,
+        environment:
+          process.env.NODE_ENV === "production" ? "production" : "development",
+      });
+
+      if (response && response.data) {
+        // Update subscription with PayPack reference
+        await prisma.restaurantSubscription.update({
+          where: { txRef: txRef },
+          data: {
+            flwRef: response.data.ref || txRef,
+            transactionId: response.data.ref || txRef,
+          },
+        });
+
+        return {
+          success: true,
+          transactionId: response.data.ref || txRef,
+          reference: response.data.ref || txRef,
+          flwRef: response.data.ref || txRef,
+          status: "pending",
+          message:
+            "Payment request sent to your phone number, please confirm it.",
+          authorizationDetails: {
+            mode: "mobile_money",
+            redirectUrl: "",
+          },
+        };
+      } else {
+        throw new Error("PayPack response invalid or missing reference");
+      }
+    } catch (error) {
+      console.log("PayPack payment failed, falling back to Flutterwave...");
+
+      const payload = {
+        tx_ref: txRef,
+        amount: amount.toString(),
+        currency: currency,
+        email: email,
+        phone_number: cleanedPhoneNumber,
+        fullname: fullname,
+        redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/subscriptions`,
+      };
+
+      const response = await flw.MobileMoney.rwanda(payload);
+
+      if (response.status === "success") {
+        return {
+          success: true,
+          transactionId: response.data?.flw_ref || txRef,
+          reference: response.data?.tx_ref || txRef,
+          flwRef: response.data?.flw_ref || txRef,
+          status: response.data?.status || "pending",
+          message: response.message || "Mobile money payment initiated",
+          authorizationDetails: response.meta?.authorization && {
+            mode: response.meta.authorization.mode,
+            redirectUrl: response.meta.authorization.redirect,
+          },
+        };
+      } else {
+        throw new Error("Flutterwave payment failed");
+      }
+    }
+  } catch (error: any) {
+    console.log("Mobile money payment failed:", error);
+    return {
+      success: false,
+      transactionId: "",
+      reference: "",
+      flwRef: "",
+      status: "failed",
+      message: "Mobile money payment processing failed",
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Process Card Payment for Subscription
+ */
+async function processSubscriptionCardPayment({
+  amount,
+  txRef,
+  email,
+  fullname,
+  phoneNumber,
+  currency = "RWF",
+  cardDetails,
+}: {
+  amount: number;
+  txRef: string;
+  email: string;
+  fullname: string;
+  phoneNumber: string;
+  currency?: string;
+  cardDetails?: any;
+}): Promise<SubscriptionPaymentResult> {
+  try {
+    console.log(`Processing subscription card payment: ${amount} ${currency}`);
+
+    const standardPayload = {
+      tx_ref: txRef,
+      amount: amount.toString(),
+      currency: currency,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/subscriptions`,
+      customer: {
+        email: email,
+        name: fullname,
+        phonenumber: phoneNumber,
+      },
+      customizations: {
+        title: "Subscription Payment",
+        description: `Subscription payment - ${txRef}`,
+        logo: `https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png`,
+      },
+      payment_options: "card",
+      meta: {
+        subscription_ref: txRef,
+        payment_method: "CARD",
+      },
+    };
+
+    const axios = require("axios");
+    const standardResponse = await axios.post(
+      "https://api.flutterwave.com/v3/payments",
+      standardPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (
+      standardResponse.data?.status === "success" &&
+      standardResponse.data?.data?.link
+    ) {
+      return {
+        success: true,
+        transactionId: txRef,
+        reference: txRef,
+        flwRef: txRef,
+        status: "pending",
+        message: "Redirect to complete card payment",
+        authorizationDetails: {
+          mode: "redirect",
+          redirectUrl: standardResponse.data.data.link,
+          message: "Redirecting to Flutterwave secure checkout",
+        },
+      };
+    } else {
+      throw new Error("Flutterwave payment link generation failed");
+    }
+  } catch (error: any) {
+    console.log("Card payment failed:", error.message);
+    return {
+      success: false,
+      error: "Card payment processing failed: " + error.message,
+      transactionId: "",
+      reference: "",
+      flwRef: "",
+      status: "failed",
+      message: "Card payment processing failed",
+    };
+  }
+}
+
+/**
+ * Process Bank Transfer for Subscription
+ */
+async function processSubscriptionBankTransfer({
+  amount,
+  txRef,
+  email,
+  phoneNumber,
+  currency = "RWF",
+  clientIp,
+  narration,
+}: {
+  amount: number;
+  txRef: string;
+  email: string;
+  phoneNumber: string;
+  currency?: string;
+  clientIp?: string;
+  narration?: string;
+}): Promise<SubscriptionPaymentResult> {
+  try {
+    console.log(`Processing subscription bank transfer: ${amount} ${currency}`);
+
+    const payload = {
+      tx_ref: txRef,
+      amount: amount.toString(),
+      email: email,
+      phone_number: phoneNumber,
+      currency: currency,
+      client_ip: clientIp,
+      device_fingerprint: "62wd23423rq324323qew1",
+      narration: narration || "Subscription payment",
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/subscriptions`,
+      is_permanent: false,
+      expires: 3600,
+    };
+
+    const response = await flw.Charge.bank_transfer(payload);
+
+    if (response.status === "success") {
+      const transferDetails = response.meta?.authorization && {
+        transferReference: response.meta.authorization.transfer_reference,
+        transferAccount: response.meta.authorization.transfer_account,
+        transferBank: response.meta.authorization.transfer_bank,
+        transferAmount: parseFloat(
+          response.meta.authorization.transfer_amount || "0"
+        ),
+        transferNote: response.meta.authorization.transfer_note,
+        accountExpiration: response.meta.authorization.account_expiration
+          ? new Date(response.meta.authorization.account_expiration)
+          : null,
+      };
+
+      return {
+        success: true,
+        transactionId: response.data?.flw_ref || txRef,
+        reference: response.data?.tx_ref || txRef,
+        flwRef: response.data?.flw_ref || txRef,
+        status: response.data?.status || "pending",
+        message: response.message || "Bank transfer initiated",
+        transferDetails,
+      };
+    } else {
+      return {
+        success: false,
+        transactionId: "",
+        reference: "",
+        flwRef: "",
+        status: "failed",
+        message: "Bank transfer initialization failed",
+        error: response.message,
+      };
+    }
+  } catch (error: any) {
+    console.log("Bank transfer failed:", error);
+    return {
+      success: false,
+      transactionId: "",
+      reference: "",
+      flwRef: "",
+      status: "failed",
+      message: "Bank transfer initialization failed",
+      error: error.message,
+    };
+  }
+}
+
+// ... Rest of the existing service functions remain the same ...
 export const getRestaurantSubscriptionsService = async (
   restaurantId: string,
   filters?: {
@@ -356,9 +952,6 @@ export const getRestaurantSubscriptionsService = async (
   };
 };
 
-/**
- * Service to get subscription by ID
- */
 export const getSubscriptionByIdService = async (
   subscriptionId: string,
   restaurantId?: string
@@ -392,7 +985,6 @@ export const getSubscriptionByIdService = async (
     throw new Error("Subscription not found");
   }
 
-  // Check restaurant ownership if restaurantId provided
   if (restaurantId && subscription.restaurantId !== restaurantId) {
     throw new Error(
       "Unauthorized: Subscription does not belong to this restaurant"
@@ -402,9 +994,6 @@ export const getSubscriptionByIdService = async (
   return subscription;
 };
 
-/**
- * Service to update restaurant subscription
- */
 export const updateRestaurantSubscriptionService = async (
   subscriptionId: string,
   data: UpdateRestaurantSubscriptionData,
@@ -433,7 +1022,6 @@ export const updateRestaurantSubscriptionService = async (
       },
     });
 
-    // Create history entry if status changed
     if (data.status && data.status !== oldStatus) {
       let action: any = "CREATED";
       if (data.status === "ACTIVE" && oldStatus === "SUSPENDED") {
@@ -462,9 +1050,6 @@ export const updateRestaurantSubscriptionService = async (
   return updatedSubscription;
 };
 
-/**
- * Service to cancel subscription
- */
 export const cancelSubscriptionService = async (
   subscriptionId: string,
   reason?: string,
@@ -504,9 +1089,6 @@ export const cancelSubscriptionService = async (
   return updatedSubscription;
 };
 
-/**
- * Service to renew subscription
- */
 export const renewSubscriptionService = async (
   subscriptionId: string,
   restaurantId?: string
@@ -522,7 +1104,6 @@ export const renewSubscriptionService = async (
 
   const plan = subscription.plan;
 
-  // Calculate new end date
   const startDate = new Date();
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + plan.duration);
@@ -531,10 +1112,10 @@ export const renewSubscriptionService = async (
     const renewed = await tx.restaurantSubscription.update({
       where: { id: subscriptionId },
       data: {
-        status: "PENDING",
+        status: SubscriptionStatus.PENDING,
         startDate,
         endDate,
-        paymentStatus: "PENDING",
+        paymentStatus: PaymentStatus.PENDING,
       },
       include: {
         plan: true,
@@ -563,9 +1144,6 @@ export const renewSubscriptionService = async (
   return renewedSubscription;
 };
 
-/**
- * Service to get all subscriptions (Admin)
- */
 export const getAllSubscriptionsService = async ({
   page = 1,
   limit = 10,
@@ -614,9 +1192,6 @@ export const getAllSubscriptionsService = async ({
   };
 };
 
-/**
- * Service to check and expire subscriptions
- */
 export const checkExpiredSubscriptionsService = async () => {
   const now = new Date();
 

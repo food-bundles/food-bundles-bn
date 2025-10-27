@@ -1,6 +1,6 @@
 tags:
   - name: Subscription Management API
-    description: Comprehensive subscription management for restaurants including plans, subscriptions, payments, and lifecycle management
+    description: Comprehensive subscription management for restaurants including plans, subscriptions, payments (Mobile Money, Card, Bank Transfer), and lifecycle management
 
 components:
   schemas:
@@ -93,7 +93,7 @@ components:
         flwRef:
           type: string
           nullable: true
-          description: Flutterwave reference
+          description: Flutterwave/PayPack reference
         transactionId:
           type: string
           nullable: true
@@ -267,10 +267,6 @@ components:
           items:
             type: string
           description: List of plan features
-          example:
-            - "Receive EBM Purchase Orders"
-            - "Stable Price"
-            - "Free Delivery"
         isActive:
           type: boolean
           description: Whether plan is active
@@ -292,8 +288,109 @@ components:
           description: Enable auto-renewal
         paymentMethod:
           type: string
-          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
+          enum: [MOBILE_MONEY, BANK_TRANSFER, CARD]
+          description: Payment method (CASH not supported for initial subscription)
+        phoneNumber:
+          type: string
+          description: Phone number (required for MOBILE_MONEY)
+          example: "0780000000"
+        cardDetails:
+          type: object
+          description: Card details (optional - if not provided, will use hosted checkout)
+          properties:
+            cardNumber:
+              type: string
+              example: "5531886652142950"
+            cvv:
+              type: string
+              example: "564"
+            expiryMonth:
+              type: string
+              example: "09"
+            expiryYear:
+              type: string
+              example: "32"
+            pin:
+              type: string
+              description: Card PIN (optional)
+              example: "3310"
+        bankDetails:
+          type: object
+          description: Bank transfer details
+          properties:
+            clientIp:
+              type: string
+              description: Client IP address
+              example: "154.123.220.1"
+
+    ProcessSubscriptionPaymentRequest:
+      type: object
+      required:
+        - paymentMethod
+      properties:
+        paymentMethod:
+          type: string
+          enum: [MOBILE_MONEY, BANK_TRANSFER, CARD]
           description: Payment method
+        phoneNumber:
+          type: string
+          description: Phone number (required for MOBILE_MONEY)
+          example: "0780000000"
+        cardDetails:
+          type: object
+          description: Card details (optional - if not provided, will use hosted checkout)
+          properties:
+            cardNumber:
+              type: string
+            cvv:
+              type: string
+            expiryMonth:
+              type: string
+            expiryYear:
+              type: string
+            pin:
+              type: string
+              description: Card PIN (optional)
+        bankDetails:
+          type: object
+          properties:
+            clientIp:
+              type: string
+
+    SubscriptionPaymentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/RestaurantSubscription"
+        transactionId:
+          type: string
+        redirectUrl:
+          type: string
+          description: Redirect URL for card payments or additional authorization
+        transferDetails:
+          type: object
+          description: Bank transfer details (for BANK_TRANSFER method)
+          properties:
+            transferReference:
+              type: string
+            transferAccount:
+              type: string
+            transferBank:
+              type: string
+            transferAmount:
+              type: number
+            transferNote:
+              type: string
+            accountExpiration:
+              type: string
+              format: date-time
+        status:
+          type: string
+          enum: [pending, successful, failed]
 
     UpdateSubscriptionRequest:
       type: object
@@ -536,8 +633,8 @@ paths:
     post:
       tags:
         - Subscription Management API
-      summary: Create restaurant subscription
-      description: Create a new subscription for a restaurant
+      summary: Create restaurant subscription with payment
+      description: Create a new subscription for a restaurant and optionally process payment immediately
       security:
         - BearerAuth: []
       requestBody:
@@ -546,6 +643,30 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateRestaurantSubscriptionRequest"
+            examples:
+              mobileMoney:
+                summary: Mobile Money Payment
+                value:
+                  planId: "plan_123"
+                  autoRenew: true
+                  paymentMethod: "MOBILE_MONEY"
+                  phoneNumber: "0780000000"
+              card:
+                summary: Card Payment (Hosted Checkout)
+                value:
+                  planId: "plan_123"
+                  autoRenew: true
+                  paymentMethod: "CARD"
+                  phoneNumber: "0780000000"
+              bankTransfer:
+                summary: Bank Transfer
+                value:
+                  planId: "plan_123"
+                  autoRenew: true
+                  paymentMethod: "BANK_TRANSFER"
+                  phoneNumber: "0780000000"
+                  bankDetails:
+                    clientIp: "154.123.220.1"
       responses:
         201:
           description: Subscription created successfully
@@ -558,10 +679,68 @@ paths:
                     type: string
                   data:
                     $ref: "#/components/schemas/RestaurantSubscription"
+                  payment:
+                    $ref: "#/components/schemas/SubscriptionPaymentResponse"
         400:
           description: Bad request - Invalid plan or restaurant already has active subscription
         401:
           description: Unauthorized
+        500:
+          description: Internal server error
+
+  /subscriptions/{subscriptionId}/pay:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Process subscription payment
+      description: Process payment for a pending subscription (Mobile Money, Card, or Bank Transfer)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessSubscriptionPaymentRequest"
+            examples:
+              mobileMoney:
+                summary: Mobile Money Payment
+                value:
+                  paymentMethod: "MOBILE_MONEY"
+                  phoneNumber: "0780000000"
+              card:
+                summary: Card Payment
+                value:
+                  paymentMethod: "CARD"
+                  phoneNumber: "0780000000"
+              bankTransfer:
+                summary: Bank Transfer
+                value:
+                  paymentMethod: "BANK_TRANSFER"
+                  phoneNumber: "0780000000"
+                  bankDetails:
+                    clientIp: "154.123.220.1"
+      responses:
+        200:
+          description: Payment processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPaymentResponse"
+        400:
+          description: Bad request - Invalid payment method or missing required fields
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+        404:
+          description: Subscription not found
         500:
           description: Internal server error
 
@@ -736,7 +915,7 @@ paths:
       tags:
         - Subscription Management API
       summary: Renew subscription
-      description: Renew an expired subscription
+      description: Renew an expired subscription (requires payment)
       security:
         - BearerAuth: []
       parameters:
@@ -747,7 +926,7 @@ paths:
             type: string
       responses:
         200:
-          description: Subscription renewed successfully
+          description: Subscription renewed successfully. Please complete payment.
           content:
             application/json:
               schema:
@@ -773,7 +952,7 @@ paths:
       tags:
         - Subscription Management API
       summary: Upgrade subscription
-      description: Upgrade to a higher-tier plan
+      description: Upgrade to a higher-tier plan (requires payment)
       security:
         - BearerAuth: []
       parameters:
@@ -790,7 +969,7 @@ paths:
               $ref: "#/components/schemas/UpgradeSubscriptionRequest"
       responses:
         200:
-          description: Subscription upgraded successfully
+          description: Subscription upgraded successfully. Please complete payment.
           content:
             application/json:
               schema:
@@ -975,7 +1154,7 @@ paths:
       tags:
         - Subscription Management API
       summary: Subscription payment webhook
-      description: Webhook endpoint for payment provider callbacks (Flutterwave/PayPack)
+      description: Webhook endpoint for payment provider callbacks (Flutterwave/PayPack). Automatically updates subscription status based on payment confirmation.
       requestBody:
         required: true
         content:
