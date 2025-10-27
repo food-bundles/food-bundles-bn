@@ -692,7 +692,7 @@ paths:
                 user_not_found:
                   value:
                     success: false
-                    message: "User not found"
+                    message: "User not found 2"
                 invalid_password:
                   value:
                     success: false
@@ -1015,6 +1015,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /restaurants/verify:
+    post:
+      tags:
+        - Restaurants API Management
+      summary: Verify restaurant account with OTP
+      description: Verifies restaurant account using 5-digit OTP sent to registered phone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+                - otp
+              properties:
+                phone:
+                  type: string
+                  example: "+250796897823"
+                otp:
+                  type: string
+                  example: "12345"
+                  pattern: "^[0-9]{5}$"
+      responses:
+        200:
+          description: Restaurant verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Restaurant verified successfully"
+                  data:
+                    type: object
+                    properties:
+                      verified:
+                        type: boolean
+                        example: true
 
   /restaurants/{id}:
     get:

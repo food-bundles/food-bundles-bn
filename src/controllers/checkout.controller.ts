@@ -10,6 +10,8 @@ import {
   updateOrderService,
 } from "../services/order.services";
 import { validateVoucherForCheckoutService } from "../services/voucher.service";
+import prisma from "../prisma";
+import { OTPService } from "../services/otp.service";
 
 /**
  * Enhanced controller to create a new order from cart
@@ -81,7 +83,45 @@ export const createCheckout = async (req: Request, res: Response) => {
       }
     }
 
-    // Create checkout with payment details (payment is processed automatically in service)
+    // For voucher payments, send OTP first instead of processing immediately
+    if (paymentMethod === "VOUCHER") {
+      const otpResult = await OTPService.sendOTPToRestaurant(restaurantId);
+      
+      if (!otpResult.success) {
+        return res.status(400).json({
+          message: otpResult.message,
+        });
+      }
+
+      // Store checkout data temporarily for OTP verification
+      const checkoutData = {
+        cartId,
+        restaurantId,
+        paymentMethod,
+        billingName,
+        billingEmail,
+        billingPhone,
+        billingAddress,
+        notes,
+        deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
+        clientIp: req.ip,
+        deviceFingerprint,
+        narration,
+        currency,
+        voucherCode,
+        fallbackPaymentMethod,
+        cardDetails,
+        bankDetails,
+      };
+
+      return res.status(200).json({
+        message: "OTP sent to your registered phone number. Please verify to complete voucher payment.",
+        requiresOTP: true,
+        checkoutSessionId: Buffer.from(JSON.stringify(checkoutData)).toString('base64'),
+      });
+    }
+
+    // For non-voucher payments, process normally
     const paymentResult = await createCheckoutService({
       cartId,
       restaurantId,
@@ -103,44 +143,7 @@ export const createCheckout = async (req: Request, res: Response) => {
     });
 
     if (paymentResult.success) {
-      // Handle voucher payment response
-      if (paymentMethod === "VOUCHER" && "voucherDetails" in paymentResult) {
-        const voucherInfo = paymentResult.voucherDetails;
-
-        if (voucherInfo && paymentResult.requiresAdditionalPayment) {
-          res.status(200).json({
-            message: paymentResult.message,
-            data: {
-              checkout: paymentResult.checkout,
-              transactionId: paymentResult.transactionId,
-              status: paymentResult.status,
-              voucherApplied: true,
-              voucherDetails: voucherInfo,
-              requiresAdditionalPayment: true,
-              additionalPaymentAmount: paymentResult.additionalPaymentAmount,
-              redirectUrl: paymentResult.redirectUrl,
-            },
-          });
-        } else if (voucherInfo) {
-          res.status(200).json({
-            message: paymentResult.message,
-            data: {
-              checkout: paymentResult.checkout,
-              transactionId: paymentResult.transactionId,
-              status: paymentResult.status,
-              voucherApplied: true,
-              voucherDetails: voucherInfo,
-              creditRemaining: voucherInfo.remainingCredit,
-              paymentDeadline:
-                voucherInfo.remainingCredit > 0
-                  ? new Date(
-                      Date.now() + 30 * 24 * 60 * 60 * 1000
-                    ).toISOString()
-                  : null,
-            },
-          });
-        }
-      } else if (paymentResult.redirectUrl) {
+      if (paymentResult.redirectUrl) {
         // For payments requiring redirect
         res.status(200).json({
           message: "Payment initiated - redirect required",
@@ -184,6 +187,105 @@ export const createCheckout = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to process payment",
+      error: error.message,
+    });
+  }
+};
+
+export const verifyVoucherOTPAndCreateOrder = async (req: Request, res: Response) => {
+  try {
+    const { otp, checkoutSessionId } = req.body;
+    const restaurantId = (req as any).user.id;
+
+    if (!otp || !checkoutSessionId) {
+      return res.status(400).json({
+        message: "OTP and checkout session ID are required",
+      });
+    }
+
+    // Get restaurant phone for OTP verification
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: { phone: true }
+    });
+
+    if (!restaurant?.phone) {
+      return res.status(400).json({
+        message: "Restaurant phone number not found",
+      });
+    }
+
+    // Verify OTP
+ 
+    const otpResult = await OTPService.verifyOTP(restaurant.phone, otp, 'VOUCHER_CHECKOUT');
+    
+    if (!otpResult.success) {
+      return res.status(400).json({
+        message: otpResult.message,
+      });
+    }
+
+    // Decode checkout data
+    let checkoutData;
+    try {
+      checkoutData = JSON.parse(Buffer.from(checkoutSessionId, 'base64').toString());
+    } catch (error) {
+      return res.status(400).json({
+        message: "Invalid checkout session",
+      });
+    }
+
+    // Process voucher payment
+    const paymentResult = await createCheckoutService(checkoutData);
+
+    if (paymentResult.success) {
+      // Handle voucher payment response
+      if ("voucherDetails" in paymentResult) {
+        const voucherInfo = paymentResult.voucherDetails;
+
+        if (voucherInfo && paymentResult.requiresAdditionalPayment) {
+          res.status(200).json({
+            message: paymentResult.message,
+            data: {
+              checkout: paymentResult.checkout,
+              transactionId: paymentResult.transactionId,
+              status: paymentResult.status,
+              voucherApplied: true,
+              voucherDetails: voucherInfo,
+              requiresAdditionalPayment: true,
+              additionalPaymentAmount: paymentResult.additionalPaymentAmount,
+              redirectUrl: paymentResult.redirectUrl,
+            },
+          });
+        } else if (voucherInfo) {
+          res.status(200).json({
+            message: paymentResult.message,
+            data: {
+              checkout: paymentResult.checkout,
+              transactionId: paymentResult.transactionId,
+              status: paymentResult.status,
+              voucherApplied: true,
+              voucherDetails: voucherInfo,
+              creditRemaining: voucherInfo.remainingCredit,
+              paymentDeadline:
+                voucherInfo.remainingCredit > 0
+                  ? new Date(
+                      Date.now() + 30 * 24 * 60 * 60 * 1000
+                    ).toISOString()
+                  : null,
+            },
+          });
+        }
+      }
+    } else {
+      res.status(400).json({
+        message: paymentResult.error || "Voucher payment failed",
+        error: paymentResult.error,
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to verify OTP and process voucher payment",
       error: error.message,
     });
   }

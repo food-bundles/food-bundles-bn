@@ -45,15 +45,87 @@ export class UserController {
   static createRestaurant = async (req: Request, res: Response) => {
     try {
       const restaurantData = req.body;
-      const result = await createRestaurantService(restaurantData);
+      const result = await createRestaurantService({ ...restaurantData, verified: false });
+
+      if (result.phone) {
+        const { OTPService } = await import('../services/otp.service');
+        await OTPService.sendRestaurantSignupOTP(result.phone);
+      }
 
       res.status(201).json({
         success: true,
-        message: "Restaurant created successfully",
+        message: "Restaurant created successfully. OTP sent to your phone for verification.",
         data: result,
       });
     } catch (error: any) {
       res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static verifyRestaurant = async (req: Request, res: Response) => {
+    try {
+      const { phone, otp } = req.body;
+
+      if (!phone || !otp) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number and OTP are required",
+        });
+      }
+
+      const { OTPService } = await import('../services/otp.service');
+      const otpResult = await OTPService.verifyOTP(
+        phone,
+        otp,
+        "RESTAURANT_SIGNUP"
+      );
+
+      if (!otpResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: otpResult.message,
+        });
+      }
+
+      const restaurant = await prisma.restaurant.update({
+        where: { phone },
+        data: { verified: true },
+        select: { phone: true, verified: true },
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Restaurant verified successfully",
+        data: restaurant,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static resendOTP = async (req: Request, res: Response) => {
+    try {
+      const { phone } = req.body;
+
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number is required",
+        });
+      }
+
+      const { OTPService } = await import('../services/otp.service');
+      const result = await OTPService.sendRestaurantSignupOTP(phone);
+
+      res.status(result.success ? 200 : 400).json(result);
+    } catch (error: any) {
+      res.status(500).json({
         success: false,
         message: error.message,
       });
@@ -396,7 +468,7 @@ export class UserController {
       }
 
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: "User not found 1" });
       }
 
       const { password, ...userWithoutPassword } = user;

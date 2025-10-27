@@ -517,7 +517,6 @@ export const processSubscriptionPaymentService = async (
             : PaymentStatus.PROCESSING,
         transactionId: paymentResult.transactionId,
         flwRef: paymentResult.flwRef,
-        flwStatus: paymentResult.status,
         status:
           paymentResult.status === "successful"
             ? SubscriptionStatus.ACTIVE
