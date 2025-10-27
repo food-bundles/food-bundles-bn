@@ -158,6 +158,107 @@ export const createVoucherService = async (data: CreateVoucherData) => {
 };
 
 /**
+ * Get all vouchers with filtering and pagination (Admin only)
+ */
+export const getAllVouchersService = async (filters?: {
+  status?: VoucherStatus;
+  restaurantId?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const { status, restaurantId, page = 1, limit = 10 } = filters || {};
+
+  const skip = (page - 1) * limit;
+
+  const where: any = {};
+
+  if (status) {
+    where.status = status;
+  }
+
+  if (restaurantId) {
+    where.restaurantId = restaurantId;
+  }
+
+  const [vouchers, totalCount] = await Promise.all([
+    prisma.voucher.findMany({
+      where,
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        loan: true,
+        transactions: {
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.voucher.count({ where }),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / limit);
+
+  return {
+    vouchers,
+    pagination: {
+      page,
+      limit,
+      total: totalCount,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    },
+  };
+};
+
+/**
+ * Get current restaurant's vouchers (using authenticated restaurant ID)
+ */
+export const getMyVouchersService = async (
+  restaurantId: string,
+  filters?: {
+    status?: VoucherStatus;
+    activeOnly?: boolean;
+  }
+) => {
+  const where: any = { restaurantId };
+
+  if (filters?.status) {
+    where.status = filters.status;
+  }
+
+  if (filters?.activeOnly) {
+    where.status = VoucherStatus.ACTIVE;
+    where.OR = [{ expiryDate: null }, { expiryDate: { gte: new Date() } }];
+  }
+
+  const vouchers = await prisma.voucher.findMany({
+    where,
+    include: {
+      loan: true,
+      transactions: {
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      },
+      penalties: {
+        where: { status: PenaltyStatus.PENDING },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return vouchers;
+};
+
+/**
  * Get voucher by ID
  */
 export const getVoucherByIdService = async (voucherId: string) => {

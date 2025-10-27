@@ -662,7 +662,7 @@ paths:
 
     get:
       tags: [Voucher Management]
-      summary: Get all vouchers (Admin only)
+      summary: Get all vouchers with pagination (Admin only)
       description: Retrieve all vouchers with filtering and pagination
       security:
         - BearerAuth: []
@@ -719,10 +719,56 @@ paths:
                         type: integer
                       totalPages:
                         type: integer
+                      hasNext:
+                        type: boolean
+                      hasPrev:
+                        type: boolean
         401:
           description: Unauthorized
         403:
           description: Admin access required
+        500:
+          description: Internal server error
+
+  /vouchers/my-vouchers:
+    get:
+      tags: [Voucher Management]
+      summary: Get current restaurant's vouchers
+      description: Retrieve all vouchers for the authenticated restaurant
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
+          description: Filter by voucher status
+        - name: activeOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Return only active, non-expired vouchers
+      responses:
+        200:
+          description: Vouchers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Vouchers retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Voucher"
+        401:
+          description: Unauthorized
+        403:
+          description: Restaurant access required
         500:
           description: Internal server error
 

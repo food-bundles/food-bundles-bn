@@ -22,6 +22,8 @@ import {
   waivePenaltyService,
   getVoucherTransactionHistoryService,
   getRestaurantCreditSummaryService,
+  getMyVouchersService,
+  getAllVouchersService,
 } from "../services/voucher.service";
 import { VoucherStatus, LoanStatus } from "@prisma/client";
 
@@ -92,21 +94,51 @@ export const createVoucher = async (req: Request, res: Response) => {
 };
 
 /**
- * Get all vouchers (Admin only)
+ * Get all vouchers with pagination (Admin only)
  * GET /vouchers
  */
 export const getAllVouchers = async (req: Request, res: Response) => {
   try {
-    const { status, restaurantId } = req.query;
+    const { status, restaurantId, page, limit } = req.query;
 
-    // For admin, can filter by restaurant
-    // For now, we'll implement a simple version
     const filters: any = {};
-    if (status) filters.status = status;
+    if (status) filters.status = status as VoucherStatus;
+    if (restaurantId) filters.restaurantId = restaurantId as string;
+    if (page) filters.page = parseInt(page as string);
+    if (limit) filters.limit = parseInt(limit as string);
 
-    // This would need implementation in service
+    const result = await getAllVouchersService(filters);
+
     res.status(200).json({
-      message: "Feature to be implemented - use restaurant-specific endpoint",
+      message: "Vouchers retrieved successfully",
+      data: result.vouchers,
+      pagination: result.pagination,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get vouchers",
+    });
+  }
+};
+
+/**
+ * Get current restaurant's vouchers
+ * GET /vouchers/my-vouchers
+ */
+export const getMyVouchers = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user.id;
+    const { status, activeOnly } = req.query;
+
+    const filters: any = {};
+    if (status) filters.status = status as VoucherStatus;
+    if (activeOnly === "true") filters.activeOnly = true;
+
+    const vouchers = await getMyVouchersService(restaurantId, filters);
+
+    res.status(200).json({
+      message: "Vouchers retrieved successfully",
+      data: vouchers,
     });
   } catch (error: any) {
     res.status(500).json({
