@@ -23,6 +23,7 @@ import {
   waivePenalty,
   getRestaurantCreditSummary,
   getVoucherByCode,
+  getMyVouchers,
 } from "../controllers/voucher.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -52,6 +53,17 @@ voucherRoutes.get(
   isAuthenticated,
   checkPermission("ADMIN"),
   getAllVouchers
+);
+
+/**
+ * Get current restaurant's vouchers
+ * GET /vouchers/my-vouchers
+ */
+voucherRoutes.get(
+  "/my-vouchers",
+  isAuthenticated,
+  checkPermission("RESTAURANT"),
+  getMyVouchers
 );
 
 /**
