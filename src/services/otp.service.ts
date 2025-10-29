@@ -1,5 +1,5 @@
-import { sendMessage } from '../utils/sms.utility';
-import prisma from '../prisma';
+import { sendMessage } from "../utils/sms.utility";
+import prisma from "../prisma";
 
 export class OTPService {
   static generateOTP(): string {
@@ -105,4 +105,30 @@ export class OTPService {
     }
   }
 
+  //    static  async verifyOTPCheckout(phone: string, otp: string, purpose: 'RESTAURANT_SIGNUP' | 'VOUCHER_CHECKOUT'): Promise<{ success: boolean; message: string }> {
+  //   try {
+  //     const otpRecord = await prisma.oTP.findFirst({
+  //       where: {
+  //         phone,
+  //         otp,
+  //         purpose,
+  //         verified: false,
+  //         expiresAt: { gt: new Date() }
+  //       }
+  //     });
+
+  //     if (!otpRecord) {
+  //       return { success: false, message: 'Invalid or expired OTP' };
+  //     }
+
+  //     await prisma.oTP.update({
+  //       where: { id: otpRecord.id },
+  //       data: { verified: true }
+  //     });
+
+  //     return { success: true, message: 'OTP verified successfully' };
+  //   } catch (error: any) {
+  //     return { success: false, message: error.message };
+  //   }
+  // }
 }

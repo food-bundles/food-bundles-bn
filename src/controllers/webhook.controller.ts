@@ -425,6 +425,158 @@ const handleChargeCompleted = async (data: any) => {
   }
 };
 
+/**
+ * Process subscription payment webhook
+ */
+async function processSubscriptionPayment(
+  txRef: string,
+  flwRef: string,
+  status: string,
+  paymentProvider: "FLUTTERWAVE" | "PAYPACK" = "FLUTTERWAVE",
+  data?: any
+) {
+  console.log("Processing subscription payment for reference:", txRef);
+
+  const subscription = await retryDatabaseOperation(async () => {
+    return await prisma.restaurantSubscription.findFirst({
+      where: {
+        OR: [{ txRef: txRef }, { flwRef: txRef }],
+      },
+      include: {
+        restaurant: true,
+        plan: true,
+      },
+    });
+  });
+
+  if (!subscription) {
+    console.log("No matching subscription found for txRef:", txRef);
+    return null;
+  }
+
+  console.log("Found matching subscription:", subscription.id);
+
+  if (status === "successful" && subscription.paymentStatus !== "COMPLETED") {
+    const updateData: any = {
+      paymentStatus: "COMPLETED",
+      status: "ACTIVE",
+      flwStatus: "successful",
+      transactionId: data?.id?.toString() || flwRef,
+      flwRef: flwRef,
+      amountPaid: subscription.plan.price,
+      updatedAt: new Date(),
+    };
+
+    if (paymentProvider === "FLUTTERWAVE") {
+      updateData.appFee = data?.appfee || data?.data?.fee;
+      updateData.merchantFee = data?.merchantfee || data?.data?.merchantfee;
+    }
+
+    // Update subscription and create history in transaction
+    await retryDatabaseOperation(async () => {
+      return await prisma.$transaction([
+        prisma.restaurantSubscription.update({
+          where: { id: subscription.id },
+          data: updateData,
+        }),
+        prisma.subscriptionHistory.create({
+          data: {
+            subscriptionId: subscription.id,
+            action: "CREATED",
+            newStatus: "ACTIVE",
+            newPlanId: subscription.planId,
+            reason: "Payment completed successfully",
+          },
+        }),
+      ]);
+    });
+
+    // Send success notification
+    try {
+      await sendMessage(
+        `Dear ${subscription.restaurant.name}, Your subscription to ${subscription.plan.name} has been activated successfully. Thank you!`,
+        subscription.restaurant.phone || ""
+      );
+    } catch (error) {
+      console.error("Failed to send subscription notification:", error);
+    }
+
+    // Broadcast subscription update via WebSocket
+    try {
+      wsManager.broadcastSubscriptionUpdate({
+        subscriptionId: subscription.id,
+        status: "ACTIVE",
+        paymentStatus: "COMPLETED",
+        timestamp: new Date().toISOString(),
+        restaurantId: subscription.restaurantId,
+      });
+
+      console.log(`✅ Broadcasted subscription activation: ${subscription.id}`);
+    } catch (wsError) {
+      console.error("Failed to broadcast subscription update:", wsError);
+    }
+
+    console.log(`Subscription payment completed: ${subscription.id}`);
+  } else if (status === "failed") {
+    await retryDatabaseOperation(async () => {
+      return await prisma.$transaction([
+        prisma.restaurantSubscription.update({
+          where: { id: subscription.id },
+          data: {
+            paymentStatus: "FAILED",
+            transactionId: data?.id?.toString() || flwRef,
+            flwRef: flwRef,
+            updatedAt: new Date(),
+          },
+        }),
+        prisma.subscriptionHistory.create({
+          data: {
+            subscriptionId: subscription.id,
+            action: "CREATED",
+            newStatus: "PENDING",
+            reason: "Payment failed",
+          },
+        }),
+      ]);
+    });
+
+    // Send failure notification
+    try {
+      await sendMessage(
+        `Dear ${subscription.restaurant.name}, Your subscription payment failed. Please try again or contact support.`,
+        subscription.restaurant.phone || ""
+      );
+    } catch (error) {
+      console.error("Failed to send subscription failure notification:", error);
+    }
+
+    // Broadcast subscription payment failure via WebSocket
+    try {
+      wsManager.broadcastSubscriptionUpdate({
+        subscriptionId: subscription.id,
+        status: "PENDING",
+        paymentStatus: "FAILED",
+        timestamp: new Date().toISOString(),
+        restaurantId: subscription.restaurantId,
+      });
+
+      console.log(
+        `✅ Broadcasted subscription payment failure: ${subscription.id}`
+      );
+    } catch (wsError) {
+      console.error("Failed to broadcast subscription failure:", wsError);
+    }
+
+    console.log(`Subscription payment failed: ${subscription.id}`);
+  }
+
+  return subscription;
+}
+
+/** Payment webhook handler
+ * POST /payments/webhook
+ */
+
 export const handlePaymentWebhook = async (req: Request, res: Response) => {
   try {
     const payload = req.body;
@@ -441,6 +593,32 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
 
       if (!signature || signature !== secretHash) {
         return res.status(401).json({ error: "Unauthorized webhook" });
+      }
+
+      const txRef =
+        payload.tx_ref ||
+        payload.txRef ||
+        payload.data?.tx_ref ||
+        payload.data?.txRef;
+      const flwRef =
+        payload.flw_ref ||
+        payload.flwRef ||
+        payload.data?.flw_ref ||
+        payload.data?.flwRef;
+      const status = payload.status || payload.data?.status;
+
+      if (!txRef) {
+        console.error("No transaction reference found in webhook");
+        return res.status(400).json({ error: "No transaction reference" });
+      } else if (txRef.includes("SUB_")) {
+        console.log("Processing subscription payment webhook");
+        await processSubscriptionPayment(
+          txRef,
+          flwRef,
+          status,
+          "FLUTTERWAVE",
+          payload
+        );
       }
 
       await handleChargeCompleted(payload);
@@ -489,6 +667,17 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
         (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))
       ) {
         await processWalletTransaction(txRef, flwRef, paymentStatus);
+      } else if (txRef.includes("SUB_")) {
+        // Check if this is a subscription payment
+
+        console.log("Processing PayPack subscription payment webhook");
+        await processSubscriptionPayment(
+          txRef,
+          flwRef,
+          paymentStatus,
+          "PAYPACK",
+          payload
+        );
       } else {
         await processCheckoutPayment(txRef, flwRef, paymentStatus, "PAYPACK");
       }
