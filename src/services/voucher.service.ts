@@ -5,6 +5,8 @@ import {
   PaymentMethod,
   PenaltyStatus,
   SubscriptionStatus,
+  OrderStatus,
+  PaymentStatus,
 } from "@prisma/client";
 import { wsManager } from "../index";
 
@@ -943,6 +945,15 @@ export const processVoucherPaymentService = async (
         },
       });
     }
+
+    // Update order payment status
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        paymentStatus: PaymentStatus.COMPLETED,
+        status: OrderStatus.CONFIRMED,
+      },
+    });
 
     return { transaction, voucher: updatedVoucher };
   });

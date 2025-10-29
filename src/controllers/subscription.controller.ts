@@ -336,6 +336,8 @@ export const getMySubscriptions = async (req: Request, res: Response) => {
       status: status as SubscriptionStatus,
     });
 
+    console.log("Subscription results", result);
+
     res.status(200).json({
       message: "Subscriptions retrieved successfully",
       data: result.subscriptions,
@@ -368,6 +370,8 @@ export const getSubscriptionById = async (req: Request, res: Response) => {
       subscriptionId,
       restaurantId
     );
+
+    console.log("Subscription By ID", subscription);
 
     res.status(200).json({
       message: "Subscription retrieved successfully",

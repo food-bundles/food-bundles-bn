@@ -123,6 +123,8 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
 
   const orderCreated = await createOrderFromCartService(orderData);
 
+  console.log("orderCreated", orderCreated);
+
   // Process immediate payment
   const paymentResult = await processPaymentService(orderCreated.id!, {
     paymentMethod: data.paymentMethod,
@@ -133,6 +135,8 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     fallbackPaymentMethod: data.fallbackPaymentMethod,
     processDirectly: true,
   });
+
+  console.log("paymentResult", paymentResult);
 
   await clearCartService(data.restaurantId);
 
@@ -1243,7 +1247,7 @@ async function processVoucherPayment({
         transactionId: voucherTransaction.transaction.id,
         reference: voucherTransaction.transaction.id,
         flwRef: `VOUCHER_${voucherCode}`,
-        status: OrderStatus.CONFIRMED,
+        status: "successful",
         message: "Payment completed using 100% discount voucher",
         voucherDetails: {
           voucherCode: voucher.voucherCode,
@@ -1285,7 +1289,7 @@ async function processVoucherPayment({
         transactionId: voucherTransaction.transaction.id,
         reference: voucherTransaction.transaction.id,
         flwRef: `VOUCHER_${voucherCode}`,
-        status: OrderStatus.CONFIRMED,
+        status: "successful",
         message: `Payment completed using voucher with ${discountPercentage}% discount`,
         voucherDetails: {
           voucherCode: voucher.voucherCode,
@@ -1433,7 +1437,7 @@ async function processVoucherPayment({
       transactionId: "",
       reference: "",
       flwRef: "",
-      status: OrderStatus.CANCELLED,
+      status: "failed",
       message: "Voucher payment processing failed",
       error: error.message,
     };
