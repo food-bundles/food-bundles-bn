@@ -20,8 +20,7 @@ export const isAuthenticated = async (
     const decoded = verifyToken(token);
 
     const user = await getUserById(decoded.id);
-     console.log("dasdasdsa", user);
-    
+
     if (!user) {
       return res.status(404).json({ message: "User not found 3" });
     }
