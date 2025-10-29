@@ -903,7 +903,6 @@ async function processSubscriptionBankTransfer({
   }
 }
 
-// ... Rest of the existing service functions remain the same ...
 export const getRestaurantSubscriptionsService = async (
   restaurantId: string,
   filters?: {
@@ -942,8 +941,14 @@ export const getRestaurantSubscriptionsService = async (
     prisma.restaurantSubscription.count({ where }),
   ]);
 
+  // ✅ Add daysRemaining to each subscription
+  const subscriptionsWithDaysRemaining = subscriptions.map((sub) => ({
+    ...sub,
+    daysRemaining: calculateDaysRemaining(sub.endDate),
+  }));
+
   return {
-    subscriptions,
+    subscriptions: subscriptionsWithDaysRemaining,
     total,
     page,
     limit,
@@ -990,7 +995,11 @@ export const getSubscriptionByIdService = async (
     );
   }
 
-  return subscription;
+  // ✅ Add daysRemaining to subscription
+  return {
+    ...subscription,
+    daysRemaining: calculateDaysRemaining(subscription.endDate),
+  };
 };
 
 export const updateRestaurantSubscriptionService = async (
@@ -1182,8 +1191,14 @@ export const getAllSubscriptionsService = async ({
     prisma.restaurantSubscription.count({ where }),
   ]);
 
+  // ✅ Add daysRemaining to each subscription
+  const subscriptionsWithDaysRemaining = subscriptions.map((sub) => ({
+    ...sub,
+    daysRemaining: calculateDaysRemaining(sub.endDate),
+  }));
+
   return {
-    subscriptions,
+    subscriptions: subscriptionsWithDaysRemaining,
     total,
     page,
     limit,
@@ -1229,3 +1244,14 @@ export const checkExpiredSubscriptionsService = async () => {
     count: expiredSubscriptions.length,
   };
 };
+
+/**
+ * Calculate days remaining in subscription
+ */
+function calculateDaysRemaining(endDate: Date): number {
+  const now = new Date();
+  const end = new Date(endDate);
+  const diffTime = end.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 0;
+}

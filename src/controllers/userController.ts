@@ -45,16 +45,20 @@ export class UserController {
   static createRestaurant = async (req: Request, res: Response) => {
     try {
       const restaurantData = req.body;
-      const result = await createRestaurantService({ ...restaurantData, verified: false });
+      const result = await createRestaurantService({
+        ...restaurantData,
+        verified: false,
+      });
 
       if (result.phone) {
-        const { OTPService } = await import('../services/otp.service');
+        const { OTPService } = await import("../services/otp.service");
         await OTPService.sendRestaurantSignupOTP(result.phone);
       }
 
       res.status(201).json({
         success: true,
-        message: "Restaurant created successfully. OTP sent to your phone for verification.",
+        message:
+          "Restaurant created successfully. OTP sent to your phone for verification.",
         data: result,
       });
     } catch (error: any) {
@@ -76,7 +80,7 @@ export class UserController {
         });
       }
 
-      const { OTPService } = await import('../services/otp.service');
+      const { OTPService } = await import("../services/otp.service");
       const otpResult = await OTPService.verifyOTP(
         phone,
         otp,
@@ -120,7 +124,7 @@ export class UserController {
         });
       }
 
-      const { OTPService } = await import('../services/otp.service');
+      const { OTPService } = await import("../services/otp.service");
       const result = await OTPService.sendRestaurantSignupOTP(phone);
 
       res.status(result.success ? 200 : 400).json(result);

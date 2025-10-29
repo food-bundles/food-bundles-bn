@@ -86,7 +86,7 @@ export const createCheckout = async (req: Request, res: Response) => {
     // For voucher payments, send OTP first instead of processing immediately
     if (paymentMethod === "VOUCHER") {
       const otpResult = await OTPService.sendOTPToRestaurant(restaurantId);
-      
+
       if (!otpResult.success) {
         return res.status(400).json({
           message: otpResult.message,
@@ -115,9 +115,12 @@ export const createCheckout = async (req: Request, res: Response) => {
       };
 
       return res.status(200).json({
-        message: "OTP sent to your registered phone number. Please verify to complete voucher payment.",
+        message:
+          "OTP sent to your registered phone number. Please verify to complete voucher payment.",
         requiresOTP: true,
-        checkoutSessionId: Buffer.from(JSON.stringify(checkoutData)).toString('base64'),
+        checkoutSessionId: Buffer.from(JSON.stringify(checkoutData)).toString(
+          "base64"
+        ),
       });
     }
 
@@ -192,10 +195,15 @@ export const createCheckout = async (req: Request, res: Response) => {
   }
 };
 
-export const verifyVoucherOTPAndCreateOrder = async (req: Request, res: Response) => {
+export const verifyVoucherOTPAndCreateOrder = async (
+  req: Request,
+  res: Response
+) => {
   try {
     const { otp, checkoutSessionId } = req.body;
     const restaurantId = (req as any).user.id;
+
+    console.log("checkoutSessionId, otp ", checkoutSessionId, otp);
 
     if (!otp || !checkoutSessionId) {
       return res.status(400).json({
@@ -206,7 +214,7 @@ export const verifyVoucherOTPAndCreateOrder = async (req: Request, res: Response
     // Get restaurant phone for OTP verification
     const restaurant = await prisma.restaurant.findUnique({
       where: { id: restaurantId },
-      select: { phone: true }
+      select: { phone: true },
     });
 
     if (!restaurant?.phone) {
@@ -216,9 +224,15 @@ export const verifyVoucherOTPAndCreateOrder = async (req: Request, res: Response
     }
 
     // Verify OTP
- 
-    const otpResult = await OTPService.verifyOTP(restaurant.phone, otp, 'VOUCHER_CHECKOUT');
-    
+
+    const otpResult = await OTPService.verifyOTP(
+      restaurant.phone,
+      otp,
+      "VOUCHER_CHECKOUT"
+    );
+
+    console.log("otpResult ", otpResult);
+
     if (!otpResult.success) {
       return res.status(400).json({
         message: otpResult.message,
@@ -228,15 +242,21 @@ export const verifyVoucherOTPAndCreateOrder = async (req: Request, res: Response
     // Decode checkout data
     let checkoutData;
     try {
-      checkoutData = JSON.parse(Buffer.from(checkoutSessionId, 'base64').toString());
+      checkoutData = JSON.parse(
+        Buffer.from(checkoutSessionId, "base64").toString()
+      );
     } catch (error) {
       return res.status(400).json({
         message: "Invalid checkout session",
       });
     }
 
+    console.log("checkoutData ", checkoutData);
+
     // Process voucher payment
     const paymentResult = await createCheckoutService(checkoutData);
+
+    console.log("paymentResult ", paymentResult);
 
     if (paymentResult.success) {
       // Handle voucher payment response
@@ -285,7 +305,8 @@ export const verifyVoucherOTPAndCreateOrder = async (req: Request, res: Response
     }
   } catch (error: any) {
     res.status(500).json({
-      message: error.message || "Failed to verify OTP and process voucher payment",
+      message:
+        error.message || "Failed to verify OTP and process voucher payment",
       error: error.message,
     });
   }

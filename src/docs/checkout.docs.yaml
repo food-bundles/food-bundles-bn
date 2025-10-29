@@ -1101,7 +1101,7 @@ paths:
                         creditUsed: 0
                         remainingCredit: 50000
                       creditRemaining: 50000
-                      paymentDeadline: "2024-12-30T00:00:00Z"
+                      paymentDeadline: "2029-12-30T00:00:00Z"
                 partial_voucher_payment:
                   summary: Partial voucher with additional payment required
                   value:

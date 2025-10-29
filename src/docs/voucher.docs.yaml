@@ -618,7 +618,7 @@ paths:
                   creditLimit: 500000
                   minTransactionAmount: 10000
                   maxTransactionAmount: 100000
-                  expiryDate: "2024-12-31T23:59:59Z"
+                  expiryDate: "2029-12-31T23:59:59Z"
               discount_50:
                 summary: 50% Discount Voucher
                 value:
