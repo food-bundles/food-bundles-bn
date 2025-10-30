@@ -959,6 +959,7 @@ enum VoucherStatus {
 enum LoanStatus {
   PENDING
   APPROVED
+  DISBURSED  
   PAID
   REJECTED
   SETTLED
