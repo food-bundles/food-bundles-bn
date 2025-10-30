@@ -477,8 +477,12 @@ export const submitLoanApplicationService = async (
 ) => {
   const { restaurantId, requestedAmount, purpose, terms } = data;
 
-  // ✅ CHECK SUBSCRIPTION FIRST
-  const subscription = await checkRestaurantSubscription(restaurantId);
+  // Check loan eligibility
+  const eligibility = await checkLoanEligibilityService(restaurantId);
+
+  if (!eligibility.isEligible) {
+    throw new Error(eligibility.reason);
+  }
 
   // Validate restaurant
   const restaurant = await prisma.restaurant.findUnique({
@@ -489,24 +493,9 @@ export const submitLoanApplicationService = async (
     throw new Error("Restaurant not found");
   }
 
-  // Check for pending applications
-  const pendingApplication = await prisma.loanApplication.findFirst({
-    where: {
-      restaurantId,
-      status: { in: [LoanStatus.PENDING, LoanStatus.APPROVED] },
-    },
-  });
-
-  if (pendingApplication) {
-    throw new Error("You already have a pending loan application");
-  }
-
-  // Optional: Set loan limits based on subscription plan
-  const maxLoanAmount = getMaxLoanAmountForPlan(subscription.plan.name);
-  if (requestedAmount > maxLoanAmount) {
-    throw new Error(
-      `Your subscription plan allows a maximum loan of ${maxLoanAmount} RWF. Requested: ${requestedAmount} RWF. Please upgrade your plan for higher limits.`
-    );
+  // Validate requested amount
+  if (requestedAmount <= 0) {
+    throw new Error("Requested amount must be greater than zero");
   }
 
   // Create loan application
@@ -524,13 +513,15 @@ export const submitLoanApplicationService = async (
           id: true,
           name: true,
           email: true,
+          phone: true,
         },
       },
     },
   });
 
-  // Broadcast loan application submission
+  // Broadcast loan application submission (if wsManager is available)
   try {
+    const { wsManager } = await import("../index");
     wsManager.broadcastLoanUpdate({
       loanId: loanApplication.id,
       action: "SUBMITTED",
@@ -645,16 +636,16 @@ export const approveLoanApplicationService = async (
   loanId: string,
   approvalData: ApproveLoanData
 ) => {
-  const {
-    approvedAmount,
-    approvedBy,
-    repaymentDays = 30,
-    voucherType,
-    notes,
-  } = approvalData;
+  const { approvedAmount, approvedBy, repaymentDays, voucherType, notes } =
+    approvalData;
 
-  // ✅ Get loan details
-  const loan = await getLoanApplicationByIdService(loanId);
+  // Get loan details
+  const loan = await prisma.loanApplication.findUnique({
+    where: { id: loanId },
+    include: {
+      restaurant: true,
+    },
+  });
 
   if (!loan) throw new Error("Loan not found");
 
@@ -662,16 +653,23 @@ export const approveLoanApplicationService = async (
     throw new Error(`Cannot approve loan with status: ${loan.status}`);
   }
 
-  // ✅ Prepare loan update data
+  // Get subscription info to use voucherPaymentDays
+  const subscriptionInfo = await checkRestaurantSubscription(loan.restaurantId);
+
+  // Use subscription's voucherPaymentDays if repaymentDays not provided
+  const finalRepaymentDays =
+    repaymentDays || subscriptionInfo.plan.voucherPaymentDays;
+
+  // Calculate dates
   const disbursementDate = new Date();
   const repaymentDueDate = new Date();
-  repaymentDueDate.setDate(repaymentDueDate.getDate() + repaymentDays);
+  repaymentDueDate.setDate(repaymentDueDate.getDate() + finalRepaymentDays);
 
-  // ✅ Set default expiry: 3 months from now
+  // Set voucher expiry: 3 months from now or custom
   const expiryDate = new Date();
   expiryDate.setMonth(expiryDate.getMonth() + 3);
 
-  // ✅ Approve loan + create voucher in a transaction
+  // Approve loan + create voucher in a transaction
   const result = await prisma.$transaction(async (tx) => {
     // Update loan to approved
     const updatedLoan = await tx.loanApplication.update({
@@ -690,20 +688,49 @@ export const approveLoanApplicationService = async (
       },
     });
 
-    // ✅ Create a voucher automatically for the approved loan
-    const voucher = await createVoucherService({
-      restaurantId: updatedLoan.restaurantId,
-      voucherType,
-      creditLimit: approvedAmount,
-      expiryDate,
-      loanId: updatedLoan.id,
+    // Create voucher automatically
+    const voucherCode = await generateVoucherCode();
+    const discountMap = {
+      DISCOUNT_10: 10,
+      DISCOUNT_20: 20,
+      DISCOUNT_50: 50,
+      DISCOUNT_80: 80,
+      DISCOUNT_100: 100,
+    };
+    const discountPercentage = discountMap[voucherType];
+
+    const voucher = await tx.voucher.create({
+      data: {
+        voucherCode,
+        voucherType,
+        discountPercentage,
+        creditLimit: approvedAmount,
+        totalCredit: approvedAmount,
+        remainingCredit: approvedAmount,
+        minTransactionAmount: 0,
+        expiryDate,
+        restaurantId: updatedLoan.restaurantId,
+        loanId: updatedLoan.id,
+        status: VoucherStatus.ACTIVE,
+      },
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        loan: true,
+      },
     });
 
     return { updatedLoan, voucher };
   });
 
-  // ✅ BROADCAST LOAN APPROVAL
+  // Broadcast loan approval
   try {
+    const { wsManager } = await import("../index");
     wsManager.broadcastLoanUpdate({
       loanId: result.updatedLoan.id,
       action: "APPROVED",
@@ -718,7 +745,6 @@ export const approveLoanApplicationService = async (
       },
     });
 
-    // ✅ BROADCAST VOUCHER CREATION
     wsManager.broadcastVoucherUpdate({
       voucherId: result.voucher.id,
       voucherCode: result.voucher.voucherCode,
@@ -783,7 +809,7 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
     const updatedLoan = await tx.loanApplication.update({
       where: { id: loanId },
       data: {
-        status: LoanStatus.DISBURSED,
+        status: LoanStatus.PAID,
         disbursementDate: new Date(),
         repaymentDueDate,
       },
@@ -800,7 +826,7 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
   try {
     wsManager.broadcastLoanUpdate({
       loanId: result.loan.id,
-      action: "DISBURSED",
+      action: "PAID",
       timestamp: new Date().toISOString(),
       restaurantId: result.loan.restaurantId,
       data: {
@@ -1062,7 +1088,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
     throw new Error("Loan does not belong to this restaurant");
   }
 
-  if (loan.status !== LoanStatus.DISBURSED) {
+  if (loan.status !== LoanStatus.PAID) {
     throw new Error(
       `Cannot make repayment for loan with status: ${loan.status}`
     );
@@ -1322,7 +1348,7 @@ export const calculatePenaltiesService = async (
     // Get all disbursed loans
     loans = await prisma.loanApplication.findMany({
       where: {
-        status: LoanStatus.DISBURSED,
+        status: LoanStatus.PAID,
       },
       include: {
         vouchers: true,
@@ -1843,14 +1869,18 @@ export const checkRestaurantSubscription = async (restaurantId: string) => {
       restaurantId,
       status: SubscriptionStatus.ACTIVE,
       endDate: {
-        gte: new Date(), // Subscription end date must be in the future
+        gte: new Date(),
       },
     },
     include: {
       plan: {
         select: {
+          id: true,
           name: true,
+          voucherAccess: true,
+          voucherPaymentDays: true,
           features: true,
+          price: true,
         },
       },
     },
@@ -1858,42 +1888,128 @@ export const checkRestaurantSubscription = async (restaurantId: string) => {
 
   if (!activeSubscription) {
     throw new Error(
-      "Restaurant does not have an active subscription. Please subscribe to access voucher and loan features."
+      "No active subscription found. Please subscribe to access voucher features."
     );
   }
 
-  // Optional: Check if the plan includes voucher/loan features
-  const features = activeSubscription.plan.features as any;
-  if (features && Array.isArray(features)) {
-    const hasVoucherFeature = features.some(
-      (f: string) =>
-        f.toLowerCase().includes("voucher") ||
-        f.toLowerCase().includes("loan") ||
-        f.toLowerCase().includes("credit")
+  // Check if plan has voucher access enabled
+  if (!activeSubscription.plan.voucherAccess) {
+    throw new Error(
+      `Your current subscription plan (${activeSubscription.plan.name}) does not include voucher access. Please upgrade to a plan with voucher features.`
     );
+  }
 
-    if (!hasVoucherFeature) {
-      throw new Error(
-        `Your current subscription plan (${activeSubscription.plan.name}) does not include voucher/loan features. Please upgrade your plan.`
-      );
-    }
+  // Check if voucherPaymentDays is set
+  if (!activeSubscription.plan.voucherPaymentDays) {
+    throw new Error(
+      `Your subscription plan does not have voucher payment days configured. Please contact support.`
+    );
   }
 
   return activeSubscription;
 };
 
 /**
- * Get maximum loan amount based on subscription plan
+ * Check if restaurant can request a new loan
+ * Returns eligibility status and details
  */
-function getMaxLoanAmountForPlan(planName: string): number {
-  // Define loan limits per plan tier
-  const loanLimits: Record<string, number> = {
-    Basic: 500000, // 500K RWF
-    Standard: 2000000, // 2M RWF
-    Premium: 5000000, // 5M RWF
-    Enterprise: 10000000, // 10M RWF
-  };
+export const checkLoanEligibilityService = async (restaurantId: string) => {
+  // Check subscription and voucher access
+  const subscriptionInfo = await checkRestaurantSubscription(restaurantId);
 
-  // Default limit if plan not found
-  return loanLimits[planName] || 1000000; // 1M RWF default
-}
+  // Get all active loans (PENDING, APPROVED, PAID - not REJECTED or SETTLED)
+  const activeLoans = await prisma.loanApplication.findMany({
+    where: {
+      restaurantId,
+      status: {
+        in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.PAID],
+      },
+    },
+    include: {
+      vouchers: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  const now = new Date();
+  const voucherPaymentDays = subscriptionInfo.plan.voucherPaymentDays;
+
+  // Check each loan's payment deadline
+  const loansExceedingDeadline = activeLoans.filter((loan) => {
+    if (!loan.repaymentDueDate) return false;
+
+    const dueDate = new Date(loan.repaymentDueDate);
+    const daysSinceDue = Math.floor(
+      (now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    // Check if loan exceeded subscription's voucherPaymentDays
+    return daysSinceDue > voucherPaymentDays;
+  });
+
+  const hasOverdueLoans = loansExceedingDeadline.length > 0;
+
+  // Calculate statistics
+  const totalActiveLoans = activeLoans.length;
+  const pendingLoans = activeLoans.filter(
+    (l) => l.status === LoanStatus.PENDING
+  ).length;
+  const approvedLoans = activeLoans.filter(
+    (l) => l.status === LoanStatus.APPROVED
+  ).length;
+  const paidLoans = activeLoans.filter(
+    (l) => l.status === LoanStatus.PAID
+  ).length;
+
+  // Eligibility decision
+  const isEligible = !hasOverdueLoans;
+
+  return {
+    isEligible,
+    reason: hasOverdueLoans
+      ? `You have ${loansExceedingDeadline.length} loan(s) that exceeded the ${voucherPaymentDays}-day payment deadline. Please settle overdue loans before requesting new ones.`
+      : "You are eligible to request a new loan.",
+    subscription: {
+      planName: subscriptionInfo.plan.name,
+      voucherPaymentDays,
+      hasVoucherAccess: subscriptionInfo.plan.voucherAccess,
+    },
+    loanStatistics: {
+      totalActiveLoans,
+      pendingLoans,
+      approvedLoans,
+      paidLoans,
+      overdueLoans: loansExceedingDeadline.length,
+    },
+    overdueLoans: loansExceedingDeadline.map((loan) => ({
+      id: loan.id,
+      requestedAmount: loan.requestedAmount,
+      approvedAmount: loan.approvedAmount,
+      repaymentDueDate: loan.repaymentDueDate,
+      daysSinceDue: loan.repaymentDueDate
+        ? Math.floor(
+            (now.getTime() - new Date(loan.repaymentDueDate).getTime()) /
+              (1000 * 60 * 60 * 24)
+          )
+        : 0,
+      status: loan.status,
+    })),
+    withinDeadlineLoans: activeLoans
+      .filter((loan) => !loansExceedingDeadline.includes(loan))
+      .map((loan) => ({
+        id: loan.id,
+        requestedAmount: loan.requestedAmount,
+        approvedAmount: loan.approvedAmount,
+        repaymentDueDate: loan.repaymentDueDate,
+        daysRemaining: loan.repaymentDueDate
+          ? Math.floor(
+              (new Date(loan.repaymentDueDate).getTime() - now.getTime()) /
+                (1000 * 60 * 60 * 24)
+            )
+          : null,
+        status: loan.status,
+      })),
+  };
+};

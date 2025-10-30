@@ -222,7 +222,7 @@ components:
           description: Loan purpose/justification
         status:
           type: string
-          enum: [PENDING, APPROVED, DISBURSED, REJECTED, SETTLED]
+          enum: [PENDING, APPROVED, PAID, REJECTED, SETTLED]
           description: Loan application status
         repaymentDueDate:
           type: string
@@ -1166,7 +1166,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [PENDING, APPROVED, DISBURSED, REJECTED, SETTLED]
+            enum: [PENDING, APPROVED, PAID, REJECTED, SETTLED]
           description: Filter by application status
         - name: restaurantId
           in: query

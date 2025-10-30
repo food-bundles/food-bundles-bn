@@ -58,6 +58,12 @@ interface CreateSubscriptionPlanData {
   price: number;
   duration: number;
   features?: string[];
+  voucherAccess?: boolean;
+  voucherPaymentDays?: number;
+  freeDelivery?: boolean;
+  stablePricing?: boolean;
+  receiveEBM?: boolean;
+  advertisingAccess?: boolean;
 }
 
 interface UpdateSubscriptionPlanData {
@@ -67,6 +73,12 @@ interface UpdateSubscriptionPlanData {
   duration?: number;
   features?: any;
   isActive?: boolean;
+  voucherAccess?: boolean;
+  voucherPaymentDays?: number;
+  freeDelivery?: boolean;
+  stablePricing?: boolean;
+  receiveEBM?: boolean;
+  advertisingAccess?: boolean;
 }
 
 interface CreateRestaurantSubscriptionData {
@@ -99,7 +111,19 @@ interface UpdateRestaurantSubscriptionData {
 export const createSubscriptionPlanService = async (
   data: CreateSubscriptionPlanData
 ) => {
-  const { name, description, price, duration, features } = data;
+  const {
+    name,
+    description,
+    price,
+    duration,
+    features,
+    voucherAccess,
+    voucherPaymentDays,
+    freeDelivery,
+    stablePricing,
+    receiveEBM,
+    advertisingAccess,
+  } = data;
 
   const existingPlan = await prisma.subscriptionPlan.findUnique({
     where: { name },
@@ -117,6 +141,11 @@ export const createSubscriptionPlanService = async (
     throw new Error("Duration must be greater than 0");
   }
 
+  // Validate voucherPaymentDays if voucherAccess is enabled
+  if (voucherAccess && voucherPaymentDays && voucherPaymentDays <= 0) {
+    throw new Error("Voucher payment days must be greater than 0");
+  }
+
   const plan = await prisma.subscriptionPlan.create({
     data: {
       name,
@@ -124,12 +153,17 @@ export const createSubscriptionPlanService = async (
       price,
       duration,
       features,
+      voucherAccess,
+      voucherPaymentDays,
+      freeDelivery,
+      stablePricing,
+      receiveEBM,
+      advertisingAccess,
     },
   });
 
   return plan;
 };
-
 /**
  * Service to get all subscription plans
  */
@@ -232,6 +266,15 @@ export const updateSubscriptionPlanService = async (
     throw new Error("Duration must be greater than 0");
   }
 
+  // Validate voucherPaymentDays if voucherAccess is being enabled
+  if (
+    data.voucherAccess &&
+    data.voucherPaymentDays !== undefined &&
+    data.voucherPaymentDays <= 0
+  ) {
+    throw new Error("Voucher payment days must be greater than 0");
+  }
+
   const updatedPlan = await prisma.subscriptionPlan.update({
     where: { id: planId },
     data,
@@ -239,7 +282,6 @@ export const updateSubscriptionPlanService = async (
 
   return updatedPlan;
 };
-
 /**
  * Service to delete subscription plan
  */

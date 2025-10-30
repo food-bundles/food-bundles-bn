@@ -21,6 +21,30 @@ components:
           type: number
           format: float
           description: Plan price
+        voucherAccess:
+          type: boolean
+          default: false
+          description: Whether voucher access is enabled
+        voucherPaymentDays:
+          type: integer
+          nullable: true
+          description: Number of days allowed for voucher payment
+        freeDelivery:
+          type: boolean
+          default: false
+          description: Whether free delivery is included
+        stablePricing:
+          type: boolean
+          default: false
+          description: Whether stable pricing is enabled
+        receiveEBM:
+          type: boolean
+          default: false
+          description: Whether EBM purchase orders are enabled
+        advertisingAccess:
+          type: boolean
+          default: false
+          description: Whether advertising access is enabled
         duration:
           type: integer
           description: Duration in days
@@ -234,6 +258,36 @@ components:
           minimum: 1
           description: Duration in days
           example: 30
+        voucherAccess:
+          type: boolean
+          default: false
+          description: Enable voucher access
+          example: true
+        voucherPaymentDays:
+          type: integer
+          minimum: 1
+          description: Number of days for voucher payment (required if voucherAccess is true)
+          example: 30
+        freeDelivery:
+          type: boolean
+          default: false
+          description: Enable free delivery
+          example: true
+        stablePricing:
+          type: boolean
+          default: false
+          description: Enable stable pricing
+          example: true
+        receiveEBM:
+          type: boolean
+          default: false
+          description: Enable EBM purchase orders
+          example: true
+        advertisingAccess:
+          type: boolean
+          default: false
+          description: Enable advertising access
+          example: false
         features:
           type: array
           items:
@@ -243,6 +297,8 @@ components:
             - "Receive EBM Purchase Orders"
             - "Stable Price"
             - "Free Delivery"
+            - "Voucher Payment System"
+            - "Priority Support"
 
     UpdateSubscriptionPlanRequest:
       type: object
@@ -262,6 +318,25 @@ components:
           type: integer
           minimum: 1
           description: Duration in days
+        voucherAccess:
+          type: boolean
+          description: Enable/disable voucher access
+        voucherPaymentDays:
+          type: integer
+          minimum: 1
+          description: Number of days for voucher payment
+        freeDelivery:
+          type: boolean
+          description: Enable/disable free delivery
+        stablePricing:
+          type: boolean
+          description: Enable/disable stable pricing
+        receiveEBM:
+          type: boolean
+          description: Enable/disable EBM purchase orders
+        advertisingAccess:
+          type: boolean
+          description: Enable/disable advertising access
         features:
           type: array
           items:
@@ -465,6 +540,42 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateSubscriptionPlanRequest"
+            examples:
+              basicPlan:
+                summary: Basic Plan
+                value:
+                  name: "Basic Plan"
+                  description: "Basic features for small restaurants"
+                  price: 25000
+                  duration: 30
+                  voucherAccess: false
+                  freeDelivery: false
+                  stablePricing: false
+                  receiveEBM: false
+                  advertisingAccess: false
+                  features:
+                    - "Basic support"
+                    - "Standard delivery"
+              premiumPlan:
+                summary: Premium Plan
+                value:
+                  name: "Premium Plan"
+                  description: "Premium features with voucher access"
+                  price: 50000
+                  duration: 30
+                  voucherAccess: true
+                  voucherPaymentDays: 30
+                  freeDelivery: true
+                  stablePricing: true
+                  receiveEBM: true
+                  advertisingAccess: true
+                  features:
+                    - "Receive EBM Purchase Orders"
+                    - "Stable Pricing"
+                    - "Free Delivery"
+                    - "Voucher Payment (30 days)"
+                    - "Advertising Access"
+                    - "Priority Support"
       responses:
         201:
           description: Subscription plan created successfully
@@ -579,6 +690,24 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateSubscriptionPlanRequest"
+            examples:
+              updateFeatures:
+                summary: Update Plan Features
+                value:
+                  voucherAccess: true
+                  voucherPaymentDays: 45
+                  freeDelivery: true
+                  receiveEBM: true
+              updatePrice:
+                summary: Update Price and Duration
+                value:
+                  price: 60000
+                  duration: 60
+              disableFeatures:
+                summary: Disable Specific Features
+                value:
+                  advertisingAccess: false
+                  voucherAccess: false
       responses:
         200:
           description: Plan updated successfully

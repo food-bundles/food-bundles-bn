@@ -26,7 +26,19 @@ import prisma from "../prisma";
  */
 export const createSubscriptionPlan = async (req: Request, res: Response) => {
   try {
-    const { name, description, price, duration, features } = req.body;
+    const {
+      name,
+      description,
+      price,
+      duration,
+      features,
+      voucherAccess,
+      voucherPaymentDays,
+      freeDelivery,
+      stablePricing,
+      receiveEBM,
+      advertisingAccess,
+    } = req.body;
 
     if (!name || !price || !duration) {
       return res.status(400).json({
@@ -40,6 +52,14 @@ export const createSubscriptionPlan = async (req: Request, res: Response) => {
       price: parseFloat(price),
       duration: parseInt(duration),
       features,
+      voucherAccess,
+      voucherPaymentDays: voucherPaymentDays
+        ? parseInt(voucherPaymentDays)
+        : undefined,
+      freeDelivery,
+      stablePricing,
+      receiveEBM,
+      advertisingAccess,
     });
 
     res.status(201).json({
@@ -113,7 +133,20 @@ export const getSubscriptionPlanById = async (req: Request, res: Response) => {
 export const updateSubscriptionPlan = async (req: Request, res: Response) => {
   try {
     const { planId } = req.params;
-    const { name, description, price, duration, features, isActive } = req.body;
+    const {
+      name,
+      description,
+      price,
+      duration,
+      features,
+      isActive,
+      voucherAccess,
+      voucherPaymentDays,
+      freeDelivery,
+      stablePricing,
+      receiveEBM,
+      advertisingAccess,
+    } = req.body;
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
@@ -122,6 +155,14 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
     if (duration !== undefined) updateData.duration = parseInt(duration);
     if (features !== undefined) updateData.features = features;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (voucherAccess !== undefined) updateData.voucherAccess = voucherAccess;
+    if (voucherPaymentDays !== undefined)
+      updateData.voucherPaymentDays = parseInt(voucherPaymentDays);
+    if (freeDelivery !== undefined) updateData.freeDelivery = freeDelivery;
+    if (stablePricing !== undefined) updateData.stablePricing = stablePricing;
+    if (receiveEBM !== undefined) updateData.receiveEBM = receiveEBM;
+    if (advertisingAccess !== undefined)
+      updateData.advertisingAccess = advertisingAccess;
 
     const plan = await updateSubscriptionPlanService(planId, updateData);
 
