@@ -565,6 +565,12 @@ model SubscriptionPlan {
   name        String   @unique
   description String?
   price       Float
+  voucherAccess Boolean @default(false)
+  voucherPaymentDays Int @default(30) // Number of days for voucher payment
+  freeDelivery Boolean @default(false)
+  stablePricing Boolean @default(false)
+  receiveEBM Boolean @default(false)
+  advertisingAccess Boolean @default(false)
   duration    Int // Duration in days
   features    String[] // Array of features included in the plan
   isActive    Boolean  @default(true)
@@ -953,7 +959,7 @@ enum VoucherStatus {
 enum LoanStatus {
   PENDING
   APPROVED
-  DISBURSED
+  PAID
   REJECTED
   SETTLED
 }

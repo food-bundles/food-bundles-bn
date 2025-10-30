@@ -60,7 +60,7 @@ interface VoucherUpdate {
 
 interface LoanUpdate {
   loanId: string;
-  action: "SUBMITTED" | "APPROVED" | "REJECTED" | "DISBURSED" | "SETTLED";
+  action: "SUBMITTED" | "APPROVED" | "REJECTED" | "PAID" | "SETTLED";
   timestamp: string;
   restaurantId: string;
   data?: {
