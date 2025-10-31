@@ -3,6 +3,7 @@ import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import { ProductData } from "./productService";
 import { processPaymentService } from "./checkout.services";
 import { decryptSecretData, encryptSecretData } from "../utils/password";
+import { DeliveryService } from "./delivery.service";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -126,9 +127,6 @@ export const createOrderFromCartService = async (
     throw new Error("Cart is empty");
   }
 
-  // REMOVED: Check for existing order - always create new order
-  // This ensures each checkout attempt creates a fresh order
-
   // Validate product availability and quantities
   for (const cartItem of cart.cartItems) {
     const product = await prisma.product.findUnique({
@@ -236,6 +234,16 @@ export const createOrderFromCartService = async (
       timeout: 15000,
     }
   );
+
+  setTimeout(async () => {}, 1000); // Small delay to ensure order is fully created
+
+  // Auto-generate delivery OTP
+  try {
+    await DeliveryService.createDeliveryOTP(order.id);
+  } catch (error) {
+    console.error("Failed to auto-generate delivery OTP:", error);
+    // Don't fail the order creation if OTP generation fails
+  }
 
   // Return complete order with relations
   return await getOrderByIdService(order.id);

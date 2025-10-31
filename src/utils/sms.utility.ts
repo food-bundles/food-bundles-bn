@@ -22,7 +22,7 @@ export async function sendMessage(messageBody: string, phoneNumber: string) {
       from: process.env.TWILIO_TRIAL_PHONE_NUMBER,
       to: cleanedPhone,
     });
-    console.log("SMS sent successfully:", message.sid);
+    console.log("SMS sent successfully:", message);
     return message;
   } catch (error) {
     console.error("SMS sending failed:", error);

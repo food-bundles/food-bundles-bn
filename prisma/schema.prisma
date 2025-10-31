@@ -63,7 +63,7 @@ model Restaurant {
   village  String?
 
   password String
-  role     Role   @default(RESTAURANT)
+  role     Role    @default(RESTAURANT)
   verified Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -286,6 +286,7 @@ model Admin {
   products              Product[]
   productCategories     ProductCategory[]
   LoanApplication       LoanApplication[]
+  OrderDelivery         OrderDelivery[]
 }
 
 model Product {
@@ -460,6 +461,8 @@ model Order {
   cart               Cart?                @relation(fields: [cartId], references: [id])
   VoucherTransaction VoucherTransaction[]
   Voucher            Voucher?             @relation(fields: [voucherId], references: [id])
+  DeliveryOTP        DeliveryOTP?
+  OrderDelivery      OrderDelivery?
 
   @@index([restaurantId])
   @@index([status])
@@ -494,6 +497,41 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+model DeliveryOTP {
+  id        String   @id @default(uuid())
+  orderId   String   @unique
+  otp       String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([expiresAt])
+}
+
+model OrderDelivery {
+  id           String         @id @default(uuid())
+  orderId      String         @unique
+  logisticsId  String
+  status       DeliveryStatus @default(PENDING)
+  otpVerified  Boolean        @default(false)
+  deliveryDate DateTime?
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  logistics Admin @relation(fields: [logisticsId], references: [id])
+
+  @@index([orderId])
+  @@index([logisticsId])
+  @@index([status])
 }
 
 // Wallet model for managing user account balances
@@ -561,21 +599,21 @@ model POSSale {
 
 // Subscription Plan model
 model SubscriptionPlan {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-  price       Float
-  voucherAccess Boolean @default(false)
-  voucherPaymentDays Int @default(30) // Number of days for voucher payment
-  freeDelivery Boolean @default(false)
-  stablePricing Boolean @default(false)
-  receiveEBM Boolean @default(false)
-  advertisingAccess Boolean @default(false)
-  duration    Int // Duration in days
-  features    String[] // Array of features included in the plan
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  name               String   @unique
+  description        String?
+  price              Float
+  voucherAccess      Boolean  @default(false)
+  voucherPaymentDays Int      @default(30) // Number of days for voucher payment
+  freeDelivery       Boolean  @default(false)
+  stablePricing      Boolean  @default(false)
+  receiveEBM         Boolean  @default(false)
+  advertisingAccess  Boolean  @default(false)
+  duration           Int // Duration in days
+  features           String[] // Array of features included in the plan
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   // Relations
   subscriptions RestaurantSubscription[]
@@ -902,6 +940,15 @@ enum OrderStatus {
   REFUNDED // Order refunded
 }
 
+enum DeliveryStatus {
+  PENDING
+  PREPARING
+  READY
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
 // Enum for wallet transaction types
 enum WalletTransactionType {
   TOP_UP
@@ -959,7 +1006,7 @@ enum VoucherStatus {
 enum LoanStatus {
   PENDING
   APPROVED
-  DISBURSED  
+  DISBURSED
   PAID
   REJECTED
   SETTLED

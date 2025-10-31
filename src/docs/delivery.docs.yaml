@@ -1,0 +1,390 @@
+tags:
+  - name: Delivery Management API
+    description: Operations for managing order deliveries with OTP verification
+
+components:
+  schemas:
+    DeliveryOTP:
+      type: object
+      properties:
+        id:
+          type: string
+        orderId:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        attempts:
+          type: integer
+        isUsed:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrderDelivery:
+      type: object
+      properties:
+        id:
+          type: string
+        orderId:
+          type: string
+        logisticsId:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, PREPARING, READY, IN_TRANSIT, DELIVERED, CANCELLED]
+        otpVerified:
+          type: boolean
+        deliveryDate:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        logistics:
+          $ref: "#/components/schemas/AdminInfo"
+        order:
+          $ref: "#/components/schemas/Order"
+
+    GenerateOTPResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            orderId:
+              type: string
+            expiresIn:
+              type: string
+
+    VerifyOTPRequest:
+      type: object
+      required:
+        - otp
+      properties:
+        otp:
+          type: string
+          pattern: "^[0-9]{6}$"
+          description: 6-digit OTP received by restaurant
+
+    UpdateDeliveryStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [PREPARING, READY, IN_TRANSIT, DELIVERED, CANCELLED]
+        notes:
+          type: string
+
+    LogisticsOrdersResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        pagination:
+          $ref: "#/components/schemas/PaginationInfo"
+
+paths:
+  /deliveries/{orderId}/otp/generate:
+    post:
+      tags:
+        - Delivery Management API
+      summary: Generate delivery OTP for an order
+      description: Generate a 6-digit OTP that will be sent to the restaurant for order delivery verification
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID to generate OTP for
+      responses:
+        200:
+          description: OTP generated and sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateOTPResponse"
+        400:
+          description: Bad request - Order not eligible for delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Order does not belong to restaurant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deliveries/{orderId}/otp/resend:
+    post:
+      tags:
+        - Delivery Management API
+      summary: Resend delivery OTP
+      description: Resend the delivery OTP to the restaurant's phone number
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID to resend OTP for
+      responses:
+        200:
+          description: OTP resent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateOTPResponse"
+        400:
+          description: Bad request - Cannot resend OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deliveries/{orderId}/otp/verify:
+    post:
+      tags:
+        - Delivery Management API
+      summary: Verify delivery OTP
+      description: Verify the OTP provided by the restaurant and mark order as delivered
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID to verify OTP for
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOTPRequest"
+      responses:
+        200:
+          description: OTP verified and order marked as delivered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      orderId:
+                        type: string
+                      status:
+                        type: string
+        400:
+          description: Bad request - Invalid OTP or verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deliveries/orders:
+    get:
+      tags:
+        - Delivery Management API
+      summary: Get orders for logistics
+      description: Retrieve all CONFIRMED orders with COMPLETED payment for logistics management
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of orders per page
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, CONFIRMED, PREPARING, READY, IN_TRANSIT, DELIVERED, CANCELLED]
+          description: Filter by order status
+      responses:
+        200:
+          description: Logistics orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogisticsOrdersResponse"
+        403:
+          description: Forbidden - Logistics access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deliveries/{orderId}/status:
+    patch:
+      tags:
+        - Delivery Management API
+      summary: Update delivery status
+      description: Update the delivery status of an order (PREPARING, READY, IN_TRANSIT, CANCELLED)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID to update status for
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeliveryStatusRequest"
+      responses:
+        200:
+          description: Delivery status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      orderId:
+                        type: string
+                      status:
+                        type: string
+        400:
+          description: Bad request - Invalid status or order not eligible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Logistics access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deliveries/{orderId}:
+    get:
+      tags:
+        - Delivery Management API
+      summary: Get delivery details
+      description: Retrieve detailed delivery information for an order
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID to get delivery details for
+      responses:
+        200:
+          description: Delivery details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/OrderDelivery"
+        404:
+          description: Delivery details not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Logistics access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deliveries/{orderId}/otp/status:
+    get:
+      tags:
+        - Delivery Management API
+      summary: Get delivery OTP status
+      description: Retrieve the current status of delivery OTP for an order
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Order ID to get OTP status for
+      responses:
+        200:
+          description: OTP status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/DeliveryOTP"
+        404:
+          description: OTP not found for this order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Order does not belong to restaurant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
