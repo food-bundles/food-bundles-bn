@@ -766,7 +766,7 @@ model LoanApplication {
   repaymentDueDate DateTime? // 30 days from disbursement
 
   // Additional info
-  terms String?
+  voucherDays Int?
   notes String?
 
   // Timestamps

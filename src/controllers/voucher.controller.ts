@@ -370,7 +370,7 @@ export const getVoucherByCode = async (req: Request, res: Response) => {
 export const applyForLoan = async (req: Request, res: Response) => {
   try {
     const restaurantId = (req as any).user.id;
-    const { requestedAmount, purpose, terms } = req.body;
+    const { requestedAmount, purpose, voucherDays } = req.body;
 
     if (!requestedAmount) {
       return res.status(400).json({
@@ -382,7 +382,7 @@ export const applyForLoan = async (req: Request, res: Response) => {
       restaurantId,
       requestedAmount: parseFloat(requestedAmount),
       purpose,
-      terms,
+      voucherDays: voucherDays ? parseInt(voucherDays) : undefined,
     });
 
     res.status(201).json({
