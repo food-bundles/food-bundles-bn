@@ -33,7 +33,7 @@ interface CreateLoanApplicationData {
   restaurantId: string;
   requestedAmount: number;
   purpose?: string;
-  terms?: string;
+  voucherDays?: number;
 }
 
 interface ApproveLoanData {
@@ -475,13 +475,67 @@ export const deactivateVoucherService = async (
 export const submitLoanApplicationService = async (
   data: CreateLoanApplicationData
 ) => {
-  const { restaurantId, requestedAmount, purpose, terms } = data;
+  const { restaurantId, requestedAmount, purpose, voucherDays } = data;
 
   // Check loan eligibility
   const eligibility = await checkLoanEligibilityService(restaurantId);
 
   if (!eligibility.isEligible) {
     throw new Error(eligibility.reason);
+  }
+
+  // Get subscription info to validate voucher days
+  const subscriptionInfo = await checkRestaurantSubscription(restaurantId);
+  const maxVoucherDays = subscriptionInfo.plan.voucherPaymentDays;
+
+  // Validate voucherDays against subscription limit
+  if (voucherDays && voucherDays > maxVoucherDays) {
+    throw new Error(`Voucher days cannot exceed ${maxVoucherDays} days as per your subscription plan`);
+  }
+
+  // Check for existing loans with repayment due dates (approved/disbursed loans)
+  const loansWithDueDates = await prisma.loanApplication.findMany({
+    where: {
+      restaurantId,
+      status: { in: [LoanStatus.APPROVED, LoanStatus.PAID] },
+      repaymentDueDate: { not: null },
+    },
+    orderBy: { createdAt: 'asc' }, // Get first loan created
+  });
+
+  // Also check if there are any active loans that would conflict
+  const pendingLoans = await prisma.loanApplication.findMany({
+    where: {
+      restaurantId,
+      status: { in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.DISBURSED] },
+      voucherDays: { not: null },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  // Priority 1: Check loans with actual due dates (approved/disbursed)
+  if (loansWithDueDates.length > 0 && voucherDays) {
+    const firstLoan = loansWithDueDates[0];
+    const now = new Date();
+    const dueDate = new Date(firstLoan.repaymentDueDate!);
+    const diffMs = dueDate.getTime() - now.getTime();
+    
+    if (diffMs > 0) {
+      const remainingDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const remainingHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const remainingMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      
+      if (voucherDays > remainingDays) {
+        throw new Error(`You can only request up to ${remainingDays} days (${remainingHours}h ${remainingMinutes}m) based on your active voucher.`);
+      }
+    }
+  }
+  // Priority 2: If no approved loans, check pending loans
+  else if (pendingLoans.length > 0 && voucherDays) {
+    const firstPendingLoan = pendingLoans[0];
+    if (firstPendingLoan.voucherDays && voucherDays > firstPendingLoan.voucherDays) {
+      throw new Error(`You can only request up to ${firstPendingLoan.voucherDays} days to match your first unpaid loan application.`);
+    }
   }
 
   // Validate restaurant
@@ -504,7 +558,7 @@ export const submitLoanApplicationService = async (
       restaurantId,
       requestedAmount,
       purpose,
-      terms,
+      voucherDays,
       status: LoanStatus.PENDING,
     },
     include: {
@@ -656,14 +710,32 @@ export const approveLoanApplicationService = async (
   // Get subscription info to use voucherPaymentDays
   const subscriptionInfo = await checkRestaurantSubscription(loan.restaurantId);
 
-  // Use subscription's voucherPaymentDays if repaymentDays not provided
+  // Use loan's voucherDays, then repaymentDays, then subscription's voucherPaymentDays
   const finalRepaymentDays =
-    repaymentDays || subscriptionInfo.plan.voucherPaymentDays;
+    loan.voucherDays || repaymentDays || subscriptionInfo.plan.voucherPaymentDays;
+
+  // For multiple loans, ensure they all have the same deadline as the first loan
+  const existingActiveLoans = await prisma.loanApplication.findMany({
+    where: {
+      restaurantId: loan.restaurantId,
+      status: { in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.PAID] },
+      id: { not: loanId }, // Exclude current loan
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  let repaymentDueDate;
+  if (existingActiveLoans.length > 0 && existingActiveLoans[0].repaymentDueDate) {
+    // Use the same due date as the first loan
+    repaymentDueDate = new Date(existingActiveLoans[0].repaymentDueDate);
+  } else {
+    // Calculate new due date based on finalRepaymentDays
+    repaymentDueDate = new Date();
+    repaymentDueDate.setDate(repaymentDueDate.getDate() + finalRepaymentDays);
+  }
 
   // Calculate dates
   const disbursementDate = new Date();
-  const repaymentDueDate = new Date();
-  repaymentDueDate.setDate(repaymentDueDate.getDate() + finalRepaymentDays);
 
   // Set voucher expiry: 3 months from now or custom
   const expiryDate = new Date();
@@ -1945,8 +2017,9 @@ export const checkLoanEligibilityService = async (restaurantId: string) => {
       (now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    // Check if loan exceeded subscription's voucherPaymentDays
-    return daysSinceDue > voucherPaymentDays;
+    // Use loan's voucherDays if available, otherwise use subscription's voucherPaymentDays
+    const loanVoucherDays = loan.voucherDays || voucherPaymentDays;
+    return daysSinceDue > loanVoucherDays;
   });
 
   const hasOverdueLoans = loansExceedingDeadline.length > 0;
