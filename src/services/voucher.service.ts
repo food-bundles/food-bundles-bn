@@ -490,7 +490,9 @@ export const submitLoanApplicationService = async (
 
   // Validate voucherDays against subscription limit
   if (voucherDays && voucherDays > maxVoucherDays) {
-    throw new Error(`Voucher days cannot exceed ${maxVoucherDays} days as per your subscription plan`);
+    throw new Error(
+      `Voucher days cannot exceed ${maxVoucherDays} days as per your subscription plan`
+    );
   }
 
   // Check for existing loans with repayment due dates (approved/disbursed loans)
@@ -500,17 +502,19 @@ export const submitLoanApplicationService = async (
       status: { in: [LoanStatus.APPROVED, LoanStatus.PAID] },
       repaymentDueDate: { not: null },
     },
-    orderBy: { createdAt: 'asc' }, // Get first loan created
+    orderBy: { createdAt: "asc" }, // Get first loan created
   });
 
   // Also check if there are any active loans that would conflict
   const pendingLoans = await prisma.loanApplication.findMany({
     where: {
       restaurantId,
-      status: { in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.DISBURSED] },
+      status: {
+        in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.DISBURSED],
+      },
       voucherDays: { not: null },
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: "asc" },
   });
 
   // Priority 1: Check loans with actual due dates (approved/disbursed)
@@ -519,22 +523,33 @@ export const submitLoanApplicationService = async (
     const now = new Date();
     const dueDate = new Date(firstLoan.repaymentDueDate!);
     const diffMs = dueDate.getTime() - now.getTime();
-    
+
     if (diffMs > 0) {
       const remainingDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const remainingHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const remainingMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-      
+      const remainingHours = Math.floor(
+        (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+      );
+      const remainingMinutes = Math.floor(
+        (diffMs % (1000 * 60 * 60)) / (1000 * 60)
+      );
+
       if (voucherDays > remainingDays) {
-        throw new Error(`You can only request up to ${remainingDays} days (${remainingHours}h ${remainingMinutes}m) based on your active voucher.`);
+        throw new Error(
+          `You can only request up to ${remainingDays} days (${remainingHours}h ${remainingMinutes}m) based on your active voucher.`
+        );
       }
     }
   }
   // Priority 2: If no approved loans, check pending loans
   else if (pendingLoans.length > 0 && voucherDays) {
     const firstPendingLoan = pendingLoans[0];
-    if (firstPendingLoan.voucherDays && voucherDays > firstPendingLoan.voucherDays) {
-      throw new Error(`You can only request up to ${firstPendingLoan.voucherDays} days to match your first unpaid loan application.`);
+    if (
+      firstPendingLoan.voucherDays &&
+      voucherDays > firstPendingLoan.voucherDays
+    ) {
+      throw new Error(
+        `You can only request up to ${firstPendingLoan.voucherDays} days to match your first unpaid loan application.`
+      );
     }
   }
 
@@ -712,20 +727,27 @@ export const approveLoanApplicationService = async (
 
   // Use loan's voucherDays, then repaymentDays, then subscription's voucherPaymentDays
   const finalRepaymentDays =
-    loan.voucherDays || repaymentDays || subscriptionInfo.plan.voucherPaymentDays;
+    loan.voucherDays ||
+    repaymentDays ||
+    subscriptionInfo.plan.voucherPaymentDays;
 
   // For multiple loans, ensure they all have the same deadline as the first loan
   const existingActiveLoans = await prisma.loanApplication.findMany({
     where: {
       restaurantId: loan.restaurantId,
-      status: { in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.PAID] },
+      status: {
+        in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.PAID],
+      },
       id: { not: loanId }, // Exclude current loan
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: "asc" },
   });
 
   let repaymentDueDate;
-  if (existingActiveLoans.length > 0 && existingActiveLoans[0].repaymentDueDate) {
+  if (
+    existingActiveLoans.length > 0 &&
+    existingActiveLoans[0].repaymentDueDate
+  ) {
     // Use the same due date as the first loan
     repaymentDueDate = new Date(existingActiveLoans[0].repaymentDueDate);
   } else {
@@ -967,6 +989,7 @@ export const rejectLoanApplicationService = async (
 /**
  * Process voucher payment
  */
+
 export const processVoucherPaymentService = async (
   data: VoucherPaymentData
 ) => {
@@ -984,16 +1007,19 @@ export const processVoucherPaymentService = async (
   const serviceFee = amountCharged * (voucher.serviceFeeRate / 100);
   const totalDeducted = amountCharged + serviceFee;
 
-  // Check sufficient credit
+  // Voucher MUST cover the full amount - NO PARTIAL PAYMENTS
   if (voucher.remainingCredit < totalDeducted) {
-    // Allow using all remaining credit even if insufficient
-    console.log(
-      `Using remaining voucher credit: ${voucher.remainingCredit} (Required: ${totalDeducted})`
+    throw new Error(
+      `Insufficient voucher credit. Required: ${totalDeducted.toFixed(2)} ${
+        voucher.currency || "RWF"
+      }, Available: ${voucher.remainingCredit.toFixed(2)} ${
+        voucher.currency || "RWF"
+      }. Voucher cannot be used for partial payments.`
     );
   }
 
-  // Use minimum of totalDeducted or remaining credit
-  const actualDeduction = Math.min(totalDeducted, voucher.remainingCredit);
+  // Use the exact order total amount (totalDeducted) instead of minimum
+  const actualDeduction = totalDeducted;
 
   // Process payment in transaction
   const result = await prisma.$transaction(async (tx) => {
@@ -1008,22 +1034,21 @@ export const processVoucherPaymentService = async (
         discountAmount,
         amountCharged,
         serviceFee,
-        totalDeducted: actualDeduction, // Use actual deduction
+        totalDeducted: actualDeduction,
       },
     });
 
     // Calculate new remaining credit
     const newRemainingCredit = voucher.remainingCredit - actualDeduction;
 
-    // Update voucher balance and mark as USED (one-time use)
+    // DON'T mark voucher as USED here - only when order is successful
+    // Update voucher balance but keep status as ACTIVE
     const updatedVoucher = await tx.voucher.update({
       where: { id: voucherId },
       data: {
         usedCredit: { increment: actualDeduction },
         remainingCredit: newRemainingCredit,
-        // Mark as USED after first use regardless of remaining credit
-        status: VoucherStatus.USED,
-        usedAt: new Date(), // Track when voucher was used
+        usedAt: new Date(), // Track last usage time
       },
     });
 
@@ -1035,7 +1060,7 @@ export const processVoucherPaymentService = async (
           restaurantId,
           loanId: voucher.loanId,
           amount: actualDeduction,
-          paymentMethod: "VOUCHER", // Add VOUCHER as payment method in Prisma schema
+          paymentMethod: "VOUCHER",
           paymentReference: transaction.id,
           allocatedToPrincipal: amountCharged,
           allocatedToServiceFee: serviceFee,
@@ -1044,7 +1069,9 @@ export const processVoucherPaymentService = async (
       });
     }
 
-    // Update order payment status
+    // ✅ Order payment status is set to COMPLETED
+    // Order status is set to CONFIRMED
+    // Voucher status will be updated separately after confirming order success
     await tx.order.update({
       where: { id: orderId },
       data: {
@@ -1061,7 +1088,7 @@ export const processVoucherPaymentService = async (
     wsManager.broadcastVoucherUpdate({
       voucherId: result.voucher.id,
       voucherCode: result.voucher.voucherCode,
-      action: "USED",
+      action: "CREATED",
       timestamp: new Date().toISOString(),
       restaurantId: result.voucher.restaurantId,
       data: {
@@ -1072,7 +1099,6 @@ export const processVoucherPaymentService = async (
       },
     });
 
-    // ✅ BROADCAST VOUCHER TRANSACTION
     wsManager.broadcastVoucherTransactionUpdate({
       transactionId: result.transaction.id,
       voucherId: result.voucher.id,
@@ -1780,7 +1806,7 @@ export const validateVoucherForCheckoutService = async (
   orderAmount: number
 ) => {
   try {
-    // ✅ CHECK SUBSCRIPTION
+    // Check subscription
     await checkRestaurantSubscription(restaurantId);
 
     const voucher = await getVoucherByCodeService(voucherCode);
@@ -1797,7 +1823,8 @@ export const validateVoucherForCheckoutService = async (
     if (voucher.status === VoucherStatus.USED) {
       return {
         valid: false,
-        error: "Voucher has already been used",
+        error:
+          "Voucher has already been used. Each voucher can only be used once.",
       };
     }
 
@@ -1849,11 +1876,21 @@ export const validateVoucherForCheckoutService = async (
     const serviceFee = amountCharged * (voucher.serviceFeeRate / 100);
     const totalRequired = amountCharged + serviceFee;
 
-    const coversFullAmount = totalRequired <= voucher.remainingCredit;
-    const requiresAdditionalPayment = !coversFullAmount;
-    const additionalPaymentRequired = requiresAdditionalPayment
-      ? totalRequired - voucher.remainingCredit
-      : 0;
+    // Voucher MUST cover full amount - NO PARTIAL PAYMENTS
+    const canCoverFullAmount = voucher.remainingCredit >= totalRequired;
+
+    if (!canCoverFullAmount) {
+      return {
+        valid: false,
+        error: `Insufficient voucher credit. Required: ${totalRequired.toFixed(
+          2
+        )} ${
+          voucher.currency || "RWF"
+        }, Available: ${voucher.remainingCredit.toFixed(2)} ${
+          voucher.currency || "RWF"
+        }. Voucher must cover the full order amount (no partial payments allowed).`,
+      };
+    }
 
     return {
       valid: true,
@@ -1870,14 +1907,15 @@ export const validateVoucherForCheckoutService = async (
         amountAfterDiscount: amountCharged,
         serviceFee,
         totalRequired,
-        voucherCovers: Math.min(totalRequired, voucher.remainingCredit),
-        coversFullAmount,
-        requiresAdditionalPayment,
-        additionalPaymentRequired,
+        voucherCovers: totalRequired,
+        canCoverFullAmount: true,
+        remainingAfterPurchase: voucher.remainingCredit - totalRequired,
       },
-      warning: requiresAdditionalPayment
-        ? `Voucher will cover ${voucher.remainingCredit} RWF. Additional payment of ${additionalPaymentRequired} required.`
-        : null,
+      message: `Voucher will cover the full order amount of ${totalRequired.toFixed(
+        2
+      )} ${voucher.currency || "RWF"}. Remaining credit after this purchase: ${(
+        voucher.remainingCredit - totalRequired
+      ).toFixed(2)} ${voucher.currency || "RWF"}`,
     };
   } catch (error: any) {
     return {
@@ -2085,4 +2123,134 @@ export const checkLoanEligibilityService = async (restaurantId: string) => {
         status: loan.status,
       })),
   };
+};
+
+/**
+ * Mark voucher as USED after successful order completion
+ * This should be called ONLY when order is successfully delivered/completed
+ */
+export const markVoucherAsUsedService = async (
+  voucherId: string,
+  orderId: string
+) => {
+  // Verify the order was successful
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+  });
+
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  // Only mark as USED if order is in a successful state
+  const successfulStatuses: OrderStatus[] = [
+    OrderStatus.DELIVERED,
+    OrderStatus.CONFIRMED,
+    OrderStatus.PREPARING,
+    OrderStatus.READY,
+    OrderStatus.IN_TRANSIT,
+  ];
+
+  if (!successfulStatuses.includes(order.status)) {
+    throw new Error(
+      `Cannot mark voucher as USED for order with status: ${order.status}`
+    );
+  }
+
+  // Mark voucher as USED
+  const updatedVoucher = await prisma.voucher.update({
+    where: { id: voucherId },
+    data: {
+      status: VoucherStatus.USED,
+      usedAt: new Date(),
+    },
+  });
+
+  // Broadcast voucher status update
+  try {
+    wsManager.broadcastVoucherUpdate({
+      voucherId: updatedVoucher.id,
+      voucherCode: updatedVoucher.voucherCode,
+      action: "USED",
+      timestamp: new Date().toISOString(),
+      restaurantId: updatedVoucher.restaurantId,
+      data: {
+        status: VoucherStatus.USED,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast voucher status update:", error);
+  }
+
+  return updatedVoucher;
+};
+
+/**
+ * Rollback voucher credit if order fails or is cancelled
+ */
+export const rollbackVoucherPaymentService = async (
+  voucherId: string,
+  orderId: string
+) => {
+  // Get the voucher transaction
+  const transaction = await prisma.voucherTransaction.findFirst({
+    where: {
+      voucherId,
+      orderId,
+    },
+    include: {
+      voucher: true,
+    },
+  });
+
+  if (!transaction) {
+    throw new Error("Voucher transaction not found");
+  }
+
+  // Rollback the voucher credit
+  const result = await prisma.$transaction(async (tx) => {
+    // Restore voucher credit
+    const updatedVoucher = await tx.voucher.update({
+      where: { id: voucherId },
+      data: {
+        usedCredit: { decrement: transaction.totalDeducted },
+        remainingCredit: { increment: transaction.totalDeducted },
+        status: VoucherStatus.ACTIVE, // Reset to ACTIVE
+      },
+    });
+
+    // Delete the voucher transaction
+    await tx.voucherTransaction.delete({
+      where: { id: transaction.id },
+    });
+
+    // Delete associated repayment if exists
+    await tx.voucherRepayment.deleteMany({
+      where: {
+        voucherId,
+        paymentReference: transaction.id,
+      },
+    });
+
+    return updatedVoucher;
+  });
+
+  // Broadcast rollback
+  try {
+    wsManager.broadcastVoucherUpdate({
+      voucherId: result.id,
+      voucherCode: result.voucherCode,
+      action: "SUSPENDED",
+      timestamp: new Date().toISOString(),
+      restaurantId: result.restaurantId,
+      data: {
+        remainingCredit: result.remainingCredit,
+        status: result.status,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast voucher rollback:", error);
+  }
+
+  return result;
 };
