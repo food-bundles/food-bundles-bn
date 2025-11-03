@@ -40,27 +40,27 @@ wsManager.initialize(httpServer);
 app.use(
   cors({
     origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Accept"],
   })
 );
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
 // JSON error handler
 app.use((err: any, req: any, res: any, next: any) => {
-  if (err instanceof SyntaxError && 'body' in err) {
+  if (err instanceof SyntaxError && "body" in err) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid JSON format in request body'
+      message: "Invalid JSON format in request body",
     });
   }
   next(err);
 });
 
 // Raw body for webhooks
-app.use('/webhooks', express.raw({ type: 'application/json' }));
+app.use("/webhooks", express.raw({ type: "application/json" }));
 
 app.use("/", routes);
 

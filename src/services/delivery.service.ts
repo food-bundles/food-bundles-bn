@@ -202,16 +202,31 @@ export class DeliveryService {
     page = 1,
     limit = 10,
     status,
+    logisticsId,
   }: {
     page?: number;
     limit?: number;
     status?: OrderStatus;
+    logisticsId?: string;
   } = {}) {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      paymentStatus: PaymentStatus.COMPLETED,
-      status: status || OrderStatus.CONFIRMED,
+      OR: [
+        {
+          AND: [
+            { status: status || OrderStatus.CONFIRMED },
+            { paymentStatus: PaymentStatus.COMPLETED },
+          ],
+        },
+        ...(logisticsId
+          ? [
+              {
+                logisticsId: logisticsId,
+              },
+            ]
+          : []),
+      ],
     };
 
     const [orders, total] = await Promise.all([
@@ -333,6 +348,7 @@ export class DeliveryService {
           data: {
             status: orderStatus,
             updatedAt: new Date(),
+            logisticsId: logisticsId,
           },
         });
 
