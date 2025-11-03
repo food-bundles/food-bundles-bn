@@ -714,6 +714,7 @@ model Voucher {
   creditLimit          Float
   minTransactionAmount Float  @default(0)
   maxTransactionAmount Float?
+  currency             VoucherCurrency @default(RWF)
 
   // Credit tracking
   totalCredit     Float
@@ -994,6 +995,12 @@ enum VoucherType {
   DISCOUNT_50
   DISCOUNT_80
   DISCOUNT_100
+}
+
+enum VoucherCurrency {
+  RWF
+  USD
+  EUR
 }
 
 enum VoucherStatus {

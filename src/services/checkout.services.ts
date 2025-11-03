@@ -6,7 +6,9 @@ import {
 } from "./wallet.service";
 import {
   getVoucherByCodeService,
+  markVoucherAsUsedService,
   processVoucherPaymentService,
+  rollbackVoucherPaymentService,
 } from "./voucher.service";
 import {
   sendPaymentNotificationEmail,
@@ -23,7 +25,12 @@ import {
   UpdateCheckoutData,
   VoucherPaymentResult,
 } from "../types/paymentTypes";
-import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
+import {
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+  VoucherStatus,
+} from "@prisma/client";
 import {
   createOrderFromCartService,
   getOrderByIdService,
@@ -137,6 +144,23 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
   });
 
   console.log("paymentResult", paymentResult);
+
+  // If order uses voucher and reaches successful state, mark voucher as USED
+  if (orderCreated.voucherId && orderCreated.status === OrderStatus.CONFIRMED) {
+    await markVoucherAsUsedService(orderCreated.voucherId, orderCreated.id);
+  }
+
+  // If order is cancelled or failed, rollback voucher payment
+  if (
+    orderCreated.voucherId &&
+    orderCreated.paymentMethod === "VOUCHER" &&
+    orderCreated.status !== OrderStatus.CONFIRMED
+  ) {
+    await rollbackVoucherPaymentService(
+      orderCreated.voucherId,
+      orderCreated.id
+    );
+  }
 
   await clearCartService(data.restaurantId);
 
@@ -335,12 +359,6 @@ export const processPaymentService = async (
           orderId: order.id!,
           restaurantId: order.restaurantId,
           originalAmount: order.totalAmount,
-          fallbackPaymentMethod: paymentData.fallbackPaymentMethod,
-          fallbackPaymentData: {
-            phoneNumber: paymentData.phoneNumber,
-            cardDetails: paymentData.cardDetails,
-            bankDetails: paymentData.bankDetails,
-          },
         });
         break;
 
@@ -1164,19 +1182,11 @@ async function processVoucherPayment({
   orderId,
   restaurantId,
   originalAmount,
-  fallbackPaymentMethod,
-  fallbackPaymentData,
 }: {
   voucherCode: string;
   orderId: string;
   restaurantId: string;
   originalAmount: number;
-  fallbackPaymentMethod?: PaymentMethod;
-  fallbackPaymentData?: {
-    phoneNumber?: string;
-    cardDetails?: any;
-    bankDetails?: any;
-  };
 }): Promise<VoucherPaymentResult> {
   try {
     console.log(
@@ -1192,7 +1202,11 @@ async function processVoucherPayment({
     }
 
     // Validate voucher status
-    if (voucher.status !== "ACTIVE") {
+    if (voucher.status === VoucherStatus.USED) {
+      throw new Error("Voucher has already been used");
+    }
+
+    if (voucher.status !== VoucherStatus.ACTIVE) {
       throw new Error(`Voucher is ${voucher.status.toLowerCase()}`);
     }
 
@@ -1206,230 +1220,61 @@ async function processVoucherPayment({
       throw new Error("Voucher has no remaining credit");
     }
 
-    // Calculate discount amounts
+    // Calculate amounts
     const discountPercentage = voucher.discountPercentage;
     const discountAmount = originalAmount * (discountPercentage / 100);
     const amountAfterDiscount = originalAmount - discountAmount;
-
-    // Calculate service fee on the charged amount
     const serviceFee = amountAfterDiscount * (voucher.serviceFeeRate / 100);
     const totalDeduction = amountAfterDiscount + serviceFee;
 
-    // Check if voucher covers the full amount
-    const voucherCoversFullAmount = totalDeduction <= voucher.remainingCredit;
-
-    if (discountPercentage === 100 && voucherCoversFullAmount) {
-      // 100% discount voucher - no additional payment needed
-      console.log("Processing 100% discount voucher");
-
-      const voucherTransaction = await processVoucherPaymentService({
-        voucherId: voucher.id,
-        orderId,
-        restaurantId,
-        originalAmount,
-      });
-
-      // Update order to mark as voucher payment
-      await prisma.order.update({
-        where: { id: orderId },
-        data: {
-          paymentType: "VOUCHER_PAYMENT",
-          paymentProvider: "VOUCHER",
-          voucherCode: voucherCode,
-          voucherId: voucher.id,
-          status: OrderStatus.CONFIRMED,
-          paymentStatus: PaymentStatus.COMPLETED,
-        },
-      });
-
-      return {
-        success: true,
-        transactionId: voucherTransaction.transaction.id,
-        reference: voucherTransaction.transaction.id,
-        flwRef: `VOUCHER_${voucherCode}`,
-        status: "successful",
-        message: "Payment completed using 100% discount voucher",
-        voucherDetails: {
-          voucherCode: voucher.voucherCode,
-          discountPercentage: voucher.discountPercentage,
-          amountCovered: totalDeduction,
-          remainingAmount: 0,
-          creditUsed: totalDeduction,
-          remainingCredit: voucherTransaction.voucher.remainingCredit,
-        },
-      };
-    } else if (voucherCoversFullAmount) {
-      // Partial discount voucher with sufficient credit
-      console.log(
-        `Processing ${discountPercentage}% discount voucher with sufficient credit`
+    // ✅ REQUIREMENT: Voucher MUST cover full amount - NO FALLBACK
+    if (voucher.remainingCredit < totalDeduction) {
+      throw new Error(
+        `Insufficient voucher credit. Required: ${totalDeduction.toFixed(
+          2
+        )}, Available: ${voucher.remainingCredit.toFixed(
+          2
+        )}. Voucher cannot be used for partial payments.`
       );
-
-      const voucherTransaction = await processVoucherPaymentService({
-        voucherId: voucher.id,
-        orderId,
-        restaurantId,
-        originalAmount,
-      });
-
-      // Update order to mark as voucher payment
-      await prisma.order.update({
-        where: { id: orderId },
-        data: {
-          paymentType: "VOUCHER_PAYMENT",
-          paymentProvider: "VOUCHER",
-          voucherCode: voucherCode,
-          voucherId: voucher.id,
-          status: OrderStatus.CONFIRMED,
-          paymentStatus: PaymentStatus.COMPLETED,
-        },
-      });
-
-      return {
-        success: true,
-        transactionId: voucherTransaction.transaction.id,
-        reference: voucherTransaction.transaction.id,
-        flwRef: `VOUCHER_${voucherCode}`,
-        status: "successful",
-        message: `Payment completed using voucher with ${discountPercentage}% discount`,
-        voucherDetails: {
-          voucherCode: voucher.voucherCode,
-          discountPercentage: voucher.discountPercentage,
-          amountCovered: totalDeduction,
-          remainingAmount: 0,
-          creditUsed: totalDeduction,
-          remainingCredit: voucherTransaction.voucher.remainingCredit,
-        },
-      };
-    } else {
-      // Voucher doesn't cover full amount - require additional payment
-      console.log("Voucher insufficient - requiring additional payment");
-
-      if (!fallbackPaymentMethod) {
-        throw new Error(
-          `Voucher credit insufficient. Available: ${voucher.remainingCredit}, Required: ${totalDeduction}. Please provide an additional payment method.`
-        );
-      }
-
-      // Calculate remaining amount after using all voucher credit
-      const voucherCreditUsed = voucher.remainingCredit;
-      const remainingAmountToPay = totalDeduction - voucherCreditUsed;
-
-      // Process voucher payment first (use all remaining credit)
-      const voucherTransaction = await processVoucherPaymentService({
-        voucherId: voucher.id,
-        orderId,
-        restaurantId,
-        originalAmount,
-      });
-
-      // Update order to mark as partial voucher payment
-      await prisma.order.update({
-        where: { id: orderId },
-        data: {
-          paymentType: "VOUCHER_PARTIAL_PAYMENT",
-          paymentProvider: "VOUCHER",
-          voucherCode: voucherCode,
-          voucherId: voucher.id,
-          status: OrderStatus.CONFIRMED,
-          paymentStatus: PaymentStatus.COMPLETED,
-        },
-      });
-
-      // Now process additional payment for remaining amount
-      let additionalPaymentResult: PaymentResult;
-      const order = await getOrderByIdService(orderId);
-
-      switch (fallbackPaymentMethod) {
-        case "MOBILE_MONEY":
-          if (!fallbackPaymentData?.phoneNumber) {
-            throw new Error(
-              "Phone number required for additional mobile money payment"
-            );
-          }
-          additionalPaymentResult = await processMobileMoneyPayment({
-            amount: remainingAmountToPay,
-            phoneNumber: fallbackPaymentData.phoneNumber,
-            txRef: `${order.txRef}_ADDITIONAL`,
-            orderId: order.txOrderId!,
-            email: order.restaurant.email,
-            fullname: order.restaurant.name,
-            currency: order.currency || "RWF",
-          });
-          break;
-
-        case "CARD":
-          if (!fallbackPaymentData?.cardDetails) {
-            throw new Error(
-              "Card details required for additional card payment"
-            );
-          }
-          additionalPaymentResult = await processCardPayment({
-            amount: remainingAmountToPay,
-            txRef: `${order.txRef}_ADDITIONAL`,
-            email: order.billingEmail || order.restaurant.email,
-            fullname: order.billingName || order.restaurant.name,
-            phoneNumber:
-              fallbackPaymentData.phoneNumber || order.billingPhone || "",
-            currency: order.currency || "RWF",
-            cardDetails: fallbackPaymentData.cardDetails,
-          });
-          break;
-
-        case "BANK_TRANSFER":
-          additionalPaymentResult = await processBankTransfer({
-            amount: remainingAmountToPay,
-            txRef: `${order.txRef}_ADDITIONAL`,
-            email: order.billingEmail || order.restaurant.email,
-            phoneNumber:
-              fallbackPaymentData?.phoneNumber || order.billingPhone || "",
-            currency: order.currency || "RWF",
-            clientIp:
-              fallbackPaymentData?.bankDetails?.clientIp ||
-              order.clientIp ||
-              "",
-            deviceFingerprint:
-              order.deviceFingerprint || "62wd23423rq324323qew1",
-            narration: `Additional payment for order ${orderId}`,
-          });
-          break;
-
-        default:
-          throw new Error("Unsupported fallback payment method");
-      }
-
-      if (additionalPaymentResult.success) {
-        return {
-          success: true,
-          transactionId: additionalPaymentResult.transactionId,
-          reference: additionalPaymentResult.reference,
-          flwRef: additionalPaymentResult.flwRef,
-          status: additionalPaymentResult.status,
-          message: `Voucher applied with ${discountPercentage}% discount. Additional payment of ${remainingAmountToPay} ${order.currency} processed.`,
-          voucherDetails: {
-            voucherCode: voucher.voucherCode,
-            discountPercentage: voucher.discountPercentage,
-            amountCovered: voucherCreditUsed,
-            remainingAmount: remainingAmountToPay,
-            creditUsed: voucherCreditUsed,
-            remainingCredit: 0,
-          },
-          requiresAdditionalPayment: true,
-          additionalPaymentAmount: remainingAmountToPay,
-          authorizationDetails:
-            "authorizationDetails" in additionalPaymentResult
-              ? additionalPaymentResult.authorizationDetails
-              : undefined,
-        };
-      } else {
-        // Rollback voucher transaction if additional payment fails
-        // Note: This should ideally be handled in a transaction
-        throw new Error(
-          `Additional payment failed: ${
-            additionalPaymentResult.error || "Unknown error"
-          }`
-        );
-      }
     }
+
+    // Process voucher payment
+    const voucherTransaction = await processVoucherPaymentService({
+      voucherId: voucher.id,
+      orderId,
+      restaurantId,
+      originalAmount,
+    });
+
+    // Update order to mark as voucher payment
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        paymentType: "VOUCHER_PAYMENT",
+        paymentProvider: "VOUCHER",
+        voucherCode: voucherCode,
+        voucherId: voucher.id,
+        status: OrderStatus.CONFIRMED,
+        paymentStatus: PaymentStatus.COMPLETED,
+      },
+    });
+
+    return {
+      success: true,
+      transactionId: voucherTransaction.transaction.id,
+      reference: voucherTransaction.transaction.id,
+      flwRef: `VOUCHER_${voucherCode}`,
+      status: "successful",
+      message: `Payment completed using voucher with ${discountPercentage}% discount`,
+      voucherDetails: {
+        voucherCode: voucher.voucherCode,
+        discountPercentage: voucher.discountPercentage,
+        amountCovered: totalDeduction,
+        remainingAmount: 0,
+        creditUsed: totalDeduction,
+        remainingCredit: voucherTransaction.voucher.remainingCredit,
+      },
+    };
   } catch (error: any) {
     console.log("Voucher payment failed:", error);
     return {
