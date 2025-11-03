@@ -65,6 +65,7 @@ model Restaurant {
   password String
   role     Role    @default(RESTAURANT)
   verified Boolean @default(false)
+  agreed   Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
