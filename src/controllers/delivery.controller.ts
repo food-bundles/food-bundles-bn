@@ -148,11 +148,13 @@ export const verifyDeliveryOTP = async (req: Request, res: Response) => {
 export const getLogisticsOrders = async (req: Request, res: Response) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
+    const logisticsId = (req as any).user.id;
 
     const result = await DeliveryService.getLogisticsOrders({
       page: parseInt(page as string),
       limit: parseInt(limit as string),
       status: status as OrderStatus,
+      logisticsId: logisticsId,
     });
 
     res.status(200).json({
