@@ -16,6 +16,7 @@ import {
   deleteRestaurantService,
   deleteAdminService,
   loginService,
+  acceptTermsService,
 } from "../services/userServices";
 import { PaginationService } from "../services/paginationService";
 import { JwtPayload } from "../types/userTypes";
@@ -132,6 +133,31 @@ export class UserController {
       res.status(500).json({
         success: false,
         message: error.message,
+      });
+    }
+  };
+
+  // TERMS AND CONDITIONS SERVICES
+
+  static acceptTerms = async (req: Request, res: Response) => {
+    try {
+      const { identifier } = req.body; // email or phone
+
+      if (!identifier) {
+        return res.status(400).json({
+          message: "Email or phone is required",
+        });
+      }
+
+      const restaurant = await acceptTermsService(identifier);
+
+      res.status(200).json({
+        message: "Terms and conditions accepted successfully",
+        data: restaurant,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        message: error.message || "Failed to accept terms",
       });
     }
   };

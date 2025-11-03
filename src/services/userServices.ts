@@ -383,6 +383,36 @@ export const createRestaurantService = async (
   }
 };
 
+// TERMS AND CONDITIONS SERVICE
+export const acceptTermsService = async (identifier: string) => {
+    const restaurant = await prisma.restaurant.findFirst({
+      where: {
+        OR: [{ email: identifier }, { phone: identifier }],
+      },
+    });
+
+    if (!restaurant) {
+      throw new Error("Restaurant not found");
+    }
+
+    // Update agreed field to true
+    const updatedRestaurant = await prisma.restaurant.update({
+      where: { id: restaurant.id },
+      data: { agreed: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        agreed: true,
+        verified: true,
+      },
+    });
+
+    return updatedRestaurant;
+  };
+
+
 export const getAllRestaurantsService = async (query: IPaginationQuery) => {
   const normalizedQuery = PaginationService.validatePaginationParams(
     query.page,
@@ -812,6 +842,8 @@ export const deleteAdminService = async (id: string) => {
   }
 };
 
+
+
 // LOGIN SERVICE
 export const loginService = async (loginData: ILoginData) => {
   const { phone, email, tin, password } = loginData;
@@ -838,7 +870,16 @@ export const loginService = async (loginData: ILoginData) => {
         ],
       },
     });
-    if (user) foundUserType = "restaurant";
+    if (user) {
+      foundUserType = "restaurant";
+      if (!user.verified) {
+        throw new Error("Your account is not verified yet.");
+      }
+      
+      if (!user.agreed) {
+        throw new Error("You must agree to the Terms and Conditions before logging in.");
+      }
+    }
   }
 
   // Admin login
