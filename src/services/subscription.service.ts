@@ -359,7 +359,7 @@ export const createRestaurantSubscriptionService = async (
   });
 
   if (existingSubscription) {
-    throw new Error("Restaurant already has an active subscription");
+    throw new Error("You already has an active subscription");
   }
 
   // Calculate end date

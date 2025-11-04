@@ -13,6 +13,7 @@ import {
 } from "../services/order.services";
 import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import prisma from "../prisma";
+import { wsManager } from "../index";
 
 /**
  * Controller to create order from cart
@@ -576,6 +577,50 @@ export const getOrderByNumber = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to get order by number",
+    });
+  }
+};
+
+/**
+ * Test WebSocket functionality
+ * POST /orders/test-websocket
+ */
+export const testWebSocket = async (req: Request, res: Response) => {
+  try {
+    const { orderId, restaurantId } = req.body;
+    
+    if (!orderId || !restaurantId) {
+      return res.status(400).json({
+        message: "orderId and restaurantId are required",
+      });
+    }
+
+    // Broadcast test order update
+    wsManager.broadcastOrderUpdate({
+      orderId,
+      status: "CONFIRMED",
+      paymentStatus: "COMPLETED",
+      timestamp: new Date().toISOString(),
+      restaurantId,
+      data: {
+        orderNumber: `TEST-${Date.now()}`,
+        totalAmount: 25000,
+        currency: "RWF",
+        paymentMethod: "MOMO",
+      },
+    });
+
+    res.status(200).json({
+      message: "WebSocket test broadcast sent successfully",
+      data: {
+        orderId,
+        restaurantId,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to test WebSocket",
     });
   }
 };

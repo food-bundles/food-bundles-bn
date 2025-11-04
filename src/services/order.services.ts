@@ -4,6 +4,7 @@ import { ProductData } from "./productService";
 import { processPaymentService } from "./checkout.services";
 import { decryptSecretData, encryptSecretData } from "../utils/password";
 import { DeliveryService } from "./delivery.service";
+import { wsManager } from "../index";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -563,6 +564,28 @@ export const updateOrderService = async (
     },
   });
 
+  // Broadcast WebSocket update for status or payment status changes
+  if (data.status || data.paymentStatus) {
+    try {
+      wsManager.broadcastOrderUpdate({
+        orderId: updatedOrder.id,
+        status: updatedOrder.status,
+        paymentStatus: updatedOrder.paymentStatus || undefined,
+        timestamp: new Date().toISOString(),
+        restaurantId: updatedOrder.restaurantId,
+        data: {
+          orderNumber: updatedOrder.orderNumber,
+          totalAmount: updatedOrder.totalAmount,
+          currency: updatedOrder.currency || "RWF",
+          paymentMethod: updatedOrder.paymentMethod || undefined,
+          transactionId: updatedOrder.txRef || undefined,
+        },
+      });
+    } catch (error) {
+      console.error("Failed to broadcast order update:", error);
+    }
+  }
+
   // Return complete order details
   return await getOrderByIdService(updatedOrder.id);
 };
@@ -609,6 +632,23 @@ export const cancelOrderService = async (
       },
     });
   });
+
+  // Broadcast WebSocket update for order cancellation
+  try {
+    wsManager.broadcastOrderUpdate({
+      orderId: order.id,
+      status: "CANCELLED",
+      timestamp: new Date().toISOString(),
+      restaurantId: order.restaurantId,
+      data: {
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount,
+        currency: order.currency || "RWF",
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast order cancellation:", error);
+  }
 
   return { message: "Order cancelled successfully" };
 };
