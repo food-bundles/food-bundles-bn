@@ -11,6 +11,7 @@ import {
   getOrderStatistics,
   getOrderByNumber,
   reOrderFromExistingOrder,
+  testWebSocket,
 } from "../controllers/order.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -26,6 +27,18 @@ const orderRoutes = Router();
  * Access: Restaurant (own stats) or Admin (all stats)
  */
 orderRoutes.get("/statistics", isAuthenticated, getOrderStatistics);
+
+/**
+ * Test WebSocket functionality
+ * POST /orders/test-websocket
+ * Access: Admin only (for testing)
+ */
+orderRoutes.post(
+  "/test-websocket",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  testWebSocket
+);
 
 // ========================================
 // RESTAURANT ORDER ROUTES
