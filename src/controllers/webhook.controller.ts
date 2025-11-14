@@ -75,7 +75,7 @@ async function processWalletTransaction(
     // Send notification
     try {
       await sendMessage(
-        `Dear ${walletTransaction.wallet.restaurant.name}, Payment completed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`,
+        `Dear ${walletTransaction.wallet.restaurant.name}, TIN: ${walletTransaction.wallet.restaurant.tin}, Payment completed of Rwf${walletTransaction.amount} for wallet Top-up. Thank you!`,
         walletTransaction.wallet.restaurant.phone || ""
       );
     } catch (error) {
@@ -98,15 +98,6 @@ async function processWalletTransaction(
         },
       });
     });
-
-    try {
-      await sendMessage(
-        `Dear ${walletTransaction.wallet.restaurant.name}, Payment failed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet Top-up. Thank you!`,
-        walletTransaction.wallet.restaurant.phone || ""
-      );
-    } catch (error) {
-      console.error("Failed to send wallet failure notification:", error);
-    }
 
     console.log(`Wallet top-up failed: ${walletTransaction.id}`);
   }
@@ -259,11 +250,8 @@ async function processCheckoutPayment(
     // Send notifications
     try {
       await sendMessage(
-        `Dear ${
-          orderData.billingName || orderData.restaurant.name || ""
-        }, Payment completed: ${orderData.totalAmount} ${
-          orderData.currency
-        }. Thank you!`,
+        `Dear ${orderData.restaurant.name}, TIN: ${orderData.restaurant.tin}, Your order of Rwf${orderData.totalAmount} has been placed successfully. Delivery is next! To order something else, visit www.food.rw`,
+
         orderData.billingPhone || orderData.restaurant.phone || ""
       );
     } catch (smsError) {
@@ -470,6 +458,8 @@ async function processSubscriptionPayment(
       });
     });
 
+    console.log("Subscription subscription found", subscription);
+
     if (!subscription) {
       console.log("No matching subscription found for txRef:", txRef);
 
@@ -492,6 +482,11 @@ async function processSubscriptionPayment(
           },
         });
       });
+
+      console.log(
+        "Subscription alternativeSubscription found",
+        alternativeSubscription
+      );
 
       if (!alternativeSubscription) {
         console.log("No subscription found with any reference:", {
@@ -536,7 +531,8 @@ async function processSubscriptionPayment(
       }
 
       // Update subscription and create history in transaction
-      await retryDatabaseOperation(async () => {
+
+      const updatedSubscription = await retryDatabaseOperation(async () => {
         return await prisma.$transaction([
           prisma.restaurantSubscription.update({
             where: { id: subscription.id },
@@ -567,6 +563,11 @@ async function processSubscriptionPayment(
           }),
         ]);
       });
+
+      console.log(
+        "Subscription updatedSubscription found",
+        updatedSubscription
+      );
 
       // Send success notification
       try {
@@ -622,19 +623,6 @@ async function processSubscriptionPayment(
           }),
         ]);
       });
-
-      // Send failure notification
-      try {
-        await sendMessage(
-          `Dear ${subscription.restaurant.name}, Your subscription payment failed. Please try again or contact support.`,
-          subscription.restaurant.phone || ""
-        );
-      } catch (error) {
-        console.error(
-          "Failed to send subscription failure notification:",
-          error
-        );
-      }
 
       // Broadcast subscription payment failure via WebSocket
       try {
@@ -700,6 +688,8 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
         payload.data?.flw_ref ||
         payload.data?.flwRef;
       const status = payload.status || payload.data?.status;
+
+      console.log("txRef", txRef, "flwRef", flwRef, "status", status);
 
       if (!txRef) {
         console.error("No transaction reference found in webhook");
