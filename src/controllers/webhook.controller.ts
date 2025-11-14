@@ -505,13 +505,6 @@ async function processSubscriptionPayment(
         updatedAt: new Date(),
       };
 
-      if (paymentProvider === "FLUTTERWAVE") {
-        updateData.appFee = data?.appfee || data?.data?.fee;
-        updateData.merchantFee = data?.merchantfee || data?.data?.merchantfee;
-      } else if (paymentProvider === "PAYPACK") {
-        updateData.appFee = data?.fee || data?.data?.fee;
-      }
-
       // Update subscription and create history in transaction
       const updatedSubscription = await retryDatabaseOperation(async () => {
         return await prisma.$transaction([
