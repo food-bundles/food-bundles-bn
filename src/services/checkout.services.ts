@@ -39,7 +39,6 @@ import {
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { encryptSecretData } from "../utils/password";
 import { clearCartService } from "./cart.service";
-import { sendMessage } from "../utils/sms.utility";
 
 dotenv.config();
 
@@ -493,30 +492,6 @@ export const processPaymentService = async (
           console.log("Error sending notification email:", emailError);
           // Don't fail the payment process if email fails
         }
-
-        // Send notification
-        try {
-          await sendMessage(
-            `Dear ${
-              order.billingName || order.restaurant.name
-            }, your order has been placed successfully. Please check your email for more details.`,
-            order.billingPhone || order.restaurant.phone || ""
-          );
-        } catch (error) {
-          console.error("Failed to send wallet notification:", error);
-        }
-      } else {
-        // Send notification
-        try {
-          await sendMessage(
-            `Dear ${
-              order.billingName || order.restaurant.name
-            }, your order has been placed successfully. Please check your email for more details.`,
-            order.billingPhone || order.restaurant.phone || ""
-          );
-        } catch (error) {
-          console.error("Failed to send wallet notification:", error);
-        }
       }
 
       return {
@@ -599,30 +574,6 @@ export const processPaymentService = async (
         } catch (emailError) {
           console.log("Error sending notification email:", emailError);
           // Don't fail the payment process if email fails
-        }
-
-        // Send notification
-        try {
-          await sendMessage(
-            `Dear ${
-              order.billingName || order.restaurant.name
-            }, your order has failed. Please check your email for more details.`,
-            order.billingPhone || order.restaurant.phone || ""
-          );
-        } catch (error) {
-          console.error("Failed to send wallet notification:", error);
-        }
-      } else {
-        // Send notification
-        try {
-          await sendMessage(
-            `Dear ${
-              order.billingName || order.restaurant.name
-            }, your order has failed.`,
-            order.billingPhone || order.restaurant.phone || ""
-          );
-        } catch (error) {
-          console.error("Failed to send wallet notification:", error);
         }
       }
 

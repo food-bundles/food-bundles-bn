@@ -181,10 +181,10 @@ export class DeliveryService {
       });
 
       // Send confirmation to restaurant
-      await sendMessage(
-        `Order ${deliveryOTP.order.orderNumber} has been successfully delivered and marked as completed.`,
-        deliveryOTP.order.restaurant.phone || ""
-      );
+      // await sendMessage(
+      //   `Order ${deliveryOTP.order.orderNumber} has been successfully delivered and marked as completed.`,
+      //   deliveryOTP.order.restaurant.phone || ""
+      // );
 
       return {
         success: true,

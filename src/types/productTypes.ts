@@ -13,7 +13,7 @@ export interface ProductSubmissionInput {
 
 // Enhanced session data for USSD
 export interface ISessionData {
-  mode?: "register" | "submit" | "account" | "help";
+  mode?: "register" | "submit" | "account" | "help" | "voucher";
   language?: "KINY" | "ENG" | "FRE";
   languageSelected?: boolean;
   selectedNewLanguage?: "KINY" | "ENG" | "FRE";
@@ -83,6 +83,11 @@ export interface ISessionData {
     step: string;
     data?: any;
   }>;
+
+  // Voucher request flow
+  voucherAmount?: number;
+  voucherDays?: number;
+  voucherPurpose?: string;
 
   // Timestamp for session expiration
   lastActivity?: Date;
@@ -363,7 +368,49 @@ export type TranslationKey =
   | "showMainMenu"
   | "showAccountMenu"
   | "currentStep"
-  | "stepData";
+  | "stepData"
+  | "requestVoucher"
+  | "voucherMenu"
+  | "requestNewVoucher"
+  | "checkVoucherStatus"
+  | "voucherHistory"
+  | "enterVoucherAmount"
+  | "minAmount"
+  | "maxAmount"
+  | "invalidVoucherAmount"
+  | "selectVoucherDays"
+  | "days"
+  | "enterVoucherPurpose"
+  | "purposeExample"
+  | "purposeTooShort"
+  | "confirmVoucherRequest"
+  | "amount"
+  | "repaymentDays"
+  | "purpose"
+  | "enterPinToConfirmVoucher"
+  | "voucherRequestSubmitted"
+  | "requestId"
+  | "voucherProcessingTime"
+  | "voucherRequestFailed"
+  | "reason"
+  | "enterPinForVoucherStatus"
+  | "noVoucherRequests"
+  | "latestVoucherStatus"
+  | "requestDate"
+  | "approvedAmount"
+  | "repaymentDue"
+  | "voucherStatusFetchFailed"
+  | "enterPinForVoucherHistory"
+  | "noVoucherHistory"
+  | "recentRequests"
+  | "activeVouchers"
+  | "totalRemainingCredit"
+  | "voucherHistoryFetchFailed"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "paid"
+  | "settled";
 
 // Translation object with support for Kinyarwanda, English, and French
 
@@ -625,6 +672,48 @@ export const translations = {
     showAccountMenu: "Erekana menu ya konti",
     currentStep: "icyo ukora",
     stepData: "amakuru y'icyo ukora",
+    requestVoucher: "Gusaba voucher",
+    voucherMenu: "Menu ya voucher",
+    requestNewVoucher: "Gusaba voucher nshya",
+    checkVoucherStatus: "Kureba uko voucher imeze",
+    voucherHistory: "Amateka ya voucher",
+    enterVoucherAmount: "Andika amafaranga y'voucher:",
+    minAmount: "Amafaranga make",
+    maxAmount: "Amafaranga menshi",
+    invalidVoucherAmount: "Amafaranga y'voucher ntabwo ari yo. Ongera ugerageze.",
+    selectVoucherDays: "Hitamo iminsi y'voucher:",
+    days: "iminsi",
+    enterVoucherPurpose: "Andika intego y'voucher:",
+    purposeExample: "Urugero: Kugura imbuto z'amashyamba",
+    purposeTooShort: "Intego ni ngufi cyane. Andika byibuze amagambo 10.",
+    confirmVoucherRequest: "Emeza gusaba voucher:",
+    amount: "Amafaranga",
+    repaymentDays: "Iminsi yo kwishyura",
+    purpose: "Intego",
+    enterPinToConfirmVoucher: "Andika PIN kugirango wemeze voucher:",
+    voucherRequestSubmitted: "Byoherejwe!",
+    requestId: "Nomero y'icyifuzo",
+    voucherProcessingTime: "Voucher izasuzumwa mu minsi 2-3.",
+    voucherRequestFailed: "Byanze.",
+    reason: "Impamvu",
+    enterPinForVoucherStatus: "Andika PIN kureba uko voucher imeze:",
+    noVoucherRequests: "Nta voucher wasabye.",
+    latestVoucherStatus: "Uko voucher ya nyuma imeze:",
+    requestDate: "Italiki yasabwe",
+    approvedAmount: "Amafaranga yemerejwe",
+    repaymentDue: "Italiki yo kwishyura",
+    voucherStatusFetchFailed: "Kureba uko voucher imeze byanze.",
+    enterPinForVoucherHistory: "Andika PIN kureba amateka ya voucher:",
+    noVoucherHistory: "Nta mateka ya voucher ufite.",
+    recentRequests: "Ibisabwa vuba aha",
+    activeVouchers: "Voucher zikora",
+    totalRemainingCredit: "Amafaranga asigaye",
+    voucherHistoryFetchFailed: "Kureba amateka ya voucher byanze.",
+    pending: "bitegereje",
+    approved: "byemerejwe",
+    rejected: "byanze",
+    paid: "byishyuwe",
+    settled: "byarangiye",
   },
   ENG: {
     welcome: "Welcome to FoodBundles!",
@@ -882,6 +971,48 @@ export const translations = {
     showAccountMenu: "Show account menu",
     currentStep: "current step",
     stepData: "step data",
+    requestVoucher: "Request Voucher",
+    voucherMenu: "Voucher Menu",
+    requestNewVoucher: "Request New Voucher",
+    checkVoucherStatus: "Check Voucher Status",
+    voucherHistory: "Voucher History",
+    enterVoucherAmount: "Enter voucher amount:",
+    minAmount: "Minimum amount",
+    maxAmount: "Maximum amount",
+    invalidVoucherAmount: "Invalid voucher amount. Please try again.",
+    selectVoucherDays: "Select voucher repayment days:",
+    days: "days",
+    enterVoucherPurpose: "Enter voucher purpose:",
+    purposeExample: "Example: Purchase seeds for next season",
+    purposeTooShort: "Purpose is too short. Please enter at least 10 words.",
+    confirmVoucherRequest: "Confirm voucher request:",
+    amount: "Amount",
+    repaymentDays: "Repayment days",
+    purpose: "Purpose",
+    enterPinToConfirmVoucher: "Enter PIN to confirm voucher:",
+    voucherRequestSubmitted: "Sent!",
+    requestId: "Request ID",
+    voucherProcessingTime: "Your voucher will be processed within 2-3 days.",
+    voucherRequestFailed: "Failed.",
+    reason: "Reason",
+    enterPinForVoucherStatus: "Enter PIN to check voucher status:",
+    noVoucherRequests: "You have no voucher requests.",
+    latestVoucherStatus: "Latest voucher status:",
+    requestDate: "Request date",
+    approvedAmount: "Approved amount",
+    repaymentDue: "Repayment due",
+    voucherStatusFetchFailed: "Failed to fetch voucher status.",
+    enterPinForVoucherHistory: "Enter PIN to view voucher history:",
+    noVoucherHistory: "You have no voucher history.",
+    recentRequests: "Recent requests",
+    activeVouchers: "Active vouchers",
+    totalRemainingCredit: "Total remaining credit",
+    voucherHistoryFetchFailed: "Failed to fetch voucher history.",
+    pending: "pending",
+    approved: "approved",
+    rejected: "rejected",
+    paid: "paid",
+    settled: "settled",
   },
   FRE: {
     welcome: "Bienvenue à FoodBundles!",
@@ -1142,6 +1273,48 @@ export const translations = {
     showAccountMenu: "Afficher le menu du compte",
     currentStep: "étape actuelle",
     stepData: "données d'étape",
+    requestVoucher: "Demander un bon",
+    voucherMenu: "Menu des bons",
+    requestNewVoucher: "Demander un nouveau bon",
+    checkVoucherStatus: "Vérifier le statut du bon",
+    voucherHistory: "Historique des bons",
+    enterVoucherAmount: "Entrez le montant du bon:",
+    minAmount: "Montant minimum",
+    maxAmount: "Montant maximum",
+    invalidVoucherAmount: "Montant du bon invalide. Veuillez réessayer.",
+    selectVoucherDays: "Sélectionnez les jours de remboursement:",
+    days: "jours",
+    enterVoucherPurpose: "Entrez l'objectif du bon:",
+    purposeExample: "Exemple: Acheter des semences pour la prochaine saison",
+    purposeTooShort: "L'objectif est trop court. Veuillez entrer au moins 10 mots.",
+    confirmVoucherRequest: "Confirmer la demande de bon:",
+    amount: "Montant",
+    repaymentDays: "Jours de remboursement",
+    purpose: "Objectif",
+    enterPinToConfirmVoucher: "Entrez le PIN pour confirmer le bon:",
+    voucherRequestSubmitted: "Envoyé!",
+    requestId: "ID de demande",
+    voucherProcessingTime: "Votre bon sera traité dans 2-3 jours.",
+    voucherRequestFailed: "Échoué.",
+    reason: "Raison",
+    enterPinForVoucherStatus: "Entrez le PIN pour vérifier le statut du bon:",
+    noVoucherRequests: "Vous n'avez aucune demande de bon.",
+    latestVoucherStatus: "Dernier statut du bon:",
+    requestDate: "Date de demande",
+    approvedAmount: "Montant approuvé",
+    repaymentDue: "Remboursement dû",
+    voucherStatusFetchFailed: "Échec de la récupération du statut du bon.",
+    enterPinForVoucherHistory: "Entrez le PIN pour voir l'historique des bons:",
+    noVoucherHistory: "Vous n'avez aucun historique de bons.",
+    recentRequests: "Demandes récentes",
+    activeVouchers: "Bons actifs",
+    totalRemainingCredit: "Crédit total restant",
+    voucherHistoryFetchFailed: "Échec de la récupération de l'historique des bons.",
+    pending: "en attente",
+    approved: "approuvé",
+    rejected: "rejeté",
+    paid: "payé",
+    settled: "réglé",
   },
 };
 

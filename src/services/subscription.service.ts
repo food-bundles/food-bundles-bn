@@ -342,6 +342,8 @@ export const createRestaurantSubscriptionService = async (
     where: { id: planId },
   });
 
+  console.log("Subscription plan found", plan);
+
   if (!plan) {
     throw new Error("Subscription plan not found");
   }
@@ -357,6 +359,8 @@ export const createRestaurantSubscriptionService = async (
       status: "ACTIVE",
     },
   });
+
+  console.log("Subscription existingSubscription found", existingSubscription);
 
   if (existingSubscription) {
     throw new Error("You already has an active subscription");
@@ -383,6 +387,7 @@ export const createRestaurantSubscriptionService = async (
         paymentMethod: paymentMethod || "MOBILE_MONEY",
         paymentStatus: PaymentStatus.PENDING,
         txRef,
+        flwRef: txRef,
       },
       include: {
         restaurant: {
@@ -397,6 +402,8 @@ export const createRestaurantSubscriptionService = async (
       },
     });
 
+    console.log("Subscription newSubscription found", newSubscription);
+
     // Create subscription history
     await tx.subscriptionHistory.create({
       data: {
@@ -404,11 +411,14 @@ export const createRestaurantSubscriptionService = async (
         action: "CREATED",
         newStatus: "PENDING",
         newPlanId: planId,
+        performedBy: restaurantId,
       },
     });
 
     return newSubscription;
   });
+
+  console.log("Subscription subscription found", subscription);
 
   // Process payment if payment method is provided
   if (paymentMethod && paymentMethod !== "CASH") {
@@ -421,6 +431,8 @@ export const createRestaurantSubscriptionService = async (
         bankDetails,
       }
     );
+
+    console.log("Subscription paymentResult found", paymentResult);
 
     return {
       subscription,
