@@ -574,9 +574,10 @@ async function handleBackNavigation(
 function showMainMenu(lang: "KINY" | "ENG" | "FRE" = "KINY"): string {
   return `CON ${getTranslation(lang, "welcome")}
 1. ${getTranslation(lang, "submitProduct")}
-2. ${getTranslation(lang, "help")}
-3. ${getTranslation(lang, "myAccount")}
-4. ${getTranslation(lang, "exit")}`;
+2. ${getTranslation(lang, "requestVoucher")}
+3. ${getTranslation(lang, "help")}
+4. ${getTranslation(lang, "myAccount")}
+5. ${getTranslation(lang, "exit")}`;
 }
 
 function showAccountMenu(lang: "KINY" | "ENG" | "FRE" = "KINY"): string {
@@ -1307,9 +1308,10 @@ export async function handleUssdLogic({
     if (text === "" && userExists && session.languageSelected) {
       return `CON ${getTranslation(lang, "welcome")}
 1. ${getTranslation(lang, "submitProduct")}
-2. ${getTranslation(lang, "help")}
-3. ${getTranslation(lang, "myAccount")}
-4. ${getTranslation(lang, "exit")}`;
+2. ${getTranslation(lang, "requestVoucher")}
+3. ${getTranslation(lang, "help")}
+4. ${getTranslation(lang, "myAccount")}
+5. ${getTranslation(lang, "exit")}`;
     }
 
     // Handle language selection for new users
@@ -1780,8 +1782,323 @@ ${getTranslation(lang, "enterPinConfirm")}
 
           return `END ${getTranslation(lang, "invalidCategory")}`;
         }
-        // 2. Help
+        // 2. Request Voucher
         case "2": {
+          session.mode = "voucher";
+
+          if (parts.length === 1) {
+            addToHistory(session, "mainMenu");
+            return `CON ${getTranslation(lang, "voucherMenu")}
+1. ${getTranslation(lang, "requestNewVoucher")}
+2. ${getTranslation(lang, "checkVoucherStatus")}
+3. ${getTranslation(lang, "voucherHistory")}
+0. ${getTranslation(lang, "back")}`;
+          }
+
+          // Request New Voucher
+          if (parts[1] === "1") {
+            if (parts.length === 2) {
+              return `CON ${getTranslation(lang, "enterVoucherAmount")}
+${getTranslation(lang, "minAmount")}: 10,000 RWF
+${getTranslation(lang, "maxAmount")}: 500,000 RWF
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            if (parts.length === 3) {
+              const amountInput = parts[2];
+
+              if (amountInput === "0") {
+                return `CON ${getTranslation(lang, "voucherMenu")}
+1. ${getTranslation(lang, "requestNewVoucher")}
+2. ${getTranslation(lang, "checkVoucherStatus")}
+3. ${getTranslation(lang, "voucherHistory")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              const amount = parseFloat(amountInput);
+              if (isNaN(amount) || amount < 10000 || amount > 500000) {
+                return `CON ${getTranslation(lang, "invalidVoucherAmount")}
+
+${getTranslation(lang, "enterVoucherAmount")}
+${getTranslation(lang, "minAmount")}: 10,000 RWF
+${getTranslation(lang, "maxAmount")}: 500,000 RWF
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              session.voucherAmount = amount;
+              return `CON ${getTranslation(lang, "selectVoucherDays")}
+1. 7 ${getTranslation(lang, "days")}
+2. 14 ${getTranslation(lang, "days")}
+3. 30 ${getTranslation(lang, "days")}
+4. 60 ${getTranslation(lang, "days")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            if (parts.length === 4) {
+              const daysChoice = parts[3];
+
+              if (daysChoice === "0") {
+                return `CON ${getTranslation(lang, "enterVoucherAmount")}
+${getTranslation(lang, "minAmount")}: 10,000 RWF
+${getTranslation(lang, "maxAmount")}: 500,000 RWF
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              const daysMap: Record<string, number> = {
+                "1": 7,
+                "2": 14,
+                "3": 30,
+                "4": 60,
+              };
+
+              const selectedDays = daysMap[daysChoice];
+              if (!selectedDays) {
+                return `CON ${getTranslation(lang, "invalidSelection")}
+
+${getTranslation(lang, "selectVoucherDays")}
+1. 7 ${getTranslation(lang, "days")}
+2. 14 ${getTranslation(lang, "days")}
+3. 30 ${getTranslation(lang, "days")}
+4. 60 ${getTranslation(lang, "days")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              session.voucherDays = selectedDays;
+              return `CON ${getTranslation(lang, "enterVoucherPurpose")}
+${getTranslation(lang, "purposeExample")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            if (parts.length === 5) {
+              const purpose = parts[4];
+
+              if (purpose === "0") {
+                return `CON ${getTranslation(lang, "selectVoucherDays")}
+1. 7 ${getTranslation(lang, "days")}
+2. 14 ${getTranslation(lang, "days")}
+3. 30 ${getTranslation(lang, "days")}
+4. 60 ${getTranslation(lang, "days")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (purpose.length < 10) {
+                return `CON ${getTranslation(lang, "purposeTooShort")}
+
+${getTranslation(lang, "enterVoucherPurpose")}
+${getTranslation(lang, "purposeExample")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              session.voucherPurpose = purpose;
+              return `CON ${getTranslation(lang, "confirmVoucherRequest")}
+${getTranslation(lang, "amount")}: ${session.voucherAmount} RWF
+${getTranslation(lang, "repaymentDays")}: ${session.voucherDays} ${getTranslation(lang, "days")}
+${getTranslation(lang, "purpose")}: ${purpose.substring(0, 30)}...
+
+1. ${getTranslation(lang, "confirm")}
+2. ${getTranslation(lang, "cancel")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            if (parts.length === 6) {
+              const confirmation = parts[5];
+
+              if (confirmation === "0") {
+                return `CON ${getTranslation(lang, "enterVoucherPurpose")}
+${getTranslation(lang, "purposeExample")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (confirmation === "2") {
+                delete session.voucherAmount;
+                delete session.voucherDays;
+                delete session.voucherPurpose;
+                return `CON ${getTranslation(lang, "voucherMenu")}
+1. ${getTranslation(lang, "requestNewVoucher")}
+2. ${getTranslation(lang, "checkVoucherStatus")}
+3. ${getTranslation(lang, "voucherHistory")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              if (confirmation === "1") {
+                return `CON ${getTranslation(lang, "enterPinToConfirmVoucher")}
+0. ${getTranslation(lang, "back")}`;
+              }
+            }
+
+            if (parts.length === 7) {
+              const pinInput = parts[6];
+
+              if (pinInput === "0") {
+                return `CON ${getTranslation(lang, "confirmVoucherRequest")}
+${getTranslation(lang, "amount")}: ${session.voucherAmount} RWF
+${getTranslation(lang, "repaymentDays")}: ${session.voucherDays} ${getTranslation(lang, "days")}
+${getTranslation(lang, "purpose")}: ${session.voucherPurpose?.substring(0, 30)}...
+
+1. ${getTranslation(lang, "confirm")}
+2. ${getTranslation(lang, "cancel")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              const pinResult = await verifyUserPin(phoneNumber, pinInput);
+              if (!pinResult.isValid) {
+                return `CON ${getTranslation(lang, pinResult.message || "incorrectPin")}
+
+${getTranslation(lang, "enterPinToConfirmVoucher")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              // Submit voucher request
+              try {
+                // Import farmer voucher service functions
+                const { submitFarmerVoucherRequest } = await import("./farmerVoucher.service");
+                
+                const voucherRequest = await submitFarmerVoucherRequest({
+                  farmerId: farmer.id,
+                  requestedAmount: session.voucherAmount!,
+                  purpose: session.voucherPurpose!,
+                  voucherDays: session.voucherDays!,
+                });
+
+                // Clear session data
+                delete session.voucherAmount;
+                delete session.voucherDays;
+                delete session.voucherPurpose;
+                delete ussdSessions[sessionId];
+
+                return `END ${getTranslation(lang, "voucherRequestSubmitted")}
+ID: ${voucherRequest.id.substring(0, 8)}`;
+              } catch (error: any) {
+                console.error("Voucher request error:", error);
+                delete ussdSessions[sessionId];
+                return `END ${getTranslation(lang, "voucherRequestFailed")}`;
+              }
+            }
+          }
+
+          // Check Voucher Status
+          if (parts[1] === "2") {
+            if (parts.length === 2) {
+              return `CON ${getTranslation(lang, "enterPinForVoucherStatus")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            if (parts.length === 3) {
+              const pinInput = parts[2];
+
+              if (pinInput === "0") {
+                return `CON ${getTranslation(lang, "voucherMenu")}
+1. ${getTranslation(lang, "requestNewVoucher")}
+2. ${getTranslation(lang, "checkVoucherStatus")}
+3. ${getTranslation(lang, "voucherHistory")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              const pinResult = await verifyUserPin(phoneNumber, pinInput);
+              if (!pinResult.isValid) {
+                return `END ${getTranslation(lang, pinResult.message || "incorrectPin")}`;
+              }
+
+              try {
+                // Get farmer's voucher applications
+                const { getFarmerVoucherApplications } = await import("./farmerVoucher.service");
+                const applications = await getFarmerVoucherApplications(farmer.id);
+
+                if (applications.length === 0) {
+                  return `END ${getTranslation(lang, "noVoucherRequests")}`;
+                }
+
+                // Show latest application status
+                const latest = applications[0];
+                let response = `END ${getTranslation(lang, "latestVoucherStatus")}\n\n`;
+                response += `${getTranslation(lang, "requestId")}: ${latest.id.substring(0, 8)}\n`;
+                response += `${getTranslation(lang, "amount")}: ${latest.requestedAmount} RWF\n`;
+                response += `${getTranslation(lang, "status")}: ${getTranslation(lang, latest.status.toLowerCase() as TranslationKey)}\n`;
+                response += `${getTranslation(lang, "requestDate")}: ${new Date(latest.createdAt).toLocaleDateString()}\n`;
+                
+                if (latest.approvedAmount) {
+                  response += `${getTranslation(lang, "approvedAmount")}: ${latest.approvedAmount} RWF\n`;
+                }
+                
+                if (latest.repaymentDueDate) {
+                  response += `${getTranslation(lang, "repaymentDue")}: ${new Date(latest.repaymentDueDate).toLocaleDateString()}\n`;
+                }
+
+                return response;
+              } catch (error) {
+                console.error("Error fetching voucher status:", error);
+                return `END ${getTranslation(lang, "voucherStatusFetchFailed")}`;
+              }
+            }
+          }
+
+          // Voucher History
+          if (parts[1] === "3") {
+            if (parts.length === 2) {
+              return `CON ${getTranslation(lang, "enterPinForVoucherHistory")}
+0. ${getTranslation(lang, "back")}`;
+            }
+
+            if (parts.length === 3) {
+              const pinInput = parts[2];
+
+              if (pinInput === "0") {
+                return `CON ${getTranslation(lang, "voucherMenu")}
+1. ${getTranslation(lang, "requestNewVoucher")}
+2. ${getTranslation(lang, "checkVoucherStatus")}
+3. ${getTranslation(lang, "voucherHistory")}
+0. ${getTranslation(lang, "back")}`;
+              }
+
+              const pinResult = await verifyUserPin(phoneNumber, pinInput);
+              if (!pinResult.isValid) {
+                return `END ${getTranslation(lang, pinResult.message || "incorrectPin")}`;
+              }
+
+              try {
+                const { getFarmerVoucherApplications, getFarmerVouchers } = await import("./farmerVoucher.service");
+                const [applications, vouchers] = await Promise.all([
+                  getFarmerVoucherApplications(farmer.id),
+                  getFarmerVouchers(farmer.id)
+                ]);
+
+                let response = `END ${getTranslation(lang, "voucherHistory")}\n\n`;
+                
+                if (applications.length === 0) {
+                  response += `${getTranslation(lang, "noVoucherHistory")}`;
+                  return response;
+                }
+
+                response += `${getTranslation(lang, "recentRequests")}:\n`;
+                applications.slice(0, 5).forEach((app, index) => {
+                  response += `${index + 1}. ${app.requestedAmount} RWF - ${getTranslation(lang, app.status.toLowerCase() as TranslationKey)}\n`;
+                  response += `   ${new Date(app.createdAt).toLocaleDateString()}\n`;
+                });
+
+                if (vouchers.length > 0) {
+                  response += `\n${getTranslation(lang, "activeVouchers")}: ${vouchers.filter(v => v.status === 'ACTIVE').length}\n`;
+                  const totalCredit = vouchers.reduce((sum, v) => sum + v.remainingCredit, 0);
+                  response += `${getTranslation(lang, "totalRemainingCredit")}: ${totalCredit} RWF`;
+                }
+
+                return response;
+              } catch (error) {
+                console.error("Error fetching voucher history:", error);
+                return `END ${getTranslation(lang, "voucherHistoryFetchFailed")}`;
+              }
+            }
+          }
+
+          // Back navigation
+          if (parts[1] === "0") {
+            return handleBackNavigation(session, lang);
+          }
+
+          break;
+        }
+
+        // 3. Help
+        case "3": {
           session.mode = "help";
 
           if (parts.length === 1) {
@@ -1868,8 +2185,8 @@ ${getTranslation(lang, "email")}: info@food.rw`;
           break;
         }
 
-        // 3. My Account
-        case "3": {
+        // 4. My Account
+        case "4": {
           session.mode = "account";
 
           if (parts.length === 1) {
@@ -2855,7 +3172,7 @@ ${getTranslation(lang, "confirmNewPIN")}
           break;
         }
 
-        case "4":
+        case "5":
           delete ussdSessions[sessionId];
           return `END ${getTranslation(lang, "exitMessage")}`;
       }
@@ -2866,9 +3183,10 @@ ${getTranslation(lang, "confirmNewPIN")}
       return `CON ${getTranslation(lang, "invalidInput")}
 ${getTranslation(lang, "welcome")}
 1. ${getTranslation(lang, "submitProduct")}
-2. ${getTranslation(lang, "help")}
-3. ${getTranslation(lang, "myAccount")}
-4. ${getTranslation(lang, "exit")}`;
+2. ${getTranslation(lang, "requestVoucher")}
+3. ${getTranslation(lang, "help")}
+4. ${getTranslation(lang, "myAccount")}
+5. ${getTranslation(lang, "exit")}`;
     } else {
       return `END ${getTranslation(lang, "pleaseRegister")}`;
     }
