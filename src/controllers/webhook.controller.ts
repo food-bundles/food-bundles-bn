@@ -451,7 +451,6 @@ async function processSubscriptionPayment(
             { txRef: txRef },
             { flwRef: txRef },
             { transactionId: txRef },
-            // ✅ FIX: Add flwRef lookup for PayPack
             { flwRef: flwRef },
             { transactionId: flwRef },
           ],
@@ -490,7 +489,7 @@ async function processSubscriptionPayment(
       subscription.paymentStatus
     );
 
-    // ✅ FIX: Handle both "successful" and "success" statuses
+    // Handle both "successful" and "success" statuses
     const isSuccessful = status === "successful" || status === "success";
     const isFailed = status === "failed" || status === "failure";
 
@@ -500,7 +499,6 @@ async function processSubscriptionPayment(
       const updateData: any = {
         paymentStatus: PaymentStatus.COMPLETED,
         status: SubscriptionStatus.ACTIVE,
-        flwStatus: "successful",
         transactionId: data?.id?.toString() || flwRef,
         flwRef: flwRef,
         amountPaid: subscription.plan.price,
@@ -540,7 +538,6 @@ async function processSubscriptionPayment(
               txRef: txRef,
               flwRef: flwRef,
               transactionId: data?.id?.toString() || flwRef,
-              flwStatus: "successful",
               paidAt: new Date(),
             },
           }),
@@ -552,7 +549,6 @@ async function processSubscriptionPayment(
         updatedSubscription[0].id
       );
 
-      // Send success notification
       try {
         await sendMessage(
           `Dear ${subscription.restaurant.name}, Your subscription to ${subscription.plan.name} has been activated successfully. Thank you!`,
@@ -590,7 +586,7 @@ async function processSubscriptionPayment(
             where: { id: subscription.id },
             data: {
               paymentStatus: PaymentStatus.FAILED,
-              status: SubscriptionStatus.CANCELLED, // ✅ FIX: Set to CANCELLED instead of PENDING
+              status: SubscriptionStatus.CANCELLED,
               transactionId: data?.id?.toString() || flwRef,
               flwRef: flwRef,
               updatedAt: new Date(),
