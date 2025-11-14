@@ -743,17 +743,9 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
         return res.status(401).json({ error: "Invalid webhook signature" });
       }
 
-      const txRef =
-        payload.tx_ref ||
-        payload.txRef ||
-        payload.data?.tx_ref ||
-        payload.data?.txRef;
-      const flwRef =
-        payload.flw_ref ||
-        payload.flwRef ||
-        payload.data?.flw_ref ||
-        payload.data?.flwRef;
-      const paymentStatus = payload.status || payload.data?.status;
+      const paymentStatus = payload?.data?.status;
+      const txRef = payload.data?.ref;
+      const flwRef = payload.data?.ref;
 
       console.log(
         `PayPack webhook - txRef: ${txRef}, status: ${paymentStatus}`
