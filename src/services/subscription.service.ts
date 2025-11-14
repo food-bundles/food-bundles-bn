@@ -738,6 +738,7 @@ async function processSubscriptionMobileMoneyPayment({
 
       const payload = {
         tx_ref: txRef,
+        order_id: txRef,
         amount: amount.toString(),
         currency: currency,
         email: email,
