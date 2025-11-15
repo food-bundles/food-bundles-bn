@@ -41,6 +41,14 @@ components:
             type: string
             format: binary
           description: A gallery of images related to the product
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          default: ACTIVE
+        inactiveReason:
+          type: string
+          nullable: true
+          description: Reason why product is inactive
         expiryDate:
           type: string
           format: date

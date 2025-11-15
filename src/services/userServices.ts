@@ -10,6 +10,8 @@ import {
   IUpdateRestaurantData,
 } from "../types/userTypes";
 import { comparePassword, hashPassword } from "../utils/password";
+import { getUserByEmail } from "./userGets";
+import { sendEmail, sendPasswordResetTemplate, generateResetToken, verifyResetToken } from "../utils/passwordReset";
 import { PaginationService } from "./paginationService";
 import { LocationValidationService } from "./location.service";
 import { validateTIN } from "../utils/validateTin";
@@ -904,4 +906,89 @@ export const loginService = async (loginData: ILoginData) => {
     userType: foundUserType,
     message: "Login successful",
   };
+};
+
+// PASSWORD RESET SERVICES
+export const requestPasswordResetService = async (email: string) => {
+  const user = await getUserByEmail(email);
+  
+  if (!user) {
+    throw new Error("No account found with this email address");
+  }
+
+  // Generate reset token
+  const resetToken = generateResetToken(user.id, user.userType);
+  
+  // Create reset link (you'll need to replace with your actual frontend URL)
+  const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+  
+  // Get user name based on user type
+  let userName = '';
+  if (user.userType === 'FARMER') {
+    userName = user.phone || 'Farmer';
+  } else if (user.userType === 'RESTAURANT') {
+    userName = (user as any).name || 'Restaurant Owner';
+  } else if (user.userType === 'ADMIN') {
+    userName = (user as any).username || 'Admin';
+  }
+
+  // Send reset email
+  const emailHtml = sendPasswordResetTemplate({
+    email: user.email!,
+    name: userName,
+    resetLink,
+    userType: user.userType,
+  });
+
+  await sendEmail({
+    to: user.email!,
+    subject: 'Reset Your FoodBundles Password',
+    html: emailHtml,
+  });
+
+  return {
+    message: 'Password reset link has been sent to your email address',
+  };
+};
+
+export const resetPasswordService = async (token: string, newPassword: string) => {
+  // Verify token
+  const decoded = verifyResetToken(token);
+  
+  if (!decoded) {
+    throw new Error('Invalid or expired reset token');
+  }
+
+  const { userId, userType } = decoded;
+  
+  // Hash new password
+  const hashedPassword = await hashPassword(newPassword);
+  
+  // Update password based on user type
+  try {
+    if (userType === 'FARMER') {
+      await prisma.farmer.update({
+        where: { id: userId },
+        data: { password: hashedPassword },
+      });
+    } else if (userType === 'RESTAURANT') {
+      await prisma.restaurant.update({
+        where: { id: userId },
+        data: { password: hashedPassword },
+      });
+    } else if (userType === 'ADMIN') {
+      await prisma.admin.update({
+        where: { id: userId },
+        data: { password: hashedPassword },
+      });
+    } else {
+      throw new Error('Invalid user type');
+    }
+
+    return {
+      message: 'Password has been reset successfully',
+    };
+  } catch (error: any) {
+    throw new Error(`Failed to reset password: ${error.message}`);
+  }
 };

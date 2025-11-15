@@ -390,3 +390,50 @@ export const approveSubmission = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const updateProductStatus = async (req: Request, res: Response) => {
+  try {
+    const { productId } = req.params;
+    const { status, reason } = req.body;
+    const adminId = (req as any).user.id;
+
+    // Verify admin
+    const admin = await prisma.admin.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin || admin.role !== "ADMIN") {
+      return res.status(403).json({
+        message: "Only ADMIN users can update product status",
+      });
+    }
+
+    // Validate status
+    if (!['ACTIVE', 'INACTIVE'].includes(status)) {
+      return res.status(400).json({
+        message: "Status must be either ACTIVE or INACTIVE",
+      });
+    }
+
+    const { updateProductStatusService } = await import("../services/productService");
+    const result = await updateProductStatusService(productId, status, reason);
+
+    // Broadcast product status update via WebSocket
+    wsManager.broadcastProductUpdate({
+      productId: result.id,
+      productName: result.productName,
+      action: "UPDATED",
+      timestamp: new Date().toISOString(),
+      data: result,
+    });
+
+    res.status(200).json({
+      message: `Product ${status.toLowerCase()} successfully`,
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to update product status",
+    });
+  }
+};

@@ -702,6 +702,115 @@ paths:
                     success: false
                     message: "Password not set for this user"
 
+  /forgot-password:
+    post:
+      tags:
+        - Authentication API Management
+      summary: Request password reset
+      description: Send password reset link to user's email. Works for all user types (Farmer, Restaurant, Admin).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                  example: "user@food.rw"
+      responses:
+        200:
+          description: Password reset email sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Password reset link has been sent to your email address"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_email:
+                  value:
+                    success: false
+                    message: "Email is required"
+                user_not_found:
+                  value:
+                    success: false
+                    message: "No account found with this email address"
+
+  /reset-password:
+    post:
+      tags:
+        - Authentication API Management
+      summary: Reset password with token
+      description: Reset user password using the token received via email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - newPassword
+              properties:
+                token:
+                  type: string
+                  description: JWT token received in reset email
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                newPassword:
+                  type: string
+                  minLength: 6
+                  description: New password (minimum 6 characters)
+                  example: "NewPassword123"
+      responses:
+        200:
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Password has been reset successfully"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_fields:
+                  value:
+                    success: false
+                    message: "Token and new password are required"
+                password_too_short:
+                  value:
+                    success: false
+                    message: "Password must be at least 6 characters long"
+                invalid_token:
+                  value:
+                    success: false
+                    message: "Invalid or expired reset token"
+
   # Farmer Endpoints
   /farmers:
     post:

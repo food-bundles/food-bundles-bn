@@ -70,6 +70,13 @@ export interface WalletNotificationData {
   description?: string;
 }
 
+export interface PasswordResetData {
+  email: string;
+  name: string;
+  resetLink: string;
+  userType: string;
+}
+
 // Clean and format phone number for Rwanda
 export const cleanPhoneNumber = (phone: string): string => {
   // Remove all non-digit characters
