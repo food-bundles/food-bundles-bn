@@ -306,6 +306,7 @@ model Product {
   categoryId        String
   productName       String              @unique
   status            ProductStatus       @default(ACTIVE)
+  inactiveReason    String?
   province          String?
   district          String?
   sector            String?

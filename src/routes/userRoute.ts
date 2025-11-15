@@ -6,4 +6,8 @@ const userRoutes = Router();
 userRoutes.post("/login", UserController.login);
 userRoutes.get("/me", UserController.me);
 
+// Password reset routes
+userRoutes.post("/forgot-password", UserController.requestPasswordReset);
+userRoutes.post("/reset-password", UserController.resetPassword);
+
 export default userRoutes;

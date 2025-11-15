@@ -490,6 +490,7 @@ export const getAllProductsService = async ({
         quantity: true,
         images: true,
         unit: true,
+        status: true,
       },
       orderBy: {
         createdAt: "desc",
@@ -565,6 +566,7 @@ export const getProductsByRoleService = async ({
         images: true,
         unit: true,
         status: true,
+        inactiveReason: true,
         expiryDate: true,
         createdAt: true,
         updatedAt: true,
@@ -577,6 +579,8 @@ export const getProductsByRoleService = async ({
           },
         },
       };
+      // Remove status filter for ADMIN to see both ACTIVE and INACTIVE products
+      delete baseWhere.status;
       break;
 
     case "AGGREGATOR":
@@ -781,4 +785,58 @@ export const approveSubmissionService = async (submissionId: string) => {
   });
 
   return updatedSubmission;
+};
+
+// Update product status (active/inactive)
+export const updateProductStatusService = async (
+  productId: string,
+  status: 'ACTIVE' | 'INACTIVE',
+  reason?: string
+) => {
+  // Check if product exists
+  const existingProduct = await prisma.product.findUnique({
+    where: { id: productId },
+  });
+
+  if (!existingProduct) {
+    throw new Error("Product not found");
+  }
+
+  // Prepare update data
+  const updateData: any = { status };
+  
+  // Handle reason based on status
+  if (status === 'INACTIVE') {
+    if (!reason) {
+      throw new Error("Reason is required when setting product to inactive");
+    }
+    updateData.inactiveReason = reason;
+  } else if (status === 'ACTIVE') {
+    // Remove reason when setting to active
+    updateData.inactiveReason = null;
+  }
+
+  // Update product status
+  const updatedProduct = await prisma.product.update({
+    where: { id: productId },
+    data: updateData,
+    include: {
+      admin: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+        },
+      },
+      category: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+        },
+      },
+    },
+  });
+
+  return updatedProduct;
 };
