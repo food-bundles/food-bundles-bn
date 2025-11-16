@@ -1,0 +1,70 @@
+/products/{productId}/status:
+  patch:
+    tags:
+      - Products API Management
+    summary: Update product status
+    description: Activate or deactivate a product (Admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Product ID
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - status
+            properties:
+              status:
+                type: string
+                enum: [ACTIVE, INACTIVE]
+                description: Product status
+                example: "INACTIVE"
+              reason:
+                type: string
+                description: Reason for setting product to inactive (required when status is INACTIVE)
+                example: "Product expired"
+    responses:
+      200:
+        description: Product status updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Product inactive successfully"
+                data:
+                  $ref: "#/components/schemas/Product"
+      401:
+        description: Unauthorized - Invalid or missing token
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+      403:
+        description: Forbidden - Admin access required
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+      404:
+        description: Product not found
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+      500:
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"

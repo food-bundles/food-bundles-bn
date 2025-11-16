@@ -17,6 +17,8 @@ import {
   deleteAdminService,
   loginService,
   acceptTermsService,
+  requestPasswordResetService,
+  resetPasswordService,
 } from "../services/userServices";
 import { PaginationService } from "../services/paginationService";
 import { JwtPayload } from "../types/userTypes";
@@ -510,6 +512,64 @@ export class UserController {
       });
     } catch (error: any) {
       return res.status(500).json({ message: error.message });
+    }
+  };
+
+  // PASSWORD RESET CONTROLLERS
+  static requestPasswordReset = async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is required",
+        });
+      }
+
+      const result = await requestPasswordResetService(email);
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static resetPassword = async (req: Request, res: Response) => {
+    try {
+      const { token, newPassword } = req.body;
+
+      if (!token || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Token and new password are required",
+        });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 6 characters long",
+        });
+      }
+
+      const result = await resetPasswordService(token, newPassword);
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
     }
   };
 }

@@ -6,6 +6,7 @@ import {
   getProductById,
   createProduct,
   getProductsByRole,
+  updateProductStatus,
 } from "../controllers/productController";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 import productImagesUpload from "../middleware/multer";
@@ -48,6 +49,14 @@ productRoutes.delete(
   isAuthenticated,
   checkPermission("ADMIN"),
   deleteProduct
+);
+
+// Update product status (Admin only)
+productRoutes.patch(
+  "/:productId/status",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  updateProductStatus
 );
 
 export default productRoutes;
