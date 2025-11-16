@@ -400,6 +400,8 @@ model Order {
   requestedDelivery DateTime?
   estimatedDelivery DateTime?
   actualDelivery    DateTime?
+  deliveryFee       Float     @default(0)
+  packagingFee      Float     @default(0)
 
   // Payment information
   paymentMethod    PaymentMethod?
@@ -610,6 +612,7 @@ model SubscriptionPlan {
   stablePricing      Boolean  @default(false)
   receiveEBM         Boolean  @default(false)
   advertisingAccess  Boolean  @default(false)
+  otherServices      Boolean  @default(false)
   duration           Int // Duration in days
   features           String[] // Array of features included in the plan
   isActive           Boolean  @default(true)
@@ -712,7 +715,7 @@ model Voucher {
 
   // Credit limits
   creditLimit          Float
-  minTransactionAmount Float  @default(0)
+  minTransactionAmount Float           @default(0)
   maxTransactionAmount Float?
   currency             VoucherCurrency @default(RWF)
 
@@ -725,6 +728,7 @@ model Voucher {
   status     VoucherStatus @default(ACTIVE)
   expiryDate DateTime?
   issuedDate DateTime      @default(now())
+  approvedBy String?
 
   // Relations
   restaurantId String
@@ -769,7 +773,7 @@ model LoanApplication {
 
   // Additional info
   voucherDays Int?
-  notes String?
+  notes       String?
 
   // Timestamps
   createdAt  DateTime  @default(now())

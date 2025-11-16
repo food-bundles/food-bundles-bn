@@ -64,6 +64,7 @@ interface CreateSubscriptionPlanData {
   stablePricing?: boolean;
   receiveEBM?: boolean;
   advertisingAccess?: boolean;
+  otherServices?: boolean;
 }
 
 interface UpdateSubscriptionPlanData {
@@ -79,6 +80,7 @@ interface UpdateSubscriptionPlanData {
   stablePricing?: boolean;
   receiveEBM?: boolean;
   advertisingAccess?: boolean;
+  otherServices?: boolean;
 }
 
 interface CreateRestaurantSubscriptionData {
@@ -123,6 +125,7 @@ export const createSubscriptionPlanService = async (
     stablePricing,
     receiveEBM,
     advertisingAccess,
+    otherServices,
   } = data;
 
   const existingPlan = await prisma.subscriptionPlan.findUnique({
@@ -159,6 +162,7 @@ export const createSubscriptionPlanService = async (
       stablePricing,
       receiveEBM,
       advertisingAccess,
+      otherServices,
     },
   });
 

@@ -37,6 +37,7 @@ import { VoucherStatus, LoanStatus } from "@prisma/client";
  */
 export const createVoucher = async (req: Request, res: Response) => {
   try {
+    const adminId = (req as any).user.id;
     const {
       restaurantId,
       voucherType,
@@ -80,6 +81,7 @@ export const createVoucher = async (req: Request, res: Response) => {
         : undefined,
       expiryDate: expiryDate ? new Date(expiryDate) : undefined,
       loanId,
+      approvedBy: adminId,
     });
 
     res.status(201).json({

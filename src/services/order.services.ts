@@ -1,5 +1,10 @@
 import prisma from "../prisma";
-import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
+import {
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+  SubscriptionStatus,
+} from "@prisma/client";
 import { ProductData } from "./productService";
 import { processPaymentService } from "./checkout.services";
 import { decryptSecretData, encryptSecretData } from "../utils/password";
@@ -238,6 +243,49 @@ export const createOrderFromCartService = async (
 
   setTimeout(async () => {}, 1000); // Small delay to ensure order is fully created
 
+  // Add delivery fee of 5,000 RWF in case order's total amount is less than 100,000 RWF and add packaging fee of 15,000 Rwf if the restaurantdoes not have an active subscription plan or its subscription does not include otherServices
+  let deliveryFee = 0;
+  let packagingFee = 0;
+
+  if (order.totalAmount < 100000) {
+    deliveryFee = 5000;
+  }
+
+  // Check restaurant subscription plan
+  const activeSubscription = await prisma.restaurantSubscription.findFirst({
+    where: {
+      restaurantId,
+      status: SubscriptionStatus.ACTIVE,
+      endDate: {
+        gte: new Date(),
+      },
+    },
+    include: {
+      plan: {
+        select: {
+          id: true,
+          otherServices: true,
+        },
+      },
+    },
+  });
+
+  if (!activeSubscription || !activeSubscription.plan.otherServices) {
+    packagingFee = 15000;
+  }
+
+  // Add delivery fee and packaging fee to total amount
+  const totalAmount = order.totalAmount + deliveryFee + packagingFee;
+
+  // Update order with delivery fee and packaging fee
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      totalAmount: totalAmount,
+      deliveryFee,
+      packagingFee,
+    },
+  });
   // Auto-generate delivery OTP
   try {
     await DeliveryService.createDeliveryOTP(order.id);

@@ -45,6 +45,10 @@ components:
           type: boolean
           default: false
           description: Whether advertising access is enabled
+        otherServices:
+          type: boolean
+          default: false
+          description: Whether other services is enabled
         duration:
           type: integer
           description: Duration in days
@@ -288,6 +292,11 @@ components:
           default: false
           description: Enable advertising access
           example: false
+        otherServices:
+          type: boolean
+          default: false
+          description: Enable other services access
+          example: false
         features:
           type: array
           items:
@@ -337,6 +346,9 @@ components:
         advertisingAccess:
           type: boolean
           description: Enable/disable advertising access
+        otherServices:
+          type: boolean
+          description: Enable/disable other services access
         features:
           type: array
           items:
@@ -553,6 +565,7 @@ paths:
                   stablePricing: false
                   receiveEBM: false
                   advertisingAccess: false
+                  otherServices: false
                   features:
                     - "Basic support"
                     - "Standard delivery"
@@ -569,6 +582,7 @@ paths:
                   stablePricing: true
                   receiveEBM: true
                   advertisingAccess: true
+                  otherServices: true
                   features:
                     - "Receive EBM Purchase Orders"
                     - "Stable Pricing"
@@ -698,6 +712,7 @@ paths:
                   voucherPaymentDays: 45
                   freeDelivery: true
                   receiveEBM: true
+                  otherServices: true
               updatePrice:
                 summary: Update Price and Duration
                 value:
@@ -708,6 +723,7 @@ paths:
                 value:
                   advertisingAccess: false
                   voucherAccess: false
+                  otherServices: false
       responses:
         200:
           description: Plan updated successfully
