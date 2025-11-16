@@ -369,14 +369,21 @@ export class DeliveryService {
           },
         });
 
-        // If status is DELIVERED, set actual delivery date
+        // If status is DELIVERED, send delivery OTP
         if (status === DeliveryStatus.DELIVERED) {
-          await tx.order.update({
-            where: { id: orderId },
-            data: {
-              actualDelivery: new Date(),
-            },
-          });
+          const result = await DeliveryService.createDeliveryOTP(orderId);
+
+          if (!result.success) {
+            return {
+              success: false,
+              message: result.message,
+            };
+          }
+
+          return {
+            success: true,
+            message: "Delivery OTP created successfully",
+          };
         }
       });
 

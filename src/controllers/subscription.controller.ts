@@ -38,6 +38,7 @@ export const createSubscriptionPlan = async (req: Request, res: Response) => {
       stablePricing,
       receiveEBM,
       advertisingAccess,
+      otherServices,
     } = req.body;
 
     if (!name || !price || !duration) {
@@ -60,6 +61,7 @@ export const createSubscriptionPlan = async (req: Request, res: Response) => {
       stablePricing,
       receiveEBM,
       advertisingAccess,
+      otherServices,
     });
 
     res.status(201).json({
@@ -146,6 +148,7 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
       stablePricing,
       receiveEBM,
       advertisingAccess,
+      otherServices,
     } = req.body;
 
     const updateData: any = {};
@@ -163,6 +166,7 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
     if (receiveEBM !== undefined) updateData.receiveEBM = receiveEBM;
     if (advertisingAccess !== undefined)
       updateData.advertisingAccess = advertisingAccess;
+    if (otherServices !== undefined) updateData.otherServices = otherServices;
 
     const plan = await updateSubscriptionPlanService(planId, updateData);
 

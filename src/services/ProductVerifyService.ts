@@ -213,23 +213,7 @@ const getFilterConditions = async (
       whereCondition.farmerId = userId;
       break;
     case Role.AGGREGATOR:
-      // Get aggregator's location details
-      const aggregator = await prisma.admin.findUnique({
-        where: { id: userId },
-        select: {
-          province: true,
-          district: true,
-        },
-      });
-
-      if (!aggregator) {
-        throw new Error("Aggregator not found");
-      }
-
-      // Filter submissions by aggregator's province and district
       whereCondition.AND = [
-        { province: aggregator.province },
-        { district: aggregator.district },
         {
           OR: [
             { aggregatorId: userId }, // Submissions already assigned to this aggregator

@@ -27,6 +27,7 @@ interface CreateVoucherData {
   maxTransactionAmount?: number;
   expiryDate?: Date;
   loanId?: string;
+  approvedBy?: string;
 }
 
 interface CreateLoanApplicationData {
@@ -81,6 +82,7 @@ export const createVoucherService = async (data: CreateVoucherData) => {
     maxTransactionAmount,
     expiryDate,
     loanId,
+    approvedBy,
   } = data;
 
   // ✅ CHECK SUBSCRIPTION FIRST
@@ -124,6 +126,7 @@ export const createVoucherService = async (data: CreateVoucherData) => {
       restaurantId,
       loanId,
       status: VoucherStatus.ACTIVE,
+      approvedBy,
     },
     include: {
       restaurant: {
@@ -806,6 +809,7 @@ export const approveLoanApplicationService = async (
         restaurantId: updatedLoan.restaurantId,
         loanId: updatedLoan.id,
         status: VoucherStatus.ACTIVE,
+        approvedBy: updatedLoan.approvedBy,
       },
       include: {
         restaurant: {
