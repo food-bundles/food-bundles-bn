@@ -1028,22 +1028,28 @@ export async function generateOrderNumber(): Promise<string> {
   const year = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
   const day = date.getDate().toString().padStart(2, "0");
+  const datePrefix = `ORD${year}${month}${day}`;
 
-  // Get today's order count
-  const startOfDay = new Date(date.setHours(0, 0, 0, 0));
-  const endOfDay = new Date(date.setHours(23, 59, 59, 999));
-
-  const todayOrderCount = await prisma.order.count({
+  // Find the highest existing order number for today
+  const lastOrder = await prisma.order.findFirst({
     where: {
-      createdAt: {
-        gte: startOfDay,
-        lte: endOfDay,
+      orderNumber: {
+        startsWith: datePrefix,
       },
+    },
+    orderBy: {
+      orderNumber: 'desc',
     },
   });
 
-  const orderSequence = (todayOrderCount + 1).toString().padStart(4, "0");
-  return `ORD${year}${month}${day}${orderSequence}`;
+  let nextSequence = 1;
+  if (lastOrder) {
+    const lastSequence = parseInt(lastOrder.orderNumber.slice(-4));
+    nextSequence = lastSequence + 1;
+  }
+
+  const orderSequence = nextSequence.toString().padStart(4, "0");
+  return `${datePrefix}${orderSequence}`;
 }
 
 /**
