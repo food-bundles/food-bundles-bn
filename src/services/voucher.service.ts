@@ -2149,7 +2149,6 @@ export const markVoucherAsUsedService = async (
   // Only mark as USED if order is in a successful state
   const successfulStatuses: OrderStatus[] = [
     OrderStatus.DELIVERED,
-    OrderStatus.CONFIRMED,
     OrderStatus.PREPARING,
     OrderStatus.READY,
     OrderStatus.IN_TRANSIT,
@@ -2167,6 +2166,7 @@ export const markVoucherAsUsedService = async (
     data: {
       status: VoucherStatus.USED,
       usedAt: new Date(),
+      usedCredit: order.totalAmount,
     },
   });
 

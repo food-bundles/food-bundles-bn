@@ -91,6 +91,7 @@ interface CreateCheckoutData {
   deviceFingerprint?: string;
   narration?: string;
   currency?: string;
+  otherServices?: boolean;
 }
 /**
  * Enhanced service to create a new order from cart
@@ -125,6 +126,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
           pin: "",
         },
     clientIp: data.clientIp || "",
+    otherServices: data.otherServices,
   };
 
   const orderCreated = await createOrderFromCartService(orderData);
@@ -153,7 +155,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
   if (
     orderCreated.voucherId &&
     orderCreated.paymentMethod === "VOUCHER" &&
-    orderCreated.status !== OrderStatus.CONFIRMED
+    orderCreated.status === OrderStatus.PENDING
   ) {
     await rollbackVoucherPaymentService(
       orderCreated.voucherId,
