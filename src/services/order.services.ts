@@ -31,6 +31,7 @@ interface CreateOrderFromCartData {
     expiryYear: string;
     pin?: string;
   };
+  otherServices?: boolean;
 }
 
 interface CreateDirectOrderData {
@@ -98,6 +99,7 @@ export const createOrderFromCartService = async (
     billingPhone,
     billingAddress,
     cardDetails,
+    otherServices,
   } = data;
 
   // Get cart and validate
@@ -247,10 +249,6 @@ export const createOrderFromCartService = async (
   let deliveryFee = 0;
   let packagingFee = 0;
 
-  if (order.totalAmount < 100000) {
-    deliveryFee = 5000;
-  }
-
   // Check restaurant subscription plan
   const activeSubscription = await prisma.restaurantSubscription.findFirst({
     where: {
@@ -265,12 +263,20 @@ export const createOrderFromCartService = async (
         select: {
           id: true,
           otherServices: true,
+          freeDelivery: true,
         },
       },
     },
   });
 
-  if (!activeSubscription || !activeSubscription.plan.otherServices) {
+  if (order.totalAmount < 100000 && !activeSubscription?.plan?.freeDelivery) {
+    deliveryFee = 5000;
+  }
+
+  if (
+    otherServices &&
+    (!activeSubscription || !activeSubscription.plan.otherServices)
+  ) {
     packagingFee = 15000;
   }
 

@@ -309,6 +309,11 @@ export const deleteSubscriptionPlanService = async (planId: string) => {
     throw new Error("Cannot delete plan with active subscriptions");
   }
 
+  // Delete all restaurant subscriptions associated with the plan
+  await prisma.restaurantSubscription.deleteMany({
+    where: { planId },
+  });
+
   await prisma.subscriptionPlan.delete({
     where: { id: planId },
   });

@@ -35,6 +35,7 @@ export const createCheckout = async (req: Request, res: Response) => {
       fallbackPaymentMethod,
       cardDetails,
       bankDetails,
+      otherServices,
     } = req.body;
 
     const restaurantId = (req as any).user.id;
@@ -112,6 +113,7 @@ export const createCheckout = async (req: Request, res: Response) => {
         fallbackPaymentMethod,
         cardDetails,
         bankDetails,
+        otherServices,
       };
 
       return res.status(200).json({
@@ -143,6 +145,7 @@ export const createCheckout = async (req: Request, res: Response) => {
       fallbackPaymentMethod,
       cardDetails,
       bankDetails,
+      otherServices,
     });
 
     if (paymentResult.success) {
