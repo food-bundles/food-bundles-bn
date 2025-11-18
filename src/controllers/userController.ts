@@ -19,6 +19,8 @@ import {
   acceptTermsService,
   requestPasswordResetService,
   resetPasswordService,
+  createFarmerByAdminService,
+  createRestaurantByAdminService,
 } from "../services/userServices";
 import { PaginationService } from "../services/paginationService";
 import { JwtPayload } from "../types/userTypes";
@@ -564,6 +566,43 @@ export class UserController {
       res.status(200).json({
         success: true,
         message: result.message,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  // ADMIN-ONLY CONTROLLERS WITH AUTO-GENERATED PASSWORDS
+  static createFarmerByAdmin = async (req: Request, res: Response) => {
+    try {
+      const farmerData = req.body;
+      const result = await createFarmerByAdminService(farmerData);
+
+      res.status(201).json({
+        success: true,
+        message: "Farmer created successfully. PIN sent via SMS.",
+        data: result,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static createRestaurantByAdmin = async (req: Request, res: Response) => {
+    try {
+      const restaurantData = req.body;
+      const result = await createRestaurantByAdminService(restaurantData);
+
+      res.status(201).json({
+        success: true,
+        message: "Restaurant created successfully. Password sent via SMS.",
+        data: result,
       });
     } catch (error: any) {
       res.status(400).json({
