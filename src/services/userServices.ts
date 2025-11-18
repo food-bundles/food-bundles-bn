@@ -15,6 +15,7 @@ import { sendEmail, sendPasswordResetTemplate, generateResetToken, verifyResetTo
 import { PaginationService } from "./paginationService";
 import { LocationValidationService } from "./location.service";
 import { validateTIN } from "../utils/validateTin";
+import { generateFarmerPIN, generateRestaurantPassword, sendPasswordSMS } from "../utils/passwordGenerator";
 
 // Helper function to check for existing phone/email across all user types
 const checkExistingUser = async (phone?: string, email?: string) => {
@@ -990,5 +991,113 @@ export const resetPasswordService = async (token: string, newPassword: string) =
     };
   } catch (error: any) {
     throw new Error(`Failed to reset password: ${error.message}`);
+  }
+};
+
+// ADMIN-ONLY SERVICES WITH AUTO-GENERATED PASSWORDS
+
+// Admin creates farmer with auto-generated PIN
+export const createFarmerByAdminService = async (farmerData: Omit<ICreateFarmerData, 'password'>) => {
+  const { phone, email, location, province, district, sector, cell, village } = farmerData;
+
+  if (!phone) {
+    throw new Error("Phone number is required for farmer creation");
+  }
+
+  const existingUser = await checkExistingUser(phone, email || undefined);
+  if (existingUser) {
+    throw new Error("User with this phone/email already exists");
+  }
+
+  if (province || district || sector || cell || village) {
+    const locationValidation = LocationValidationService.validateLocationHierarchy({
+      province: province as string,
+      district: district as string,
+      sector: sector as string,
+      cell: cell as string,
+      village: village as string,
+    });
+
+    if (!locationValidation.isValid) {
+      throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
+    }
+  }
+
+  try {
+    const generatedPIN = generateFarmerPIN();
+    const hashedPassword = await hashPassword(generatedPIN);
+
+    const farmer = await prisma.farmer.create({
+      data: {
+        phone,
+        email,
+        password: hashedPassword,
+        location,
+        province,
+        district,
+        sector,
+        cell,
+        village,
+      },
+    });
+
+    await sendPasswordSMS(phone, generatedPIN, 'farmer');
+
+    const { password: _, ...farmerWithoutPassword } = farmer;
+    return farmerWithoutPassword;
+  } catch (error: any) {
+    throw new Error(`Failed to create farmer: ${error.message}`);
+  }
+};
+
+// Admin creates restaurant with auto-generated password
+export const createRestaurantByAdminService = async (restaurantData: Omit<ICreateRestaurantData, 'password'>) => {
+  const { name, email, phone, tin, location } = restaurantData;
+
+  if (!name || !email || !phone) {
+    throw new Error("Name, email, and phone are required for restaurant creation");
+  }
+
+  if (!tin) {
+    throw new Error("TIN is required");
+  }
+
+  if (!validateTIN(tin)) {
+    throw new Error("Invalid TIN format");
+  }
+
+  const existingTIN = await prisma.restaurant.findUnique({ where: { tin } });
+  if (existingTIN) {
+    throw new Error("Restaurant with this TIN already exists");
+  }
+
+  const existingUser = await checkExistingUser(phone, email);
+  if (existingUser) {
+    throw new Error("User with this phone/email already exists");
+  }
+
+  try {
+    const generatedPassword = generateRestaurantPassword();
+    const hashedPassword = await hashPassword(generatedPassword);
+
+    const restaurant = await prisma.restaurant.create({
+      data: {
+        name,
+        email,
+        phone,
+        password: hashedPassword,
+        tin,
+        location,
+        verified: true,
+        agreed: true,
+      },
+    });
+
+    await sendPasswordSMS(phone, generatedPassword, 'restaurant');
+
+    const { password: _, ...restaurantWithoutPassword } = restaurant;
+    return restaurantWithoutPassword;
+  } catch (error: any) {
+    throw new Error(`Failed to create restaurant: ${error.message}`);
   }
 };
