@@ -805,6 +805,7 @@ export async function sendPaymentConfirmationEmail(paymentData: {
     email: string;
   };
   orderId: string;
+  orderNumber: string;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
     console.log("Email credentials not configured");
@@ -827,7 +828,7 @@ export async function sendPaymentConfirmationEmail(paymentData: {
   const confirmationEmail = {
     from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
     to: paymentData.customer.email,
-    subject: `Payment Confirmed - FoodBundles Order #${paymentData.orderId}`,
+    subject: `Payment Confirmed - FoodBundles Order #${paymentData.orderNumber}`,
     html: `${sendPaymentConfirmationTemplate(paymentData)}`,
   };
 
@@ -852,6 +853,7 @@ export async function sendPaymentFailedEmail(paymentData: {
     email: string;
   };
   orderId: string;
+  orderNumber: string;
   failureReason?: string;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
@@ -874,7 +876,7 @@ export async function sendPaymentFailedEmail(paymentData: {
     from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
 
     to: paymentData.customer.email,
-    subject: `Payment Failed - FoodBundles Order #${paymentData.orderId}`,
+    subject: `Payment Failed - FoodBundles Order #${paymentData.orderNumber}`,
     html: sendPaymentFailedTemplate(paymentData),
   };
 

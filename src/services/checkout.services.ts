@@ -571,6 +571,7 @@ export const processPaymentService = async (
               email: order.billingEmail!,
             },
             orderId: orderId,
+            orderNumber: order.orderNumber,
             failureReason: paymentResult.error,
           });
         } catch (emailError) {

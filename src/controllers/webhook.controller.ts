@@ -273,6 +273,7 @@ async function processCheckoutPayment(
           email: orderData.billingEmail || orderData.restaurant.email || "",
         },
         orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
       });
     } catch (emailError) {
       console.error("Failed to send confirmation email:", emailError);
@@ -347,6 +348,7 @@ async function processCheckoutPayment(
           email: orderData.billingEmail || orderData.restaurant.email || "",
         },
         orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
       });
     } catch (emailError) {
       console.error("Failed to send payment failed email:", emailError);
