@@ -11,7 +11,12 @@ import {
 } from "../types/userTypes";
 import { comparePassword, hashPassword } from "../utils/password";
 import { getUserByEmail } from "./userGets";
-import { sendEmail, sendPasswordResetTemplate, generateResetToken, verifyResetToken } from "../utils/passwordReset";
+import {
+  sendEmail,
+  sendPasswordResetTemplate,
+  generateResetToken,
+  verifyResetToken,
+} from "../utils/passwordReset";
 import { PaginationService } from "./paginationService";
 import { LocationValidationService } from "./location.service";
 import { validateTIN } from "../utils/validateTin";
@@ -123,6 +128,7 @@ export const getAllFarmersService = async (query: IPaginationQuery) => {
   const options = {
     select: {
       id: true,
+      location: true,
       province: true,
       district: true,
       sector: true,
@@ -167,6 +173,7 @@ export const getFarmerByIdService = async (id: string) => {
     where: { id },
     select: {
       id: true,
+      location: true,
       province: true,
       district: true,
       sector: true,
@@ -387,33 +394,32 @@ export const createRestaurantService = async (
 
 // TERMS AND CONDITIONS SERVICE
 export const acceptTermsService = async (identifier: string) => {
-    const restaurant = await prisma.restaurant.findFirst({
-      where: {
-        OR: [{ email: identifier }, { phone: identifier }],
-      },
-    });
+  const restaurant = await prisma.restaurant.findFirst({
+    where: {
+      OR: [{ email: identifier }, { phone: identifier }],
+    },
+  });
 
-    if (!restaurant) {
-      throw new Error("Restaurant not found");
-    }
+  if (!restaurant) {
+    throw new Error("Restaurant not found");
+  }
 
-    // Update agreed field to true
-    const updatedRestaurant = await prisma.restaurant.update({
-      where: { id: restaurant.id },
-      data: { agreed: true },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        agreed: true,
-        verified: true,
-      },
-    });
+  // Update agreed field to true
+  const updatedRestaurant = await prisma.restaurant.update({
+    where: { id: restaurant.id },
+    data: { agreed: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      agreed: true,
+      verified: true,
+    },
+  });
 
-    return updatedRestaurant;
-  };
-
+  return updatedRestaurant;
+};
 
 export const getAllRestaurantsService = async (query: IPaginationQuery) => {
   const normalizedQuery = PaginationService.validatePaginationParams(
@@ -427,6 +433,7 @@ export const getAllRestaurantsService = async (query: IPaginationQuery) => {
       name: true,
       email: true,
       phone: true,
+      location: true,
       province: true,
       district: true,
       sector: true,
@@ -472,6 +479,7 @@ export const getRestaurantByIdService = async (id: string) => {
       name: true,
       email: true,
       phone: true,
+      location: true,
       province: true,
       district: true,
       sector: true,
@@ -703,6 +711,7 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
       email: true,
       role: true,
       phone: true,
+      location: true,
       province: true,
       district: true,
       sector: true,
@@ -736,6 +745,7 @@ export const getAdminByIdService = async (id: string) => {
       email: true,
       role: true,
       phone: true,
+      location: true,
       province: true,
       district: true,
       sector: true,
@@ -844,8 +854,6 @@ export const deleteAdminService = async (id: string) => {
   }
 };
 
-
-
 // LOGIN SERVICE
 export const loginService = async (loginData: ILoginData) => {
   const { phone, email, tin, password } = loginData;
@@ -877,9 +885,11 @@ export const loginService = async (loginData: ILoginData) => {
       if (!user.verified) {
         throw new Error("Your account is not verified yet.");
       }
-      
+
       if (!user.agreed) {
-        throw new Error("You must agree to the Terms and Conditions before logging in.");
+        throw new Error(
+          "You must agree to the Terms and Conditions before logging in."
+        );
       }
     }
   }
@@ -911,25 +921,25 @@ export const loginService = async (loginData: ILoginData) => {
 // PASSWORD RESET SERVICES
 export const requestPasswordResetService = async (email: string) => {
   const user = await getUserByEmail(email);
-  
+
   if (!user) {
     throw new Error("No account found with this email address");
   }
 
   // Generate reset token
   const resetToken = generateResetToken(user.id, user.userType);
-  
+
   // Create reset link (you'll need to replace with your actual frontend URL)
   const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-  
+
   // Get user name based on user type
-  let userName = '';
-  if (user.userType === 'FARMER') {
-    userName = user.phone || 'Farmer';
-  } else if (user.userType === 'RESTAURANT') {
-    userName = (user as any).name || 'Restaurant Owner';
-  } else if (user.userType === 'ADMIN') {
-    userName = (user as any).username || 'Admin';
+  let userName = "";
+  if (user.userType === "FARMER") {
+    userName = user.phone || "Farmer";
+  } else if (user.userType === "RESTAURANT") {
+    userName = (user as any).name || "Restaurant Owner";
+  } else if (user.userType === "ADMIN") {
+    userName = (user as any).username || "Admin";
   }
 
   // Send reset email
@@ -942,51 +952,54 @@ export const requestPasswordResetService = async (email: string) => {
 
   await sendEmail({
     to: user.email!,
-    subject: 'Reset Your FoodBundles Password',
+    subject: "Reset Your FoodBundles Password",
     html: emailHtml,
   });
 
   return {
-    message: 'Password reset link has been sent to your email address',
+    message: "Password reset link has been sent to your email address",
   };
 };
 
-export const resetPasswordService = async (token: string, newPassword: string) => {
+export const resetPasswordService = async (
+  token: string,
+  newPassword: string
+) => {
   // Verify token
   const decoded = verifyResetToken(token);
-  
+
   if (!decoded) {
-    throw new Error('Invalid or expired reset token');
+    throw new Error("Invalid or expired reset token");
   }
 
   const { userId, userType } = decoded;
-  
+
   // Hash new password
   const hashedPassword = await hashPassword(newPassword);
-  
+
   // Update password based on user type
   try {
-    if (userType === 'FARMER') {
+    if (userType === "FARMER") {
       await prisma.farmer.update({
         where: { id: userId },
         data: { password: hashedPassword },
       });
-    } else if (userType === 'RESTAURANT') {
+    } else if (userType === "RESTAURANT") {
       await prisma.restaurant.update({
         where: { id: userId },
         data: { password: hashedPassword },
       });
-    } else if (userType === 'ADMIN') {
+    } else if (userType === "ADMIN") {
       await prisma.admin.update({
         where: { id: userId },
         data: { password: hashedPassword },
       });
     } else {
-      throw new Error('Invalid user type');
+      throw new Error("Invalid user type");
     }
 
     return {
-      message: 'Password has been reset successfully',
+      message: "Password has been reset successfully",
     };
   } catch (error: any) {
     throw new Error(`Failed to reset password: ${error.message}`);

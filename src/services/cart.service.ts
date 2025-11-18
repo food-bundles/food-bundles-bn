@@ -158,7 +158,7 @@ export const getCartByRestaurantIdService = async (restaurantId: string) => {
     throw new Error("Restaurant not found");
   }
 
-  // Get active cart with items
+  // Get active cart with items and include latest active subscription if exists
   const cart = await prisma.cart.findFirst({
     where: {
       restaurantId,
@@ -189,6 +189,23 @@ export const getCartByRestaurantIdService = async (restaurantId: string) => {
           id: true,
           name: true,
           email: true,
+        },
+        include: {
+          subscriptions: {
+            where: {
+              status: "ACTIVE",
+            },
+            include: {
+              plan: {
+                select: {
+                  freeDelivery: true,
+                  otherServices: true,
+                  receiveEBM: true,
+                  voucherAccess: true,
+                },
+              },
+            },
+          },
         },
       },
     },
