@@ -184,17 +184,10 @@ export const getCartByRestaurantIdService = async (restaurantId: string) => {
           createdAt: "desc",
         },
       },
-      restaurant: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
+       restaurant: {
         include: {
           subscriptions: {
-            where: {
-              status: "ACTIVE",
-            },
+            where: { status: "ACTIVE" },
             include: {
               plan: {
                 select: {
