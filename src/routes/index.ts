@@ -19,6 +19,7 @@ import locationRoutes from "./location.routes";
 import subscriptionRoutes from "./subscription.routes";
 import voucherRoutes from "./voucher.routes";
 import deliveryRoutes from "./delivery.routes";
+import contactRoutes from "./contact.routes";
 
 const routes = Router();
 
@@ -38,6 +39,7 @@ routes.use("/locations", locationRoutes);
 routes.use("/subscriptions", subscriptionRoutes);
 routes.use("/vouchers", voucherRoutes);
 routes.use("/deliveries", deliveryRoutes);
+routes.use("/", contactRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);
