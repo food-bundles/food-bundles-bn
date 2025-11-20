@@ -20,6 +20,7 @@ import {
 import { PaginationService } from "./paginationService";
 import { LocationValidationService } from "./location.service";
 import { validateTIN } from "../utils/validateTin";
+import { createNotificationService } from "./notification.services";
 
 // Helper function to check for existing phone/email across all user types
 const checkExistingUser = async (phone?: string, email?: string) => {
@@ -109,6 +110,22 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
         sector,
         cell,
         village,
+      },
+    });
+
+    await createNotificationService({
+      title: "New User Registration",
+      message: `New ${farmer.role.toLowerCase()} ${
+        farmer.email
+      } has registered`,
+      eventType: "USER_SIGNUP",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: {
+        userId: farmer.id,
+        userRole: farmer.role,
+        email: farmer.email,
+        registeredAt: new Date().toISOString(),
       },
     });
 
@@ -382,6 +399,23 @@ export const createRestaurantService = async (
         sector,
         cell,
         village,
+      },
+    });
+
+    // In user registration controller
+    await createNotificationService({
+      title: "New User Registration",
+      message: `New ${restaurant.role.toLowerCase()} ${
+        restaurant.name || restaurant.email
+      } has registered`,
+      eventType: "USER_SIGNUP",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: {
+        userId: restaurant.id,
+        userRole: restaurant.role,
+        email: restaurant.email,
+        registeredAt: new Date().toISOString(),
       },
     });
 
@@ -688,6 +722,21 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
         sector,
         cell,
         village,
+      },
+    });
+
+    // In user registration controller
+    await createNotificationService({
+      title: "New User Registration",
+      message: `New ${admin.role.toLowerCase()} ${admin.email} has registered`,
+      eventType: "USER_SIGNUP",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: {
+        userId: admin.id,
+        userRole: admin.role,
+        email: admin.email,
+        registeredAt: new Date().toISOString(),
       },
     });
 

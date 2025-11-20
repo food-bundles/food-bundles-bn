@@ -9,6 +9,7 @@ import {
   PaymentStatus,
 } from "@prisma/client";
 import { wsManager } from "../index";
+import { createNotificationService } from "./notification.services";
 
 // ============================================
 // TYPES AND INTERFACES
@@ -820,6 +821,20 @@ export const approveLoanApplicationService = async (
           },
         },
         loan: true,
+      },
+    });
+
+    await createNotificationService({
+      title: "Voucher Issued",
+      message: `A ${voucher.discountPercentage}% discount voucher worth ${voucher.creditLimit} RWF has been issued`,
+      eventType: "VOUCHER_ISSUED",
+      targetType: "SPECIFIC_USER",
+      targetId: voucher.restaurantId,
+      metadata: {
+        voucherId: voucher.id,
+        voucherCode: voucher.voucherCode,
+        creditLimit: voucher.creditLimit,
+        discountPercentage: voucher.discountPercentage,
       },
     });
 

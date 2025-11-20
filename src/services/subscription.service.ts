@@ -8,6 +8,7 @@ import {
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { sendMessage } from "../utils/sms.utility";
 import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
+import { createNotificationService } from "./notification.services";
 
 dotenv.config();
 
@@ -1280,6 +1281,9 @@ export const checkExpiredSubscriptionsService = async () => {
         lte: now,
       },
     },
+    include: {
+      plan: true,
+    },
   });
 
   for (const subscription of expiredSubscriptions) {
@@ -1298,6 +1302,19 @@ export const checkExpiredSubscriptionsService = async () => {
           oldStatus: "ACTIVE",
           newStatus: "EXPIRED",
           reason: "Subscription period ended",
+        },
+      });
+
+      await createNotificationService({
+        title: "Subscription Expired",
+        message: `Your ${subscription.plan.name} subscription has expired. Renew to continue enjoying premium features`,
+        eventType: "SUBSCRIPTION_EXPIRED",
+        targetType: "SPECIFIC_USER",
+        targetId: subscription.restaurantId,
+        metadata: {
+          subscriptionId: subscription.id,
+          planName: subscription.plan.name,
+          expiredAt: subscription.endDate,
         },
       });
     });

@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 import { DeliveryStatus, OrderStatus, PaymentStatus } from "@prisma/client";
 import { sendMessage } from "../utils/sms.utility";
+import { createNotificationService } from "./notification.services";
 
 export class DeliveryService {
   /**
@@ -181,10 +182,18 @@ export class DeliveryService {
       });
 
       // Send confirmation to restaurant
-      // await sendMessage(
-      //   `Order ${deliveryOTP.order.orderNumber} has been successfully delivered and marked as completed.`,
-      //   deliveryOTP.order.restaurant.phone || ""
-      // );
+      await createNotificationService({
+        title: "Order Delivered",
+        message: `Order #${deliveryOTP.order.orderNumber} has been successfully delivered`,
+        eventType: "ORDER_DELIVERED",
+        targetType: "SPECIFIC_USER",
+        targetId: deliveryOTP.order.restaurant.id,
+        metadata: {
+          orderId: deliveryOTP.order.id,
+          orderNumber: deliveryOTP.order.orderNumber,
+          deliveredAt: new Date().toISOString(),
+        },
+      });
 
       return {
         success: true,

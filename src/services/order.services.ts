@@ -10,6 +10,7 @@ import { processPaymentService } from "./checkout.services";
 import { decryptSecretData, encryptSecretData } from "../utils/password";
 import { DeliveryService } from "./delivery.service";
 import { wsManager } from "../index";
+import { createNotificationService } from "./notification.services";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -150,6 +151,22 @@ export const createOrderFromCartService = async (
     }
 
     if (product.quantity < cartItem.quantity) {
+      if (product.quantity <= 10) {
+        await createNotificationService({
+          title: "Low Stock Alert",
+          message: `Product "${product.productName}" is running low (${product.quantity} ${product.unit} remaining)`,
+          eventType: "LOW_STOCK_ALERT",
+          targetType: "ROLE_BASED",
+          targetRole: "ADMIN",
+          metadata: {
+            productId: product.id,
+            productName: product.productName,
+            currentQuantity: product.quantity,
+            unit: product.unit,
+          },
+        });
+      }
+
       throw new Error(
         `Insufficient stock for ${product.productName}. Available: ${product.quantity}, Required: ${cartItem.quantity}`
       );
@@ -1038,7 +1055,7 @@ export async function generateOrderNumber(): Promise<string> {
       },
     },
     orderBy: {
-      orderNumber: 'desc',
+      orderNumber: "desc",
     },
   });
 

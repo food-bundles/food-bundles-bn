@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import { createNotificationService } from "./notification.services";
 
 export interface ProductData {
   productName: string;
@@ -726,7 +727,10 @@ export const getVerifiedSubmissionsService = async () => {
 };
 
 // Approve submission without creating product
-export const approveSubmissionService = async (submissionId: string) => {
+export const approveSubmissionService = async (
+  submissionId: string,
+  adminId: string
+) => {
   const submission = await prisma.farmerSubmission.findUnique({
     where: { id: submissionId },
   });
@@ -784,13 +788,27 @@ export const approveSubmissionService = async (submissionId: string) => {
     },
   });
 
+  await createNotificationService({
+    title: "Product Approved",
+    message: `Your product "${submission.productName}" has been approved and is now available`,
+    eventType: "PRODUCT_APPROVED",
+    targetType: "SPECIFIC_USER",
+    targetId: submission.farmerId,
+    metadata: {
+      productId: submission.id,
+      productName: submission.productName,
+      submissionId: submission.id,
+      approvedBy: adminId,
+    },
+  });
+
   return updatedSubmission;
 };
 
 // Update product status (active/inactive)
 export const updateProductStatusService = async (
   productId: string,
-  status: 'ACTIVE' | 'INACTIVE',
+  status: "ACTIVE" | "INACTIVE",
   reason?: string
 ) => {
   // Check if product exists
@@ -804,14 +822,14 @@ export const updateProductStatusService = async (
 
   // Prepare update data
   const updateData: any = { status };
-  
+
   // Handle reason based on status
-  if (status === 'INACTIVE') {
+  if (status === "INACTIVE") {
     if (!reason) {
       throw new Error("Reason is required when setting product to inactive");
     }
     updateData.inactiveReason = reason;
-  } else if (status === 'ACTIVE') {
+  } else if (status === "ACTIVE") {
     // Remove reason when setting to active
     updateData.inactiveReason = null;
   }

@@ -373,9 +373,10 @@ export const getVerifiedSubmissions = async (req: Request, res: Response) => {
 // Approve submission without creating product (direct approval)
 export const approveSubmission = async (req: Request, res: Response) => {
   try {
+    const adminId = (req as any).user.id;
     const { submissionId } = req.params;
 
-    const result = await approveSubmissionService(submissionId);
+    const result = await approveSubmissionService(submissionId, adminId);
 
     // NEW PRODUCT VIA WEBSOCKET
     wsManager.broadcastNewProduct(result);
@@ -409,13 +410,15 @@ export const updateProductStatus = async (req: Request, res: Response) => {
     }
 
     // Validate status
-    if (!['ACTIVE', 'INACTIVE'].includes(status)) {
+    if (!["ACTIVE", "INACTIVE"].includes(status)) {
       return res.status(400).json({
         message: "Status must be either ACTIVE or INACTIVE",
       });
     }
 
-    const { updateProductStatusService } = await import("../services/productService");
+    const { updateProductStatusService } = await import(
+      "../services/productService"
+    );
     const result = await updateProductStatusService(productId, status, reason);
 
     // Broadcast product status update via WebSocket
