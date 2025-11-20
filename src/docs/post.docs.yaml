@@ -1,0 +1,565 @@
+tags:
+  - name: Post Management
+    description: Operations related to restaurant post management
+
+components:
+  schemas:
+    Post:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique post identifier
+        restaurantId:
+          type: string
+          description: ID of the restaurant that created the post
+        title:
+          type: string
+          description: Post title
+        content:
+          type: string
+          description: Post content
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: Array of image URLs
+        isActive:
+          type: boolean
+          description: Whether the post is active
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Post creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        restaurant:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+
+    CreatePostRequest:
+      type: object
+      required:
+        - title
+        - content
+      properties:
+        title:
+          type: string
+          description: Post title
+          minLength: 1
+          maxLength: 200
+        content:
+          type: string
+          description: Post content
+          minLength: 1
+          maxLength: 2000
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: Array of image URLs (optional)
+        isActive:
+          type: boolean
+          description: Whether the post should be active
+          default: true
+
+    UpdatePostRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Post title
+          minLength: 1
+          maxLength: 200
+        content:
+          type: string
+          description: Post content
+          minLength: 1
+          maxLength: 2000
+        images:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: Array of image URLs
+        isActive:
+          type: boolean
+          description: Whether the post is active
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Number of items per page
+        total:
+          type: integer
+          description: Total number of items
+        totalPages:
+          type: integer
+          description: Total number of pages
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Success message
+        data:
+          type: object
+          description: Response data
+
+paths:
+  /posts:
+    post:
+      tags:
+        - Post Management
+      summary: Create a new post
+      description: Create a new post with image upload (Restaurant only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - title
+                - content
+              properties:
+                title:
+                  type: string
+                  description: Post title
+                  minLength: 1
+                  maxLength: 200
+                content:
+                  type: string
+                  description: Post content
+                  minLength: 1
+                  maxLength: 2000
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Image files to upload (optional)
+                isActive:
+                  type: boolean
+                  description: Whether the post should be active
+                  default: true
+      responses:
+        201:
+          description: Post created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Post created successfully"
+                  data:
+                    $ref: "#/components/schemas/Post"
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Title and content are required"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      tags:
+        - Post Management
+      summary: Get all posts
+      description: Retrieve all posts with optional filtering and pagination
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by post title or content
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+        - name: restaurantId
+          in: query
+          schema:
+            type: string
+          description: Filter by restaurant ID
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of posts per page
+      responses:
+        200:
+          description: Posts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Posts retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Post"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /posts/{postId}:
+    get:
+      tags:
+        - Post Management
+      summary: Get post by ID
+      description: Retrieve a specific post by its ID
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique post identifier
+      responses:
+        200:
+          description: Post retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Post retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Post"
+        404:
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Post not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      tags:
+        - Post Management
+      summary: Update post
+      description: Update an existing post with optional image upload (Restaurant only - own posts)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique post identifier
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Post title
+                  minLength: 1
+                  maxLength: 200
+                content:
+                  type: string
+                  description: Post content
+                  minLength: 1
+                  maxLength: 2000
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: New image files to upload (optional)
+                isActive:
+                  type: boolean
+                  description: Whether the post is active
+      responses:
+        200:
+          description: Post updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Post updated successfully"
+                  data:
+                    $ref: "#/components/schemas/Post"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Can only update own posts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "You can only update your own posts"
+        404:
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Post Management
+      summary: Delete post
+      description: Delete a post (Restaurant only - own posts)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique post identifier
+      responses:
+        200:
+          description: Post deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Post deleted successfully"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Can only delete own posts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "You can only delete your own posts"
+        404:
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /posts/my-posts:
+    get:
+      tags:
+        - Post Management
+      summary: Get my posts
+      description: Retrieve posts created by the authenticated restaurant
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of posts per page
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+      responses:
+        200:
+          description: My posts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "My posts retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Post"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Restaurant access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /posts/restaurant/{restaurantId}:
+    get:
+      tags:
+        - Post Management
+      summary: Get posts by restaurant
+      description: Retrieve all posts created by a specific restaurant
+      parameters:
+        - name: restaurantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique restaurant identifier
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of posts per page
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+      responses:
+        200:
+          description: Restaurant posts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Restaurant posts retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Post"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

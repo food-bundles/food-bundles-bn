@@ -19,6 +19,8 @@ import locationRoutes from "./location.routes";
 import subscriptionRoutes from "./subscription.routes";
 import voucherRoutes from "./voucher.routes";
 import deliveryRoutes from "./delivery.routes";
+import postRoutes from "./post.routes";
+import notificationRoutes from "./notification.routes";
 
 const routes = Router();
 
@@ -38,6 +40,8 @@ routes.use("/locations", locationRoutes);
 routes.use("/subscriptions", subscriptionRoutes);
 routes.use("/vouchers", voucherRoutes);
 routes.use("/deliveries", deliveryRoutes);
+routes.use("/posts", postRoutes);
+routes.use("/notifications", notificationRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

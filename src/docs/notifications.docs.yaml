@@ -1,0 +1,523 @@
+tags:
+  - name: Notification Management
+    description: Operations related to notification management
+
+components:
+  schemas:
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique notification identifier
+        title:
+          type: string
+          description: Notification title
+        message:
+          type: string
+          description: Notification message
+        eventType:
+          type: string
+          enum: [NEW_ORDER_PLACED, ORDER_CONFIRMED, ORDER_DELIVERED, PAYMENT_PROCESSED, PAYMENT_FAILED, USER_SIGNUP, PRODUCT_APPROVED, VOUCHER_ISSUED, SUBSCRIPTION_EXPIRED, LOW_STOCK_ALERT, SYSTEM_MAINTENANCE]
+          description: Type of event that triggered the notification
+        targetType:
+          type: string
+          enum: [SPECIFIC_USER, ROLE_BASED, ALL_USERS]
+          description: Who should receive this notification
+        targetId:
+          type: string
+          nullable: true
+          description: Specific user ID (when targetType is SPECIFIC_USER)
+        targetRole:
+          type: string
+          enum: [FARMER, RESTAURANT, ADMIN, AGGREGATOR, LOGISTICS]
+          nullable: true
+          description: Role to notify (when targetType is ROLE_BASED)
+        isRead:
+          type: boolean
+          description: Whether the notification has been read
+          default: false
+        metadata:
+          type: object
+          nullable: true
+          description: Additional data related to the notification
+        createdAt:
+          type: string
+          format: date-time
+          description: Notification creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    CreateNotificationRequest:
+      type: object
+      required:
+        - title
+        - message
+        - eventType
+        - targetType
+      properties:
+        title:
+          type: string
+          description: Notification title
+          minLength: 1
+          maxLength: 200
+        message:
+          type: string
+          description: Notification message
+          minLength: 1
+          maxLength: 1000
+        eventType:
+          type: string
+          enum: [NEW_ORDER_PLACED, ORDER_CONFIRMED, ORDER_DELIVERED, PAYMENT_PROCESSED, PAYMENT_FAILED, USER_SIGNUP, PRODUCT_APPROVED, VOUCHER_ISSUED, SUBSCRIPTION_EXPIRED, LOW_STOCK_ALERT, SYSTEM_MAINTENANCE]
+          description: Type of event that triggered the notification
+        targetType:
+          type: string
+          enum: [SPECIFIC_USER, ROLE_BASED, ALL_USERS]
+          description: Who should receive this notification
+        targetId:
+          type: string
+          description: Specific user ID (required when targetType is SPECIFIC_USER)
+        targetRole:
+          type: string
+          enum: [FARMER, RESTAURANT, ADMIN, AGGREGATOR, LOGISTICS]
+          description: Role to notify (required when targetType is ROLE_BASED)
+        metadata:
+          type: object
+          description: Additional data related to the notification
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Number of items per page
+        total:
+          type: integer
+          description: Total number of items
+        totalPages:
+          type: integer
+          description: Total number of pages
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+
+paths:
+  /notifications:
+    post:
+      tags:
+        - Notification Management
+      summary: Create a new notification
+      description: Create a new notification (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationRequest"
+      responses:
+        201:
+          description: Notification created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Notification created successfully"
+                  data:
+                    $ref: "#/components/schemas/Notification"
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Title, message, eventType, and targetType are required"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      tags:
+        - Notification Management
+      summary: Get all notifications
+      description: Retrieve all notifications with optional filtering and pagination (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: eventType
+          in: query
+          schema:
+            type: string
+            enum: [NEW_ORDER_PLACED, ORDER_CONFIRMED, ORDER_DELIVERED, PAYMENT_PROCESSED, PAYMENT_FAILED, USER_SIGNUP, PRODUCT_APPROVED, VOUCHER_ISSUED, SUBSCRIPTION_EXPIRED, LOW_STOCK_ALERT, SYSTEM_MAINTENANCE]
+          description: Filter by event type
+        - name: targetType
+          in: query
+          schema:
+            type: string
+            enum: [SPECIFIC_USER, ROLE_BASED, ALL_USERS]
+          description: Filter by target type
+        - name: isRead
+          in: query
+          schema:
+            type: boolean
+          description: Filter by read status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of notifications per page
+      responses:
+        200:
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Notifications retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/my-notifications:
+    get:
+      tags:
+        - Notification Management
+      summary: Get my notifications
+      description: Retrieve notifications for the authenticated user
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of notifications per page
+        - name: isRead
+          in: query
+          schema:
+            type: boolean
+          description: Filter by read status
+      responses:
+        200:
+          description: My notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "My notifications retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/unread-count:
+    get:
+      tags:
+        - Notification Management
+      summary: Get unread notification count
+      description: Get the count of unread notifications for the authenticated user
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Unread count retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Unread count retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      unreadCount:
+                        type: integer
+                        example: 5
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/mark-all-read:
+    patch:
+      tags:
+        - Notification Management
+      summary: Mark all notifications as read
+      description: Mark all notifications as read for the authenticated user
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "5 notifications marked as read"
+                  data:
+                    type: object
+                    properties:
+                      updatedCount:
+                        type: integer
+                        example: 5
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/{notificationId}:
+    get:
+      tags:
+        - Notification Management
+      summary: Get notification by ID
+      description: Retrieve a specific notification by its ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique notification identifier
+      responses:
+        200:
+          description: Notification retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Notification retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Notification"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Notification not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Notification Management
+      summary: Delete notification
+      description: Delete a notification (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique notification identifier
+      responses:
+        200:
+          description: Notification deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Notification deleted successfully"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/{notificationId}/read:
+    patch:
+      tags:
+        - Notification Management
+      summary: Mark notification as read
+      description: Mark a specific notification as read
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique notification identifier
+      responses:
+        200:
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Notification marked as read"
+                  data:
+                    $ref: "#/components/schemas/Notification"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
