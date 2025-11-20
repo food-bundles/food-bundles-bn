@@ -1,0 +1,221 @@
+paths:
+  /contact-submissions:
+    post:
+      tags:
+        - Contact
+      summary: Create a new contact submission
+      description: Submit a contact form and send email notification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - message
+              properties:
+                name:
+                  type: string
+                  example: "John Doe"
+                email:
+                  type: string
+                  format: email
+                  example: "john@example.com"
+                message:
+                  type: string
+                  example: "I need help with my order"
+      responses:
+        200:
+          description: Contact submission created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  info:
+                    type: object
+                  submission:
+                    $ref: '#/components/schemas/ContactSubmission'
+        500:
+          description: Failed to send email
+    
+    get:
+      tags:
+        - Contact
+      summary: Get all contact submissions
+      description: Retrieve all contact submissions with optional search
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search term for name, email, or message
+      responses:
+        200:
+          description: List of contact submissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContactSubmission'
+        500:
+          description: Failed to fetch submissions
+
+  /contact-submissions/{id}:
+    get:
+      tags:
+        - Contact
+      summary: Get a specific contact submission
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Contact submission ID
+      responses:
+        200:
+          description: Contact submission details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactSubmission'
+        404:
+          description: Submission not found
+        500:
+          description: Failed to fetch submission
+    
+    put:
+      tags:
+        - Contact
+      summary: Update a contact submission
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Contact submission ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                message:
+                  type: string
+                status:
+                  type: string
+                response:
+                  type: string
+      responses:
+        200:
+          description: Contact submission updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactSubmission'
+        500:
+          description: Failed to update submission
+    
+    delete:
+      tags:
+        - Contact
+      summary: Delete a contact submission
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Contact submission ID
+      responses:
+        200:
+          description: Contact submission deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        500:
+          description: Failed to delete submission
+
+  /contact-submissions/{id}/respond:
+    post:
+      tags:
+        - Contact
+      summary: Respond to a contact submission
+      description: Send email response to a contact submission
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Contact submission ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - response
+              properties:
+                response:
+                  type: string
+                  example: "Thank you for contacting us. We will process your request."
+      responses:
+        200:
+          description: Response sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        404:
+          description: Submission not found
+        500:
+          description: Failed to send response
+
+components:
+  schemas:
+    ContactSubmission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        message:
+          type: string
+        status:
+          type: string
+          default: "pending"
+        response:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

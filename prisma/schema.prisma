@@ -1110,3 +1110,16 @@ enum NotificationTarget {
   ROLE_BASED
   ALL_USERS
 }
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  status    String   @default("unread") // unread, read, responded
+  response  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("contact_submissions")
+}
