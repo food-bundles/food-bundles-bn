@@ -4,6 +4,7 @@ export interface PostData {
   title: string;
   content: string;
   images?: string[];
+  videos?: string[];
   isActive?: boolean;
   restaurantId: string;
 }
@@ -23,6 +24,7 @@ export const createPostService = async (postData: PostData) => {
       title: postData.title.trim(),
       content: postData.content.trim(),
       images: postData.images || [],
+      videos: postData.videos || [],
       isActive: postData.isActive ?? true,
       restaurantId: postData.restaurantId,
     },
@@ -103,6 +105,72 @@ export const getAllPostsService = async ({
   };
 };
 
+// Get Featured Posts (from restaurants with active advertising subscriptions)
+export const getFeaturedPostsService = async ({
+  page = 1,
+  limit = 10,
+}: {
+  page?: number;
+  limit?: number;
+}) => {
+  const skip = (page - 1) * limit;
+
+  const [posts, total] = await Promise.all([
+    prisma.post.findMany({
+      where: {
+        isActive: true,
+        restaurant: {
+          subscriptions: {
+            some: {
+              status: "ACTIVE",
+              plan: {
+                advertisingAccess: true,
+              },
+            },
+          },
+        },
+      },
+      skip,
+      take: limit,
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+    prisma.post.count({
+      where: {
+        isActive: true,
+        restaurant: {
+          subscriptions: {
+            some: {
+              status: "ACTIVE",
+              plan: {
+                advertisingAccess: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  return {
+    posts,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+};
+
 // Get Post by ID
 export const getPostByIdService = async (postId: string) => {
   const post = await prisma.post.findUnique({
@@ -155,6 +223,9 @@ export const updatePostService = async (
       ...(updateData.images !== undefined && {
         images: updateData.images,
       }),
+      ...(updateData.videos !== undefined && {
+        videos: updateData.videos,
+      }),
       ...(updateData.isActive !== undefined && {
         isActive: updateData.isActive,
       }),
@@ -174,7 +245,10 @@ export const updatePostService = async (
 };
 
 // Delete Post
-export const deletePostService = async (postId: string, restaurantId: string) => {
+export const deletePostService = async (
+  postId: string,
+  restaurantId: string
+) => {
   const post = await prisma.post.findUnique({
     where: { id: postId },
   });
@@ -197,7 +271,11 @@ export const deletePostService = async (postId: string, restaurantId: string) =>
 // Get Posts by Restaurant ID
 export const getPostsByRestaurantService = async (
   restaurantId: string,
-  { page = 1, limit = 10, isActive }: { page?: number; limit?: number; isActive?: boolean }
+  {
+    page = 1,
+    limit = 10,
+    isActive,
+  }: { page?: number; limit?: number; isActive?: boolean }
 ) => {
   const skip = (page - 1) * limit;
 

@@ -6,6 +6,7 @@ import {
   updatePostService,
   deletePostService,
   getPostsByRestaurantService,
+  getFeaturedPostsService,
 } from "../services/post.services";
 import cloudinary from "../utils/cloudinary.utility";
 
@@ -21,14 +22,16 @@ export const createPost = async (req: Request, res: Response) => {
       });
     }
 
-    // Handle image upload
+    // Handle file uploads
     let imageUrls: string[] = [];
+    let videoUrls: string[] = [];
 
     if (req.files && !Array.isArray(req.files)) {
       const filesDict = req.files as {
         [fieldname: string]: Express.Multer.File[];
       };
 
+      // Handle image uploads
       if (filesDict["images"]) {
         for (let index = 0; index < filesDict["images"].length; index++) {
           const uploadResult = await cloudinary.v2.uploader.upload(
@@ -37,13 +40,33 @@ export const createPost = async (req: Request, res: Response) => {
           imageUrls.push(uploadResult.secure_url);
         }
       }
+
+      // Handle video uploads
+      if (filesDict["videos"]) {
+        for (let index = 0; index < filesDict["videos"].length; index++) {
+          const file = filesDict["videos"][index];
+
+          // Check file size (10MB limit)
+          if (file.size > 10 * 1024 * 1024) {
+            return res.status(400).json({
+              message: "Video files must be less than 10MB",
+            });
+          }
+
+          const uploadResult = await cloudinary.v2.uploader.upload(file.path, {
+            resource_type: "video",
+          });
+          videoUrls.push(uploadResult.secure_url);
+        }
+      }
     }
 
     const post = await createPostService({
       title,
       content,
       images: imageUrls,
-      isActive: isActive === 'true' || isActive === true,
+      videos: videoUrls,
+      isActive: isActive === "true" || isActive === true,
       restaurantId,
     });
 
@@ -119,14 +142,16 @@ export const updatePost = async (req: Request, res: Response) => {
     const updateData = req.body;
     const restaurantId = (req as any).user.id;
 
-    // Handle image upload
+    // Handle file uploads
     let imageUrls: string[] = [];
+    let videoUrls: string[] = [];
 
     if (req.files && !Array.isArray(req.files)) {
       const filesDict = req.files as {
         [fieldname: string]: Express.Multer.File[];
       };
 
+      // Handle image uploads
       if (filesDict["images"]) {
         for (let index = 0; index < filesDict["images"].length; index++) {
           const uploadResult = await cloudinary.v2.uploader.upload(
@@ -136,14 +161,39 @@ export const updatePost = async (req: Request, res: Response) => {
         }
         updateData.images = imageUrls;
       }
+
+      // Handle video uploads
+      if (filesDict["videos"]) {
+        for (let index = 0; index < filesDict["videos"].length; index++) {
+          const file = filesDict["videos"][index];
+
+          // Check file size (10MB limit)
+          if (file.size > 10 * 1024 * 1024) {
+            return res.status(400).json({
+              message: "Video files must be less than 10MB",
+            });
+          }
+
+          const uploadResult = await cloudinary.v2.uploader.upload(file.path, {
+            resource_type: "video",
+          });
+          videoUrls.push(uploadResult.secure_url);
+        }
+        updateData.videos = videoUrls;
+      }
     }
 
     // Parse boolean fields
     if (updateData.isActive !== undefined) {
-      updateData.isActive = updateData.isActive === 'true' || updateData.isActive === true;
+      updateData.isActive =
+        updateData.isActive === "true" || updateData.isActive === true;
     }
 
-    const updatedPost = await updatePostService(postId, updateData, restaurantId);
+    const updatedPost = await updatePostService(
+      postId,
+      updateData,
+      restaurantId
+    );
 
     res.status(200).json({
       message: "Post updated successfully",
@@ -252,6 +302,33 @@ export const getMyPosts = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to get my posts",
+    });
+  }
+};
+
+// Get Featured Posts (public)
+export const getFeaturedPosts = async (req: Request, res: Response) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+
+    const result = await getFeaturedPostsService({
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+    });
+
+    res.status(200).json({
+      message: "Featured posts retrieved successfully",
+      data: result.posts,
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get featured posts",
     });
   }
 };

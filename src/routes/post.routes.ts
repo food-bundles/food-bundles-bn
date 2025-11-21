@@ -7,9 +7,10 @@ import {
   deletePost,
   getPostsByRestaurant,
   getMyPosts,
+  getFeaturedPosts,
 } from "../controllers/post.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
-import productImagesUpload from "../middleware/multer";
+import postFilesUpload from "../middleware/postMulter";
 
 const postRoutes = Router();
 
@@ -21,6 +22,9 @@ postRoutes.get(
   getMyPosts
 );
 
+// Get featured posts (public)
+postRoutes.get("/featured", getFeaturedPosts);
+
 // Get posts by restaurant ID (public)
 postRoutes.get("/restaurant/:restaurantId", getPostsByRestaurant);
 
@@ -29,7 +33,7 @@ postRoutes.post(
   "/",
   isAuthenticated,
   checkPermission("RESTAURANT"),
-  productImagesUpload,
+  postFilesUpload,
   createPost
 );
 
@@ -44,7 +48,7 @@ postRoutes.patch(
   "/:postId",
   isAuthenticated,
   checkPermission("RESTAURANT"),
-  productImagesUpload,
+  postFilesUpload,
   updatePost
 );
 

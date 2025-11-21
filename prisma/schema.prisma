@@ -889,6 +889,7 @@ model Post {
   title        String
   content      String
   images       String[]
+  videos       String[]
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -1004,6 +1005,7 @@ enum OrderStatus {
 
 enum DeliveryStatus {
   PENDING
+  CONFIRMED
   PREPARING
   READY
   IN_TRANSIT

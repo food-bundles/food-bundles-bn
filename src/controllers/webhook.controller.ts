@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import crypto from "crypto";
 import prisma from "../prisma";
 import {
+  sendAdminOrderConfirmationEmail,
+  sendLogisticsOrderNotificationEmail,
   sendPaymentConfirmationEmail,
   sendPaymentFailedEmail,
 } from "../utils/emailTemplates";
@@ -261,6 +263,48 @@ async function processCheckoutPayment(
 
     try {
       await sendPaymentConfirmationEmail({
+        amount: orderData.totalAmount,
+        transactionId: data?.id?.toString() || flwRef,
+        restaurantName: orderData.restaurant.name,
+        products: orderData.orderItems.map((item) => ({
+          name: item.productName,
+          quantity: item.quantity,
+          price: item.unitPrice,
+        })),
+        customer: {
+          name: orderData.billingName || orderData.restaurant.name || "",
+          email: orderData.billingEmail || orderData.restaurant.email || "",
+        },
+        orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
+      });
+    } catch (emailError) {
+      console.error("Failed to send confirmation email:", emailError);
+    }
+
+    try {
+      await sendAdminOrderConfirmationEmail({
+        amount: orderData.totalAmount,
+        transactionId: data?.id?.toString() || flwRef,
+        restaurantName: orderData.restaurant.name,
+        products: orderData.orderItems.map((item) => ({
+          name: item.productName,
+          quantity: item.quantity,
+          price: item.unitPrice,
+        })),
+        customer: {
+          name: orderData.billingName || orderData.restaurant.name || "",
+          email: orderData.billingEmail || orderData.restaurant.email || "",
+        },
+        orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
+      });
+    } catch (emailError) {
+      console.error("Failed to send confirmation email:", emailError);
+    }
+
+    try {
+      await sendLogisticsOrderNotificationEmail({
         amount: orderData.totalAmount,
         transactionId: data?.id?.toString() || flwRef,
         restaurantName: orderData.restaurant.name,

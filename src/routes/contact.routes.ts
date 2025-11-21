@@ -1,20 +1,20 @@
-import { Router } from 'express';
+import { Router } from "express";
 import {
   createContactSubmission,
   getContactSubmissions,
   getContactSubmission,
   updateContactSubmission,
   deleteContactSubmission,
-  respondToSubmission
-} from '../controllers/contact.controller';
+  respondToSubmission,
+} from "../controllers/contact.controller";
 
 const router = Router();
 
-router.post('/contact-submissions', createContactSubmission);
-router.get('/contact-submissions', getContactSubmissions);
-router.get('/contact-submissions/:id', getContactSubmission);
-router.put('/contact-submissions/:id', updateContactSubmission);
-router.delete('/contact-submissions/:id', deleteContactSubmission);
-router.post('/contact-submissions/:id/respond', respondToSubmission);
+router.post("/", createContactSubmission);
+router.get("/", getContactSubmissions);
+router.get("/:id", getContactSubmission);
+router.put("/:id", updateContactSubmission);
+router.delete("/:id", deleteContactSubmission);
+router.post("/:id/respond", respondToSubmission);
 
 export default router;

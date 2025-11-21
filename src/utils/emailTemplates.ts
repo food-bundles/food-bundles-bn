@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import prisma from "../prisma";
 
 export interface PaymentNotificationData {
   amount: number;
@@ -923,5 +924,424 @@ export async function sendWalletNotificationEmail(
     console.log("Wallet notification email sent successfully");
   } catch (error) {
     console.error("Failed to send wallet notification email:", error);
+  }
+}
+
+/**
+ * Generate admin order confirmation email template
+ */
+const sendAdminOrderConfirmationTemplate = (paymentData: {
+  amount: number;
+  transactionId: string;
+  restaurantName: string;
+  products: { name: string; quantity: number; price: number }[];
+  customer: {
+    name: string;
+    email: string;
+  };
+  orderId: string;
+  orderNumber: string;
+}): string => {
+  const totalItems = paymentData.products.reduce(
+    (sum, product) => sum + product.quantity,
+    0
+  );
+
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New Order Confirmed - Admin Notification</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .order-summary { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3b82f6; }
+      .product-list { margin: 15px 0; }
+      .product-item { padding: 10px 0; border-bottom: 1px solid #e2e8f0; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #3b82f6; font-weight: bold; }
+      .amount { font-size: 24px; font-weight: bold; color: #22c55e; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🎉 New Order Confirmed!</h1>
+      </div>
+      <div class="content">
+        <p>Dear Admin,</p>
+        
+        <p>A new order has been confirmed and payment has been completed successfully.</p>
+        
+        <div class="order-summary">
+          <h2>📋 Order Details</h2>
+          <p><span class="highlight">Order Number:</span> #${
+            paymentData.orderNumber
+          }</p>
+          <p><span class="highlight">Order ID:</span> ${paymentData.orderId}</p>
+          <p><span class="highlight">Restaurant:</span> ${
+            paymentData.restaurantName
+          }</p>
+          <p><span class="highlight">Customer:</span> ${
+            paymentData.customer.name
+          } (${paymentData.customer.email})</p>
+          <p><span class="highlight">Total Amount:</span> <span class="amount">${paymentData.amount.toLocaleString()} RWF</span></p>
+          <p><span class="highlight">Transaction ID:</span> ${
+            paymentData.transactionId
+          }</p>
+          <p><span class="highlight">Total Items:</span> ${totalItems}</p>
+        </div>
+
+        <div class="product-list">
+          <h3>🛒 Order Items:</h3>
+          ${paymentData.products
+            .map(
+              (product) => `
+            <div class="product-item">
+              <strong>${product.name}</strong><br>
+              Quantity: ${
+                product.quantity
+              } × ${product.price.toLocaleString()} RWF = <strong>${(
+                product.quantity * product.price
+              ).toLocaleString()} RWF</strong>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+
+        <p><strong>Action Required:</strong> Please process this order for fulfillment and delivery coordination.</p>
+      </div>
+      <div class="footer">
+        <p>🌱 FoodBundles Admin System</p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Send admin order confirmation email
+export async function sendAdminOrderConfirmationEmail(paymentData: {
+  amount: number;
+  transactionId: string;
+  restaurantName: string;
+  products: { name: string; quantity: number; price: number }[];
+  customer: {
+    name: string;
+    email: string;
+  };
+  orderId: string;
+  orderNumber: string;
+}) {
+  if (
+    !process.env.GOOGLE_EMAIL ||
+    !process.env.GOOGLE_PASSWORD ||
+    !process.env.ADMIN_EMAIL
+  ) {
+    console.log("Email credentials or admin email not configured");
+    return;
+  }
+
+  const config = {
+    service: "gmail",
+    auth: {
+      user: process.env.GOOGLE_EMAIL,
+      pass: process.env.GOOGLE_PASSWORD,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  };
+
+  const transporter = nodemailer.createTransport(config);
+
+  const adminEmail = {
+    from: `"Food Bundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `🎉 New Order Confirmed - #${paymentData.orderNumber} from ${paymentData.restaurantName}`,
+    html: sendAdminOrderConfirmationTemplate(paymentData),
+  };
+
+  try {
+    await transporter.sendMail(adminEmail);
+    console.log("Admin order confirmation email sent successfully");
+  } catch (error) {
+    console.error("Failed to send admin order confirmation email:", error);
+  }
+}
+
+/**
+ * Generate logistics order notification email template
+ */
+const sendLogisticsOrderNotificationTemplate = (paymentData: {
+  amount: number;
+  transactionId: string;
+  restaurantName: string;
+  products: { name: string; quantity: number; price: number }[];
+  customer: {
+    name: string;
+    email: string;
+  };
+  orderId: string;
+  orderNumber: string;
+}): string => {
+  const totalItems = paymentData.products.reduce(
+    (sum, product) => sum + product.quantity,
+    0
+  );
+
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New Order Ready for Delivery</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .order-summary { background-color: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b; }
+      .product-list { margin: 15px 0; }
+      .product-item { padding: 10px 0; border-bottom: 1px solid #e2e8f0; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #f59e0b; font-weight: bold; }
+      .amount { font-size: 24px; font-weight: bold; color: #22c55e; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🚚 New Order Ready for Delivery!</h1>
+      </div>
+      <div class="content">
+        <p>Dear Logistics Team,</p>
+        
+        <p>A new order has been confirmed and is ready for delivery coordination.</p>
+        
+        <div class="order-summary">
+          <h2>📦 Delivery Details</h2>
+          <p><span class="highlight">Order Number:</span> #${
+            paymentData.orderNumber
+          }</p>
+          <p><span class="highlight">Order ID:</span> ${paymentData.orderId}</p>
+          <p><span class="highlight">Restaurant:</span> ${
+            paymentData.restaurantName
+          }</p>
+          <p><span class="highlight">Customer:</span> ${
+            paymentData.customer.name
+          } (${paymentData.customer.email})</p>
+          <p><span class="highlight">Total Amount:</span> <span class="amount">${paymentData.amount.toLocaleString()} RWF</span></p>
+          <p><span class="highlight">Transaction ID:</span> ${
+            paymentData.transactionId
+          }</p>
+          <p><span class="highlight">Total Items:</span> ${totalItems}</p>
+        </div>
+
+        <div class="product-list">
+          <h3>📋 Items to Deliver:</h3>
+          ${paymentData.products
+            .map(
+              (product) => `
+            <div class="product-item">
+              <strong>${product.name}</strong><br>
+              Quantity: ${
+                product.quantity
+              } × ${product.price.toLocaleString()} RWF = <strong>${(
+                product.quantity * product.price
+              ).toLocaleString()} RWF</strong>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+
+        <p><strong>Next Steps:</strong> Please coordinate with the restaurant for pickup and delivery scheduling.</p>
+      </div>
+      <div class="footer">
+        <p>🚛 FoodBundles Logistics System</p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Send logistics order notification email to all LOGISTICS users
+export async function sendLogisticsOrderNotificationEmail(paymentData: {
+  amount: number;
+  transactionId: string;
+  restaurantName: string;
+  products: { name: string; quantity: number; price: number }[];
+  customer: {
+    name: string;
+    email: string;
+  };
+  orderId: string;
+  orderNumber: string;
+}) {
+  if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+    console.log("Email credentials not configured");
+    return;
+  }
+
+  try {
+    // Get all LOGISTICS users
+    const logisticsUsers = await prisma.admin.findMany({
+      where: {
+        role: "LOGISTICS",
+      },
+      select: {
+        email: true,
+        username: true,
+      },
+    });
+
+    if (logisticsUsers.length === 0) {
+      console.log("No logistics users found");
+      return;
+    }
+
+    const config = {
+      service: "gmail",
+      auth: {
+        user: process.env.GOOGLE_EMAIL,
+        pass: process.env.GOOGLE_PASSWORD,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    };
+
+    const transporter = nodemailer.createTransport(config);
+
+    // Send email to all logistics users
+    const emailPromises = logisticsUsers.map(
+      async (user: { email: string; username: string }) => {
+        const logisticsEmail = {
+          from: `"Food Bundles Logistics" <${process.env.GOOGLE_EMAIL}>`,
+          to: user.email,
+          subject: `🚚 New Delivery Order - #${paymentData.orderNumber} from ${paymentData.restaurantName}`,
+          html: sendLogisticsOrderNotificationTemplate(paymentData),
+        };
+
+        return transporter.sendMail(logisticsEmail);
+      }
+    );
+
+    await Promise.all(emailPromises);
+    console.log(
+      `Logistics order notification emails sent to ${logisticsUsers.length} users`
+    );
+  } catch (error) {
+    console.error("Failed to send logistics order notification emails:", error);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/**
+ * Generate invitation email template
+ */
+const sendInvitationEmailTemplate = (
+  firstName: string,
+  inviteUrl: string
+): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>You've Been Invited!</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .invitation-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6366f1; }
+      .button { display: inline-block; background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #6366f1; font-weight: bold; }
+      .warning { background-color: #fef3c7; color: #92400e; padding: 15px; border-radius: 8px; margin: 15px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <img src="https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png" alt="FoodBundles Logo" style="max-width: 150px; margin-bottom: 20px;" />
+        <h1>🎉 You've Been Invited!</h1>
+      </div>
+      <div class="content">
+        <p>Hello ${firstName},</p>
+        
+        <p>You've been invited to join <strong>FoodBundles Platform</strong>. We're excited to have you on board!</p>
+        
+        <p>This invitation gives you access to our platform where you can collaborate with your team, manage projects, and more.</p>
+        
+        <div class="invitation-details">
+          <h2>📋 Your Invitation Details</h2>
+          <p>This invitation will expire in <span class="highlight">24 hours</span>.</p>
+        </div>
+        
+        <div style="text-align: center;">
+          <a href="${inviteUrl}" class="button">Accept Invitation</a>
+        </div>
+        
+        <div class="warning">
+          <p><strong>If the button above doesn't work, you can copy and paste the following link into your browser:</strong></p>
+          <p style="word-break: break-all; font-family: monospace; background: #f3f4f6; padding: 10px; border-radius: 4px;">${inviteUrl}</p>
+        </div>
+        
+        <p>If you didn't expect this invitation or have any questions, please contact our support team.</p>
+        
+        <p>Best regards,<br>The FoodBundles Team</p>
+      </div>
+      <div class="footer">
+        <p>© 2025 FoodBundles Platform. All rights reserved.</p>
+        <p style="font-size: 12px; margin-top: 15px;">This is an automated email, please do not reply.</p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Send invitation email
+export async function sendInvitationEmail(
+  email: string,
+  firstName: string,
+  inviteUrl: string
+) {
+  if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+    console.log("Email credentials not configured");
+    return;
+  }
+
+  const config = {
+    service: "gmail",
+    auth: {
+      user: process.env.GOOGLE_EMAIL,
+      pass: process.env.GOOGLE_PASSWORD,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  };
+
+  const transporter = nodemailer.createTransport(config);
+
+  const invitationEmail = {
+    from: `"FoodBundles Platform" <${process.env.GOOGLE_EMAIL}>`,
+    to: email,
+    subject: "You've Been Invited to Join FoodBundles Platform!",
+    html: sendInvitationEmailTemplate(firstName, inviteUrl),
+  };
+
+  try {
+    await transporter.sendMail(invitationEmail);
+    console.log("Invitation email sent successfully");
+  } catch (error) {
+    console.error("Failed to send invitation email:", error);
   }
 }

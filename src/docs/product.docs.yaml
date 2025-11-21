@@ -383,6 +383,8 @@ paths:
         - Products API Management
       summary: Get all products by user role
       description: Retrieve all products based on user role with optional filtering and pagination
+      security:
+        - BearerAuth: []
       parameters:
         - name: category
           in: query

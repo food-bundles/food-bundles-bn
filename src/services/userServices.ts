@@ -984,7 +984,7 @@ export const requestPasswordResetService = async (email: string) => {
   const resetToken = generateResetToken(user.id, user.userType);
 
   // Create reset link (you'll need to replace with your actual frontend URL)
-  const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+  const resetLink = `${process.env.CLIENT_PRODUCTION_URL}/reset-password?token=${resetToken}`;
 
   // Get user name based on user type
   let userName = "";

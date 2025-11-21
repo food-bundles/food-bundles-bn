@@ -350,6 +350,23 @@ export class DeliveryService {
           orderStatus = OrderStatus.CONFIRMED;
       }
 
+      // If status is DELIVERED, send delivery OTP
+      if (status === DeliveryStatus.DELIVERED) {
+        const result = await DeliveryService.createDeliveryOTP(orderId);
+
+        if (!result.success) {
+          return {
+            success: false,
+            message: result.message,
+          };
+        }
+
+        return {
+          success: true,
+          message: "Delivery OTP created successfully",
+        };
+      }
+
       await prisma.$transaction(async (tx) => {
         // Update order status
         await tx.order.update({
@@ -377,23 +394,6 @@ export class DeliveryService {
             notes,
           },
         });
-
-        // If status is DELIVERED, send delivery OTP
-        if (status === DeliveryStatus.DELIVERED) {
-          const result = await DeliveryService.createDeliveryOTP(orderId);
-
-          if (!result.success) {
-            return {
-              success: false,
-              message: result.message,
-            };
-          }
-
-          return {
-            success: true,
-            message: "Delivery OTP created successfully",
-          };
-        }
       });
 
       return {
@@ -455,7 +455,41 @@ export class DeliveryService {
     });
 
     if (!delivery) {
-      throw new Error("Delivery details not found for this order");
+      // Return order details without delivery details
+      const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+          restaurant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              location: true,
+              province: true,
+              district: true,
+              sector: true,
+              cell: true,
+              village: true,
+            },
+          },
+          orderItems: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  productName: true,
+                  unitPrice: true,
+                  unit: true,
+                  images: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return order;
     }
 
     return delivery;

@@ -1,0 +1,309 @@
+tags:
+  - name: Data Export
+    description: Operations related to data export in various formats
+
+components:
+  schemas:
+    ExportType:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            [
+              users,
+              orders,
+              restaurants,
+              payments,
+              products,
+              farmers,
+              logistics,
+              aggregators,
+            ]
+        description:
+          type: string
+
+    ExportFormat:
+      type: object
+      properties:
+        format:
+          type: string
+          enum: [csv, excel, pdf, html]
+        description:
+          type: string
+
+    ExportOptions:
+      type: object
+      properties:
+        types:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExportType"
+        formats:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExportFormat"
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+paths:
+  /export/types:
+    get:
+      tags:
+        - Data Export
+      summary: Get available export types and formats
+      description: Retrieve all available data types and formats for export (Admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Export options retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Export options retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/ExportOptions"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /export/{type}/{format}:
+    get:
+      tags:
+        - Data Export
+      summary: Export data in specified format
+      description: Export specific data type in the requested format (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              [
+                users,
+                orders,
+                restaurants,
+                payments,
+                products,
+                farmers,
+                logistics,
+                aggregators,
+              ]
+          description: Type of data to export
+        - name: format
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [csv, excel, pdf, html]
+          description: Export format
+      responses:
+        200:
+          description: Data exported successfully
+          content:
+            text/csv:
+              schema:
+                type: string
+                example: "id,name,email,phone\n1,Restaurant A,email@example.com,+1234567890"
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            text/html:
+              schema:
+                type: string
+                example: "<html><body><table><tr><th>ID</th><th>Name</th></tr></table></body></html>"
+        400:
+          description: Bad request - Invalid type or format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_format:
+                  value:
+                    message: "Invalid format. Supported formats: pdf, csv, excel, html"
+                invalid_type:
+                  value:
+                    message: "Invalid export type"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /export/users/csv:
+    get:
+      tags:
+        - Data Export
+      summary: Export users as CSV
+      description: Export all restaurant users in CSV format
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Users exported as CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /export/orders/excel:
+    get:
+      tags:
+        - Data Export
+      summary: Export orders as Excel
+      description: Export all orders in Excel format
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Orders exported as Excel
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /export/restaurants/pdf:
+    get:
+      tags:
+        - Data Export
+      summary: Export restaurants as PDF
+      description: Export restaurant information in PDF format
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Restaurants exported as PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /export/payments/html:
+    get:
+      tags:
+        - Data Export
+      summary: Export payments as HTML
+      description: Export payment information in HTML format
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Payments exported as HTML
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /export/products/csv:
+    get:
+      tags:
+        - Data Export
+      summary: Export products as CSV
+      description: Export product catalog in CSV format
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Products exported as CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /export/farmers/excel:
+    get:
+      tags:
+        - Data Export
+      summary: Export farmers as Excel
+      description: Export farmer information in Excel format
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Farmers exported as Excel
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /export/logistics/pdf:
+    get:
+      tags:
+        - Data Export
+      summary: Export logistics as PDF
+      description: Export logistics personnel in PDF format
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Logistics exported as PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /export/aggregators/html:
+    get:
+      tags:
+        - Data Export
+      summary: Export aggregators as HTML
+      description: Export aggregator information in HTML format
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Aggregators exported as HTML
+          content:
+            text/html:
+              schema:
+                type: string

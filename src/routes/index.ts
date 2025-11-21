@@ -21,7 +21,10 @@ import voucherRoutes from "./voucher.routes";
 import deliveryRoutes from "./delivery.routes";
 import postRoutes from "./post.routes";
 import notificationRoutes from "./notification.routes";
+import salesRoutes from "./sales.routes";
+import exportRoutes from "./export.routes";
 import contactRoutes from "./contact.routes";
+import inviteRoutes from "./invite.routes";
 
 const routes = Router();
 
@@ -43,7 +46,10 @@ routes.use("/vouchers", voucherRoutes);
 routes.use("/deliveries", deliveryRoutes);
 routes.use("/posts", postRoutes);
 routes.use("/notifications", notificationRoutes);
-routes.use("/", contactRoutes);
+routes.use("/sales", salesRoutes);
+routes.use("/export", exportRoutes);
+routes.use("/invites", inviteRoutes);
+routes.use("/contact - submissions", contactRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

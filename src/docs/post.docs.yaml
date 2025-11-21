@@ -23,8 +23,12 @@ components:
           type: array
           items:
             type: string
-            format: binary
           description: Array of image URLs
+        videos:
+          type: array
+          items:
+            type: string
+          description: Array of video URLs
         isActive:
           type: boolean
           description: Whether the post is active
@@ -67,8 +71,12 @@ components:
           type: array
           items:
             type: string
-            format: binary
           description: Array of image URLs (optional)
+        videos:
+          type: array
+          items:
+            type: string
+          description: Array of video URLs (optional)
         isActive:
           type: boolean
           description: Whether the post should be active
@@ -91,8 +99,12 @@ components:
           type: array
           items:
             type: string
-            format: binary
           description: Array of image URLs
+        videos:
+          type: array
+          items:
+            type: string
+          description: Array of video URLs
         isActive:
           type: boolean
           description: Whether the post is active
@@ -164,7 +176,13 @@ paths:
                   items:
                     type: string
                     format: binary
-                  description: Image files to upload (optional)
+                  description: Image files to upload (max 5, optional)
+                videos:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Video files to upload (max 3, 10MB each, optional)
                 isActive:
                   type: boolean
                   description: Whether the post should be active
@@ -346,7 +364,13 @@ paths:
                   items:
                     type: string
                     format: binary
-                  description: New image files to upload (optional)
+                  description: New image files to upload (max 5, optional)
+                videos:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: New video files to upload (max 3, 10MB each, optional)
                 isActive:
                   type: boolean
                   description: Whether the post is active
@@ -500,6 +524,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /posts/featured:
+    get:
+      tags:
+        - Post Management
+      summary: Get featured posts
+      description: Retrieve posts from restaurants with active advertising subscriptions
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of posts per page
+      responses:
+        200:
+          description: Featured posts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Featured posts retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Post"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
         500:
           description: Internal server error
           content:
