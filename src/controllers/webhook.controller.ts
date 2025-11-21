@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import crypto from "crypto";
 import prisma from "../prisma";
 import {
+  sendAdminOrderConfirmationEmail,
+  sendLogisticsOrderNotificationEmail,
   sendPaymentConfirmationEmail,
   sendPaymentFailedEmail,
 } from "../utils/emailTemplates";
@@ -10,6 +12,7 @@ import { clearCartService } from "../services/cart.service";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { wsManager } from "../index";
 import { OrderStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
+import { createNotificationService } from "../services/notification.services";
 
 // Process wallet transactions with WebSocket notification
 async function processWalletTransaction(
@@ -273,10 +276,94 @@ async function processCheckoutPayment(
           email: orderData.billingEmail || orderData.restaurant.email || "",
         },
         orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
       });
     } catch (emailError) {
       console.error("Failed to send confirmation email:", emailError);
     }
+
+    try {
+      await sendAdminOrderConfirmationEmail({
+        amount: orderData.totalAmount,
+        transactionId: data?.id?.toString() || flwRef,
+        restaurantName: orderData.restaurant.name,
+        products: orderData.orderItems.map((item) => ({
+          name: item.productName,
+          quantity: item.quantity,
+          price: item.unitPrice,
+        })),
+        customer: {
+          name: orderData.billingName || orderData.restaurant.name || "",
+          email: orderData.billingEmail || orderData.restaurant.email || "",
+        },
+        orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
+      });
+    } catch (emailError) {
+      console.error("Failed to send confirmation email:", emailError);
+    }
+
+    try {
+      await sendLogisticsOrderNotificationEmail({
+        amount: orderData.totalAmount,
+        transactionId: data?.id?.toString() || flwRef,
+        restaurantName: orderData.restaurant.name,
+        products: orderData.orderItems.map((item) => ({
+          name: item.productName,
+          quantity: item.quantity,
+          price: item.unitPrice,
+        })),
+        customer: {
+          name: orderData.billingName || orderData.restaurant.name || "",
+          email: orderData.billingEmail || orderData.restaurant.email || "",
+        },
+        orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
+      });
+    } catch (emailError) {
+      console.error("Failed to send confirmation email:", emailError);
+    }
+
+    await createNotificationService({
+      title: "New Order Received",
+      message: `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
+      eventType: "NEW_ORDER_PLACED",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: {
+        orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
+        restaurantId: orderData.restaurantId,
+        totalAmount: orderData.totalAmount,
+      },
+    });
+
+    await createNotificationService({
+      title: "Payment Successful",
+      message: `Payment of ${orderData.totalAmount} RWF for order #${orderData.orderNumber} has been processed`,
+      eventType: "PAYMENT_PROCESSED",
+      targetType: "SPECIFIC_USER",
+      targetId: orderData.restaurantId,
+      metadata: {
+        orderId: orderData.id,
+        amount: orderData.totalAmount,
+        paymentMethod: orderData.paymentMethod,
+        transactionId: orderData.transactionId,
+      },
+    });
+
+    await createNotificationService({
+      title: "Order Confirmed",
+      message: `Your order #${orderData.orderNumber} has been confirmed and is being prepared`,
+      eventType: "ORDER_CONFIRMED",
+      targetType: "SPECIFIC_USER",
+      targetId: orderData.restaurantId,
+      metadata: {
+        orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
+        estimatedDelivery: orderData.estimatedDelivery,
+      },
+    });
 
     console.log(`Checkout payment completed: ${orderData.id}`);
   } else if (status === "failed") {
@@ -347,10 +434,25 @@ async function processCheckoutPayment(
           email: orderData.billingEmail || orderData.restaurant.email || "",
         },
         orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
       });
     } catch (emailError) {
       console.error("Failed to send payment failed email:", emailError);
     }
+
+    // In payment webhook when payment fails
+    await createNotificationService({
+      title: "Payment Failed",
+      message: `Payment for order #${orderData.orderNumber} failed. Please try again or contact support`,
+      eventType: "PAYMENT_FAILED",
+      targetType: "SPECIFIC_USER",
+      targetId: orderData.restaurantId,
+      metadata: {
+        orderId: orderData.id,
+        amount: orderData.totalAmount,
+        failureReason: "Payment failed",
+      },
+    });
 
     console.log(`Checkout payment failed: ${orderData.id}`);
   }

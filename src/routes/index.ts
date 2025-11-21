@@ -19,7 +19,12 @@ import locationRoutes from "./location.routes";
 import subscriptionRoutes from "./subscription.routes";
 import voucherRoutes from "./voucher.routes";
 import deliveryRoutes from "./delivery.routes";
+import postRoutes from "./post.routes";
+import notificationRoutes from "./notification.routes";
+import salesRoutes from "./sales.routes";
+import exportRoutes from "./export.routes";
 import contactRoutes from "./contact.routes";
+import inviteRoutes from "./invite.routes";
 
 const routes = Router();
 
@@ -39,7 +44,12 @@ routes.use("/locations", locationRoutes);
 routes.use("/subscriptions", subscriptionRoutes);
 routes.use("/vouchers", voucherRoutes);
 routes.use("/deliveries", deliveryRoutes);
-routes.use("/", contactRoutes);
+routes.use("/posts", postRoutes);
+routes.use("/notifications", notificationRoutes);
+routes.use("/sales", salesRoutes);
+routes.use("/export", exportRoutes);
+routes.use("/invites", inviteRoutes);
+routes.use("/contact - submissions", contactRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

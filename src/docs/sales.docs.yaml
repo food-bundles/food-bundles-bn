@@ -1,0 +1,438 @@
+tags:
+  - name: Sales Management
+    description: Operations related to sales, revenue, and expense management
+
+components:
+  schemas:
+    RevenueData:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              orderNumber:
+                type: string
+              totalAmount:
+                type: number
+              paidAt:
+                type: string
+                format: date-time
+              restaurant:
+                type: object
+                properties:
+                  name:
+                    type: string
+        subscriptions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              amount:
+                type: number
+              paidAt:
+                type: string
+                format: date-time
+              subscription:
+                type: object
+                properties:
+                  restaurant:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                  plan:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+        totalOrderRevenue:
+          type: number
+        totalSubscriptionRevenue:
+          type: number
+        totalRevenue:
+          type: number
+
+    ExpenseData:
+      type: object
+      properties:
+        submissions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              productName:
+                type: string
+              totalAmount:
+                type: number
+              paidAt:
+                type: string
+                format: date-time
+              farmer:
+                type: object
+                properties:
+                  phone:
+                    type: string
+        voucherTransactions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              discountAmount:
+                type: number
+              transactionDate:
+                type: string
+                format: date-time
+              restaurant:
+                type: object
+                properties:
+                  name:
+                    type: string
+              voucher:
+                type: object
+                properties:
+                  voucherCode:
+                    type: string
+        totalSubmissionExpense:
+          type: number
+        totalVoucherExpense:
+          type: number
+        totalExpense:
+          type: number
+
+    SalesSummary:
+      type: object
+      properties:
+        revenue:
+          type: object
+          properties:
+            orders:
+              type: number
+            subscriptions:
+              type: number
+            total:
+              type: number
+        expense:
+          type: object
+          properties:
+            submissions:
+              type: number
+            vouchers:
+              type: number
+            total:
+              type: number
+        profit:
+          type: number
+        profitMargin:
+          type: number
+
+    SalesAnalytics:
+      type: object
+      properties:
+        monthlyRevenue:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+                format: date
+              revenue:
+                type: number
+        topRestaurants:
+          type: array
+          items:
+            type: object
+            properties:
+              restaurantId:
+                type: string
+              name:
+                type: string
+              _sum:
+                type: object
+                properties:
+                  totalAmount:
+                    type: number
+              _count:
+                type: object
+                properties:
+                  id:
+                    type: number
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+paths:
+  /sales/revenue:
+    get:
+      tags:
+        - Sales Management
+      summary: Get revenue data
+      description: Retrieve revenue data from orders and subscriptions (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Start date for filtering (YYYY-MM-DD)
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: End date for filtering (YYYY-MM-DD)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of items per page
+      responses:
+        200:
+          description: Revenue data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Revenue data retrieved successfully"
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/RevenueData"
+                      - type: object
+                        properties:
+                          pagination:
+                            $ref: "#/components/schemas/PaginationInfo"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sales/expense:
+    get:
+      tags:
+        - Sales Management
+      summary: Get expense data
+      description: Retrieve expense data from farmer payments and voucher discounts (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Start date for filtering (YYYY-MM-DD)
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: End date for filtering (YYYY-MM-DD)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of items per page
+      responses:
+        200:
+          description: Expense data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Expense data retrieved successfully"
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/ExpenseData"
+                      - type: object
+                        properties:
+                          pagination:
+                            $ref: "#/components/schemas/PaginationInfo"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sales/summary:
+    get:
+      tags:
+        - Sales Management
+      summary: Get sales summary
+      description: Get comprehensive sales summary with revenue, expenses, and profit (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Start date for filtering (YYYY-MM-DD)
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: End date for filtering (YYYY-MM-DD)
+      responses:
+        200:
+          description: Sales summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Sales summary retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/SalesSummary"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sales/analytics:
+    get:
+      tags:
+        - Sales Management
+      summary: Get sales analytics
+      description: Get sales analytics including trends and top performers (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Start date for filtering (YYYY-MM-DD)
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: End date for filtering (YYYY-MM-DD)
+      responses:
+        200:
+          description: Sales analytics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Sales analytics retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/SalesAnalytics"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

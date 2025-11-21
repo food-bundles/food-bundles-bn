@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 import { DeliveryStatus, OrderStatus, PaymentStatus } from "@prisma/client";
 import { sendMessage } from "../utils/sms.utility";
+import { createNotificationService } from "./notification.services";
 
 export class DeliveryService {
   /**
@@ -181,10 +182,18 @@ export class DeliveryService {
       });
 
       // Send confirmation to restaurant
-      // await sendMessage(
-      //   `Order ${deliveryOTP.order.orderNumber} has been successfully delivered and marked as completed.`,
-      //   deliveryOTP.order.restaurant.phone || ""
-      // );
+      await createNotificationService({
+        title: "Order Delivered",
+        message: `Order #${deliveryOTP.order.orderNumber} has been successfully delivered`,
+        eventType: "ORDER_DELIVERED",
+        targetType: "SPECIFIC_USER",
+        targetId: deliveryOTP.order.restaurant.id,
+        metadata: {
+          orderId: deliveryOTP.order.id,
+          orderNumber: deliveryOTP.order.orderNumber,
+          deliveredAt: new Date().toISOString(),
+        },
+      });
 
       return {
         success: true,
@@ -341,6 +350,23 @@ export class DeliveryService {
           orderStatus = OrderStatus.CONFIRMED;
       }
 
+      // If status is DELIVERED, send delivery OTP
+      if (status === DeliveryStatus.DELIVERED) {
+        const result = await DeliveryService.createDeliveryOTP(orderId);
+
+        if (!result.success) {
+          return {
+            success: false,
+            message: result.message,
+          };
+        }
+
+        return {
+          success: true,
+          message: "Delivery OTP created successfully",
+        };
+      }
+
       await prisma.$transaction(async (tx) => {
         // Update order status
         await tx.order.update({
@@ -368,23 +394,6 @@ export class DeliveryService {
             notes,
           },
         });
-
-        // If status is DELIVERED, send delivery OTP
-        if (status === DeliveryStatus.DELIVERED) {
-          const result = await DeliveryService.createDeliveryOTP(orderId);
-
-          if (!result.success) {
-            return {
-              success: false,
-              message: result.message,
-            };
-          }
-
-          return {
-            success: true,
-            message: "Delivery OTP created successfully",
-          };
-        }
       });
 
       return {
@@ -446,7 +455,41 @@ export class DeliveryService {
     });
 
     if (!delivery) {
-      throw new Error("Delivery details not found for this order");
+      // Return order details without delivery details
+      const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+          restaurant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              location: true,
+              province: true,
+              district: true,
+              sector: true,
+              cell: true,
+              village: true,
+            },
+          },
+          orderItems: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  productName: true,
+                  unitPrice: true,
+                  unit: true,
+                  images: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return order;
     }
 
     return delivery;

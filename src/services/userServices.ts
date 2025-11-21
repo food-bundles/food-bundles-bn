@@ -20,7 +20,12 @@ import {
 import { PaginationService } from "./paginationService";
 import { LocationValidationService } from "./location.service";
 import { validateTIN } from "../utils/validateTin";
-import { generateFarmerPIN, generateRestaurantPassword, sendPasswordSMS } from "../utils/passwordGenerator";
+import { createNotificationService } from "./notification.services";
+import {
+  generateFarmerPIN,
+  generateRestaurantPassword,
+  sendPasswordSMS,
+} from "../utils/passwordGenerator";
 
 // Helper function to check for existing phone/email across all user types
 const checkExistingUser = async (phone?: string, email?: string) => {
@@ -110,6 +115,22 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
         sector,
         cell,
         village,
+      },
+    });
+
+    await createNotificationService({
+      title: "New User Registration",
+      message: `New ${farmer.role.toLowerCase()} ${
+        farmer.email
+      } has registered`,
+      eventType: "USER_SIGNUP",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: {
+        userId: farmer.id,
+        userRole: farmer.role,
+        email: farmer.email,
+        registeredAt: new Date().toISOString(),
       },
     });
 
@@ -383,6 +404,23 @@ export const createRestaurantService = async (
         sector,
         cell,
         village,
+      },
+    });
+
+    // In user registration controller
+    await createNotificationService({
+      title: "New User Registration",
+      message: `New ${restaurant.role.toLowerCase()} ${
+        restaurant.name || restaurant.email
+      } has registered`,
+      eventType: "USER_SIGNUP",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: {
+        userId: restaurant.id,
+        userRole: restaurant.role,
+        email: restaurant.email,
+        registeredAt: new Date().toISOString(),
       },
     });
 
@@ -692,6 +730,21 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
       },
     });
 
+    // In user registration controller
+    await createNotificationService({
+      title: "New User Registration",
+      message: `New ${admin.role.toLowerCase()} ${admin.email} has registered`,
+      eventType: "USER_SIGNUP",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: {
+        userId: admin.id,
+        userRole: admin.role,
+        email: admin.email,
+        registeredAt: new Date().toISOString(),
+      },
+    });
+
     const { password: _, ...adminWithoutPassword } = admin;
     return adminWithoutPassword;
   } catch (error: any) {
@@ -931,7 +984,7 @@ export const requestPasswordResetService = async (email: string) => {
   const resetToken = generateResetToken(user.id, user.userType);
 
   // Create reset link (you'll need to replace with your actual frontend URL)
-  const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+  const resetLink = `${process.env.CLIENT_PRODUCTION_URL}/reset-password?token=${resetToken}`;
 
   // Get user name based on user type
   let userName = "";
@@ -1010,8 +1063,11 @@ export const resetPasswordService = async (
 // ADMIN-ONLY SERVICES WITH AUTO-GENERATED PASSWORDS
 
 // Admin creates farmer with auto-generated PIN
-export const createFarmerByAdminService = async (farmerData: Omit<ICreateFarmerData, 'password'>) => {
-  const { phone, email, location, province, district, sector, cell, village } = farmerData;
+export const createFarmerByAdminService = async (
+  farmerData: Omit<ICreateFarmerData, "password">
+) => {
+  const { phone, email, location, province, district, sector, cell, village } =
+    farmerData;
 
   if (!phone) {
     throw new Error("Phone number is required for farmer creation");
@@ -1023,16 +1079,19 @@ export const createFarmerByAdminService = async (farmerData: Omit<ICreateFarmerD
   }
 
   if (province || district || sector || cell || village) {
-    const locationValidation = LocationValidationService.validateLocationHierarchy({
-      province: province as string,
-      district: district as string,
-      sector: sector as string,
-      cell: cell as string,
-      village: village as string,
-    });
+    const locationValidation =
+      LocationValidationService.validateLocationHierarchy({
+        province: province as string,
+        district: district as string,
+        sector: sector as string,
+        cell: cell as string,
+        village: village as string,
+      });
 
     if (!locationValidation.isValid) {
-      throw new Error(`Location validation failed: ${locationValidation.errors.join(", ")}`);
+      throw new Error(
+        `Location validation failed: ${locationValidation.errors.join(", ")}`
+      );
     }
   }
 
@@ -1054,7 +1113,7 @@ export const createFarmerByAdminService = async (farmerData: Omit<ICreateFarmerD
       },
     });
 
-    await sendPasswordSMS(phone, generatedPIN, 'farmer');
+    await sendPasswordSMS(phone, generatedPIN, "farmer");
 
     const { password: _, ...farmerWithoutPassword } = farmer;
     return farmerWithoutPassword;
@@ -1064,11 +1123,15 @@ export const createFarmerByAdminService = async (farmerData: Omit<ICreateFarmerD
 };
 
 // Admin creates restaurant with auto-generated password
-export const createRestaurantByAdminService = async (restaurantData: Omit<ICreateRestaurantData, 'password'>) => {
+export const createRestaurantByAdminService = async (
+  restaurantData: Omit<ICreateRestaurantData, "password">
+) => {
   const { name, email, phone, tin, location } = restaurantData;
 
   if (!name || !email || !phone) {
-    throw new Error("Name, email, and phone are required for restaurant creation");
+    throw new Error(
+      "Name, email, and phone are required for restaurant creation"
+    );
   }
 
   if (!tin) {
@@ -1106,7 +1169,7 @@ export const createRestaurantByAdminService = async (restaurantData: Omit<ICreat
       },
     });
 
-    await sendPasswordSMS(phone, generatedPassword, 'restaurant');
+    await sendPasswordSMS(phone, generatedPassword, "restaurant");
 
     const { password: _, ...restaurantWithoutPassword } = restaurant;
     return restaurantWithoutPassword;

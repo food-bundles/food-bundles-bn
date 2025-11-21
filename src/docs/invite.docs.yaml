@@ -1,0 +1,342 @@
+tags:
+  - name: Invitations API Management
+    description: Operations for managing user invitations
+
+components:
+  schemas:
+    Invitation:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique invitation identifier
+        email:
+          type: string
+          format: email
+          description: Invitee email address
+        username:
+          type: string
+          description: Invitee username
+        phone:
+          type: string
+          nullable: true
+          description: Invitee phone number
+        role:
+          type: string
+          enum: [ADMIN, LOGISTICS, AGGREGATOR]
+          description: Role assigned to invitee
+        createdAt:
+          type: string
+          format: date-time
+          description: Invitation creation timestamp
+
+    CreateInviteRequest:
+      type: object
+      required:
+        - email
+        - role
+        - username
+      properties:
+        email:
+          type: string
+          format: email
+          description: Invitee email address (required)
+          example: "user@example.com"
+        role:
+          type: string
+          enum: [ADMIN, LOGISTICS, AGGREGATOR]
+          description: Role to assign (required)
+          example: "LOGISTICS"
+        username:
+          type: string
+          description: Username for the invitee (required)
+          example: "johndoe"
+        phone:
+          type: string
+          description: Invitee phone number
+          example: "+250788123456"
+
+    AcceptInviteRequest:
+      type: object
+      required:
+        - token
+        - password
+      properties:
+        token:
+          type: string
+          description: JWT invitation token (required)
+          example: "eyJhbGciOiJIUzI1NiJ9..."
+        password:
+          type: string
+          minLength: 6
+          description: New password (required, minimum 6 characters)
+          example: "newpassword123"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+
+paths:
+  /invites:
+    post:
+      tags:
+        - Invitations API Management
+      summary: Create invitation
+      description: Create a new invitation for a user (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInviteRequest"
+      responses:
+        201:
+          description: Invitation created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Invitation sent successfully"
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      role:
+                        type: string
+                      inviteUrl:
+                        type: string
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden
+
+    get:
+      tags:
+        - Invitations API Management
+      summary: Get all invitations
+      description: Retrieve all invitations (Admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Invitations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Invitations retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Invitation"
+
+  /invites/{id}:
+    get:
+      tags:
+        - Invitations API Management
+      summary: Get invitation by ID
+      description: Retrieve a specific invitation by ID (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique invitation identifier
+      responses:
+        200:
+          description: Invitation retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Invitation retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Invitation"
+        404:
+          description: Invitation not found
+
+    delete:
+      tags:
+        - Invitations API Management
+      summary: Cancel invitation
+      description: Cancel a pending invitation (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique invitation identifier
+      responses:
+        200:
+          description: Invitation cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Invitation cancelled successfully"
+        400:
+          description: Bad request
+        404:
+          description: Invitation not found
+
+  /invites/{id}/resend:
+    post:
+      tags:
+        - Invitations API Management
+      summary: Resend invitation
+      description: Resend invitation email (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique invitation identifier
+      responses:
+        200:
+          description: Invitation resent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Invitation resent successfully"
+                  data:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                      inviteUrl:
+                        type: string
+
+  /invites/verify/{token}:
+    get:
+      tags:
+        - Invitations API Management
+      summary: Verify invitation token
+      description: Verify if invitation token is valid (Public)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: JWT invitation token
+      responses:
+        200:
+          description: Token verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Token verified successfully"
+                  data:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      role:
+                        type: string
+        400:
+          description: Invalid or expired token
+
+  /invites/accept:
+    post:
+      tags:
+        - Invitations API Management
+      summary: Accept invitation
+      description: Accept invitation and set password (Public)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInviteRequest"
+      responses:
+        200:
+          description: Invitation accepted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Invitation accepted successfully"
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      role:
+                        type: string
+        400:
+          description: Bad request

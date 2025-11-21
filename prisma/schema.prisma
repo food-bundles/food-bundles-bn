@@ -81,6 +81,7 @@ model Restaurant {
   VoucherTransaction VoucherTransaction[]
   VoucherRepayment   VoucherRepayment[]
   VoucherPenalty     VoucherPenalty[]
+  posts              Post[]
 }
 
 model FarmerSubmission {
@@ -882,6 +883,61 @@ model VoucherPenalty {
   @@index([appliedDate])
 }
 
+model Post {
+  id           String   @id @default(uuid())
+  restaurantId String
+  title        String
+  content      String
+  images       String[]
+  videos       String[]
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model OTP {
+  id        String     @id @default(uuid())
+  phone     String
+  otp       String
+  purpose   OTPPurpose
+  verified  Boolean    @default(false)
+  expiresAt DateTime
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([phone])
+  @@index([purpose])
+  @@index([expiresAt])
+}
+
+model Notification {
+  id         String             @id @default(uuid())
+  title      String
+  message    String
+  eventType  NotificationEvent
+  targetType NotificationTarget
+  targetId   String? // Specific user ID when targetType is SPECIFIC_USER
+  targetRole Role? // Role when targetType is ROLE_BASED
+  isRead     Boolean            @default(false)
+  metadata   Json? // Additional data related to the notification
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([targetType])
+  @@index([targetId])
+  @@index([targetRole])
+  @@index([eventType])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
 enum Role {
   FARMER
   RESTAURANT
@@ -949,6 +1005,7 @@ enum OrderStatus {
 
 enum DeliveryStatus {
   PENDING
+  CONFIRMED
   PREPARING
   READY
   IN_TRANSIT
@@ -1031,24 +1088,29 @@ enum PenaltyStatus {
   WAIVED
 }
 
-model OTP {
-  id        String     @id @default(uuid())
-  phone     String
-  otp       String
-  purpose   OTPPurpose
-  verified  Boolean    @default(false)
-  expiresAt DateTime
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-
-  @@index([phone])
-  @@index([purpose])
-  @@index([expiresAt])
-}
-
 enum OTPPurpose {
   RESTAURANT_SIGNUP
   VOUCHER_CHECKOUT
+}
+
+enum NotificationEvent {
+  NEW_ORDER_PLACED
+  ORDER_CONFIRMED
+  ORDER_DELIVERED
+  PAYMENT_PROCESSED
+  PAYMENT_FAILED
+  USER_SIGNUP
+  PRODUCT_APPROVED
+  VOUCHER_ISSUED
+  SUBSCRIPTION_EXPIRED
+  LOW_STOCK_ALERT
+  SYSTEM_MAINTENANCE
+}
+
+enum NotificationTarget {
+  SPECIFIC_USER
+  ROLE_BASED
+  ALL_USERS
 }
 
 model ContactSubmission {
