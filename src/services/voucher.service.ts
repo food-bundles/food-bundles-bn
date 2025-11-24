@@ -10,6 +10,199 @@ import {
 } from "@prisma/client";
 import { wsManager } from "../index";
 import { createNotificationService } from "./notification.services";
+import {
+  getWalletByRestaurantIdService,
+  debitWalletService,
+} from "./wallet.service";
+
+// Payment processing functions
+const flw = require("flutterwave-node-v3");
+const paypack = require("paypack-js");
+
+function cleanPhoneNumber(phone: string): string {
+  return phone.replace(/[^0-9]/g, "").replace(/^250/, "");
+}
+
+function isValidRwandaPhone(phone: string): boolean {
+  return /^(078|079|072|073)\d{7}$/.test(phone);
+}
+
+async function processMobileMoneyPayment({
+  amount,
+  phoneNumber,
+  txRef,
+  orderId,
+  email,
+  fullname,
+  currency = "RWF",
+}: any) {
+  try {
+    const cleanedPhoneNumber = cleanPhoneNumber(phoneNumber);
+    if (!isValidRwandaPhone(cleanedPhoneNumber)) {
+      throw new Error("Invalid mobile number format");
+    }
+
+    try {
+      const response = await paypack.cashin({
+        number: cleanedPhoneNumber,
+        amount: amount,
+        environment:
+          process.env.NODE_ENV === "production" ? "production" : "development",
+      });
+
+      if (response?.data) {
+        return {
+          success: true,
+          transactionId: response.data.ref || txRef,
+          reference: response.data.ref || txRef,
+          flwRef: response.data.ref || txRef,
+          status: "pending",
+          message:
+            "Payment request sent to your phone number, please confirm it.",
+        };
+      }
+    } catch (error) {
+      console.log("PayPack failed, trying Flutterwave...");
+    }
+
+    const payload = {
+      tx_ref: txRef,
+      order_id: orderId,
+      amount: amount.toString(),
+      currency: currency,
+      email: email,
+      phone_number: cleanedPhoneNumber,
+      fullname: fullname,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+    };
+
+    const response = await flw.MobileMoney.rwanda(payload);
+    if (response.status === "success") {
+      return {
+        success: true,
+        transactionId: response.data?.flw_ref || txRef,
+        reference: response.data?.tx_ref || txRef,
+        flwRef: response.data?.flw_ref || txRef,
+        status: response.data?.status || "pending",
+        message: response.message || "Mobile money payment initiated",
+      };
+    }
+    throw new Error("Payment failed");
+  } catch (error: any) {
+    return {
+      success: false,
+      transactionId: "",
+      reference: "",
+      status: "failed",
+      message: error.message || "Mobile money payment failed",
+    };
+  }
+}
+
+async function processCardPayment({
+  amount,
+  txRef,
+  email,
+  fullname,
+  phoneNumber,
+  currency = "RWF",
+  cardDetails,
+}: any) {
+  try {
+    const axios = require("axios");
+    const standardPayload = {
+      tx_ref: txRef,
+      amount: amount.toString(),
+      currency: currency,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+      customer: {
+        email: email,
+        name: fullname,
+        phonenumber: phoneNumber,
+      },
+      payment_options: "card",
+    };
+
+    const response = await axios.post(
+      "https://api.flutterwave.com/v3/payments",
+      standardPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.data?.status === "success" && response.data?.data?.link) {
+      return {
+        success: true,
+        transactionId: txRef,
+        reference: txRef,
+        status: "pending",
+        message: "Redirect to complete card payment",
+        authorizationDetails: {
+          mode: "redirect",
+          redirectUrl: response.data.data.link,
+        },
+      };
+    }
+    throw new Error("Card payment failed");
+  } catch (error: any) {
+    return {
+      success: false,
+      transactionId: "",
+      reference: "",
+      status: "failed",
+      message: error.message || "Card payment failed",
+    };
+  }
+}
+
+async function processBankTransfer({
+  amount,
+  txRef,
+  email,
+  phoneNumber,
+  currency = "RWF",
+  clientIp,
+  deviceFingerprint,
+  narration,
+}: any) {
+  try {
+    const payload = {
+      tx_ref: txRef,
+      amount: amount.toString(),
+      email: email,
+      phone_number: phoneNumber,
+      currency: currency,
+      client_ip: clientIp,
+      device_fingerprint: deviceFingerprint,
+      narration: narration,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+    };
+
+    const response = await flw.Charge.bank_transfer(payload);
+    if (response.status === "success") {
+      return {
+        success: true,
+        transactionId: response.data?.flw_ref || txRef,
+        reference: response.data?.tx_ref || txRef,
+        status: response.data?.status || "pending",
+        message: response.message || "Bank transfer initiated",
+      };
+    }
+    throw new Error("Bank transfer failed");
+  } catch (error: any) {
+    return {
+      success: false,
+      transactionId: "",
+      reference: "",
+      status: "failed",
+      message: error.message || "Bank transfer failed",
+    };
+  }
+}
 
 // ============================================
 // TYPES AND INTERFACES
@@ -60,11 +253,11 @@ interface VoucherPaymentData {
 
 interface RepaymentData {
   restaurantId: string;
-  loanId: string;
+  loanId?: string;
   amount: number;
   paymentMethod: PaymentMethod;
   paymentReference?: string;
-  voucherId?: string;
+  voucherId: string;
 }
 
 // ============================================
@@ -250,10 +443,6 @@ export const getMyVouchersService = async (
     where,
     include: {
       loan: true,
-      transactions: {
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      },
       penalties: {
         where: { status: PenaltyStatus.PENDING },
       },
@@ -1037,8 +1226,9 @@ export const processVoucherPaymentService = async (
     );
   }
 
-  // Use the exact order total amount (totalDeducted) instead of minimum
-  const actualDeduction = totalDeducted;
+  // For voucher tracking, always deduct the full original amount (including fees)
+  // This ensures delivery and packaging fees are also covered by the voucher
+  const actualDeduction = originalAmount;
 
   // Process payment in transaction
   const result = await prisma.$transaction(async (tx) => {
@@ -1057,17 +1247,20 @@ export const processVoucherPaymentService = async (
       },
     });
 
-    // Calculate new remaining credit
-    const newRemainingCredit = voucher.remainingCredit - actualDeduction;
+    // Calculate new values
+    const newUsedCredit = actualDeduction; // Full amount used including fees
+    const newTotalCredit = newUsedCredit; // Only the amount used, no penalties
+    const newRemainingCredit = 0; // Always 0 since single-use
 
-    // DON'T mark voucher as USED here - only when order is successful
-    // Update voucher balance but keep status as ACTIVE
+    // Update voucher - mark as USED after single use
     const updatedVoucher = await tx.voucher.update({
       where: { id: voucherId },
       data: {
-        usedCredit: { increment: actualDeduction },
+        usedCredit: newUsedCredit,
+        totalCredit: newTotalCredit,
         remainingCredit: newRemainingCredit,
-        usedAt: new Date(), // Track last usage time
+        usedAt: new Date(),
+        status: VoucherStatus.USED, // Always mark as USED after single use
       },
     });
 
@@ -1198,8 +1391,71 @@ export const processRepaymentService = async (data: RepaymentData) => {
     voucherId,
   } = data;
 
+  // Get voucher details first
+  const voucher = await getVoucherByIdService(voucherId);
+
+  if (voucher.restaurantId !== restaurantId) {
+    throw new Error("Voucher does not belong to this restaurant");
+  }
+
+  // Use loanId from voucher if not provided in request
+  const actualLoanId = loanId || voucher.loanId;
+
+  // Handle vouchers without loans (standalone vouchers)
+  if (!actualLoanId) {
+    // Process actual payment for standalone vouchers
+    const paymentResult = await processRepaymentPaymentService({
+      amount,
+      paymentMethod,
+      restaurantId,
+      voucherId,
+    });
+
+    if (paymentResult.success) {
+      // Add credit back to the voucher after successful payment
+      const updatedVoucher = await prisma.voucher.update({
+        where: { id: voucherId },
+        data: {
+          remainingCredit: voucher.remainingCredit + amount,
+          totalCredit: voucher.totalCredit + amount,
+        },
+      });
+
+      return {
+        repayment: {
+          id:
+            paymentResult.transactionId ||
+            `standalone-${voucherId}-${Date.now()}`,
+          amount,
+          paymentMethod,
+          paymentReference: paymentResult.reference || paymentReference,
+          allocatedToPrincipal: amount,
+          allocatedToServiceFee: 0,
+          allocatedToPenalty: 0,
+          createdAt: new Date(),
+        },
+        newOutstanding: {
+          total: 0,
+          totalCredit: updatedVoucher.totalCredit,
+          totalUsed: updatedVoucher.usedCredit,
+          totalServiceFees: 0,
+          totalPenalties: 0,
+          totalRepayments: amount,
+          outstandingPrincipal: 0,
+          outstandingServiceFees: 0,
+          outstandingPenalties: 0,
+          transactions: 0,
+          repayments: 1,
+          penalties: 0,
+        },
+      };
+    } else {
+      throw new Error(`Payment failed: ${paymentResult.message}`);
+    }
+  }
+
   // Get loan details
-  const loan = await getLoanApplicationByIdService(loanId);
+  const loan = await getLoanApplicationByIdService(actualLoanId);
 
   if (loan.restaurantId !== restaurantId) {
     throw new Error("Loan does not belong to this restaurant");
@@ -1212,7 +1468,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
   }
 
   // Calculate outstanding balance
-  const outstanding = await calculateOutstandingBalanceService(loanId);
+  const outstanding = await calculateOutstandingBalanceService(actualLoanId);
 
   if (amount > outstanding.total) {
     throw new Error(
@@ -1251,7 +1507,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
     data: {
       voucherId,
       restaurantId,
-      loanId,
+      loanId: actualLoanId,
       amount,
       paymentMethod,
       paymentReference,
@@ -1267,14 +1523,14 @@ export const processRepaymentService = async (data: RepaymentData) => {
 
   // Mark penalties as paid if fully covered
   if (allocatedToPenalty > 0) {
-    await markPenaltiesAsPaid(loanId, allocatedToPenalty);
+    await markPenaltiesAsPaid(actualLoanId, allocatedToPenalty);
   }
 
   // Check if loan is fully paid
-  const newOutstanding = await calculateOutstandingBalanceService(loanId);
+  const newOutstanding = await calculateOutstandingBalanceService(actualLoanId);
   if (newOutstanding.total <= 0) {
     await prisma.loanApplication.update({
-      where: { id: loanId },
+      where: { id: actualLoanId },
       data: { status: LoanStatus.SETTLED },
     });
 
@@ -1291,7 +1547,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
   try {
     wsManager.broadcastRepaymentUpdate({
       repaymentId: repayment.id,
-      loanId: loanId,
+      loanId: actualLoanId,
       voucherId: voucherId,
       action: "PROCESSED",
       timestamp: new Date().toISOString(),
@@ -1306,7 +1562,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
     // If loan is settled, broadcast loan update
     if (newOutstanding.total <= 0) {
       wsManager.broadcastLoanUpdate({
-        loanId: loanId,
+        loanId: actualLoanId,
         action: "SETTLED",
         timestamp: new Date().toISOString(),
         restaurantId: restaurantId,
@@ -2232,8 +2488,14 @@ export const rollbackVoucherPaymentService = async (
     const updatedVoucher = await tx.voucher.update({
       where: { id: voucherId },
       data: {
-        usedCredit: { decrement: transaction.totalDeducted },
-        remainingCredit: { increment: transaction.totalDeducted },
+        usedCredit: Math.max(
+          0,
+          transaction.voucher.usedCredit - transaction.totalDeducted
+        ),
+        remainingCredit: Math.min(
+          transaction.voucher.totalCredit,
+          transaction.voucher.remainingCredit + transaction.totalDeducted
+        ),
         status: VoucherStatus.ACTIVE, // Reset to ACTIVE
       },
     });
@@ -2272,4 +2534,83 @@ export const rollbackVoucherPaymentService = async (
   }
 
   return result;
+};
+
+/**
+ * Process actual payment for repayments
+ */
+export const processRepaymentPaymentService = async (data: {
+  amount: number;
+  paymentMethod: PaymentMethod;
+  restaurantId: string;
+  voucherId: string;
+  phoneNumber?: string;
+  cardDetails?: any;
+  email?: string;
+  fullname?: string;
+}) => {
+  const { amount, paymentMethod, restaurantId } = data;
+  const txRef = `repay_${Date.now()}`;
+
+  try {
+    switch (paymentMethod) {
+      case "MOBILE_MONEY":
+        return await processMobileMoneyPayment({
+          amount,
+          phoneNumber: data.phoneNumber || "",
+          txRef,
+          orderId: `repay_${data.voucherId}`,
+          email: data.email || "",
+          fullname: data.fullname || "",
+          currency: "RWF",
+        });
+
+      case "BANK_TRANSFER":
+        return await processBankTransfer({
+          amount,
+          txRef,
+          email: data.email || "",
+          phoneNumber: data.phoneNumber || "",
+          currency: "RWF",
+          clientIp: "",
+          deviceFingerprint: "62wd23423rq324323qew1",
+          narration: `Voucher repayment for ${data.voucherId}`,
+        });
+
+      case "CASH":
+        const wallet = await getWalletByRestaurantIdService(restaurantId);
+        await debitWalletService({
+          walletId: wallet.id,
+          amount,
+          description: `Voucher repayment for ${data.voucherId}`,
+          reference: `repay_${data.voucherId}`,
+          orderId: `repay_${data.voucherId}`,
+        });
+        return {
+          success: true,
+          transactionId: `WALLET_${Date.now()}`,
+          reference: `CASH-${Date.now()}`,
+          message: "Cash payment recorded successfully",
+        };
+
+      case "CARD":
+        return await processCardPayment({
+          amount,
+          txRef,
+          email: data.email || "",
+          fullname: data.fullname || "",
+          phoneNumber: data.phoneNumber || "",
+          currency: "RWF",
+          cardDetails: data.cardDetails,
+        });
+
+      default:
+        throw new Error(`Unsupported payment method: ${paymentMethod}`);
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error.message || "Payment processing failed",
+    };
+  }
 };

@@ -692,7 +692,7 @@ paths:
                 user_not_found:
                   value:
                     success: false
-                    message: "User not found 2"
+                    message: "User not found"
                 invalid_password:
                   value:
                     success: false
