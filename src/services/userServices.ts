@@ -956,7 +956,7 @@ export const loginService = async (loginData: ILoginData) => {
     if (user) foundUserType = "admin";
   }
 
-  if (!user) throw new Error("User not found 5");
+  if (!user) throw new Error("User not found");
 
   if (!user.password) throw new Error("Password not set for this user");
 

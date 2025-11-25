@@ -336,13 +336,13 @@ components:
     RepaymentRequest:
       type: object
       required:
-        - loanId
         - amount
         - paymentMethod
       properties:
         loanId:
           type: string
-          description: Loan ID to make repayment for
+          nullable: true
+          description: Loan ID to make repayment for (optional - will use voucher's loan if not provided)
         amount:
           type: number
           format: float
@@ -357,10 +357,6 @@ components:
           type: string
           nullable: true
           description: Payment reference from gateway
-        voucherId:
-          type: string
-          nullable: true
-          description: Specific voucher ID (optional)
 
     VoucherRepayment:
       type: object
@@ -1443,7 +1439,7 @@ paths:
     post:
       tags: [Repayment & Penalties]
       summary: Make repayment (Restaurant)
-      description: Make a repayment towards outstanding balance
+      description: Make a repayment towards outstanding balance using voucher ID. Works for both loan-backed vouchers and standalone vouchers.
       security:
         - BearerAuth: []
       parameters:
@@ -1452,7 +1448,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Voucher ID (optional but recommended)
+          description: Voucher ID
       requestBody:
         required: true
         content:
@@ -1460,20 +1456,30 @@ paths:
             schema:
               $ref: "#/components/schemas/RepaymentRequest"
             examples:
+              simple_repayment:
+                summary: Simple Cash Repayment
+                value:
+                  amount: 100000
+                  paymentMethod: "CASH"
               mobile_money_repayment:
                 summary: Mobile Money Repayment
                 value:
-                  loanId: "loan-12345"
                   amount: 100000
                   paymentMethod: "MOBILE_MONEY"
                   paymentReference: "MM123456789"
               bank_transfer_repayment:
                 summary: Bank Transfer Repayment
                 value:
-                  loanId: "loan-12345"
                   amount: 200000
                   paymentMethod: "BANK_TRANSFER"
                   paymentReference: "BT987654321"
+              with_loan_id:
+                summary: Repayment with explicit loan ID (optional)
+                value:
+                  loanId: "loan-12345"
+                  amount: 100000
+                  paymentMethod: "MOBILE_MONEY"
+                  paymentReference: "MM123456789"
       responses:
         200:
           description: Repayment processed successfully

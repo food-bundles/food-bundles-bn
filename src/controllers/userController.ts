@@ -502,7 +502,7 @@ export class UserController {
       }
 
       if (!user) {
-        return res.status(404).json({ message: "User not found 1" });
+        return res.status(404).json({ message: "User not found" });
       }
 
       const { password, ...userWithoutPassword } = user;

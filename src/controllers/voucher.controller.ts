@@ -605,9 +605,9 @@ export const makeRepayment = async (req: Request, res: Response) => {
     const restaurantId = (req as any).user.id;
     const { amount, paymentMethod, paymentReference, loanId } = req.body;
 
-    if (!amount || !paymentMethod || !loanId) {
+    if (!amount || !paymentMethod) {
       return res.status(400).json({
-        message: "Amount, payment method, and loan ID are required",
+        message: "Amount and payment method are required",
       });
     }
 

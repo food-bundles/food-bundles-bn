@@ -22,7 +22,7 @@ export const isAuthenticated = async (
     const user = await getUserById(decoded.id);
 
     if (!user) {
-      return res.status(404).json({ message: "User not found 3" });
+      return res.status(404).json({ message: "User not found" });
     }
 
     (req as any).user = user;
