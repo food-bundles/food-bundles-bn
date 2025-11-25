@@ -108,6 +108,116 @@ async function processWalletTransaction(
   return walletTransaction;
 }
 
+// Process voucher repayment payment with WebSocket notification
+async function processVoucherRepaymentPayment(
+  txRef: string,
+  flwRef: string,
+  status: string,
+  paymentProvider: "FLUTTERWAVE" | "PAYPACK" = "FLUTTERWAVE",
+  data?: any
+) {
+  console.log("Processing voucher repayment for reference:", txRef);
+
+  const repaymentTransaction = await retryDatabaseOperation(async () => {
+    return await prisma.voucherRepayment.findFirst({
+      where: {
+        OR: [
+          { paymentReference: txRef },
+          { paymentReference: flwRef },
+          { paymentReference: { contains: txRef.split("_").pop() || "" } },
+        ],
+      },
+      include: {
+        voucher: {
+          include: { restaurant: true },
+        },
+        loan: true,
+      },
+    });
+  });
+
+  if (!repaymentTransaction) {
+    console.log("No matching voucher repayment found for txRef:", txRef);
+    return null;
+  }
+
+  console.log("Found matching voucher repayment:", repaymentTransaction.id);
+
+  if (status === "successful") {
+    // Update voucher credit for successful payment
+    await retryDatabaseOperation(async () => {
+      return await prisma.voucher.update({
+        where: { id: repaymentTransaction.voucherId! },
+        data: {
+          remainingCredit: {
+            increment: repaymentTransaction.amount,
+          },
+          totalCredit: {
+            increment: repaymentTransaction.amount,
+          },
+        },
+      });
+    });
+
+    // Broadcast voucher repayment success
+    try {
+      wsManager.broadcastRepaymentUpdate({
+        repaymentId: repaymentTransaction.id,
+        loanId: repaymentTransaction.loanId || "",
+        voucherId: repaymentTransaction.voucherId || "",
+        action: "PROCESSED",
+        timestamp: new Date().toISOString(),
+        restaurantId: repaymentTransaction.restaurantId,
+        data: {
+          amount: repaymentTransaction.amount,
+          paymentMethod: repaymentTransaction.paymentMethod,
+        },
+      });
+
+      console.log(
+        `✅ Broadcasted voucher repayment success: ${repaymentTransaction.id}`
+      );
+    } catch (wsError) {
+      console.error("Failed to broadcast voucher repayment:", wsError);
+    }
+
+    console.log(`Voucher repayment completed: ${repaymentTransaction.id}`);
+  } else if (status === "failed") {
+    // Remove repayment record for failed payment
+    await retryDatabaseOperation(async () => {
+      return await prisma.voucherRepayment.delete({
+        where: { id: repaymentTransaction.id },
+      });
+    });
+
+    // Broadcast voucher repayment failure
+    try {
+      wsManager.broadcastRepaymentUpdate({
+        repaymentId: repaymentTransaction.id,
+        loanId: repaymentTransaction.loanId || "",
+        voucherId: repaymentTransaction.voucherId || "",
+        action: "FAILED",
+        timestamp: new Date().toISOString(),
+        restaurantId: repaymentTransaction.restaurantId,
+        data: {
+          amount: repaymentTransaction.amount,
+          paymentMethod: repaymentTransaction.paymentMethod,
+        },
+      });
+
+      console.log(
+        `✅ Broadcasted voucher repayment failure: ${repaymentTransaction.id}`
+      );
+    } catch (wsError) {
+      console.error("Failed to broadcast voucher repayment failure:", wsError);
+    }
+
+    console.log(`Voucher repayment failed: ${repaymentTransaction.id}`);
+  }
+
+  return repaymentTransaction;
+}
+
 // Process checkout payment with WebSocket notification
 async function processCheckoutPayment(
   txRef: string,
@@ -507,6 +617,15 @@ const handleChargeCompleted = async (data: any) => {
         "FLUTTERWAVE",
         data
       );
+    } else if (txRef.includes("repay_")) {
+      console.log("Processing voucher repayment via charge.completed");
+      await processVoucherRepaymentPayment(
+        txRef,
+        flwRef,
+        status,
+        "FLUTTERWAVE",
+        data
+      );
     } else if (
       txRef &&
       (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))
@@ -795,10 +914,10 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       if (subscription) {
         console.log("Found subscription for PayPack webhook:", subscription.id);
         await processSubscriptionPayment(
-          subscription.txRef || txRef,
-          flwRef,
-          status,
-          "PAYPACK",
+          subscription.txRef || txRef || "",
+          flwRef || "",
+          status || "",
+          "FLUTTERWAVE",
           payload
         );
       } else {
@@ -863,9 +982,18 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       if (subscription) {
         console.log("Found subscription for PayPack webhook:", subscription.id);
         await processSubscriptionPayment(
-          subscription.txRef || txRef,
-          flwRef,
-          paymentStatus,
+          subscription.txRef || txRef || "",
+          flwRef || "",
+          paymentStatus || "",
+          "PAYPACK",
+          payload
+        );
+      } else if (txRef.includes("repay_")) {
+        console.log("Processing PayPack voucher repayment");
+        await processVoucherRepaymentPayment(
+          txRef || "",
+          flwRef || "",
+          paymentStatus || "",
           "PAYPACK",
           payload
         );
@@ -874,10 +1002,19 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
         (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))
       ) {
         console.log("Processing PayPack wallet transaction");
-        await processWalletTransaction(txRef, flwRef, paymentStatus);
+        await processWalletTransaction(
+          txRef || "",
+          flwRef || "",
+          paymentStatus || ""
+        );
       } else {
         console.log("Processing PayPack checkout payment");
-        await processCheckoutPayment(txRef, flwRef, paymentStatus, "PAYPACK");
+        await processCheckoutPayment(
+          txRef || "",
+          flwRef || "",
+          paymentStatus || "",
+          "PAYPACK"
+        );
       }
     }
 

@@ -1461,10 +1461,16 @@ export const processRepaymentService = async (data: RepaymentData) => {
     throw new Error("Loan does not belong to this restaurant");
   }
 
-  if (loan.status !== LoanStatus.PAID) {
-    throw new Error(
-      `Cannot make repayment for loan with status: ${loan.status}`
-    );
+  // Process actual payment for vouchers with loans
+  const paymentResult = await processRepaymentPaymentService({
+    amount,
+    paymentMethod,
+    restaurantId,
+    voucherId,
+  });
+
+  if (!paymentResult.success) {
+    throw new Error(`Payment failed: ${paymentResult.message}`);
   }
 
   // Calculate outstanding balance
@@ -1510,7 +1516,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
       loanId: actualLoanId,
       amount,
       paymentMethod,
-      paymentReference,
+      paymentReference: paymentResult.reference || paymentReference,
       allocatedToPrincipal,
       allocatedToServiceFee,
       allocatedToPenalty,
