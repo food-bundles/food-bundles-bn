@@ -47,7 +47,7 @@ farmersRoutes.patch(
 );
 
 farmersRoutes.post("/", UserController.createFarmer);
-farmersRoutes.post("/admin/create", isAuthenticated, checkPermission(Role.ADMIN), UserController.createFarmerByAdmin);
+farmersRoutes.post("/admin/create", isAuthenticated, checkPermission(Role.ADMIN, Role.AGGREGATOR), UserController.createFarmerByAdmin);
 farmersRoutes.get("/", UserController.getAllFarmers);
 farmersRoutes.get("/:id", UserController.getFarmerById);
 farmersRoutes.put("/:id", UserController.updateFarmer);
