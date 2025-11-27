@@ -195,10 +195,18 @@ export const updateProduct = async (req: Request, res: Response) => {
     const updateData = req.body;
     const adminId = (req as any).user.id;
 
-    // Handle image upload
-    let imageUrls: string[] = [];
+    let finalImageUrls: string[] = [];
 
-    // Type guard to check if req.files is a dictionary
+    if (updateData.images) {
+      const existingImages = typeof updateData.images === 'string' 
+        ? JSON.parse(updateData.images) 
+        : updateData.images;
+      
+      if (Array.isArray(existingImages)) {
+        finalImageUrls = [...existingImages];
+      }
+    }
+
     if (req.files && !Array.isArray(req.files)) {
       const filesDict = req.files as {
         [fieldname: string]: Express.Multer.File[];
@@ -209,14 +217,14 @@ export const updateProduct = async (req: Request, res: Response) => {
           const uploadResult = await cloudinary.v2.uploader.upload(
             filesDict["images"][index].path
           );
-          imageUrls.push(uploadResult.secure_url);
+          finalImageUrls.push(uploadResult.secure_url);
         }
       }
-
-      updateData.images = imageUrls.length > 0 ? imageUrls : [];
     }
 
-    console.log("The updated images", updateData.images);
+    updateData.images = finalImageUrls;
+
+    console.log("Final images array:", updateData.images);
 
     if (updateData.expiryDate) {
       updateData.expiryDate = new Date(updateData.expiryDate);
