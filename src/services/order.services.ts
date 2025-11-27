@@ -376,13 +376,14 @@ export const createDirectOrderService = async (data: CreateDirectOrderData) => {
       );
     }
 
-    const subtotal = product.unitPrice * item.quantity;
+    const subtotal =
+      product.unitPrice * (1 - Number(product.bonus) / 100) * item.quantity;
     totalAmount += subtotal;
 
     validatedItems.push({
       productId: item.productId,
       quantity: item.quantity,
-      unitPrice: product.unitPrice,
+      unitPrice: product.unitPrice * (1 - Number(product.bonus) / 100),
       product,
     });
   }
@@ -852,13 +853,15 @@ export const reOrderFromExistingOrderService = async (
     }
 
     // FIXED: Use current product price, calculate fresh subtotal
-    const subtotal = orderItem.quantity * product.unitPrice;
+    const subtotal =
+      orderItem.quantity *
+      (product.unitPrice * (1 - Number(product.bonus) / 100));
     totalAmount += subtotal;
 
     validatedItems.push({
       productId: orderItem.productId,
       quantity: orderItem.quantity,
-      unitPrice: product.unitPrice, // Use current price
+      unitPrice: product.unitPrice * (1 - Number(product.bonus) / 100), // Use current price
       subtotal,
       product,
     });

@@ -168,10 +168,14 @@ export const updateProductService = async (
   updateData: Partial<ProductData>,
   adminId: string
 ) => {
+  console.log("updateData:", updateData);
+
   // Check if product exists
   const existingProduct = await prisma.product.findUnique({
     where: { id: productId },
   });
+
+  console.log("existingProduct:", existingProduct);
 
   if (!existingProduct) {
     throw new Error("Product not found");
@@ -181,6 +185,8 @@ export const updateProductService = async (
   const admin = await prisma.admin.findUnique({
     where: { id: adminId },
   });
+
+  console.log("admin:", admin);
 
   if (!admin || admin.role !== "ADMIN") {
     throw new Error("Only ADMIN users can update products");
@@ -240,6 +246,8 @@ export const updateProductService = async (
       },
     },
   });
+
+  console.log("updatedProduct:", updatedProduct);
 
   return updatedProduct;
 };

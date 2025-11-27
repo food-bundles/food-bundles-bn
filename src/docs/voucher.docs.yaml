@@ -1227,6 +1227,60 @@ paths:
         500:
           description: Internal server error
 
+    delete:
+      tags: [Loan Management]
+      summary: Delete loan application
+      description: Delete a loan application that has not been assigned a voucher (pending, rejected, no orders made). Restaurants can delete their own applications, admins can delete any.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Loan application ID
+      responses:
+        200:
+          description: Loan application deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Loan application deleted successfully"
+        400:
+          description: Cannot delete loan application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                voucher_assigned:
+                  value:
+                    message: "Cannot delete loan application: Voucher has been assigned"
+                invalid_status:
+                  value:
+                    message: "Cannot delete loan application with status: APPROVED"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to loan application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  value:
+                    message: "Unauthorized: Cannot delete other restaurant's loan application"
+        404:
+          description: Loan application not found
+        500:
+          description: Internal server error
+
   /vouchers/loans/{id}/approve:
     patch:
       tags: [Loan Management]

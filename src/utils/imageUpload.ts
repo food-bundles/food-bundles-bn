@@ -28,10 +28,20 @@ const fileFilter = (
 ) => {
   const allowedMimes = [
     "image/jpeg",
-    "image/jpg",
     "image/png",
     "image/gif",
     "image/webp",
+    "image/bmp",
+    "image/tiff",
+    "image/avif",
+    "image/x-icon",
+    "image/vnd.microsoft.icon",
+    "image/svg+xml",
+    "image/heic",
+    "image/heif",
+    "image/vnd.adobe.photoshop",
+    "image/jxl",
+    "image/apng",
   ];
 
   if (allowedMimes.includes(file.mimetype)) {

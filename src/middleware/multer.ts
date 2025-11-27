@@ -21,7 +21,15 @@ const upload = multer({
       file.mimetype === "image/png" ||
       file.mimetype === "image/jpg" ||
       file.mimetype === "image/webp" ||
-      file.mimetype === "image/gif"
+      file.mimetype === "image/gif" ||
+      file.mimetype === "image/svg+xml" ||
+      file.mimetype === "image/avif" ||
+      file.mimetype === "image/bmp" ||
+      file.mimetype === "image/tiff" ||
+      file.mimetype === "image/x-icon" ||
+      file.mimetype === "image/heic" ||
+      file.mimetype === "image/heif" ||
+      file.mimetype === "image/vnd.adobe.photoshop"
     ) {
       callback(null, true);
     } else {

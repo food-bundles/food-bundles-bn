@@ -74,7 +74,8 @@ export const addToCartService = async (data: AddToCartData) => {
     },
   });
 
-  const subtotal = quantity * product.unitPrice;
+  const subtotal =
+    quantity * (product.unitPrice * (1 - Number(product.bonus) / 100));
 
   let cartItem;
   if (existingCartItem) {
@@ -92,7 +93,8 @@ export const addToCartService = async (data: AddToCartData) => {
       where: { id: existingCartItem.id },
       data: {
         quantity: newQuantity,
-        subtotal: newQuantity * product.unitPrice,
+        subtotal:
+          newQuantity * (product.unitPrice * (1 - Number(product.bonus) / 100)),
       },
       include: {
         product: {
@@ -113,7 +115,7 @@ export const addToCartService = async (data: AddToCartData) => {
         cartId: cart.id,
         productId,
         quantity,
-        unitPrice: product.unitPrice,
+        unitPrice: product.unitPrice * (1 - Number(product.bonus) / 100),
         subtotal,
       },
       include: {

@@ -28,7 +28,7 @@ import {
 } from "../utils/passwordGenerator";
 
 // Helper function to check for existing phone/email across all user types
-const checkExistingUser = async (phone?: string, email?: string) => {
+export const checkExistingUser = async (phone?: string, email?: string) => {
   if (!phone && !email) return null;
 
   const conditions = [];

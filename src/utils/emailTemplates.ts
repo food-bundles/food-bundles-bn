@@ -1261,7 +1261,7 @@ const sendInvitationEmailTemplate = (
       .header { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #ffffff; padding: 30px 20px; text-align: center; }
       .content { padding: 30px; }
       .invitation-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6366f1; }
-      .button { display: inline-block; background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
+      .button { display: inline-block; background: linear-gradient(135deg, #82f163ff, #66e546ff); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
       .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
       .highlight { color: #6366f1; font-weight: bold; }
       .warning { background-color: #fef3c7; color: #92400e; padding: 15px; border-radius: 8px; margin: 15px 0; }
@@ -1269,10 +1269,6 @@ const sendInvitationEmailTemplate = (
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <img src="https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png" alt="FoodBundles Logo" style="max-width: 150px; margin-bottom: 20px;" />
-        <h1>🎉 You've Been Invited!</h1>
-      </div>
       <div class="content">
         <p>Hello ${firstName},</p>
         
@@ -1280,10 +1276,9 @@ const sendInvitationEmailTemplate = (
         
         <p>This invitation gives you access to our platform where you can collaborate with your team, manage projects, and more.</p>
         
-        <div class="invitation-details">
-          <h2>📋 Your Invitation Details</h2>
-          <p>This invitation will expire in <span class="highlight">24 hours</span>.</p>
-        </div>
+                  <p>This invitation will expire in <span class="highlight">24 hours</span>.</p>
+
+
         
         <div style="text-align: center;">
           <a href="${inviteUrl}" class="button">Accept Invitation</a>

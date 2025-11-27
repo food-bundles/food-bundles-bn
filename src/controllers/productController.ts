@@ -216,11 +216,15 @@ export const updateProduct = async (req: Request, res: Response) => {
       updateData.images = imageUrls.length > 0 ? imageUrls : [];
     }
 
+    console.log("The updated images", updateData.images);
+
     if (updateData.expiryDate) {
       updateData.expiryDate = new Date(updateData.expiryDate);
     }
 
     const result = await updateProductService(productId, updateData, adminId);
+
+    console.log("The updated result", result);
 
     // ✅ BROADCAST PRODUCT UPDATE VIA WEBSOCKET
     wsManager.broadcastProductUpdate({
