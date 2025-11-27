@@ -9,23 +9,17 @@ import {
   PaymentStatus,
 } from "@prisma/client";
 import { wsManager } from "../index";
+
 import { createNotificationService } from "./notification.services";
 import {
   getWalletByRestaurantIdService,
   debitWalletService,
 } from "./wallet.service";
+import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
 
 // Payment processing functions
 const flw = require("flutterwave-node-v3");
 const paypack = require("paypack-js");
-
-function cleanPhoneNumber(phone: string): string {
-  return phone.replace(/[^0-9]/g, "").replace(/^250/, "");
-}
-
-function isValidRwandaPhone(phone: string): boolean {
-  return /^(078|079|072|073)\d{7}$/.test(phone);
-}
 
 async function processMobileMoneyPayment({
   amount,
@@ -42,6 +36,8 @@ async function processMobileMoneyPayment({
       throw new Error("Invalid mobile number format");
     }
 
+    console.log("cleanedPhoneNumber:", cleanedPhoneNumber);
+
     try {
       const response = await paypack.cashin({
         number: cleanedPhoneNumber,
@@ -49,6 +45,8 @@ async function processMobileMoneyPayment({
         environment:
           process.env.NODE_ENV === "production" ? "production" : "development",
       });
+
+      console.log("response:", response);
 
       if (response?.data) {
         return {
@@ -77,6 +75,9 @@ async function processMobileMoneyPayment({
     };
 
     const response = await flw.MobileMoney.rwanda(payload);
+
+    console.log("response:", response);
+
     if (response.status === "success") {
       return {
         success: true,
@@ -781,9 +782,23 @@ export const submitLoanApplicationService = async (
     },
   });
 
+  await createNotificationService({
+    title: "New Voucher Application Submitted",
+    message: `The restaurant ${restaurant.name} has submitted a new voucher application for RWF ${requestedAmount}. Please review and approve or reject the application.`,
+    eventType: "VOUCHER_APPLIED",
+    targetType: "ROLE_BASED",
+    targetRole: "ADMIN",
+    metadata: {
+      loanApplicationId: loanApplication.id,
+      restaurantId: loanApplication.restaurantId,
+      requestedAmount: loanApplication.requestedAmount,
+      purpose: loanApplication.purpose,
+      voucherDays: loanApplication.voucherDays,
+    },
+  });
+
   // Broadcast loan application submission (if wsManager is available)
   try {
-    const { wsManager } = await import("../index");
     wsManager.broadcastLoanUpdate({
       loanId: loanApplication.id,
       action: "SUBMITTED",
@@ -1391,6 +1406,13 @@ export const processRepaymentService = async (data: RepaymentData) => {
     voucherId,
   } = data;
 
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+  });
+
+  if (!restaurant) {
+    throw new Error("Restaurant not found");
+  }
   // Get voucher details first
   const voucher = await getVoucherByIdService(voucherId);
 
@@ -1409,6 +1431,9 @@ export const processRepaymentService = async (data: RepaymentData) => {
       paymentMethod,
       restaurantId,
       voucherId,
+      phoneNumber: restaurant.phone!,
+      email: restaurant.email,
+      fullname: restaurant.name,
     });
 
     if (paymentResult.success) {
@@ -2555,6 +2580,8 @@ export const processRepaymentPaymentService = async (data: {
   email?: string;
   fullname?: string;
 }) => {
+  console.log("Processing repayment payment with data:", data);
+
   const { amount, paymentMethod, restaurantId } = data;
   const txRef = `repay_${Date.now()}`;
 

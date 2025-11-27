@@ -7,13 +7,13 @@ export const inviteController = {
   // Create invitation
   async createInvite(req: Request, res: Response) {
     try {
-      const { email, role, username, phone } = req.body;
+      const { email, role } = req.body;
 
       // Validate required fields
-      if (!email || !role || !username) {
+      if (!email || !role) {
         return res.status(400).json({
           success: false,
-          message: "Email, role, and username are required",
+          message: "Email and role are required",
         });
       }
 
@@ -28,20 +28,18 @@ export const inviteController = {
       const result = await inviteServices.createInvite({
         email,
         role,
-        username,
-        phone,
       });
 
       // Send invitation email
-      await sendInvitationEmail(email, username, result.inviteUrl);
+      await sendInvitationEmail(email, "User", result.inviteUrl);
 
       res.status(201).json({
         success: true,
         message: "Invitation sent successfully",
         data: {
-          id: result.user.id,
-          email: result.user.email,
-          role: result.user.role,
+          id: result.invitation.id,
+          email: result.invitation.email,
+          role: result.invitation.role,
           inviteUrl: result.inviteUrl,
         },
       });
@@ -101,15 +99,14 @@ export const inviteController = {
   async verifyInviteToken(req: Request, res: Response) {
     try {
       const { token } = req.params;
-      const result = await inviteServices.verifyInviteToken(token);
+      const invitation = await inviteServices.verifyInviteToken(token);
 
       res.status(200).json({
         success: true,
         message: "Token verified successfully",
         data: {
-          email: result.decoded.email,
-          username: result.decoded.username,
-          role: result.decoded.role,
+          email: invitation.email,
+          role: invitation.role,
         },
       });
     } catch (error: any) {
@@ -123,12 +120,12 @@ export const inviteController = {
   // Accept invitation
   async acceptInvite(req: Request, res: Response) {
     try {
-      const { token, password } = req.body;
+      const { token, username, phone, password } = req.body;
 
-      if (!token || !password) {
+      if (!token || !username || !password) {
         return res.status(400).json({
           success: false,
-          message: "Token and password are required",
+          message: "Token, username, and password are required",
         });
       }
 
@@ -139,7 +136,12 @@ export const inviteController = {
         });
       }
 
-      const user = await inviteServices.acceptInvite(token, password);
+      const user = await inviteServices.acceptInvite({
+        token,
+        username,
+        phone,
+        password,
+      });
 
       res.status(200).json({
         success: true,
@@ -162,8 +164,8 @@ export const inviteController = {
 
       // Send invitation email
       await sendInvitationEmail(
-        result.user.email,
-        result.user.username,
+        result.invitation.email,
+        "User",
         result.inviteUrl
       );
 
@@ -171,7 +173,7 @@ export const inviteController = {
         success: true,
         message: "Invitation resent successfully",
         data: {
-          email: result.user.email,
+          email: result.invitation.email,
           inviteUrl: result.inviteUrl,
         },
       });

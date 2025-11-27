@@ -14,17 +14,20 @@ components:
           type: string
           format: email
           description: Invitee email address
-        username:
-          type: string
-          description: Invitee username
-        phone:
-          type: string
-          nullable: true
-          description: Invitee phone number
         role:
           type: string
           enum: [ADMIN, LOGISTICS, AGGREGATOR]
           description: Role assigned to invitee
+        token:
+          type: string
+          description: Invitation token
+        expiresAt:
+          type: string
+          format: date-time
+          description: Token expiration timestamp
+        isUsed:
+          type: boolean
+          description: Whether invitation has been used
         createdAt:
           type: string
           format: date-time
@@ -35,7 +38,6 @@ components:
       required:
         - email
         - role
-        - username
       properties:
         email:
           type: string
@@ -47,25 +49,26 @@ components:
           enum: [ADMIN, LOGISTICS, AGGREGATOR]
           description: Role to assign (required)
           example: "LOGISTICS"
-        username:
-          type: string
-          description: Username for the invitee (required)
-          example: "johndoe"
-        phone:
-          type: string
-          description: Invitee phone number
-          example: "+250788123456"
 
     AcceptInviteRequest:
       type: object
       required:
         - token
+        - username
         - password
       properties:
         token:
           type: string
-          description: JWT invitation token (required)
-          example: "eyJhbGciOiJIUzI1NiJ9..."
+          description: Invitation token (required)
+          example: "abc123def456..."
+        username:
+          type: string
+          description: Username for the new user (required)
+          example: "johndoe"
+        phone:
+          type: string
+          description: Phone number (optional)
+          example: "+250788123456"
         password:
           type: string
           minLength: 6
@@ -293,8 +296,6 @@ paths:
                     type: object
                     properties:
                       email:
-                        type: string
-                      username:
                         type: string
                       role:
                         type: string

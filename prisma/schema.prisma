@@ -938,6 +938,34 @@ model Notification {
   @@index([createdAt])
 }
 
+model Invitation {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  token     String   @unique
+  role      Role
+  expiresAt DateTime // Valid for 24 hours
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  status    String   @default("unread") // unread, read, responded
+  response  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("contact_submissions")
+}
+
 enum Role {
   FARMER
   RESTAURANT
@@ -1101,6 +1129,7 @@ enum NotificationEvent {
   PAYMENT_FAILED
   USER_SIGNUP
   PRODUCT_APPROVED
+  VOUCHER_APPLIED
   VOUCHER_ISSUED
   SUBSCRIPTION_EXPIRED
   LOW_STOCK_ALERT
@@ -1113,15 +1142,4 @@ enum NotificationTarget {
   ALL_USERS
 }
 
-model ContactSubmission {
-  id        String   @id @default(cuid())
-  name      String
-  email     String
-  message   String
-  status    String   @default("unread") // unread, read, responded
-  response  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  @@map("contact_submissions")
-}

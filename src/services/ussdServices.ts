@@ -1892,7 +1892,9 @@ ${getTranslation(lang, "purposeExample")}
               session.voucherPurpose = purpose;
               return `CON ${getTranslation(lang, "confirmVoucherRequest")}
 ${getTranslation(lang, "amount")}: ${session.voucherAmount} RWF
-${getTranslation(lang, "repaymentDays")}: ${session.voucherDays} ${getTranslation(lang, "days")}
+${getTranslation(lang, "repaymentDays")}: ${
+                session.voucherDays
+              } ${getTranslation(lang, "days")}
 ${getTranslation(lang, "purpose")}: ${purpose.substring(0, 30)}...
 
 1. ${getTranslation(lang, "confirm")}
@@ -1932,8 +1934,13 @@ ${getTranslation(lang, "purposeExample")}
               if (pinInput === "0") {
                 return `CON ${getTranslation(lang, "confirmVoucherRequest")}
 ${getTranslation(lang, "amount")}: ${session.voucherAmount} RWF
-${getTranslation(lang, "repaymentDays")}: ${session.voucherDays} ${getTranslation(lang, "days")}
-${getTranslation(lang, "purpose")}: ${session.voucherPurpose?.substring(0, 30)}...
+${getTranslation(lang, "repaymentDays")}: ${
+                  session.voucherDays
+                } ${getTranslation(lang, "days")}
+${getTranslation(lang, "purpose")}: ${session.voucherPurpose?.substring(
+                  0,
+                  30
+                )}...
 
 1. ${getTranslation(lang, "confirm")}
 2. ${getTranslation(lang, "cancel")}
@@ -1942,7 +1949,10 @@ ${getTranslation(lang, "purpose")}: ${session.voucherPurpose?.substring(0, 30)}.
 
               const pinResult = await verifyUserPin(phoneNumber, pinInput);
               if (!pinResult.isValid) {
-                return `CON ${getTranslation(lang, pinResult.message || "incorrectPin")}
+                return `CON ${getTranslation(
+                  lang,
+                  pinResult.message || "incorrectPin"
+                )}
 
 ${getTranslation(lang, "enterPinToConfirmVoucher")}
 0. ${getTranslation(lang, "back")}`;
@@ -1951,8 +1961,10 @@ ${getTranslation(lang, "enterPinToConfirmVoucher")}
               // Submit voucher request
               try {
                 // Import farmer voucher service functions
-                const { submitFarmerVoucherRequest } = await import("./farmerVoucher.service");
-                
+                const { submitFarmerVoucherRequest } = await import(
+                  "./farmerVoucher.service"
+                );
+
                 const voucherRequest = await submitFarmerVoucherRequest({
                   farmerId: farmer.id,
                   requestedAmount: session.voucherAmount!,
@@ -1996,13 +2008,20 @@ ID: ${voucherRequest.id.substring(0, 8)}`;
 
               const pinResult = await verifyUserPin(phoneNumber, pinInput);
               if (!pinResult.isValid) {
-                return `END ${getTranslation(lang, pinResult.message || "incorrectPin")}`;
+                return `END ${getTranslation(
+                  lang,
+                  pinResult.message || "incorrectPin"
+                )}`;
               }
 
               try {
                 // Get farmer's voucher applications
-                const { getFarmerVoucherApplications } = await import("./farmerVoucher.service");
-                const applications = await getFarmerVoucherApplications(farmer.id);
+                const { getFarmerVoucherApplications } = await import(
+                  "./farmerVoucher.service"
+                );
+                const applications = await getFarmerVoucherApplications(
+                  farmer.id
+                );
 
                 if (applications.length === 0) {
                   return `END ${getTranslation(lang, "noVoucherRequests")}`;
@@ -2010,24 +2029,50 @@ ID: ${voucherRequest.id.substring(0, 8)}`;
 
                 // Show latest application status
                 const latest = applications[0];
-                let response = `END ${getTranslation(lang, "latestVoucherStatus")}\n\n`;
-                response += `${getTranslation(lang, "requestId")}: ${latest.id.substring(0, 8)}\n`;
-                response += `${getTranslation(lang, "amount")}: ${latest.requestedAmount} RWF\n`;
-                response += `${getTranslation(lang, "status")}: ${getTranslation(lang, latest.status.toLowerCase() as TranslationKey)}\n`;
-                response += `${getTranslation(lang, "requestDate")}: ${new Date(latest.createdAt).toLocaleDateString()}\n`;
-                
+                let response = `END ${getTranslation(
+                  lang,
+                  "latestVoucherStatus"
+                )}\n\n`;
+                response += `${getTranslation(
+                  lang,
+                  "requestId"
+                )}: ${latest.id.substring(0, 8)}\n`;
+                response += `${getTranslation(lang, "amount")}: ${
+                  latest.requestedAmount
+                } RWF\n`;
+                response += `${getTranslation(
+                  lang,
+                  "status"
+                )}: ${getTranslation(
+                  lang,
+                  latest.status.toLowerCase() as TranslationKey
+                )}\n`;
+                response += `${getTranslation(lang, "requestDate")}: ${new Date(
+                  latest.createdAt
+                ).toLocaleDateString()}\n`;
+
                 if (latest.approvedAmount) {
-                  response += `${getTranslation(lang, "approvedAmount")}: ${latest.approvedAmount} RWF\n`;
+                  response += `${getTranslation(lang, "approvedAmount")}: ${
+                    latest.approvedAmount
+                  } RWF\n`;
                 }
-                
+
                 if (latest.repaymentDueDate) {
-                  response += `${getTranslation(lang, "repaymentDue")}: ${new Date(latest.repaymentDueDate).toLocaleDateString()}\n`;
+                  response += `${getTranslation(
+                    lang,
+                    "repaymentDue"
+                  )}: ${new Date(
+                    latest.repaymentDueDate
+                  ).toLocaleDateString()}\n`;
                 }
 
                 return response;
               } catch (error) {
                 console.error("Error fetching voucher status:", error);
-                return `END ${getTranslation(lang, "voucherStatusFetchFailed")}`;
+                return `END ${getTranslation(
+                  lang,
+                  "voucherStatusFetchFailed"
+                )}`;
               }
             }
           }
@@ -2052,18 +2097,25 @@ ID: ${voucherRequest.id.substring(0, 8)}`;
 
               const pinResult = await verifyUserPin(phoneNumber, pinInput);
               if (!pinResult.isValid) {
-                return `END ${getTranslation(lang, pinResult.message || "incorrectPin")}`;
+                return `END ${getTranslation(
+                  lang,
+                  pinResult.message || "incorrectPin"
+                )}`;
               }
 
               try {
-                const { getFarmerVoucherApplications, getFarmerVouchers } = await import("./farmerVoucher.service");
+                const { getFarmerVoucherApplications, getFarmerVouchers } =
+                  await import("./farmerVoucher.service");
                 const [applications, vouchers] = await Promise.all([
                   getFarmerVoucherApplications(farmer.id),
-                  getFarmerVouchers(farmer.id)
+                  getFarmerVouchers(farmer.id),
                 ]);
 
-                let response = `END ${getTranslation(lang, "voucherHistory")}\n\n`;
-                
+                let response = `END ${getTranslation(
+                  lang,
+                  "voucherHistory"
+                )}\n\n`;
+
                 if (applications.length === 0) {
                   response += `${getTranslation(lang, "noVoucherHistory")}`;
                   return response;
@@ -2071,20 +2123,38 @@ ID: ${voucherRequest.id.substring(0, 8)}`;
 
                 response += `${getTranslation(lang, "recentRequests")}:\n`;
                 applications.slice(0, 5).forEach((app, index) => {
-                  response += `${index + 1}. ${app.requestedAmount} RWF - ${getTranslation(lang, app.status.toLowerCase() as TranslationKey)}\n`;
-                  response += `   ${new Date(app.createdAt).toLocaleDateString()}\n`;
+                  response += `${index + 1}. ${
+                    app.requestedAmount
+                  } RWF - ${getTranslation(
+                    lang,
+                    app.status.toLowerCase() as TranslationKey
+                  )}\n`;
+                  response += `   ${new Date(
+                    app.createdAt
+                  ).toLocaleDateString()}\n`;
                 });
 
                 if (vouchers.length > 0) {
-                  response += `\n${getTranslation(lang, "activeVouchers")}: ${vouchers.filter(v => v.status === 'ACTIVE').length}\n`;
-                  const totalCredit = vouchers.reduce((sum, v) => sum + v.remainingCredit, 0);
-                  response += `${getTranslation(lang, "totalRemainingCredit")}: ${totalCredit} RWF`;
+                  response += `\n${getTranslation(lang, "activeVouchers")}: ${
+                    vouchers.filter((v) => v.status === "ACTIVE").length
+                  }\n`;
+                  const totalCredit = vouchers.reduce(
+                    (sum, v) => sum + v.remainingCredit,
+                    0
+                  );
+                  response += `${getTranslation(
+                    lang,
+                    "totalRemainingCredit"
+                  )}: ${totalCredit} RWF`;
                 }
 
                 return response;
               } catch (error) {
                 console.error("Error fetching voucher history:", error);
-                return `END ${getTranslation(lang, "voucherHistoryFetchFailed")}`;
+                return `END ${getTranslation(
+                  lang,
+                  "voucherHistoryFetchFailed"
+                )}`;
               }
             }
           }
@@ -2172,7 +2242,7 @@ ${getTranslation(lang, "techSupportDesc")}
           // Contact Support
           if (parts[1] === "3") {
             return `END ${getTranslation(lang, "contactSupport")}
-${getTranslation(lang, "callUs")}: +250796897823
+${getTranslation(lang, "callUs")}: 6054
 ${getTranslation(lang, "whatsapp")}: +250796897823
 ${getTranslation(lang, "email")}: info@food.rw`;
           }
