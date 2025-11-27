@@ -14,6 +14,7 @@ import {
   approveLoanApplicationService,
   disburseLoanService,
   rejectLoanApplicationService,
+  deleteLoanApplicationService,
   processVoucherPaymentService,
   processRepaymentService,
   calculateOutstandingBalanceService,
@@ -765,6 +766,28 @@ export const waivePenalty = async (req: Request, res: Response) => {
 // ============================================
 // CREDIT SUMMARY CONTROLLERS
 // ============================================
+
+/**
+ * Delete loan application
+ * DELETE /vouchers/loans/:id
+ */
+export const deleteLoanApplication = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    const result = await deleteLoanApplicationService(id, userId, userRole);
+
+    res.status(200).json({
+      message: result.message,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to delete loan application",
+    });
+  }
+};
 
 /**
  * Get restaurant credit summary

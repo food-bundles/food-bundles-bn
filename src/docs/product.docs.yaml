@@ -495,7 +495,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: "#/components/schemas/CreateProductRequest"
+              $ref: "#/components/schemas/UpdateProductRequest"
             encoding:
               images:
                 contentType: image/jpeg, image/png, image/gif, image/webp

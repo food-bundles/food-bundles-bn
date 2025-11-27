@@ -15,6 +15,7 @@ import {
   approveLoan,
   disburseLoan,
   rejectLoan,
+  deleteLoanApplication,
   processVoucherPayment,
   makeRepayment,
   getOutstandingBalance,
@@ -196,6 +197,12 @@ voucherRoutes.patch(
   checkPermission("ADMIN"),
   rejectLoan
 );
+
+/**
+ * Delete loan application
+ * DELETE /vouchers/loans/:id
+ */
+voucherRoutes.delete("/loans/:id", isAuthenticated, deleteLoanApplication);
 
 // ========================================
 // VOUCHER PAYMENT ROUTES

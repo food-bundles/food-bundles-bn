@@ -2568,6 +2568,75 @@ export const rollbackVoucherPaymentService = async (
 };
 
 /**
+ * Delete loan application (only if no voucher assigned)
+ */
+export const deleteLoanApplicationService = async (
+  loanId: string,
+  userId: string,
+  userRole: string
+) => {
+  const loan = await prisma.loanApplication.findUnique({
+    where: { id: loanId },
+    include: {
+      vouchers: true,
+      restaurant: true,
+    },
+  });
+
+  if (!loan) {
+    throw new Error("Loan application not found");
+  }
+
+  // Check authorization
+  if (userRole === "RESTAURANT" && loan.restaurantId !== userId) {
+    throw new Error(
+      "Unauthorized: Cannot delete other restaurant's loan application"
+    );
+  }
+
+  // Check if loan has vouchers assigned
+  if (loan.vouchers && loan.vouchers.length > 0) {
+    throw new Error(
+      "Cannot delete loan application: Voucher has been assigned"
+    );
+  }
+
+  // Only allow deletion of pending or rejected loans
+  const deletableStatuses: LoanStatus[] = [
+    LoanStatus.PENDING,
+    LoanStatus.REJECTED,
+  ];
+  if (!deletableStatuses.includes(loan.status)) {
+    throw new Error(
+      `Cannot delete loan application with status: ${loan.status}`
+    );
+  }
+
+  // Delete the loan application
+  await prisma.loanApplication.delete({
+    where: { id: loanId },
+  });
+
+  // Broadcast loan deletion
+  try {
+    wsManager.broadcastLoanUpdate({
+      loanId: loan.id,
+      action: "SETTLED",
+      timestamp: new Date().toISOString(),
+      restaurantId: loan.restaurantId,
+      data: {
+        requestedAmount: loan.requestedAmount,
+        status: loan.status,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast loan deletion:", error);
+  }
+
+  return { message: "Loan application deleted successfully" };
+};
+
+/**
  * Process actual payment for repayments
  */
 export const processRepaymentPaymentService = async (data: {
