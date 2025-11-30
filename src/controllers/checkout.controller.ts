@@ -84,8 +84,69 @@ export const createCheckout = async (req: Request, res: Response) => {
       }
     }
 
-    // For voucher payments, send OTP first instead of processing immediately
+    // For voucher payments, validate voucher first before sending OTP
     if (paymentMethod === "VOUCHER") {
+      // Get cart total
+      const cart = await prisma.cart.findUnique({
+        where: { id: cartId },
+        include: {
+          cartItems: {
+            include: {
+              product: true,
+            },
+          },
+        },
+      });
+
+      if (!cart) {
+        return res.status(404).json({
+          message: "Cart not found",
+        });
+      }
+
+      const cartTotal = cart.cartItems.reduce(
+        (total, item) => total + item.quantity * item.product.unitPrice,
+        0
+      );
+
+      // Validate voucher
+      const voucher = await prisma.voucher.findUnique({
+        where: { voucherCode },
+        include: {
+          restaurant: true,
+        },
+      });
+
+      if (!voucher) {
+        return res.status(404).json({
+          message: "Voucher not found",
+        });
+      }
+
+      if (voucher.status !== "ACTIVE") {
+        return res.status(400).json({
+          message: "Voucher is not active",
+        });
+      }
+
+      if (voucher.restaurantId !== restaurantId) {
+        return res.status(403).json({
+          message: "Voucher does not belong to this restaurant",
+        });
+      }
+
+      // Check if voucher has sufficient credit based on discount percentage
+      const discountAmount = (voucher.creditLimit * voucher.discountPercentage) / 100;
+      
+      if (cartTotal > discountAmount) {
+        return res.status(400).json({
+          message: `Insufficient voucher credit. Available: ${discountAmount} RWF`,
+        });
+      }
+
+      console.log("discountAmount ", discountAmount);
+      console.log("cartTotal ", cartTotal);
+
       const otpResult = await OTPService.sendOTPToRestaurant(restaurantId);
 
       if (!otpResult.success) {
