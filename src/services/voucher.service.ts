@@ -1,3 +1,4 @@
+import axios from "axios";
 import prisma from "../prisma";
 import {
   VoucherStatus,
@@ -73,8 +74,18 @@ interface RepaymentData {
   loanId?: string;
   amount: number;
   paymentMethod: PaymentMethod;
-  paymentReference?: string;
   voucherId: string;
+  phoneNumber?: string;
+  cardDetails?: {
+    cardNumber: string;
+    cvv: string;
+    expiryMonth: string;
+    expiryYear: string;
+    cardType?: string;
+    cardCountry?: string;
+    authModel?: string;
+    encryptionKey?: string;
+  };
 }
 
 // ============================================
@@ -875,9 +886,9 @@ export const approveLoanApplicationService = async (
   // Calculate dates
   const disbursementDate = new Date();
 
-  // Set voucher expiry: 3 months from now or custom
+  // Set voucher expiry: 48 hours from now or custom
   const expiryDate = new Date();
-  expiryDate.setMonth(expiryDate.getMonth() + 3);
+  expiryDate.setDate(expiryDate.getDate() + 2); // Voucher valid for 2 days
 
   // Approve loan + create voucher in a transaction
   const result = await prisma.$transaction(async (tx) => {
@@ -1310,8 +1321,9 @@ export const processRepaymentService = async (data: RepaymentData) => {
     loanId,
     amount,
     paymentMethod,
-    paymentReference,
     voucherId,
+    phoneNumber,
+    cardDetails,
   } = data;
 
   const restaurant = await prisma.restaurant.findUnique({
@@ -1339,10 +1351,12 @@ export const processRepaymentService = async (data: RepaymentData) => {
       paymentMethod,
       restaurantId,
       voucherId,
-      phoneNumber: restaurant.phone!,
+      phoneNumber: phoneNumber || restaurant.phone!,
       email: restaurant.email,
       fullname: restaurant.name,
     });
+
+    console.log("paymentResult------", paymentResult);
 
     if (paymentResult.success) {
       // Add credit back to the voucher after successful payment
@@ -1361,7 +1375,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
             `standalone-${voucherId}-${Date.now()}`,
           amount,
           paymentMethod,
-          paymentReference: paymentResult.reference || paymentReference,
+          paymentReference: paymentResult.reference || "",
           allocatedToPrincipal: amount,
           allocatedToServiceFee: 0,
           allocatedToPenalty: 0,
@@ -1381,6 +1395,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
           repayments: 1,
           penalties: 0,
         },
+        paymentResult,
       };
     } else {
       throw new Error(`Payment failed: ${paymentResult.message}`);
@@ -1400,6 +1415,9 @@ export const processRepaymentService = async (data: RepaymentData) => {
     paymentMethod,
     restaurantId,
     voucherId,
+    phoneNumber: phoneNumber || restaurant.phone!,
+    email: restaurant.email,
+    fullname: restaurant.name,
   });
 
   if (!paymentResult.success) {
@@ -1449,7 +1467,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
       loanId: actualLoanId,
       amount,
       paymentMethod,
-      paymentReference: paymentResult.reference || paymentReference,
+      paymentReference: paymentResult.reference || "",
       allocatedToPrincipal,
       allocatedToServiceFee,
       allocatedToPenalty,
@@ -1528,7 +1546,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
     console.error("Failed to broadcast repayment:", error);
   }
 
-  return { repayment, newOutstanding };
+  return { repayment, newOutstanding, paymentResult };
 };
 
 /**
@@ -2675,32 +2693,45 @@ async function processMobileMoneyPayment({
       console.log("PayPack failed, trying Flutterwave...");
     }
 
-    const payload = {
+    const standardPayload = {
       tx_ref: txRef,
-      order_id: orderId,
       amount: amount.toString(),
       currency: currency,
-      email: email,
-      phone_number: cleanedPhoneNumber,
-      fullname: fullname,
       redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+      customer: {
+        email: email,
+        name: fullname,
+        phonenumber: cleanedPhoneNumber,
+      },
+      payment_options: "mobilemoney",
     };
 
-    const response = await flw.MobileMoney.rwanda(payload);
+    const response = await axios.post(
+      "https://api.flutterwave.com/v3/payments",
+      standardPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-    console.log("response:", response);
-
-    if (response.status === "success") {
+    if (response.data?.status === "success" && response.data?.data?.link) {
       return {
         success: true,
-        transactionId: response.data?.flw_ref || txRef,
-        reference: response.data?.tx_ref || txRef,
-        flwRef: response.data?.flw_ref || txRef,
-        status: response.data?.status || "pending",
-        message: response.message || "Mobile money payment initiated",
+        transactionId: txRef,
+        reference: txRef,
+        flwRef: txRef,
+        status: "pending",
+        message: "Redirect to complete mobile money payment",
+        authorizationDetails: {
+          mode: "redirect",
+          redirectUrl: response.data.data.link,
+        },
       };
     }
-    throw new Error("Payment failed");
+    throw new Error("Mobile money payment failed");
   } catch (error: any) {
     return {
       success: false,
@@ -2722,7 +2753,6 @@ async function processCardPayment({
   cardDetails,
 }: any) {
   try {
-    const axios = require("axios");
     const standardPayload = {
       tx_ref: txRef,
       amount: amount.toString(),

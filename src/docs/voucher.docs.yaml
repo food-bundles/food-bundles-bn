@@ -69,11 +69,6 @@ components:
           type: string
           enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
           description: Current voucher status
-        expiryDate:
-          type: string
-          format: date-time
-          nullable: true
-          description: Voucher expiration date
         serviceFeeRate:
           type: number
           format: float
@@ -132,11 +127,6 @@ components:
           nullable: true
           description: Maximum transaction amount
           example: 100000
-        expiryDate:
-          type: string
-          format: date-time
-          nullable: true
-          description: Voucher expiration date
         loanId:
           type: string
           nullable: true
@@ -353,10 +343,11 @@ components:
           type: string
           enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
           description: Payment method for repayment
-        paymentReference:
+        phoneNumber:
           type: string
           nullable: true
-          description: Payment reference from gateway
+          description: Phone number for mobile money payments (optional - will use restaurant phone as fallback)
+          example: "+250788123456"
 
     VoucherRepayment:
       type: object
@@ -1520,20 +1511,18 @@ paths:
                 value:
                   amount: 100000
                   paymentMethod: "MOBILE_MONEY"
-                  paymentReference: "MM123456789"
+                  phoneNumber: "+250788123456"
               bank_transfer_repayment:
                 summary: Bank Transfer Repayment
                 value:
                   amount: 200000
                   paymentMethod: "BANK_TRANSFER"
-                  paymentReference: "BT987654321"
               with_loan_id:
                 summary: Repayment with explicit loan ID (optional)
                 value:
                   loanId: "loan-12345"
                   amount: 100000
                   paymentMethod: "MOBILE_MONEY"
-                  paymentReference: "MM123456789"
       responses:
         200:
           description: Repayment processed successfully
