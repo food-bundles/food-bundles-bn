@@ -91,7 +91,7 @@ async function processSubscriptionPayment(
         restaurantId: subscription.restaurantId,
       });
 
-      console.log(`✅ Broadcasted subscription activation: ${subscription.id}`);
+      console.log(`Broadcasted subscription activation: ${subscription.id}`);
     } catch (wsError) {
       console.error("Failed to broadcast subscription update:", wsError);
     }
@@ -141,7 +141,7 @@ async function processSubscriptionPayment(
       });
 
       console.log(
-        `✅ Broadcasted subscription payment failure: ${subscription.id}`
+        `Broadcasted subscription payment failure: ${subscription.id}`
       );
     } catch (wsError) {
       console.error("Failed to broadcast subscription failure:", wsError);

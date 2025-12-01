@@ -817,7 +817,7 @@ async function processSubscriptionMobileMoneyPayment({
         email: email,
         phone_number: cleanedPhoneNumber,
         fullname: fullname,
-        redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/subscriptions`,
+        redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/subscribe`,
       };
 
       const response = await flw.MobileMoney.rwanda(payload);
@@ -880,7 +880,7 @@ async function processSubscriptionCardPayment({
       tx_ref: txRef,
       amount: amount.toString(),
       currency: currency,
-      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/subscriptions`,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/subscribe`,
       customer: {
         email: email,
         name: fullname,
@@ -976,7 +976,7 @@ async function processSubscriptionBankTransfer({
       client_ip: clientIp,
       device_fingerprint: "62wd23423rq324323qew1",
       narration: narration || "Subscription payment",
-      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/subscriptions`,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/subscribe`,
       is_permanent: false,
       expires: 3600,
     };

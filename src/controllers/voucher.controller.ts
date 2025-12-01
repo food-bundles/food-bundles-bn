@@ -607,21 +607,30 @@ export const makeRepayment = async (req: Request, res: Response) => {
   try {
     const { id: voucherId } = req.params;
     const restaurantId = (req as any).user.id;
-    const { amount, paymentMethod, loanId, phoneNumber } = req.body;
+    const { paymentMethod, phoneNumber, cardDetails } = req.body;
 
-    if (!amount || !paymentMethod) {
+    if (!paymentMethod) {
       return res.status(400).json({
-        message: "Amount and payment method are required",
+        message: "Payment method is required",
       });
+    }
+
+    // Validate card details if payment method is CARD
+    if (paymentMethod === "CARD" && cardDetails) {
+      const { cardNumber, cvv, expiryMonth, expiryYear } = cardDetails;
+      if (!cardNumber || !cvv || !expiryMonth || !expiryYear) {
+        return res.status(400).json({
+          message: "Complete card details (number, CVV, expiry month/year) are required",
+        });
+      }
     }
 
     const result = await processRepaymentService({
       restaurantId,
-      loanId,
-      amount: parseFloat(amount),
       paymentMethod,
       voucherId,
       phoneNumber,
+      cardDetails,
     });
 
     if (result.paymentResult) {

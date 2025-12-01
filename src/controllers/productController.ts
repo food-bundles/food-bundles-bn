@@ -64,7 +64,7 @@ export const createProduct = async (req: Request, res: Response) => {
       createdBy: adminId,
     });
 
-    // ✅ BROADCAST NEW PRODUCT VIA WEBSOCKET
+    // BROADCAST NEW PRODUCT VIA WEBSOCKET
     wsManager.broadcastNewProduct(product);
 
     res.status(201).json({
@@ -100,7 +100,7 @@ export const updateProductQuantityFromSubmission = async (
       productId,
     });
 
-    // ✅ BROADCAST PRODUCT UPDATE VIA WEBSOCKET
+    // BROADCAST PRODUCT UPDATE VIA WEBSOCKET
     wsManager.broadcastProductUpdate({
       productId: result.product.id,
       productName: result.product.productName,
@@ -174,7 +174,7 @@ export const createProductFromSubmission = async (
       },
     });
 
-    // ✅ BROADCAST NEW PRODUCT VIA WEBSOCKET
+    // BROADCAST NEW PRODUCT VIA WEBSOCKET
     wsManager.broadcastNewProduct(result.product);
 
     res.status(201).json({
@@ -198,10 +198,11 @@ export const updateProduct = async (req: Request, res: Response) => {
     let finalImageUrls: string[] = [];
 
     if (updateData.images) {
-      const existingImages = typeof updateData.images === 'string' 
-        ? JSON.parse(updateData.images) 
-        : updateData.images;
-      
+      const existingImages =
+        typeof updateData.images === "string"
+          ? JSON.parse(updateData.images)
+          : updateData.images;
+
       if (Array.isArray(existingImages)) {
         finalImageUrls = [...existingImages];
       }
@@ -234,7 +235,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 
     console.log("The updated result", result);
 
-    // ✅ BROADCAST PRODUCT UPDATE VIA WEBSOCKET
+    // BROADCAST PRODUCT UPDATE VIA WEBSOCKET
     wsManager.broadcastProductUpdate({
       productId: result.id,
       productName: result.productName,
@@ -262,7 +263,7 @@ export const deleteProduct = async (req: Request, res: Response) => {
 
     await deleteProductService(productId);
 
-    // ✅ BROADCAST PRODUCT DELETION VIA WEBSOCKET
+    // BROADCAST PRODUCT DELETION VIA WEBSOCKET
     wsManager.broadcastProductUpdate({
       productId,
       productName: "Deleted Product",

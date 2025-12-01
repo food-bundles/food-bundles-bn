@@ -236,7 +236,7 @@ export const sendPaymentNotificationTemplate = (
         <p>We have received your order from <strong>Food Bundles Ltd</strong> and are processing your payment request.</p>
         
         <div class="products-list">
-          <h2>🛒 Your Order</h2>
+          <h2>Your Order</h2>
           ${data.products
             .map(
               (product) => `
@@ -267,7 +267,7 @@ export const sendPaymentNotificationTemplate = (
         </div>
 
         <div class="warning">
-          <p>⚠️ Important: Complete your payment within 8 hours</p>
+          <p>Important: Complete your payment within 8 hours</p>
           <p><strong>Expires:</strong> ${expirationTime.toLocaleString(
             "en-RW",
             {
@@ -399,7 +399,7 @@ export const sendPaymentConfirmationTemplate = (
         <p>Thank you for your payment! Your order from <strong>Food Bundles Ltd</strong> has been successfully processed and confirmed.</p>
         
         <div class="order-details">
-          <h2>📋 Order Summary</h2>
+          <h2>Order Summary</h2>
           <p><span class="highlight">Amount Paid:</span> <strong>${data.amount.toLocaleString()} RWF</strong></p>
           ${
             data.deliveryDate
@@ -415,7 +415,7 @@ export const sendPaymentConfirmationTemplate = (
               : ""
           }
           
-          <h3 style="margin-top: 20px;">🛒 Items Ordered:</h3>
+          <h3 style="margin-top: 20px;">Items Ordered:</h3>
           ${data.products
             .map(
               (product) => `
@@ -431,7 +431,7 @@ export const sendPaymentConfirmationTemplate = (
         </div>
 
         <div class="tracking-info">
-          <h2>📦 What's Next?</h2>
+          <h2>What's Next?</h2>
           <ul style="margin: 10px 0; padding-left: 20px;">
             <li>Your order is now being prepared</li>
             <li>You'll receive updates on the preparation status</li>
@@ -454,8 +454,8 @@ export const sendPaymentConfirmationTemplate = (
         </p>
       </div>
       <div class="footer">
-        <p>Best regards,</p>
-        <p>🌱 <strong>The FoodBundles Team</strong></p>
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
         <p style="font-size: 12px; margin-top: 15px;">
           This is an automated message. Please do not reply to this email.
         </p>
@@ -506,7 +506,7 @@ export const sendPaymentFailedTemplate = (data: {
         <p>We attempted to process your payment for your order from <strong>Food Bundles Ltd</strong>, but it was not successful.</p>
 
         <div class="order-details">
-          <h2>📋 Payment Details</h2>
+          <h2>Payment Details</h2>
           <p><span class="highlight">Amount:</span> ${data.amount.toLocaleString()} RWF</p>
           ${
             data.failureReason
@@ -514,7 +514,7 @@ export const sendPaymentFailedTemplate = (data: {
               : ""
           }
 
-          <h3 style="margin-top: 20px;">🛒 Items Ordered:</h3>
+          <h3 style="margin-top: 20px;">Items Ordered:</h3>
           ${data.products
             .map(
               (product) => `
@@ -543,7 +543,12 @@ export const sendPaymentFailedTemplate = (data: {
           Don’t worry — your order is still saved and can be completed once the payment succeeds.
         </p>
       </div>
-      <div class="footer">🌱 The FoodBundles Team</div>
+      <div class="footer">
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p></div>
     </div>
   </body>
   </html>`;
@@ -627,16 +632,7 @@ export const generateOrderStatusTemplate = (data: OrderStatusData): string => {
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <h1>📦 Order Update</h1>
-      </div>
       <div class="content">
-        <div class="status-badge">
-          ${statusInfo.emoji} Your order is ${data.status
-    .toLowerCase()
-    .replace("_", " ")}
-        </div>
-        
         <p>Dear ${data.customer.name},</p>
         
         <p>Your order from <strong>Food Bundles Ltd</strong> has been updated.</p>
@@ -659,8 +655,11 @@ export const generateOrderStatusTemplate = (data: OrderStatusData): string => {
         <p>Thank you for your patience!</p>
       </div>
       <div class="footer">
-        <p>🌱 The FoodBundles Team</p>
-      </div>
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p></div>
     </div>
   </body>
   </html>`;
@@ -702,9 +701,6 @@ export const sendWalletNotificationTemplate = (
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <h1>${typeInfo.emoji} Wallet ${typeInfo.text}</h1>
-      </div>
       <div class="content">
         <p>Dear ${data.restaurantName},</p>
         
@@ -735,8 +731,11 @@ export const sendWalletNotificationTemplate = (
         <p>If you did not initiate this transaction, please contact our support team immediately.</p>
       </div>
       <div class="footer">
-        <p>Thank you for using FoodBundles Wallet!</p>
-        <p>🌱 <strong>Secure and convenient payment solutions</strong></p>
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
       </div>
     </div>
   </body>
@@ -976,16 +975,13 @@ const sendAdminOrderConfirmationTemplate = (paymentData: {
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <h1>🎉 New Order Confirmed!</h1>
-      </div>
       <div class="content">
         <p>Dear Admin,</p>
         
         <p>A new order has been confirmed and payment has been completed successfully.</p>
         
         <div class="order-summary">
-          <h2>📋 Order Details</h2>
+          <h2>Order Details</h2>
           <p><span class="highlight">Order Number:</span> #${
             paymentData.orderNumber
           }</p>
@@ -1004,7 +1000,7 @@ const sendAdminOrderConfirmationTemplate = (paymentData: {
         </div>
 
         <div class="product-list">
-          <h3>🛒 Order Items:</h3>
+          <h3>Order Items:</h3>
           ${paymentData.products
             .map(
               (product) => `
@@ -1024,7 +1020,11 @@ const sendAdminOrderConfirmationTemplate = (paymentData: {
         <p><strong>Action Required:</strong> Please process this order for fulfillment and delivery coordination.</p>
       </div>
       <div class="footer">
-        <p>🌱 FoodBundles Admin System</p>
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
       </div>
     </div>
   </body>
@@ -1122,16 +1122,13 @@ const sendLogisticsOrderNotificationTemplate = (paymentData: {
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <h1>🚚 New Order Ready for Delivery!</h1>
-      </div>
       <div class="content">
         <p>Dear Logistics Team,</p>
         
         <p>A new order has been confirmed and is ready for delivery coordination.</p>
         
         <div class="order-summary">
-          <h2>📦 Delivery Details</h2>
+          <h2>Delivery Details</h2>
           <p><span class="highlight">Order Number:</span> #${
             paymentData.orderNumber
           }</p>
@@ -1150,7 +1147,7 @@ const sendLogisticsOrderNotificationTemplate = (paymentData: {
         </div>
 
         <div class="product-list">
-          <h3>📋 Items to Deliver:</h3>
+          <h3>Items to Deliver:</h3>
           ${paymentData.products
             .map(
               (product) => `
@@ -1170,7 +1167,11 @@ const sendLogisticsOrderNotificationTemplate = (paymentData: {
         <p><strong>Next Steps:</strong> Please coordinate with the restaurant for pickup and delivery scheduling.</p>
       </div>
       <div class="footer">
-        <p>🚛 FoodBundles Logistics System</p>
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
       </div>
     </div>
   </body>
@@ -1299,11 +1300,13 @@ const sendInvitationEmailTemplate = (
         
         <p>If you didn't expect this invitation or have any questions, please contact our support team.</p>
         
-        <p>Best regards,<br>The FoodBundles Team</p>
       </div>
       <div class="footer">
-        <p>© 2025 FoodBundles Platform. All rights reserved.</p>
-        <p style="font-size: 12px; margin-top: 15px;">This is an automated email, please do not reply.</p>
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
       </div>
     </div>
   </body>
@@ -1508,13 +1511,6 @@ const sendSubscriptionExpiryTemplate = (
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <h1>${
-          isWarning
-            ? "⚠️ Subscription Expiring Soon"
-            : "❌ Subscription Expired"
-        }</h1>
-      </div>
       <div class="content">
         <p>Dear ${data.restaurantName},</p>
         
@@ -1543,41 +1539,22 @@ const sendSubscriptionExpiryTemplate = (
           }
         </div>
         
-        <div class="subscription-details">
-          <h2>📋 Subscription Details</h2>
-          <p><span class="highlight">Plan:</span> ${data.planName}</p>
-          <p><span class="highlight">${
-            isWarning ? "Expires" : "Expired"
-          }:</span> ${new Date(data.endDate).toLocaleDateString()}</p>
-          <p><span class="highlight">Restaurant:</span> ${
-            data.restaurantName
-          }</p>
-        </div>
-        
         <div style="text-align: center;">
           <a href="${
             process.env.CLIENT_PRODUCTION_URL
-          }/restaurant/subscriptions" class="button">
+          }/restaurant/subscribe" class="button">
             ${isWarning ? "Renew Subscription" : "Reactivate Subscription"}
           </a>
-        </div>
-        
-        <div class="subscription-details">
-          <h2>💡 Why Upgrade?</h2>
-          <ul>
-            <li>✅ Access to voucher system</li>
-            <li>✅ Priority customer support</li>
-            <li>✅ Advanced analytics and reporting</li>
-            <li>✅ Promotional tools and marketing features</li>
-            <li>✅ Extended payment terms</li>
-          </ul>
         </div>
         
         <p>Need help choosing the right plan? Our team is here to assist you!</p>
       </div>
       <div class="footer">
         <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
-        <p>🌱 <strong>The FoodBundles Team</strong></p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
       </div>
     </div>
   </body>
@@ -1611,7 +1588,7 @@ export async function sendSubscriptionExpiryEmail(
     from: `"FoodBundles" <${process.env.GOOGLE_EMAIL}>`,
     to: data.email,
     subject: `${
-      isWarning ? "⚠️ Subscription Expiring Soon" : "❌ Subscription Expired"
+      isWarning ? "Subscription Expiring Soon" : "Subscription Expired"
     } - ${data.planName}`,
     html: sendSubscriptionExpiryTemplate(data),
   };

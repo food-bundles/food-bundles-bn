@@ -342,7 +342,7 @@ export const createRestaurantService = async (
     village,
   } = restaurantData;
 
-  // ✅ Require fields
+  // Require fields
   if (!name || !email || !password) {
     throw new Error("Name, email, and password are required for restaurants");
   }
@@ -351,14 +351,14 @@ export const createRestaurantService = async (
     throw new Error("TIN (Tax Identification Number) is required");
   }
 
-  // ✅ Validate TIN format
+  // Validate TIN format
   if (!validateTIN(tin)) {
     throw new Error(
       "Invalid TIN format. TIN must be a 9-digit number (not all zeros)"
     );
   }
 
-  // ✅ Check unique TIN
+  // Check unique TIN
   const existingTIN = await prisma.restaurant.findUnique({
     where: { tin },
   });
@@ -366,13 +366,13 @@ export const createRestaurantService = async (
     throw new Error("A restaurant with this TIN already exists");
   }
 
-  // ✅ Check phone/email uniqueness across user tables
+  // Check phone/email uniqueness across user tables
   const existingUser = await checkExistingUser(phone || undefined, email);
   if (existingUser) {
     throw new Error("User with this phone/email already exists");
   }
 
-  // ✅ Validate location if provided
+  // Validate location if provided
   if (province || district || sector || cell || village) {
     const locationValidation =
       LocationValidationService.validateLocationHierarchy({
@@ -398,7 +398,7 @@ export const createRestaurantService = async (
         name,
         email,
         phone,
-        tin, // ✅ Save TIN
+        tin, // Save TIN
         password: hashedPassword,
         location,
         province,

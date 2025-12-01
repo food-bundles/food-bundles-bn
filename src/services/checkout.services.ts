@@ -1206,7 +1206,7 @@ async function processVoucherPayment({
     const serviceFee = amountAfterDiscount * (voucher.serviceFeeRate / 100);
     const totalDeduction = amountAfterDiscount + serviceFee;
 
-    // ✅ REQUIREMENT: Voucher MUST cover full amount - NO FALLBACK
+    // REQUIREMENT: Voucher MUST cover full amount - NO FALLBACK
     if (voucher.remainingCredit < totalDeduction) {
       throw new Error(
         `Insufficient voucher credit. Required: ${totalDeduction.toFixed(
