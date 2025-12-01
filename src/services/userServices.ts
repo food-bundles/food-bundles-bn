@@ -37,6 +37,7 @@ export const checkExistingUser = async (phone?: string, email?: string) => {
     conditions.push(
       prisma.farmer.findFirst({ where: { phone } }),
       prisma.restaurant.findFirst({ where: { phone } }),
+      prisma.affiliator.findFirst({ where: { phone } }),
       prisma.admin.findFirst({ where: { phone } })
     );
   }
@@ -45,6 +46,7 @@ export const checkExistingUser = async (phone?: string, email?: string) => {
     conditions.push(
       prisma.farmer.findFirst({ where: { email } }),
       prisma.restaurant.findFirst({ where: { email } }),
+      prisma.affiliator.findFirst({ where: { email } }),
       prisma.admin.findFirst({ where: { email } })
     );
   }

@@ -82,6 +82,26 @@ model Restaurant {
   VoucherRepayment   VoucherRepayment[]
   VoucherPenalty     VoucherPenalty[]
   posts              Post[]
+  affiliators        Affiliator[]
+}
+
+model Affiliator {
+  id           String  @id @default(uuid())
+  name         String
+  email        String? @unique
+  phone        String? @unique
+  restaurantId String
+  password     String
+  role         Role    @default(AFFILIATOR)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders     Order[]
+
+  @@index([restaurantId])
 }
 
 model FarmerSubmission {
@@ -383,6 +403,7 @@ model CartItem {
 model Order {
   id           String      @id @default(uuid())
   restaurantId String
+  affiliatorId String?
   logisticsId  String?
   orderNumber  String      @unique
   status       OrderStatus @default(PENDING)
@@ -461,6 +482,7 @@ model Order {
 
   // Relations
   restaurant         Restaurant           @relation(fields: [restaurantId], references: [id])
+  affiliator         Affiliator?          @relation(fields: [affiliatorId], references: [id])
   orderItems         OrderItem[]
   logistics          Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
   cart               Cart?                @relation(fields: [cartId], references: [id])
@@ -972,6 +994,7 @@ enum Role {
   ADMIN
   AGGREGATOR
   LOGISTICS
+  AFFILIATOR
 }
 
 enum SubmissionStatus {
@@ -1099,6 +1122,7 @@ enum VoucherStatus {
   EXPIRED
   SUSPENDED
   SETTLED
+  MATURED
 }
 
 enum LoanStatus {

@@ -1156,8 +1156,13 @@ async function processVoucherPayment({
     }
 
     // Validate voucher status
-    if (voucher.status === VoucherStatus.USED) {
-      throw new Error("Voucher has already been used");
+    if (
+      voucher.status === VoucherStatus.USED ||
+      voucher.status === VoucherStatus.MATURED ||
+      voucher.status !== VoucherStatus.ACTIVE ||
+      voucher.status === VoucherStatus.EXPIRED
+    ) {
+      throw new Error("Voucher is not active or has already been used");
     }
 
     if (voucher.status !== VoucherStatus.ACTIVE) {
@@ -1174,6 +1179,14 @@ async function processVoucherPayment({
       throw new Error("Voucher has no remaining credit");
     }
 
+    // Check remaining credit greater than original amount
+    if (voucher.remainingCredit < originalAmount) {
+      throw new Error(
+        `Voucher credit (${voucher.remainingCredit.toFixed(
+          2
+        )}) is less than order amount (${originalAmount.toFixed(2)})`
+      );
+    }
     // Calculate amounts
     const discountPercentage = voucher.discountPercentage;
     const discountAmount = originalAmount * (discountPercentage / 100);

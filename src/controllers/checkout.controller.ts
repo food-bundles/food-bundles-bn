@@ -4,12 +4,15 @@ import {
   processPaymentService,
   verifyPaymentStatus,
 } from "../services/checkout.services";
-import { PaymentMethod } from "@prisma/client";
+import { PaymentMethod, VoucherStatus } from "@prisma/client";
 import {
   getOrderByIdService,
   updateOrderService,
 } from "../services/order.services";
-import { validateVoucherForCheckoutService } from "../services/voucher.service";
+import {
+  getVoucherByCodeService,
+  validateVoucherForCheckoutService,
+} from "../services/voucher.service";
 import prisma from "../prisma";
 import { OTPService } from "../services/otp.service";
 
@@ -86,6 +89,34 @@ export const createCheckout = async (req: Request, res: Response) => {
 
     // For voucher payments, send OTP first instead of processing immediately
     if (paymentMethod === "VOUCHER") {
+      // Get cart to calculate total
+      const cart = await prisma.cart.findUnique({
+        where: { id: cartId },
+        include: { cartItems: true },
+      });
+
+      if (!cart) {
+        return res.status(404).json({ message: "Cart not found" });
+      }
+
+      const cartTotal = cart.cartItems.reduce(
+        (sum, item) => sum + item.subtotal,
+        0
+      );
+
+      // Validate voucher for checkout
+      const voucherValidation = await validateVoucherForCheckoutService(
+        voucherCode,
+        restaurantId,
+        cartTotal
+      );
+
+      if (!voucherValidation.valid) {
+        return res.status(400).json({
+          message: voucherValidation.error,
+        });
+      }
+
       const otpResult = await OTPService.sendOTPToRestaurant(restaurantId);
 
       if (!otpResult.success) {

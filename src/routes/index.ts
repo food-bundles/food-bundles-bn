@@ -25,12 +25,14 @@ import salesRoutes from "./sales.routes";
 import exportRoutes from "./export.routes";
 import contactRoutes from "./contact.routes";
 import inviteRoutes from "./invite.routes";
+import affiliatorRoutes from "./affiliator.routes";
 
 const routes = Router();
 
 // Order matters! Most specific routes should come first
 routes.use("/farmers", farmersRoutes);
 routes.use("/restaurants", restaurantsRoutes);
+routes.use("/affiliators", affiliatorRoutes);
 routes.use("/admins", adminsRoutes);
 routes.use("/submissions", submissionsRoutes);
 routes.use("/products", productRoutes);

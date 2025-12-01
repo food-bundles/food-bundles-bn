@@ -78,6 +78,14 @@ export interface PasswordResetData {
   userType: string;
 }
 
+export interface SubscriptionExpiryData {
+  email: string;
+  restaurantName: string;
+  planName: string;
+  endDate: Date;
+  isWarning?: boolean;
+}
+
 // Clean and format phone number for Rwanda
 export const cleanPhoneNumber = (phone: string): string => {
   // Remove all non-digit characters
@@ -293,8 +301,8 @@ export const sendPaymentNotificationTemplate = (
       </div>
       <div class="footer">
         <p>Thank you for choosing FoodBundles!</p>
-        <p>🌱 <strong>Connecting farmers to markets, sustainably</strong></p>
-      </div>
+        <p style="font-size: 12px; margin-top: 15px;">Email: sales@food.rw | Phone: +250 796 897 823</p>
+        <p style="font-size: 12px;">This is an automated message. Please do not reply to this email.</p>      </div>
     </div>
   </body>
   </html>`;
@@ -1302,6 +1310,120 @@ const sendInvitationEmailTemplate = (
   </html>`;
 };
 
+/**
+ * Generate affiliator welcome email template
+ */
+const sendAffiliatorWelcomeTemplate = (
+  name: string,
+  restaurantName: string,
+  email: string,
+  password: string,
+  loginUrl: string
+): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to FoodBundles - Your Affiliator Account</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .content { padding: 30px; }
+      .credentials-box { background: linear-gradient(135deg, #f0fdf4, #dcfce7); padding: 20px; border-radius: 12px; margin: 20px 0; border: 2px solid #22c55e; }
+      .button { display: inline-block; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
+      .warning { background-color: #fee2e2;color: #991b1b;padding: 15px;border-radius: 8px;margin: 15px 0;font-weight: bold; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #22c55e; font-weight: bold; }
+      .credentials { font-family: monospace; background: #f3f4f6; padding: 10px; border-radius: 4px; margin: 5px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Hello <strong>${name}</strong>,</p>
+        
+        <p>Congratulations! You've been successfully added as an <strong>Affiliator</strong> for <span class="highlight">${restaurantName}</span> on the FoodBundles platform.</p>
+        
+        <div class="credentials-box">
+          <h2>🔐 Your Account Credentials</h2>
+          <p><strong>Email:</strong> <span class="credentials">${email}</span></p>
+          <p><strong>Password:</strong> <span class="credentials">${password}</span></p>
+          <p><strong>Restaurant:</strong> ${restaurantName}</p>
+        </div>
+
+        <div style="text-align: center;">
+          <a href="${loginUrl}" class="button">Login to Your Account</a>
+        </div> 
+
+         <div class="warning">
+          <p><strong>If the button above doesn't work, you can copy and paste the following link into your browser:</strong></p>
+          <p style="word-break: break-all; font-family: monospace; background: #f3f4f6; padding: 10px; border-radius: 4px;">${loginUrl}</p>
+        </div>
+        
+        <p><strong>Important:</strong> Please keep your login credentials secure and change your password after your first login for enhanced security.</p>
+        
+        <p>If you have any questions or need assistance, our support team is here to help you succeed!</p>
+        
+        <p>Welcome aboard and let's grow together! 🇷🇼</p>
+      </div>
+      <div class="footer">
+        <p><strong>FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">Email: sales@food.rw | Phone: +250 796 897 823</p>
+        <p style="font-size: 12px;">This is an automated message. Please do not reply to this email.</p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Send affiliator welcome email
+export async function sendAffiliatorWelcomeEmail(
+  email: string,
+  name: string,
+  restaurantName: string,
+  password: string
+) {
+  if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+    console.log("Email credentials not configured");
+    return;
+  }
+
+  const config = {
+    service: "gmail",
+    auth: {
+      user: process.env.GOOGLE_EMAIL,
+      pass: process.env.GOOGLE_PASSWORD,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  };
+
+  const transporter = nodemailer.createTransport(config);
+  const loginUrl = `${process.env.CLIENT_PRODUCTION_URL}/login`;
+
+  const affiliatorEmail = {
+    from: `"FoodBundles Platform" <${process.env.GOOGLE_EMAIL}>`,
+    to: email,
+    subject: `Welcome to FoodBundles - Your ${restaurantName} Affiliator Account`,
+    html: sendAffiliatorWelcomeTemplate(
+      name,
+      restaurantName,
+      email,
+      password,
+      loginUrl
+    ),
+  };
+
+  try {
+    await transporter.sendMail(affiliatorEmail);
+    console.log("Affiliator welcome email sent successfully");
+  } catch (error) {
+    console.error("Failed to send affiliator welcome email:", error);
+  }
+}
+
 // Send invitation email
 export async function sendInvitationEmail(
   email: string,
@@ -1338,5 +1460,171 @@ export async function sendInvitationEmail(
     console.log("Invitation email sent successfully");
   } catch (error) {
     console.error("Failed to send invitation email:", error);
+  }
+}
+/**
+ * Generate subscription expiry email template
+ */
+const sendSubscriptionExpiryTemplate = (
+  data: SubscriptionExpiryData
+): string => {
+  const isWarning = data.isWarning || false;
+  const daysRemaining = isWarning
+    ? Math.ceil(
+        (new Date(data.endDate).getTime() - new Date().getTime()) /
+          (1000 * 60 * 60 * 24)
+      )
+    : 0;
+
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${
+      isWarning ? "Subscription Expiring Soon" : "Subscription Expired"
+    } - FoodBundles</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: ${
+        isWarning
+          ? "linear-gradient(135deg, #f59e0b, #d97706)"
+          : "linear-gradient(135deg, #ef4444, #b91c1c)"
+      }; color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .alert-box { background-color: ${
+        isWarning ? "#fef3c7" : "#fee2e2"
+      }; color: ${
+    isWarning ? "#92400e" : "#b91c1c"
+  }; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${
+    isWarning ? "#f59e0b" : "#ef4444"
+  }; }
+      .subscription-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #22c55e; }
+      .button { display: inline-block; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #22c55e; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>${
+          isWarning
+            ? "⚠️ Subscription Expiring Soon"
+            : "❌ Subscription Expired"
+        }</h1>
+      </div>
+      <div class="content">
+        <p>Dear ${data.restaurantName},</p>
+        
+        ${
+          isWarning
+            ? `<p>Your <strong>${
+                data.planName
+              }</strong> subscription will expire in <strong>${daysRemaining} day${
+                daysRemaining !== 1 ? "s" : ""
+              }</strong>.</p>`
+            : `<p>Your <strong>${
+                data.planName
+              }</strong> subscription has expired on <strong>${new Date(
+                data.endDate
+              ).toLocaleDateString()}</strong>.</p>`
+        }
+        
+        <div class="alert-box">
+          <h2>${isWarning ? "🔔 Action Required" : "🚫 Access Restricted"}</h2>
+          ${
+            isWarning
+              ? `<p>To avoid service interruption, please renew your subscription before <strong>${new Date(
+                  data.endDate
+                ).toLocaleDateString()}</strong>.</p>`
+              : `<p>Your access to premium features has been suspended. Renew your subscription to restore full access.</p>`
+          }
+        </div>
+        
+        <div class="subscription-details">
+          <h2>📋 Subscription Details</h2>
+          <p><span class="highlight">Plan:</span> ${data.planName}</p>
+          <p><span class="highlight">${
+            isWarning ? "Expires" : "Expired"
+          }:</span> ${new Date(data.endDate).toLocaleDateString()}</p>
+          <p><span class="highlight">Restaurant:</span> ${
+            data.restaurantName
+          }</p>
+        </div>
+        
+        <div style="text-align: center;">
+          <a href="${
+            process.env.CLIENT_PRODUCTION_URL
+          }/restaurant/subscriptions" class="button">
+            ${isWarning ? "Renew Subscription" : "Reactivate Subscription"}
+          </a>
+        </div>
+        
+        <div class="subscription-details">
+          <h2>💡 Why Upgrade?</h2>
+          <ul>
+            <li>✅ Access to voucher system</li>
+            <li>✅ Priority customer support</li>
+            <li>✅ Advanced analytics and reporting</li>
+            <li>✅ Promotional tools and marketing features</li>
+            <li>✅ Extended payment terms</li>
+          </ul>
+        </div>
+        
+        <p>Need help choosing the right plan? Our team is here to assist you!</p>
+      </div>
+      <div class="footer">
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p>🌱 <strong>The FoodBundles Team</strong></p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Send subscription expiry email
+export async function sendSubscriptionExpiryEmail(
+  data: SubscriptionExpiryData
+) {
+  if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+    console.log("Email credentials not configured");
+    return;
+  }
+
+  const config = {
+    service: "gmail",
+    auth: {
+      user: process.env.GOOGLE_EMAIL,
+      pass: process.env.GOOGLE_PASSWORD,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  };
+
+  const transporter = nodemailer.createTransport(config);
+  const isWarning = data.isWarning || false;
+
+  const expiryEmail = {
+    from: `"FoodBundles" <${process.env.GOOGLE_EMAIL}>`,
+    to: data.email,
+    subject: `${
+      isWarning ? "⚠️ Subscription Expiring Soon" : "❌ Subscription Expired"
+    } - ${data.planName}`,
+    html: sendSubscriptionExpiryTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(expiryEmail);
+    console.log(
+      `Subscription ${isWarning ? "warning" : "expiry"} email sent successfully`
+    );
+  } catch (error) {
+    console.error(
+      `Failed to send subscription ${isWarning ? "warning" : "expiry"} email:`,
+      error
+    );
   }
 }

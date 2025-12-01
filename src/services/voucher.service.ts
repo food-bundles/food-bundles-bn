@@ -21,190 +21,6 @@ import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
 const flw = require("flutterwave-node-v3");
 const paypack = require("paypack-js");
 
-async function processMobileMoneyPayment({
-  amount,
-  phoneNumber,
-  txRef,
-  orderId,
-  email,
-  fullname,
-  currency = "RWF",
-}: any) {
-  try {
-    const cleanedPhoneNumber = cleanPhoneNumber(phoneNumber);
-    if (!isValidRwandaPhone(cleanedPhoneNumber)) {
-      throw new Error("Invalid mobile number format");
-    }
-
-    console.log("cleanedPhoneNumber:", cleanedPhoneNumber);
-
-    try {
-      const response = await paypack.cashin({
-        number: cleanedPhoneNumber,
-        amount: amount,
-        environment:
-          process.env.NODE_ENV === "production" ? "production" : "development",
-      });
-
-      console.log("response:", response);
-
-      if (response?.data) {
-        return {
-          success: true,
-          transactionId: response.data.ref || txRef,
-          reference: response.data.ref || txRef,
-          flwRef: response.data.ref || txRef,
-          status: "pending",
-          message:
-            "Payment request sent to your phone number, please confirm it.",
-        };
-      }
-    } catch (error) {
-      console.log("PayPack failed, trying Flutterwave...");
-    }
-
-    const payload = {
-      tx_ref: txRef,
-      order_id: orderId,
-      amount: amount.toString(),
-      currency: currency,
-      email: email,
-      phone_number: cleanedPhoneNumber,
-      fullname: fullname,
-      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
-    };
-
-    const response = await flw.MobileMoney.rwanda(payload);
-
-    console.log("response:", response);
-
-    if (response.status === "success") {
-      return {
-        success: true,
-        transactionId: response.data?.flw_ref || txRef,
-        reference: response.data?.tx_ref || txRef,
-        flwRef: response.data?.flw_ref || txRef,
-        status: response.data?.status || "pending",
-        message: response.message || "Mobile money payment initiated",
-      };
-    }
-    throw new Error("Payment failed");
-  } catch (error: any) {
-    return {
-      success: false,
-      transactionId: "",
-      reference: "",
-      status: "failed",
-      message: error.message || "Mobile money payment failed",
-    };
-  }
-}
-
-async function processCardPayment({
-  amount,
-  txRef,
-  email,
-  fullname,
-  phoneNumber,
-  currency = "RWF",
-  cardDetails,
-}: any) {
-  try {
-    const axios = require("axios");
-    const standardPayload = {
-      tx_ref: txRef,
-      amount: amount.toString(),
-      currency: currency,
-      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
-      customer: {
-        email: email,
-        name: fullname,
-        phonenumber: phoneNumber,
-      },
-      payment_options: "card",
-    };
-
-    const response = await axios.post(
-      "https://api.flutterwave.com/v3/payments",
-      standardPayload,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (response.data?.status === "success" && response.data?.data?.link) {
-      return {
-        success: true,
-        transactionId: txRef,
-        reference: txRef,
-        status: "pending",
-        message: "Redirect to complete card payment",
-        authorizationDetails: {
-          mode: "redirect",
-          redirectUrl: response.data.data.link,
-        },
-      };
-    }
-    throw new Error("Card payment failed");
-  } catch (error: any) {
-    return {
-      success: false,
-      transactionId: "",
-      reference: "",
-      status: "failed",
-      message: error.message || "Card payment failed",
-    };
-  }
-}
-
-async function processBankTransfer({
-  amount,
-  txRef,
-  email,
-  phoneNumber,
-  currency = "RWF",
-  clientIp,
-  deviceFingerprint,
-  narration,
-}: any) {
-  try {
-    const payload = {
-      tx_ref: txRef,
-      amount: amount.toString(),
-      email: email,
-      phone_number: phoneNumber,
-      currency: currency,
-      client_ip: clientIp,
-      device_fingerprint: deviceFingerprint,
-      narration: narration,
-      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
-    };
-
-    const response = await flw.Charge.bank_transfer(payload);
-    if (response.status === "success") {
-      return {
-        success: true,
-        transactionId: response.data?.flw_ref || txRef,
-        reference: response.data?.tx_ref || txRef,
-        status: response.data?.status || "pending",
-        message: response.message || "Bank transfer initiated",
-      };
-    }
-    throw new Error("Bank transfer failed");
-  } catch (error: any) {
-    return {
-      success: false,
-      transactionId: "",
-      reference: "",
-      status: "failed",
-      message: error.message || "Bank transfer failed",
-    };
-  }
-}
-
 // ============================================
 // TYPES AND INTERFACES
 // ============================================
@@ -358,6 +174,71 @@ export const createVoucherService = async (data: CreateVoucherData) => {
 };
 
 /**
+ * Check and update voucher status to MATURED if payment deadline exceeded
+ */
+const checkAndUpdateVoucherMaturity = async (voucher: any) => {
+  const now = new Date();
+  let newStatus = null;
+
+  // Check if ACTIVE voucher has expired
+  if (
+    voucher.status === VoucherStatus.ACTIVE &&
+    voucher.expiryDate &&
+    now > new Date(voucher.expiryDate)
+  ) {
+    newStatus = VoucherStatus.EXPIRED;
+  }
+  // Check if USED voucher should be MATURED (payment deadline exceeded)
+  else if (voucher.status === VoucherStatus.USED) {
+    let shouldMature = false;
+
+    // Check if loan repayment due date has passed
+    if (voucher.loan?.repaymentDueDate) {
+      shouldMature = now > new Date(voucher.loan.repaymentDueDate);
+    }
+
+    // If no loan due date, check subscription payment deadline
+    if (!shouldMature && voucher.restaurantId) {
+      try {
+        const subscription = await prisma.restaurantSubscription.findFirst({
+          where: {
+            restaurantId: voucher.restaurantId,
+            status: SubscriptionStatus.ACTIVE,
+          },
+          include: { plan: true },
+        });
+
+        if (subscription?.plan?.voucherPaymentDays && voucher.createdAt) {
+          const paymentDeadline = new Date(voucher.createdAt);
+          paymentDeadline.setDate(
+            paymentDeadline.getDate() + subscription.plan.voucherPaymentDays
+          );
+          shouldMature = now > paymentDeadline;
+        }
+      } catch (error) {
+        console.error(
+          "Error checking subscription for voucher maturity:",
+          error
+        );
+      }
+    }
+
+    if (shouldMature) {
+      newStatus = VoucherStatus.MATURED;
+    }
+  }
+
+  if (newStatus) {
+    return await prisma.voucher.update({
+      where: { id: voucher.id },
+      data: { status: newStatus },
+    });
+  }
+
+  return voucher;
+};
+
+/**
  * Get all vouchers with filtering and pagination (Admin only)
  */
 export const getAllVouchersService = async (filters?: {
@@ -404,10 +285,15 @@ export const getAllVouchersService = async (filters?: {
     prisma.voucher.count({ where }),
   ]);
 
+  // Check and update maturity status for each voucher
+  const updatedVouchers = await Promise.all(
+    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher))
+  );
+
   const totalPages = Math.ceil(totalCount / limit);
 
   return {
-    vouchers,
+    vouchers: updatedVouchers,
     pagination: {
       page,
       limit,
@@ -451,7 +337,12 @@ export const getMyVouchersService = async (
     orderBy: { createdAt: "desc" },
   });
 
-  return vouchers;
+  // Check and update maturity status for each voucher
+  const updatedVouchers = await Promise.all(
+    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher))
+  );
+
+  return updatedVouchers;
 };
 
 /**
@@ -487,7 +378,10 @@ export const getVoucherByIdService = async (voucherId: string) => {
     throw new Error("Voucher not found");
   }
 
-  return voucher;
+  // Check and update maturity status
+  const updatedVoucher = await checkAndUpdateVoucherMaturity(voucher);
+
+  return updatedVoucher;
 };
 
 /**
@@ -506,7 +400,10 @@ export const getVoucherByCodeService = async (voucherCode: string) => {
     throw new Error("Voucher not found");
   }
 
-  return voucher;
+  // Check and update maturity status
+  const updatedVoucher = await checkAndUpdateVoucherMaturity(voucher);
+
+  return updatedVoucher;
 };
 
 /**
@@ -556,8 +453,13 @@ export const getRestaurantVouchersService = async (
     orderBy: { createdAt: "desc" },
   });
 
+  // Check and update maturity status for each voucher
+  const updatedVouchers = await Promise.all(
+    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher))
+  );
+
   return {
-    vouchers,
+    vouchers: updatedVouchers,
     subscription: subscriptionStatus
       ? {
           isActive: true,
@@ -597,9 +499,15 @@ export const getAvailableVouchersForCheckoutService = async (
     orderBy: { discountPercentage: "desc" }, // Show highest discount first
   });
 
-  return vouchers;
+  // Check and update maturity status for each voucher
+  const updatedVouchers = await Promise.all(
+    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher))
+  );
 
-  return vouchers;
+  // Filter out matured vouchers from available ones
+  return updatedVouchers.filter(
+    (voucher) => voucher.status === VoucherStatus.ACTIVE
+  );
 };
 
 /**
@@ -2150,6 +2058,14 @@ export const validateVoucherForCheckoutService = async (
       };
     }
 
+    // Check credit limit
+    if (voucher.creditLimit < orderAmount) {
+      return {
+        valid: false,
+        error: `Voucher credit limit (${voucher.creditLimit}) is less than order amount (${orderAmount})`,
+      };
+    }
+
     // Check min/max transaction amounts
     if (orderAmount < voucher.minTransactionAmount) {
       return {
@@ -2716,3 +2632,187 @@ export const processRepaymentPaymentService = async (data: {
     };
   }
 };
+
+async function processMobileMoneyPayment({
+  amount,
+  phoneNumber,
+  txRef,
+  orderId,
+  email,
+  fullname,
+  currency = "RWF",
+}: any) {
+  try {
+    const cleanedPhoneNumber = cleanPhoneNumber(phoneNumber);
+    if (!isValidRwandaPhone(cleanedPhoneNumber)) {
+      throw new Error("Invalid mobile number format");
+    }
+
+    console.log("cleanedPhoneNumber:", cleanedPhoneNumber);
+
+    try {
+      const response = await paypack.cashin({
+        number: cleanedPhoneNumber,
+        amount: amount,
+        environment:
+          process.env.NODE_ENV === "production" ? "production" : "development",
+      });
+
+      console.log("response:", response);
+
+      if (response?.data) {
+        return {
+          success: true,
+          transactionId: response.data.ref || txRef,
+          reference: response.data.ref || txRef,
+          flwRef: response.data.ref || txRef,
+          status: "pending",
+          message:
+            "Payment request sent to your phone number, please confirm it.",
+        };
+      }
+    } catch (error) {
+      console.log("PayPack failed, trying Flutterwave...");
+    }
+
+    const payload = {
+      tx_ref: txRef,
+      order_id: orderId,
+      amount: amount.toString(),
+      currency: currency,
+      email: email,
+      phone_number: cleanedPhoneNumber,
+      fullname: fullname,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+    };
+
+    const response = await flw.MobileMoney.rwanda(payload);
+
+    console.log("response:", response);
+
+    if (response.status === "success") {
+      return {
+        success: true,
+        transactionId: response.data?.flw_ref || txRef,
+        reference: response.data?.tx_ref || txRef,
+        flwRef: response.data?.flw_ref || txRef,
+        status: response.data?.status || "pending",
+        message: response.message || "Mobile money payment initiated",
+      };
+    }
+    throw new Error("Payment failed");
+  } catch (error: any) {
+    return {
+      success: false,
+      transactionId: "",
+      reference: "",
+      status: "failed",
+      message: error.message || "Mobile money payment failed",
+    };
+  }
+}
+
+async function processCardPayment({
+  amount,
+  txRef,
+  email,
+  fullname,
+  phoneNumber,
+  currency = "RWF",
+  cardDetails,
+}: any) {
+  try {
+    const axios = require("axios");
+    const standardPayload = {
+      tx_ref: txRef,
+      amount: amount.toString(),
+      currency: currency,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+      customer: {
+        email: email,
+        name: fullname,
+        phonenumber: phoneNumber,
+      },
+      payment_options: "card",
+    };
+
+    const response = await axios.post(
+      "https://api.flutterwave.com/v3/payments",
+      standardPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.data?.status === "success" && response.data?.data?.link) {
+      return {
+        success: true,
+        transactionId: txRef,
+        reference: txRef,
+        status: "pending",
+        message: "Redirect to complete card payment",
+        authorizationDetails: {
+          mode: "redirect",
+          redirectUrl: response.data.data.link,
+        },
+      };
+    }
+    throw new Error("Card payment failed");
+  } catch (error: any) {
+    return {
+      success: false,
+      transactionId: "",
+      reference: "",
+      status: "failed",
+      message: error.message || "Card payment failed",
+    };
+  }
+}
+
+async function processBankTransfer({
+  amount,
+  txRef,
+  email,
+  phoneNumber,
+  currency = "RWF",
+  clientIp,
+  deviceFingerprint,
+  narration,
+}: any) {
+  try {
+    const payload = {
+      tx_ref: txRef,
+      amount: amount.toString(),
+      email: email,
+      phone_number: phoneNumber,
+      currency: currency,
+      client_ip: clientIp,
+      device_fingerprint: deviceFingerprint,
+      narration: narration,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+    };
+
+    const response = await flw.Charge.bank_transfer(payload);
+    if (response.status === "success") {
+      return {
+        success: true,
+        transactionId: response.data?.flw_ref || txRef,
+        reference: response.data?.tx_ref || txRef,
+        status: response.data?.status || "pending",
+        message: response.message || "Bank transfer initiated",
+      };
+    }
+    throw new Error("Bank transfer failed");
+  } catch (error: any) {
+    return {
+      success: false,
+      transactionId: "",
+      reference: "",
+      status: "failed",
+      message: error.message || "Bank transfer failed",
+    };
+  }
+}
