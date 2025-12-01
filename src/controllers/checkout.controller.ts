@@ -4,12 +4,15 @@ import {
   processPaymentService,
   verifyPaymentStatus,
 } from "../services/checkout.services";
-import { PaymentMethod } from "@prisma/client";
+import { PaymentMethod, VoucherStatus } from "@prisma/client";
 import {
   getOrderByIdService,
   updateOrderService,
 } from "../services/order.services";
-import { validateVoucherForCheckoutService } from "../services/voucher.service";
+import {
+  getVoucherByCodeService,
+  validateVoucherForCheckoutService,
+} from "../services/voucher.service";
 import prisma from "../prisma";
 import { OTPService } from "../services/otp.service";
 
@@ -86,66 +89,33 @@ export const createCheckout = async (req: Request, res: Response) => {
 
     // For voucher payments, validate voucher first before sending OTP
     if (paymentMethod === "VOUCHER") {
-      // Get cart total
+      // Get cart to calculate total
       const cart = await prisma.cart.findUnique({
         where: { id: cartId },
-        include: {
-          cartItems: {
-            include: {
-              product: true,
-            },
-          },
-        },
+        include: { cartItems: true },
       });
 
       if (!cart) {
-        return res.status(404).json({
-          message: "Cart not found",
-        });
+        return res.status(404).json({ message: "Cart not found" });
       }
 
       const cartTotal = cart.cartItems.reduce(
-        (total, item) => total + item.quantity * item.product.unitPrice,
+        (sum, item) => sum + item.subtotal,
         0
       );
 
-      // Validate voucher
-      const voucher = await prisma.voucher.findUnique({
-        where: { voucherCode },
-        include: {
-          restaurant: true,
-        },
-      });
+      // Validate voucher for checkout
+      const voucherValidation = await validateVoucherForCheckoutService(
+        voucherCode,
+        restaurantId,
+        cartTotal
+      );
 
-      if (!voucher) {
-        return res.status(404).json({
-          message: "Voucher not found",
-        });
-      }
-
-      if (voucher.status !== "ACTIVE") {
+      if (!voucherValidation.valid) {
         return res.status(400).json({
-          message: "Voucher is not active",
+          message: voucherValidation.error,
         });
       }
-
-      if (voucher.restaurantId !== restaurantId) {
-        return res.status(403).json({
-          message: "Voucher does not belong to this restaurant",
-        });
-      }
-
-      // Check if voucher has sufficient credit based on discount percentage
-      const discountAmount = (voucher.creditLimit * voucher.discountPercentage) / 100;
-      
-      if (cartTotal > discountAmount) {
-        return res.status(400).json({
-          message: `Insufficient voucher credit. Available: ${discountAmount} RWF`,
-        });
-      }
-
-      console.log("discountAmount ", discountAmount);
-      console.log("cartTotal ", cartTotal);
 
       const otpResult = await OTPService.sendOTPToRestaurant(restaurantId);
 

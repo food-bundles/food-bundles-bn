@@ -1,0 +1,433 @@
+tags:
+  - name: Affiliator Management
+    description: Operations for managing restaurant affiliators
+
+components:
+  schemas:
+    Affiliator:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique affiliator identifier
+          example: "aff-12345-abcde"
+        name:
+          type: string
+          description: Affiliator's full name
+          example: "John Doe"
+        email:
+          type: string
+          nullable: true
+          description: Affiliator's email address
+          example: "john.doe@example.com"
+        phone:
+          type: string
+          nullable: true
+          description: Affiliator's phone number
+          example: "+250788123456"
+        restaurantId:
+          type: string
+          description: ID of the restaurant this affiliator belongs to
+          example: "rest-12345"
+        role:
+          type: string
+          enum: [AFFILIATOR]
+          description: User role
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        restaurant:
+          $ref: "#/components/schemas/RestaurantInfo"
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderSummary"
+
+    CreateAffiliatorRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Affiliator's full name
+          example: "John Doe"
+        email:
+          type: string
+          nullable: true
+          description: Affiliator's email address (either email or phone required)
+          example: "john.doe@example.com"
+        phone:
+          type: string
+          nullable: true
+          description: Affiliator's phone number (either email or phone required)
+          example: "+250788123456"
+
+    UpdateAffiliatorRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Affiliator's full name
+          example: "John Doe"
+        email:
+          type: string
+          nullable: true
+          description: Affiliator's email address
+          example: "john.doe@example.com"
+        phone:
+          type: string
+          nullable: true
+          description: Affiliator's phone number
+          example: "+250788123456"
+
+    RestaurantInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+
+    OrderSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        orderNumber:
+          type: string
+        totalAmount:
+          type: number
+          format: float
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ApiResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []
+
+paths:
+  /affiliators:
+    post:
+      tags: [Affiliator Management]
+      summary: Create new affiliator (Restaurant only)
+      description: Create a new affiliator for the authenticated restaurant with auto-generated password and email/SMS invitation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAffiliatorRequest"
+            examples:
+              with_email:
+                summary: Affiliator with Email
+                value:
+                  name: "John Doe"
+                  email: "john.doe@example.com"
+              with_phone:
+                summary: Affiliator with Phone
+                value:
+                  name: "Jane Smith"
+                  phone: "+250788123456"
+              with_both:
+                summary: Affiliator with Email and Phone
+                value:
+                  name: "Bob Johnson"
+                  email: "bob.johnson@example.com"
+                  phone: "+250788654321"
+      responses:
+        201:
+          description: Affiliator created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Affiliator created successfully"
+                  data:
+                    $ref: "#/components/schemas/Affiliator"
+        400:
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_name:
+                  value:
+                    message: "Name is required"
+                missing_contact:
+                  value:
+                    message: "Either email or phone number must be provided"
+        401:
+          description: Unauthorized
+        403:
+          description: Restaurant access required
+        500:
+          description: Internal server error
+
+    get:
+      tags: [Affiliator Management]
+      summary: Get all affiliators (Admin only)
+      description: Retrieve all affiliators with filtering and pagination
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: restaurantId
+          in: query
+          schema:
+            type: string
+          description: Filter by restaurant ID
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Items per page
+      responses:
+        200:
+          description: Affiliators retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Affiliators retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Affiliator"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+                      hasNext:
+                        type: boolean
+                      hasPrev:
+                        type: boolean
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        500:
+          description: Internal server error
+
+  /affiliators/my-affiliators:
+    get:
+      tags: [Affiliator Management]
+      summary: Get restaurant's affiliators
+      description: Retrieve all affiliators for the authenticated restaurant
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Affiliators retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Affiliators retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Affiliator"
+        401:
+          description: Unauthorized
+        403:
+          description: Restaurant access required
+        500:
+          description: Internal server error
+
+  /affiliators/{id}:
+    get:
+      tags: [Affiliator Management]
+      summary: Get affiliator by ID
+      description: Retrieve detailed affiliator information
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Affiliator ID
+      responses:
+        200:
+          description: Affiliator retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Affiliator retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/Affiliator"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to affiliator
+        404:
+          description: Affiliator not found
+        500:
+          description: Internal server error
+
+    patch:
+      tags: [Affiliator Management]
+      summary: Update affiliator
+      description: Update affiliator information
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Affiliator ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAffiliatorRequest"
+            examples:
+              update_name:
+                summary: Update Name
+                value:
+                  name: "John Smith"
+              update_contact:
+                summary: Update Contact Info
+                value:
+                  email: "john.smith@example.com"
+                  phone: "+250788999888"
+      responses:
+        200:
+          description: Affiliator updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Affiliator updated successfully"
+                  data:
+                    $ref: "#/components/schemas/Affiliator"
+        400:
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  value:
+                    message: "Another affiliator with this email or phone already exists"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to affiliator
+        404:
+          description: Affiliator not found
+        500:
+          description: Internal server error
+
+    delete:
+      tags: [Affiliator Management]
+      summary: Delete affiliator
+      description: Delete an affiliator (only if no orders exist)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Affiliator ID
+      responses:
+        200:
+          description: Affiliator deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Affiliator deleted successfully"
+        400:
+          description: Cannot delete affiliator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                has_orders:
+                  value:
+                    message: "Cannot delete affiliator with existing orders"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to affiliator
+        404:
+          description: Affiliator not found
+        500:
+          description: Internal server error

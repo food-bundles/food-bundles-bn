@@ -9,6 +9,7 @@ import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { sendMessage } from "../utils/sms.utility";
 import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
 import { createNotificationService } from "./notification.services";
+import { sendSubscriptionExpiryEmail } from "../utils/emailTemplates";
 
 dotenv.config();
 
@@ -169,6 +170,68 @@ export const createSubscriptionPlanService = async (
 
   return plan;
 };
+/**
+ * Helper function to check and update subscription expiry
+ */
+const checkAndUpdateSubscriptionExpiry = async (subscription: any) => {
+  const now = new Date();
+
+  if (
+    subscription.status === SubscriptionStatus.ACTIVE &&
+    subscription.endDate &&
+    now > new Date(subscription.endDate)
+  ) {
+    const updatedSubscription = await prisma.restaurantSubscription.update({
+      where: { id: subscription.id },
+      data: { status: SubscriptionStatus.EXPIRED },
+    });
+
+    // Send expiry notification only once (when status changes from ACTIVE to EXPIRED)
+    try {
+      await sendSubscriptionExpiryEmail({
+        email: subscription.restaurant?.email || "",
+        restaurantName: subscription.restaurant?.name || "Restaurant",
+        planName: subscription.plan?.name || "Plan",
+        endDate: subscription.endDate,
+      });
+    } catch (error) {
+      console.error("Failed to send subscription expiry email:", error);
+    }
+
+    return updatedSubscription;
+  }
+
+  // Check if subscription is about to expire (3 days before) - only for ACTIVE subscriptions
+  if (
+    subscription.status === SubscriptionStatus.ACTIVE &&
+    subscription.endDate
+  ) {
+    const threeDaysFromNow = new Date();
+    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+    const daysUntilExpiry = Math.ceil(
+      (new Date(subscription.endDate).getTime() - now.getTime()) /
+        (1000 * 60 * 60 * 24)
+    );
+
+    // Send warning only when exactly 3 days remain (prevents multiple sends)
+    if (daysUntilExpiry === 3) {
+      try {
+        await sendSubscriptionExpiryEmail({
+          email: subscription.restaurant?.email || "",
+          restaurantName: subscription.restaurant?.name || "Restaurant",
+          planName: subscription.plan?.name || "Plan",
+          endDate: subscription.endDate,
+          isWarning: true,
+        });
+      } catch (error) {
+        console.error("Failed to send subscription warning email:", error);
+      }
+    }
+  }
+
+  return subscription;
+};
+
 /**
  * Service to get all subscription plans
  */
@@ -1006,8 +1069,15 @@ export const getRestaurantSubscriptionsService = async (
     prisma.restaurantSubscription.count({ where }),
   ]);
 
-  // ✅ Add daysRemaining to each subscription
-  const subscriptionsWithDaysRemaining = subscriptions.map((sub) => ({
+  // Check and update subscription expiry
+  const updatedSubscriptions = await Promise.all(
+    subscriptions.map((subscription) =>
+      checkAndUpdateSubscriptionExpiry(subscription)
+    )
+  );
+
+  // Add daysRemaining to each subscription
+  const subscriptionsWithDaysRemaining = updatedSubscriptions.map((sub) => ({
     ...sub,
     daysRemaining: calculateDaysRemaining(sub.endDate),
   }));
@@ -1060,10 +1130,15 @@ export const getSubscriptionByIdService = async (
     );
   }
 
-  // ✅ Add daysRemaining to subscription
+  // Check and update subscription expiry
+  const updatedSubscription = await checkAndUpdateSubscriptionExpiry(
+    subscription
+  );
+
+  // Add daysRemaining to subscription
   return {
-    ...subscription,
-    daysRemaining: calculateDaysRemaining(subscription.endDate),
+    ...updatedSubscription,
+    daysRemaining: calculateDaysRemaining(updatedSubscription.endDate),
   };
 };
 
@@ -1256,8 +1331,15 @@ export const getAllSubscriptionsService = async ({
     prisma.restaurantSubscription.count({ where }),
   ]);
 
-  // ✅ Add daysRemaining to each subscription
-  const subscriptionsWithDaysRemaining = subscriptions.map((sub) => ({
+  // Check and update subscription expiry
+  const updatedSubscriptions = await Promise.all(
+    subscriptions.map((subscription) =>
+      checkAndUpdateSubscriptionExpiry(subscription)
+    )
+  );
+
+  // Add daysRemaining to each subscription
+  const subscriptionsWithDaysRemaining = updatedSubscriptions.map((sub) => ({
     ...sub,
     daysRemaining: calculateDaysRemaining(sub.endDate),
   }));
