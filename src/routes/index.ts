@@ -27,6 +27,7 @@ import contactRoutes from "./contact.routes";
 import inviteRoutes from "./invite.routes";
 import affiliatorRoutes from "./affiliator.routes";
 
+
 const routes = Router();
 
 // Order matters! Most specific routes should come first
@@ -51,7 +52,7 @@ routes.use("/notifications", notificationRoutes);
 routes.use("/sales", salesRoutes);
 routes.use("/export", exportRoutes);
 routes.use("/invites", inviteRoutes);
-routes.use("/contact - submissions", contactRoutes);
+routes.use("/contact-submissions", contactRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

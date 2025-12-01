@@ -8,13 +8,13 @@ import {
   respondToSubmission,
 } from "../controllers/contact.controller";
 
-const router = Router();
+const contactRoutes = Router();
 
-router.post("/", createContactSubmission);
-router.get("/", getContactSubmissions);
-router.get("/:id", getContactSubmission);
-router.put("/:id", updateContactSubmission);
-router.delete("/:id", deleteContactSubmission);
-router.post("/:id/respond", respondToSubmission);
+contactRoutes.post('/', createContactSubmission);
+contactRoutes.get('/', getContactSubmissions);
+contactRoutes.get('/:id', getContactSubmission);
+contactRoutes.put('/:id', updateContactSubmission);
+contactRoutes.delete('/:id', deleteContactSubmission);
+contactRoutes.post('/:id/respond', respondToSubmission);
 
-export default router;
+export default contactRoutes;
