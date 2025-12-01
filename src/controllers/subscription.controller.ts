@@ -381,8 +381,6 @@ export const getMySubscriptions = async (req: Request, res: Response) => {
       status: status as SubscriptionStatus,
     });
 
-    console.log("Subscription results", result);
-
     res.status(200).json({
       message: "Subscriptions retrieved successfully",
       data: result.subscriptions,

@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import axios from "axios";
 import prisma from "../prisma";
 import {
   debitWalletService,
@@ -725,21 +726,32 @@ async function processMobileMoneyPayment({
       // Fallback: Try Flutterwave
       console.log("Falling back to Flutterwave...");
 
-      const payload = {
+      const standardPayload = {
         tx_ref: txRef,
-        order_id: orderId,
         amount: amount.toString(),
         currency: currency,
-        email: email,
-        phone_number: cleanedPhoneNumber,
-        fullname: fullname,
         redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+        customer: {
+          email: email,
+          name: fullname,
+          phonenumber: cleanedPhoneNumber,
+        },
+        payment_options: "mobilemoney",
       };
 
-      const response = await flw.MobileMoney.rwanda(payload);
-      console.log("Mobile Money Response:", response);
+      const response = await axios.post(
+        "https://api.flutterwave.com/v3/payments",
+        standardPayload,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log("Mobile Money Response:", response.data);
 
-      if (response.status === "success") {
+      if (response.data?.status === "success" && response.data?.data?.link) {
         // Update order to indicate fallback to Flutterwave
         await prisma.order.update({
           where: { txRef: txRef },
@@ -751,18 +763,18 @@ async function processMobileMoneyPayment({
 
         return {
           success: true,
-          transactionId: response.data?.flw_ref || txRef,
-          reference: response.data?.tx_ref || txRef,
-          flwRef: response.data?.flw_ref || txRef,
-          status: response.data?.status || "pending",
-          message: response.message || "Mobile money payment initiated",
-          authorizationDetails: response.meta?.authorization && {
-            mode: response.meta.authorization.mode,
-            redirectUrl: response.meta.authorization.redirect,
+          transactionId: txRef,
+          reference: txRef,
+          flwRef: txRef,
+          status: "pending",
+          message: "Redirect to complete mobile money payment",
+          authorizationDetails: {
+            mode: "redirect",
+            redirectUrl: response.data.data.link,
           },
         };
       } else {
-        throw new Error("Flutterwave payment failed");
+        throw new Error("Flutterwave mobile money payment failed");
       }
     }
   } catch (error: any) {

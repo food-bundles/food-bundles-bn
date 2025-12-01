@@ -45,7 +45,6 @@ export const createVoucher = async (req: Request, res: Response) => {
       creditLimit,
       minTransactionAmount,
       maxTransactionAmount,
-      expiryDate,
       loanId,
     } = req.body;
 
@@ -70,6 +69,10 @@ export const createVoucher = async (req: Request, res: Response) => {
       });
     }
 
+    // Set voucher expiry: 48 hours from now or custom
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + 2); // Voucher valid for 2 days
+
     const voucher = await createVoucherService({
       restaurantId,
       voucherType,
@@ -80,7 +83,7 @@ export const createVoucher = async (req: Request, res: Response) => {
       maxTransactionAmount: maxTransactionAmount
         ? parseFloat(maxTransactionAmount)
         : undefined,
-      expiryDate: expiryDate ? new Date(expiryDate) : undefined,
+      expiryDate,
       loanId,
       approvedBy: adminId,
     });
@@ -604,7 +607,7 @@ export const makeRepayment = async (req: Request, res: Response) => {
   try {
     const { id: voucherId } = req.params;
     const restaurantId = (req as any).user.id;
-    const { amount, paymentMethod, paymentReference, loanId } = req.body;
+    const { amount, paymentMethod, loanId, phoneNumber } = req.body;
 
     if (!amount || !paymentMethod) {
       return res.status(400).json({
@@ -617,9 +620,43 @@ export const makeRepayment = async (req: Request, res: Response) => {
       loanId,
       amount: parseFloat(amount),
       paymentMethod,
-      paymentReference,
       voucherId,
+      phoneNumber,
     });
+
+    if (result.paymentResult) {
+      const paymentResult = result.paymentResult as any;
+      if (
+        paymentResult.redirectUrl ||
+        paymentResult.authorizationDetails?.redirectUrl
+      ) {
+        // For payments requiring redirect
+        return res.status(200).json({
+          message: "Payment initiated - redirect required",
+          data: {
+            repayment: result.repayment,
+            transactionId: paymentResult.transactionId,
+            redirectUrl:
+              paymentResult.redirectUrl ||
+              paymentResult.authorizationDetails?.redirectUrl,
+            status: paymentResult.status,
+            requiresRedirect: true,
+          },
+        });
+      } else if (paymentResult.transferDetails) {
+        // For bank transfers
+        return res.status(200).json({
+          message: "Bank transfer initiated",
+          data: {
+            repayment: result.repayment,
+            transactionId: paymentResult.transactionId,
+            transferDetails: paymentResult.transferDetails,
+            status: paymentResult.status,
+            message: "Please transfer funds to the provided account details",
+          },
+        });
+      }
+    }
 
     res.status(200).json({
       message: "Repayment processed successfully",

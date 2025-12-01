@@ -144,18 +144,61 @@ async function processVoucherRepaymentPayment(
   console.log("Found matching voucher repayment:", repaymentTransaction.id);
 
   if (status === "successful") {
-    // Update voucher credit for successful payment
     await retryDatabaseOperation(async () => {
-      return await prisma.voucher.update({
-        where: { id: repaymentTransaction.voucherId! },
-        data: {
-          remainingCredit: {
-            increment: repaymentTransaction.amount,
+      return await prisma.$transaction(async (tx) => {
+        // Update voucher credit for successful payment
+        await tx.voucher.update({
+          where: { id: repaymentTransaction.voucherId! },
+          data: {
+            remainingCredit: {
+              increment: repaymentTransaction.amount,
+            },
+            totalCredit: {
+              increment: repaymentTransaction.amount,
+            },
           },
-          totalCredit: {
-            increment: repaymentTransaction.amount,
-          },
-        },
+        });
+
+        // If there's a loan, check if it's fully paid
+        if (repaymentTransaction.loanId) {
+          // Calculate outstanding balance
+          const transactions = await tx.voucherTransaction.findMany({
+            where: { voucher: { loanId: repaymentTransaction.loanId } },
+          });
+          
+          const repayments = await tx.voucherRepayment.findMany({
+            where: { loanId: repaymentTransaction.loanId },
+          });
+
+          const penalties = await tx.voucherPenalty.findMany({
+            where: {
+              voucher: { loanId: repaymentTransaction.loanId },
+              status: "PENDING",
+            },
+          });
+
+          const totalUsed = transactions.reduce((sum, t) => sum + t.amountCharged, 0);
+          const totalServiceFees = transactions.reduce((sum, t) => sum + t.serviceFee, 0);
+          const totalPenalties = penalties.reduce((sum, p) => sum + p.penaltyAmount, 0);
+          const totalRepayments = repayments.reduce((sum, r) => sum + r.amount, 0);
+          
+          const outstanding = totalUsed + totalServiceFees + totalPenalties - totalRepayments;
+
+          // If fully paid, update loan and voucher status
+          if (outstanding <= 0) {
+            await tx.loanApplication.update({
+              where: { id: repaymentTransaction.loanId },
+              data: { status: "SETTLED" },
+            });
+
+            await tx.voucher.updateMany({
+              where: { loanId: repaymentTransaction.loanId },
+              data: { status: "SETTLED" },
+            });
+
+            console.log(`Loan ${repaymentTransaction.loanId} fully settled`);
+          }
+        }
       });
     });
 
