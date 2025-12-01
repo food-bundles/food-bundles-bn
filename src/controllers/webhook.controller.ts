@@ -165,7 +165,7 @@ async function processVoucherRepaymentPayment(
           const transactions = await tx.voucherTransaction.findMany({
             where: { voucher: { loanId: repaymentTransaction.loanId } },
           });
-          
+
           const repayments = await tx.voucherRepayment.findMany({
             where: { loanId: repaymentTransaction.loanId },
           });
@@ -177,12 +177,25 @@ async function processVoucherRepaymentPayment(
             },
           });
 
-          const totalUsed = transactions.reduce((sum, t) => sum + t.amountCharged, 0);
-          const totalServiceFees = transactions.reduce((sum, t) => sum + t.serviceFee, 0);
-          const totalPenalties = penalties.reduce((sum, p) => sum + p.penaltyAmount, 0);
-          const totalRepayments = repayments.reduce((sum, r) => sum + r.amount, 0);
-          
-          const outstanding = totalUsed + totalServiceFees + totalPenalties - totalRepayments;
+          const totalUsed = transactions.reduce(
+            (sum, t) => sum + t.amountCharged,
+            0
+          );
+          const totalServiceFees = transactions.reduce(
+            (sum, t) => sum + t.serviceFee,
+            0
+          );
+          const totalPenalties = penalties.reduce(
+            (sum, p) => sum + p.penaltyAmount,
+            0
+          );
+          const totalRepayments = repayments.reduce(
+            (sum, r) => sum + r.amount,
+            0
+          );
+
+          const outstanding =
+            totalUsed + totalServiceFees + totalPenalties - totalRepayments;
 
           // If fully paid, update loan and voucher status
           if (outstanding <= 0) {
@@ -218,7 +231,7 @@ async function processVoucherRepaymentPayment(
       });
 
       console.log(
-        `✅ Broadcasted voucher repayment success: ${repaymentTransaction.id}`
+        `Broadcasted voucher repayment success: ${repaymentTransaction.id}`
       );
     } catch (wsError) {
       console.error("Failed to broadcast voucher repayment:", wsError);
@@ -249,7 +262,7 @@ async function processVoucherRepaymentPayment(
       });
 
       console.log(
-        `✅ Broadcasted voucher repayment failure: ${repaymentTransaction.id}`
+        `Broadcasted voucher repayment failure: ${repaymentTransaction.id}`
       );
     } catch (wsError) {
       console.error("Failed to broadcast voucher repayment failure:", wsError);
@@ -336,7 +349,7 @@ async function processCheckoutPayment(
         });
       });
 
-      // ✅ BROADCAST ORDER PAYMENT SUCCESS
+      // BROADCAST ORDER PAYMENT SUCCESS
       try {
         wsManager.broadcastOrderUpdate({
           orderId: orderData.id,
@@ -360,12 +373,12 @@ async function processCheckoutPayment(
           },
         });
 
-        console.log(`✅ Broadcasted order payment success: ${orderData.id}`);
+        console.log(`Broadcasted order payment success: ${orderData.id}`);
       } catch (wsError) {
         console.error("Failed to broadcast order update:", wsError);
       }
 
-      // ✅ If voucher was used, broadcast voucher transaction
+      // If voucher was used, broadcast voucher transaction
       if (orderData.voucherId && orderData.voucher) {
         try {
           wsManager.broadcastVoucherTransactionUpdate({
@@ -382,7 +395,7 @@ async function processCheckoutPayment(
           });
 
           console.log(
-            `✅ Broadcasted voucher transaction: ${orderData.voucherId}`
+            `Broadcasted voucher transaction: ${orderData.voucherId}`
           );
         } catch (wsError) {
           console.error("Failed to broadcast voucher transaction:", wsError);
@@ -546,7 +559,7 @@ async function processCheckoutPayment(
         });
       });
 
-      // ✅ BROADCAST ORDER PAYMENT FAILURE
+      // BROADCAST ORDER PAYMENT FAILURE
       try {
         wsManager.broadcastOrderUpdate({
           orderId: orderData.id,
@@ -564,7 +577,7 @@ async function processCheckoutPayment(
           },
         });
 
-        console.log(`✅ Broadcasted order payment failure: ${orderData.id}`);
+        console.log(`Broadcasted order payment failure: ${orderData.id}`);
       } catch (wsError) {
         console.error("Failed to broadcast order failure:", wsError);
       }
@@ -825,9 +838,7 @@ async function processSubscriptionPayment(
           restaurantId: subscription.restaurantId,
         });
 
-        console.log(
-          `✅ Broadcasted subscription activation: ${subscription.id}`
-        );
+        console.log(`Broadcasted subscription activation: ${subscription.id}`);
       } catch (wsError) {
         console.error("Failed to broadcast subscription update:", wsError);
       }
@@ -881,7 +892,7 @@ async function processSubscriptionPayment(
         });
 
         console.log(
-          `✅ Broadcasted subscription payment failure: ${subscription.id}`
+          `Broadcasted subscription payment failure: ${subscription.id}`
         );
       } catch (wsError) {
         console.error("Failed to broadcast subscription failure:", wsError);

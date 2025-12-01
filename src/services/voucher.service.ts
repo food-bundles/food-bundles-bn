@@ -71,8 +71,6 @@ interface VoucherPaymentData {
 
 interface RepaymentData {
   restaurantId: string;
-  loanId?: string;
-  amount: number;
   paymentMethod: PaymentMethod;
   voucherId: string;
   phoneNumber?: string;
@@ -107,7 +105,7 @@ export const createVoucherService = async (data: CreateVoucherData) => {
     approvedBy,
   } = data;
 
-  // ✅ CHECK SUBSCRIPTION FIRST
+  // CHECK SUBSCRIPTION FIRST
   await checkRestaurantSubscription(restaurantId);
 
   // Validate restaurant exists
@@ -559,7 +557,7 @@ export const deactivateVoucherService = async (
     },
   });
 
-  // ✅ BROADCAST VOUCHER SUSPENSION
+  // BROADCAST VOUCHER SUSPENSION
   try {
     wsManager.broadcastVoucherUpdate({
       voucherId: voucher.id,
@@ -1058,7 +1056,7 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
     return { loan: updatedLoan, voucher };
   });
 
-  // ✅ BROADCAST LOAN DISBURSEMENT
+  // BROADCAST LOAN DISBURSEMENT
   try {
     wsManager.broadcastLoanUpdate({
       loanId: result.loan.id,
@@ -1105,7 +1103,7 @@ export const rejectLoanApplicationService = async (
     },
   });
 
-  // ✅ BROADCAST LOAN REJECTION
+  // BROADCAST LOAN REJECTION
   try {
     wsManager.broadcastLoanUpdate({
       loanId: updatedLoan.id,
@@ -1215,7 +1213,7 @@ export const processVoucherPaymentService = async (
       });
     }
 
-    // ✅ Order payment status is set to COMPLETED
+    // Order payment status is set to COMPLETED
     // Order status is set to CONFIRMED
     // Voucher status will be updated separately after confirming order success
     await tx.order.update({
@@ -1229,7 +1227,7 @@ export const processVoucherPaymentService = async (
     return { transaction, voucher: updatedVoucher };
   });
 
-  // ✅ BROADCAST VOUCHER USAGE
+  // BROADCAST VOUCHER USAGE
   try {
     wsManager.broadcastVoucherUpdate({
       voucherId: result.voucher.id,
@@ -1316,15 +1314,7 @@ function validateVoucherEligibility(
  * Process repayment
  */
 export const processRepaymentService = async (data: RepaymentData) => {
-  const {
-    restaurantId,
-    loanId,
-    amount,
-    paymentMethod,
-    voucherId,
-    phoneNumber,
-    cardDetails,
-  } = data;
+  const { restaurantId, paymentMethod, voucherId, phoneNumber } = data;
 
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: restaurantId },
@@ -1333,6 +1323,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
   if (!restaurant) {
     throw new Error("Restaurant not found");
   }
+
   // Get voucher details first
   const voucher = await getVoucherByIdService(voucherId);
 
@@ -1340,76 +1331,15 @@ export const processRepaymentService = async (data: RepaymentData) => {
     throw new Error("Voucher does not belong to this restaurant");
   }
 
-  // Use loanId from voucher if not provided in request
-  const actualLoanId = loanId || voucher.loanId;
-
-  // Handle vouchers without loans (standalone vouchers)
-  if (!actualLoanId) {
-    // Process actual payment for standalone vouchers
-    const paymentResult = await processRepaymentPaymentService({
-      amount,
-      paymentMethod,
-      restaurantId,
-      voucherId,
-      phoneNumber: phoneNumber || restaurant.phone!,
-      email: restaurant.email,
-      fullname: restaurant.name,
-    });
-
-    console.log("paymentResult------", paymentResult);
-
-    if (paymentResult.success) {
-      // Add credit back to the voucher after successful payment
-      const updatedVoucher = await prisma.voucher.update({
-        where: { id: voucherId },
-        data: {
-          remainingCredit: voucher.remainingCredit + amount,
-          totalCredit: voucher.totalCredit + amount,
-        },
-      });
-
-      return {
-        repayment: {
-          id:
-            paymentResult.transactionId ||
-            `standalone-${voucherId}-${Date.now()}`,
-          amount,
-          paymentMethod,
-          paymentReference: paymentResult.reference || "",
-          allocatedToPrincipal: amount,
-          allocatedToServiceFee: 0,
-          allocatedToPenalty: 0,
-          createdAt: new Date(),
-        },
-        newOutstanding: {
-          total: 0,
-          totalCredit: updatedVoucher.totalCredit,
-          totalUsed: updatedVoucher.usedCredit,
-          totalServiceFees: 0,
-          totalPenalties: 0,
-          totalRepayments: amount,
-          outstandingPrincipal: 0,
-          outstandingServiceFees: 0,
-          outstandingPenalties: 0,
-          transactions: 0,
-          repayments: 1,
-          penalties: 0,
-        },
-        paymentResult,
-      };
-    } else {
-      throw new Error(`Payment failed: ${paymentResult.message}`);
-    }
+  // Check if voucher has been used
+  if (voucher.usedCredit <= 0) {
+    throw new Error("Voucher has no used credit to repay");
   }
 
-  // Get loan details
-  const loan = await getLoanApplicationByIdService(actualLoanId);
+  // Use voucher's used credit as the repayment amount
+  const amount = voucher.usedCredit;
 
-  if (loan.restaurantId !== restaurantId) {
-    throw new Error("Loan does not belong to this restaurant");
-  }
-
-  // Process actual payment for vouchers with loans
+  // Process payment for voucher repayment
   const paymentResult = await processRepaymentPaymentService({
     amount,
     paymentMethod,
@@ -1420,43 +1350,10 @@ export const processRepaymentService = async (data: RepaymentData) => {
     fullname: restaurant.name,
   });
 
+  console.log("paymentResult------", paymentResult);
+
   if (!paymentResult.success) {
     throw new Error(`Payment failed: ${paymentResult.message}`);
-  }
-
-  // Calculate outstanding balance
-  const outstanding = await calculateOutstandingBalanceService(actualLoanId);
-
-  if (amount > outstanding.total) {
-    throw new Error(
-      `Repayment amount (${amount}) exceeds outstanding balance (${outstanding.total})`
-    );
-  }
-
-  // Allocate payment (priority: penalties, service fees, principal)
-  let remainingAmount = amount;
-  let allocatedToPenalty = 0;
-  let allocatedToServiceFee = 0;
-  let allocatedToPrincipal = 0;
-
-  // Allocate to penalties first
-  if (outstanding.penalties > 0) {
-    allocatedToPenalty = Math.min(remainingAmount, outstanding.penalties);
-    remainingAmount -= allocatedToPenalty;
-  }
-
-  // Then to service fees
-  if (remainingAmount > 0 && outstanding.totalServiceFees > 0) {
-    allocatedToServiceFee = Math.min(
-      remainingAmount,
-      outstanding.totalServiceFees
-    );
-    remainingAmount -= allocatedToServiceFee;
-  }
-
-  // Finally to principal
-  if (remainingAmount > 0) {
-    allocatedToPrincipal = remainingAmount;
   }
 
   // Create repayment record
@@ -1464,13 +1361,13 @@ export const processRepaymentService = async (data: RepaymentData) => {
     data: {
       voucherId,
       restaurantId,
-      loanId: actualLoanId,
+      loanId: voucher.loanId,
       amount,
       paymentMethod,
       paymentReference: paymentResult.reference || "",
-      allocatedToPrincipal,
-      allocatedToServiceFee,
-      allocatedToPenalty,
+      allocatedToPrincipal: amount,
+      allocatedToServiceFee: 0,
+      allocatedToPenalty: 0,
     },
     include: {
       voucher: true,
@@ -1478,75 +1375,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
     },
   });
 
-  // Mark penalties as paid if fully covered
-  if (allocatedToPenalty > 0) {
-    await markPenaltiesAsPaid(actualLoanId, allocatedToPenalty);
-  }
-
-  // Check if loan is fully paid
-  const newOutstanding = await calculateOutstandingBalanceService(actualLoanId);
-  if (newOutstanding.total <= 0) {
-    await prisma.loanApplication.update({
-      where: { id: actualLoanId },
-      data: { status: LoanStatus.SETTLED },
-    });
-
-    // Mark all vouchers as settled
-    if (voucherId) {
-      await prisma.voucher.update({
-        where: { id: voucherId },
-        data: { status: VoucherStatus.SETTLED },
-      });
-    }
-  }
-
-  // ✅ BROADCAST REPAYMENT
-  try {
-    wsManager.broadcastRepaymentUpdate({
-      repaymentId: repayment.id,
-      loanId: actualLoanId,
-      voucherId: voucherId,
-      action: "PROCESSED",
-      timestamp: new Date().toISOString(),
-      restaurantId: restaurantId,
-      data: {
-        amount: amount,
-        paymentMethod: paymentMethod,
-        newOutstanding: newOutstanding.total,
-      },
-    });
-
-    // If loan is settled, broadcast loan update
-    if (newOutstanding.total <= 0) {
-      wsManager.broadcastLoanUpdate({
-        loanId: actualLoanId,
-        action: "SETTLED",
-        timestamp: new Date().toISOString(),
-        restaurantId: restaurantId,
-        data: {
-          status: "SETTLED",
-        },
-      });
-
-      // Also broadcast voucher settlement
-      if (voucherId) {
-        wsManager.broadcastVoucherUpdate({
-          voucherId: voucherId,
-          voucherCode: repayment.voucher?.voucherCode || "",
-          action: "SETTLED",
-          timestamp: new Date().toISOString(),
-          restaurantId: restaurantId,
-          data: {
-            status: "SETTLED",
-          },
-        });
-      }
-    }
-  } catch (error) {
-    console.error("Failed to broadcast repayment:", error);
-  }
-
-  return { repayment, newOutstanding, paymentResult };
+  return { repayment, paymentResult };
 };
 
 /**
@@ -1559,72 +1388,34 @@ export const calculateOutstandingBalanceService = async (loanId: string) => {
     throw new Error("Loan has no approved amount");
   }
 
-  // Get all voucher transactions for this loan
-  const transactions = await prisma.voucherTransaction.findMany({
-    where: {
-      voucher: {
-        loanId,
-      },
-    },
+  // Get voucher for this loan (single voucher per loan)
+  const voucher = await prisma.voucher.findFirst({
+    where: { loanId },
   });
 
-  // Get all repayments
+  if (!voucher) {
+    return {
+      totalCredit: loan.approvedAmount,
+      totalUsed: 0,
+      totalRepayments: 0,
+      total: 0,
+    };
+  }
+
+  // Get repayments
   const repayments = await prisma.voucherRepayment.findMany({
     where: { loanId },
   });
 
-  // Get pending penalties
-  const penalties = await prisma.voucherPenalty.findMany({
-    where: {
-      voucher: {
-        loanId,
-      },
-      status: PenaltyStatus.PENDING,
-    },
-  });
-
-  // Calculate totals
-  const totalUsed = transactions.reduce((sum, t) => sum + t.amountCharged, 0);
-  const totalServiceFees = transactions.reduce(
-    (sum, t) => sum + t.serviceFee,
-    0
-  );
-  const totalPenalties = penalties.reduce((sum, p) => sum + p.penaltyAmount, 0);
-
   const totalRepayments = repayments.reduce((sum, r) => sum + r.amount, 0);
-  const repaidPrincipal = repayments.reduce(
-    (sum, r) => sum + r.allocatedToPrincipal,
-    0
-  );
-  const repaidServiceFees = repayments.reduce(
-    (sum, r) => sum + r.allocatedToServiceFee,
-    0
-  );
-  const repaidPenalties = repayments.reduce(
-    (sum, r) => sum + r.allocatedToPenalty,
-    0
-  );
-
-  const outstandingPrincipal = totalUsed - repaidPrincipal;
-  const outstandingServiceFees = totalServiceFees - repaidServiceFees;
-  const outstandingPenalties = totalPenalties - repaidPenalties;
-
-  const total =
-    outstandingPrincipal + outstandingServiceFees + outstandingPenalties;
+  const totalUsed = voucher.usedCredit;
+  const outstanding = totalUsed - totalRepayments;
 
   return {
     totalCredit: loan.approvedAmount,
     totalUsed,
-    totalServiceFees,
-    totalPenalties,
     totalRepayments,
-    outstandingPrincipal,
-    outstandingServiceFees,
-    outstandingPenalties,
-    total,
-    transactions: transactions.length,
-    repayments: repayments.length,
-    penalties: penalties.length,
+    total: Math.max(0, outstanding),
   };
 };
 
@@ -1703,12 +1494,10 @@ export const calculatePenaltiesService = async (
 
     if (outstanding.total <= 0) continue; // Already paid
 
-    // Calculate penalty
+    // Calculate penalty based on total outstanding amount
     const monthsOverdue = daysOverdue / 30;
     const penaltyAmount =
-      outstanding.outstandingPrincipal *
-      (penaltyRatePerMonth / 100) *
-      monthsOverdue;
+      outstanding.total * (penaltyRatePerMonth / 100) * monthsOverdue;
 
     // Check if penalty already exists for this period
     const existingPenalty = await prisma.voucherPenalty.findFirst({
@@ -1744,7 +1533,7 @@ export const calculatePenaltiesService = async (
         daysOverdue,
       });
 
-      // ✅ BROADCAST PENALTY APPLICATION
+      // BROADCAST PENALTY APPLICATION
       try {
         wsManager.broadcastPenaltyUpdate({
           penaltyId: penalty.id,
@@ -1771,7 +1560,7 @@ export const calculatePenaltiesService = async (
         data: { status: VoucherStatus.SUSPENDED },
       });
 
-      // ✅ BROADCAST VOUCHER SUSPENSION
+      // BROADCAST VOUCHER SUSPENSION
       try {
         for (const voucher of loan.vouchers) {
           wsManager.broadcastVoucherUpdate({
@@ -1853,7 +1642,7 @@ export const waivePenaltyService = async (
     },
   });
 
-  // ✅ BROADCAST PENALTY WAIVER
+  // BROADCAST PENALTY WAIVER
   try {
     wsManager.broadcastPenaltyUpdate({
       penaltyId: penalty.id,

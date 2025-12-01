@@ -326,19 +326,8 @@ components:
     RepaymentRequest:
       type: object
       required:
-        - amount
         - paymentMethod
       properties:
-        loanId:
-          type: string
-          nullable: true
-          description: Loan ID to make repayment for (optional - will use voucher's loan if not provided)
-        amount:
-          type: number
-          format: float
-          minimum: 0.01
-          description: Repayment amount
-          example: 100000
         paymentMethod:
           type: string
           enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]

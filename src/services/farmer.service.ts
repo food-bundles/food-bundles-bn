@@ -125,10 +125,10 @@ export const submitFarmerFeedbackService = async (
 
     switch (feedbackData.feedbackStatus) {
       case "ACCEPTED":
-        message += `✅ ACCEPTED - Ready for payment\nQty: ${existingSubmission.acceptedQty}kg at ${existingSubmission.acceptedPrice}RWF/kg`;
+        message += `ACCEPTED - Ready for payment\nQty: ${existingSubmission.acceptedQty}kg at ${existingSubmission.acceptedPrice}RWF/kg`;
         break;
       case "REJECTED":
-        message += `❌ REJECTED - Purchase declined\n${
+        message += `REJECTED - Purchase declined\n${
           feedbackData.notes ? `Reason: ${feedbackData.notes}` : ""
         }`;
         break;
