@@ -87,7 +87,7 @@ export const createCheckout = async (req: Request, res: Response) => {
       }
     }
 
-    // For voucher payments, send OTP first instead of processing immediately
+    // For voucher payments, validate voucher first before sending OTP
     if (paymentMethod === "VOUCHER") {
       // Get cart to calculate total
       const cart = await prisma.cart.findUnique({
