@@ -73,9 +73,8 @@ export const createAffiliatorService = async (data: CreateAffiliatorData) => {
   }
 
   if (phone) {
-    const loginUrl = `${process.env.CLIENT_PRODUCTION_URL}/login`;
     await sendMessage(
-      `Welcome ${name}! You've been added as an affiliator for ${restaurant.name}. Login at ${loginUrl} with phone: ${phone} and password: ${password}`,
+      `Welcome ${name}! You've been added as an affiliator for ${restaurant.name} restaurant. Visit our website and login with phone: ${phone} and password: ${password}`,
       phone
     );
   }
