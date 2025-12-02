@@ -70,6 +70,7 @@ export interface UpdateOrderData {
   chargedAmount?: number;
   appFee?: number;
   merchantFee?: number;
+  logisticsId?: string;
 
   processorResponse?: string;
 }

@@ -1203,13 +1203,13 @@ export const processVoucherPaymentService = async (
       });
     }
 
-    // Order payment status is set to COMPLETED
+    // Order payment status is set to VOUCHER_CREDIT (credit-based payment)
     // Order status is set to CONFIRMED
-    // Voucher status will be updated separately after confirming order success
+    // Payment will be COMPLETED when voucher is SETTLED (paid)
     await tx.order.update({
       where: { id: orderId },
       data: {
-        paymentStatus: PaymentStatus.COMPLETED,
+        paymentStatus: PaymentStatus.VOUCHER_CREDIT,
         status: OrderStatus.CONFIRMED,
       },
     });
@@ -1346,26 +1346,50 @@ export const processRepaymentService = async (data: RepaymentData) => {
     throw new Error(`Payment failed: ${paymentResult.message}`);
   }
 
-  // Create repayment record
-  const repayment = await prisma.voucherRepayment.create({
-    data: {
-      voucherId,
-      restaurantId,
-      loanId: voucher.loanId,
-      amount,
-      paymentMethod,
-      paymentReference: paymentResult.reference || "",
-      allocatedToPrincipal: amount,
-      allocatedToServiceFee: 0,
-      allocatedToPenalty: 0,
-    },
-    include: {
-      voucher: true,
-      loan: true,
-    },
+  // Create repayment record and update voucher status to SETTLED
+  const result = await prisma.$transaction(async (tx) => {
+    const repayment = await tx.voucherRepayment.create({
+      data: {
+        voucherId,
+        restaurantId,
+        loanId: voucher.loanId,
+        amount,
+        paymentMethod,
+        paymentReference: paymentResult.reference || "",
+        allocatedToPrincipal: amount,
+        allocatedToServiceFee: 0,
+        allocatedToPenalty: 0,
+      },
+      include: {
+        voucher: true,
+        loan: true,
+      },
+    });
+
+    // Update voucher status to SETTLED when repayment is made
+    await tx.voucher.update({
+      where: { id: voucherId },
+      data: {
+        status: VoucherStatus.SETTLED,
+      },
+    });
+
+    // Update all orders with this voucher to COMPLETED payment status
+    await tx.order.updateMany({
+      where: {
+        voucherId: voucherId,
+        paymentStatus: PaymentStatus.VOUCHER_CREDIT,
+      },
+      data: {
+        paymentStatus: PaymentStatus.COMPLETED,
+        paidAt: new Date(),
+      },
+    });
+
+    return repayment;
   });
 
-  return { repayment, paymentResult };
+  return { repayment: result, paymentResult };
 };
 
 /**

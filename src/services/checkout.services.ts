@@ -1110,7 +1110,7 @@ async function processVoucherPayment({
         voucherCode: voucherCode,
         voucherId: voucher.id,
         status: OrderStatus.CONFIRMED,
-        paymentStatus: PaymentStatus.COMPLETED,
+        paymentStatus: PaymentStatus.VOUCHER_CREDIT,
       },
     });
 

@@ -1040,6 +1040,7 @@ enum PaymentStatus {
   FAILED
   CANCELLED
   REFUNDED
+  VOUCHER_CREDIT 
 }
 
 // Order status enum

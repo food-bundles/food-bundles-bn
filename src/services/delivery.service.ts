@@ -157,12 +157,13 @@ export class DeliveryService {
           },
         });
 
-        // Update order status to DELIVERED
+        // Update order status to DELIVERED with logistics ID
         await tx.order.update({
           where: { id: orderId },
           data: {
             status: OrderStatus.DELIVERED,
             actualDelivery: new Date(),
+            logisticsId: logisticsId,
             updatedAt: new Date(),
           },
         });
