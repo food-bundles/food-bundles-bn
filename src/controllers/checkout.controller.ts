@@ -57,12 +57,8 @@ export const createCheckout = async (req: Request, res: Response) => {
       });
     }
 
-    // Validate payment method specific fields
-    if (paymentMethod === "MOBILE_MONEY" && !billingPhone) {
-      return res.status(400).json({
-        message: "Phone number is required for mobile money payments",
-      });
-    }
+    // For Flutterwave payments (MOBILE_MONEY, CARD), no phone validation needed
+    // Flutterwave handles all payment details through their hosted checkout
 
     // Validate voucher-specific requirements
     if (paymentMethod === "VOUCHER" && !voucherCode) {
@@ -71,21 +67,8 @@ export const createCheckout = async (req: Request, res: Response) => {
       });
     }
 
-    if (paymentMethod === "CARD") {
-      if (!cardDetails) {
-        return res.status(400).json({
-          message: "Card details are required for card payments",
-        });
-      }
-
-      const { cardNumber, cvv, expiryMonth, expiryYear } = cardDetails;
-      if (!cardNumber || !cvv || !expiryMonth || !expiryYear) {
-        return res.status(400).json({
-          message:
-            "Complete card details (number, CVV, expiry month/year) are required",
-        });
-      }
-    }
+    // For Flutterwave CARD payments, no card details validation needed
+    // Flutterwave handles all card details through their hosted checkout
 
     // For voucher payments, validate voucher first before sending OTP
     if (paymentMethod === "VOUCHER") {
@@ -370,29 +353,8 @@ export const processPayment = async (req: Request, res: Response) => {
       });
     }
 
-    // Validate payment method specific fields
-    if (paymentMethod === "MOBILE_MONEY" && !phoneNumber) {
-      return res.status(400).json({
-        message: "Phone number is required for mobile money payments",
-      });
-    }
-
-    if (paymentMethod === "CARD" && !cardDetails) {
-      return res.status(400).json({
-        message: "Card details are required for card payments",
-      });
-    }
-
-    // Validate card details if provided
-    if (cardDetails) {
-      const { cardNumber, cvv, expiryMonth, expiryYear } = cardDetails;
-      if (!cardNumber || !cvv || !expiryMonth || !expiryYear) {
-        return res.status(400).json({
-          message:
-            "Complete card details (number, CVV, expiry month/year) are required",
-        });
-      }
-    }
+    // For Flutterwave payments (MOBILE_MONEY, CARD), no validation needed
+    // Flutterwave handles all payment details through their hosted checkout
 
     const paymentResult = await processPaymentService(orderId, {
       paymentMethod,

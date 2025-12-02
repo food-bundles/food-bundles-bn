@@ -309,13 +309,8 @@ export const createOrderFromCartService = async (
       packagingFee,
     },
   });
-  // Auto-generate delivery OTP
-  try {
-    await DeliveryService.createDeliveryOTP(order.id);
-  } catch (error) {
-    console.error("Failed to auto-generate delivery OTP:", error);
-    // Don't fail the order creation if OTP generation fails
-  }
+  // Note: Delivery OTP will be generated only after successful payment
+  // This is handled in the checkout service when payment is confirmed
 
   // Return complete order with relations
   return await getOrderByIdService(order.id);

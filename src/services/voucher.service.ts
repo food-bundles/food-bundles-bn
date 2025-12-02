@@ -73,17 +73,7 @@ interface RepaymentData {
   restaurantId: string;
   paymentMethod: PaymentMethod;
   voucherId: string;
-  phoneNumber?: string;
-  cardDetails?: {
-    cardNumber: string;
-    cvv: string;
-    expiryMonth: string;
-    expiryYear: string;
-    cardType?: string;
-    cardCountry?: string;
-    authModel?: string;
-    encryptionKey?: string;
-  };
+  paymentReference?: string;
 }
 
 // ============================================
@@ -1314,7 +1304,7 @@ function validateVoucherEligibility(
  * Process repayment
  */
 export const processRepaymentService = async (data: RepaymentData) => {
-  const { restaurantId, paymentMethod, voucherId, phoneNumber } = data;
+  const { restaurantId, paymentMethod, voucherId, paymentReference } = data;
 
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: restaurantId },
@@ -1345,7 +1335,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
     paymentMethod,
     restaurantId,
     voucherId,
-    phoneNumber: phoneNumber || restaurant.phone!,
+    paymentReference,
     email: restaurant.email,
     fullname: restaurant.name,
   });
@@ -2367,27 +2357,27 @@ export const processRepaymentPaymentService = async (data: {
   paymentMethod: PaymentMethod;
   restaurantId: string;
   voucherId: string;
-  phoneNumber?: string;
-  cardDetails?: any;
+  paymentReference?: string;
   email?: string;
   fullname?: string;
 }) => {
   console.log("Processing repayment payment with data:", data);
 
   const { amount, paymentMethod, restaurantId } = data;
-  const txRef = `repay_${Date.now()}`;
+  const txRef = data.paymentReference || `repay_${Date.now()}`;
 
   try {
     switch (paymentMethod) {
       case "MOBILE_MONEY":
-        return await processMobileMoneyPayment({
+      case "CARD":
+        // Use Flutterwave's hosted checkout for both mobile money and card payments
+        return await processFlutterwaveHostedPayment({
           amount,
-          phoneNumber: data.phoneNumber || "",
           txRef,
-          orderId: `repay_${data.voucherId}`,
           email: data.email || "",
           fullname: data.fullname || "",
           currency: "RWF",
+          paymentMethod,
         });
 
       case "BANK_TRANSFER":
@@ -2395,7 +2385,7 @@ export const processRepaymentPaymentService = async (data: {
           amount,
           txRef,
           email: data.email || "",
-          phoneNumber: data.phoneNumber || "",
+          phoneNumber: "",
           currency: "RWF",
           clientIp: "",
           deviceFingerprint: "62wd23423rq324323qew1",
@@ -2418,17 +2408,6 @@ export const processRepaymentPaymentService = async (data: {
           message: "Cash payment recorded successfully",
         };
 
-      case "CARD":
-        return await processCardPayment({
-          amount,
-          txRef,
-          email: data.email || "",
-          fullname: data.fullname || "",
-          phoneNumber: data.phoneNumber || "",
-          currency: "RWF",
-          cardDetails: data.cardDetails,
-        });
-
       default:
         throw new Error(`Unsupported payment method: ${paymentMethod}`);
     }
@@ -2439,6 +2418,68 @@ export const processRepaymentPaymentService = async (data: {
     };
   }
 };
+
+async function processFlutterwaveHostedPayment({
+  amount,
+  txRef,
+  email,
+  fullname,
+  currency = "RWF",
+  paymentMethod,
+}: any) {
+  try {
+    // Determine payment options based on method
+    let paymentOptions = "";
+    if (paymentMethod === "MOBILE_MONEY") {
+      paymentOptions = "mobilemoney";
+    } else if (paymentMethod === "CARD") {
+      paymentOptions = "card";
+    }
+
+    const standardPayload = {
+      tx_ref: txRef,
+      amount: amount.toString(),
+      currency: currency,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
+      customer: {
+        email: email,
+        name: fullname,
+      },
+      payment_options: paymentOptions,
+    };
+
+    const response = await axios.post(
+      "https://api.flutterwave.com/v3/payments",
+      standardPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.data?.status === "success" && response.data?.data?.link) {
+      return {
+        success: true,
+        transactionId: txRef,
+        reference: txRef,
+        status: "pending",
+        message: "Redirect to complete payment",
+        redirectUrl: response.data.data.link,
+      };
+    }
+    throw new Error(`${paymentMethod} payment failed`);
+  } catch (error: any) {
+    return {
+      success: false,
+      transactionId: "",
+      reference: "",
+      status: "failed",
+      message: error.message || `${paymentMethod} payment failed`,
+    };
+  }
+}
 
 async function processMobileMoneyPayment({
   amount,
@@ -2573,10 +2614,7 @@ async function processCardPayment({
         reference: txRef,
         status: "pending",
         message: "Redirect to complete card payment",
-        authorizationDetails: {
-          mode: "redirect",
-          redirectUrl: response.data.data.link,
-        },
+        redirectUrl: response.data.data.link,
       };
     }
     throw new Error("Card payment failed");
