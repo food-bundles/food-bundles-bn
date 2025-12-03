@@ -446,7 +446,9 @@ export const processPaymentService = async (
               data: {
                 paymentStatus:
                   paymentResult.status === "successful"
-                    ? PaymentStatus.COMPLETED
+                    ? paymentData.paymentMethod === "VOUCHER"
+                      ? PaymentStatus.VOUCHER_CREDIT
+                      : PaymentStatus.COMPLETED
                     : PaymentStatus.PROCESSING,
                 paymentReference: paymentResult.reference,
                 status:
