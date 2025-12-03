@@ -607,7 +607,7 @@ export const makeRepayment = async (req: Request, res: Response) => {
   try {
     const { id: voucherId } = req.params;
     const restaurantId = (req as any).user.id;
-    const { paymentMethod, phoneNumber, cardDetails } = req.body;
+    const { paymentMethod, paymentReference } = req.body;
 
     if (!paymentMethod) {
       return res.status(400).json({
@@ -615,22 +615,14 @@ export const makeRepayment = async (req: Request, res: Response) => {
       });
     }
 
-    // Validate card details if payment method is CARD
-    if (paymentMethod === "CARD" && cardDetails) {
-      const { cardNumber, cvv, expiryMonth, expiryYear } = cardDetails;
-      if (!cardNumber || !cvv || !expiryMonth || !expiryYear) {
-        return res.status(400).json({
-          message: "Complete card details (number, CVV, expiry month/year) are required",
-        });
-      }
-    }
+    // For Flutterwave payments (MOBILE_MONEY, CARD), no additional validation needed
+    // Flutterwave handles all payment details through their hosted checkout
 
     const result = await processRepaymentService({
       restaurantId,
       paymentMethod,
       voucherId,
-      phoneNumber,
-      cardDetails,
+      paymentReference,
     });
 
     if (result.paymentResult) {

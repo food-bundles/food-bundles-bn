@@ -30,6 +30,11 @@ export class DeliveryService {
         return { success: false, message: "Order not found" };
       }
 
+      // Check if payment is completed
+      if (order.paymentStatus !== "COMPLETED") {
+        return { success: false, message: "Order payment must be completed before generating delivery OTP" };
+      }
+
       // Generate OTP
       const otp = this.generateOTP();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
@@ -152,12 +157,13 @@ export class DeliveryService {
           },
         });
 
-        // Update order status to DELIVERED
+        // Update order status to DELIVERED with logistics ID
         await tx.order.update({
           where: { id: orderId },
           data: {
             status: OrderStatus.DELIVERED,
             actualDelivery: new Date(),
+            logisticsId: logisticsId,
             updatedAt: new Date(),
           },
         });
