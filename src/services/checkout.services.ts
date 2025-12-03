@@ -373,7 +373,9 @@ export const processPaymentService = async (
       const updateData: UpdateCheckoutData = {
         paymentStatus:
           paymentResult.status === "successful"
-            ? PaymentStatus.COMPLETED
+            ? paymentData.paymentMethod === "VOUCHER"
+              ? PaymentStatus.VOUCHER_CREDIT
+              : PaymentStatus.COMPLETED
             : PaymentStatus.PROCESSING,
         transactionId: paymentResult.transactionId,
         paymentReference: paymentResult.reference,
@@ -461,7 +463,10 @@ export const processPaymentService = async (
               const { DeliveryService } = await import("./delivery.service");
               await DeliveryService.createDeliveryOTP(order.id);
             } catch (otpError) {
-              console.error("Failed to generate delivery OTP after successful payment:", otpError);
+              console.error(
+                "Failed to generate delivery OTP after successful payment:",
+                otpError
+              );
               // Don't fail the payment process if OTP generation fails
             }
           }

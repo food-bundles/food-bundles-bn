@@ -4,7 +4,7 @@ import {
   processPaymentService,
   verifyPaymentStatus,
 } from "../services/checkout.services";
-import { PaymentMethod, VoucherStatus } from "@prisma/client";
+import { PaymentMethod, PaymentStatus, VoucherStatus } from "@prisma/client";
 import {
   getOrderByIdService,
   updateOrderService,
@@ -443,7 +443,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
     if (verificationResult.success) {
       // Update order with verified payment details
       await updateOrderService(orderId, {
-        paymentStatus: "COMPLETED",
+        paymentStatus: PaymentStatus.COMPLETED,
         flwStatus: verificationResult.status,
         chargedAmount: verificationResult.chargedAmount,
         appFee: verificationResult.appFee,
