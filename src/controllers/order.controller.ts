@@ -276,11 +276,13 @@ export const updateOrder = async (req: Request, res: Response) => {
       paymentMethod,
       paymentStatus,
       paymentReference,
+      otp, // For DELIVERED status verification
     } = req.body;
 
     const userRole = (req as any).user.role;
+    const userId = (req as any).user.id;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT" ? userId : undefined;
 
     // Validate status if provided
     if (status && !Object.values(OrderStatus).includes(status)) {
@@ -316,6 +318,36 @@ export const updateOrder = async (req: Request, res: Response) => {
       });
     }
 
+    // Special handling for DELIVERED status
+    if (status === "DELIVERED") {
+      if (userRole === "LOGISTICS") {
+        // LOGISTICS user must provide OTP
+        if (!otp) {
+          return res.status(400).json({
+            message: "OTP is required for logistics to mark order as delivered",
+          });
+        }
+
+        // Verify OTP using delivery service
+        const { DeliveryService } = await import("../services/delivery.service");
+        const otpResult = await DeliveryService.verifyDeliveryOTP(orderId, otp, userId);
+        
+        if (!otpResult.success) {
+          return res.status(400).json({
+            message: otpResult.message,
+          });
+        }
+
+        // OTP verified successfully, order already updated to DELIVERED in verifyDeliveryOTP
+        const updatedOrder = await getOrderByIdService(orderId, restaurantId);
+        return res.status(200).json({
+          message: "Order delivered successfully",
+          data: updatedOrder,
+        });
+      }
+      // ADMIN can update to DELIVERED without OTP (continues to normal flow)
+    }
+
     const updateData: any = {};
     if (status !== undefined) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
@@ -329,6 +361,11 @@ export const updateOrder = async (req: Request, res: Response) => {
     if (paymentStatus !== undefined) updateData.paymentStatus = paymentStatus;
     if (paymentReference !== undefined)
       updateData.paymentReference = paymentReference;
+
+    // Add logistics ID for any status update
+    if (status !== undefined) {
+      updateData.logisticsId = userId;
+    }
 
     const updatedOrder = await updateOrderService(
       orderId,
