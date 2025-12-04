@@ -7,6 +7,7 @@ import {
   createProduct,
   getProductsByRole,
   updateProductStatus,
+  getDiscountedProducts,
 } from "../controllers/productController";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 import productImagesUpload from "../middleware/multer";
@@ -28,6 +29,9 @@ productRoutes.post(
   productImagesUpload,
   createProduct
 );
+
+// Get discounted products only
+productRoutes.get("/discounted", getDiscountedProducts);
 
 // Get all products (accessible by all authenticated)
 productRoutes.get("/", getAllProducts);

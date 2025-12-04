@@ -453,3 +453,19 @@ export const updateProductStatus = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getDiscountedProducts = async (req: Request, res: Response) => {
+  try {
+    const { getDiscountedProductsService } = require("../services/productService");
+    const products = await getDiscountedProductsService();
+
+    res.status(200).json({
+      message: "Discounted products retrieved successfully",
+      data: products,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get discounted products",
+    });
+  }
+};
