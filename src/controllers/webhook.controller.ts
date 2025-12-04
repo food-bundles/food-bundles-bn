@@ -416,12 +416,45 @@ async function processCheckoutPayment(
       }
     }
 
-    // Send notifications
+    // Send notifications to the restaurant
     try {
       await sendMessage(
         `Dear ${orderData.restaurant.name}, TIN: ${orderData.restaurant.tin}, Your order of Rwf${orderData.totalAmount} has been placed successfully. Delivery is next! To order something else, visit www.food.rw`,
 
         orderData.billingPhone || orderData.restaurant.phone || ""
+      );
+    } catch (smsError) {
+      console.error("Failed to send SMS notification:", smsError);
+    }
+
+    // Send notifications
+    try {
+      await sendMessage(
+        `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
+
+        process.env.LOGISTICS_NUMBER_ONE || ""
+      );
+    } catch (smsError) {
+      console.error("Failed to send SMS notification:", smsError);
+    }
+
+    // Send notifications
+    try {
+      await sendMessage(
+        `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
+
+        process.env.LOGISTICS_NUMBER_TWO || ""
+      );
+    } catch (smsError) {
+      console.error("Failed to send SMS notification:", smsError);
+    }
+
+    // Send notifications
+    try {
+      await sendMessage(
+        `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
+
+        process.env.PRIVATE_RECEIVER || ""
       );
     } catch (smsError) {
       console.error("Failed to send SMS notification:", smsError);
@@ -496,6 +529,20 @@ async function processCheckoutPayment(
       eventType: "NEW_ORDER_PLACED",
       targetType: "ROLE_BASED",
       targetRole: "ADMIN",
+      metadata: {
+        orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
+        restaurantId: orderData.restaurantId,
+        totalAmount: orderData.totalAmount,
+      },
+    });
+
+    await createNotificationService({
+      title: "New Order Received",
+      message: `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
+      eventType: "NEW_ORDER_PLACED",
+      targetType: "ROLE_BASED",
+      targetRole: "LOGISTICS",
       metadata: {
         orderId: orderData.id,
         orderNumber: orderData.orderNumber,
