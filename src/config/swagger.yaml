@@ -14,3 +14,68 @@ servers:
 tags:
   - name: Contact
     description: Contact form submissions and email management
+  - name: Products
+    description: Product management and retrieval
+
+paths:
+  /products/discounted:
+    get:
+      tags:
+        - Products
+      summary: Get all discounted products
+      description: Retrieve all products that have discounts (bonus > 0 and discountedPrice is not null)
+      responses:
+        '200':
+          description: Discounted products retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Discounted products retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        productName:
+                          type: string
+                        unitPrice:
+                          type: number
+                        discountedPrice:
+                          type: number
+                        bonus:
+                          type: number
+                        category:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                        sku:
+                          type: string
+                        quantity:
+                          type: number
+                        images:
+                          type: array
+                          items:
+                            type: string
+                        unit:
+                          type: string
+                        status:
+                          type: string
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Failed to get discounted products"

@@ -866,3 +866,39 @@ export const updateProductStatusService = async (
 
   return updatedProduct;
 };
+
+// Get discounted products only
+export const getDiscountedProductsService = async () => {
+  const where = {
+    status: "ACTIVE" as const,
+    quantity: { gt: 0 },
+    bonus: { gt: 0 },
+  };
+
+  const products = await prisma.product.findMany({
+    where,
+    select: {
+      id: true,
+      productName: true,
+      unitPrice: true,
+      category: true,
+      bonus: true,
+      sku: true,
+      quantity: true,
+      images: true,
+      unit: true,
+      status: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  // Calculate discounted price for products with bonus
+  const productsWithDiscount = products.map((product) => ({
+    ...product,
+    discountedPrice: product.unitPrice * (1 - Number(product.bonus) / 100),
+  }));
+
+  return productsWithDiscount;
+};
