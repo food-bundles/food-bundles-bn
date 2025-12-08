@@ -908,7 +908,6 @@ model VoucherPenalty {
 model Post {
   id           String   @id @default(uuid())
   restaurantId String
-  title        String
   content      String
   images       String[]
   videos       String[]

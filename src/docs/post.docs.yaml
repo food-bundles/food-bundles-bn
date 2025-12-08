@@ -13,9 +13,6 @@ components:
         restaurantId:
           type: string
           description: ID of the restaurant that created the post
-        title:
-          type: string
-          description: Post title
         content:
           type: string
           description: Post content
@@ -54,14 +51,8 @@ components:
     CreatePostRequest:
       type: object
       required:
-        - title
         - content
       properties:
-        title:
-          type: string
-          description: Post title
-          minLength: 1
-          maxLength: 200
         content:
           type: string
           description: Post content
@@ -85,11 +76,6 @@ components:
     UpdatePostRequest:
       type: object
       properties:
-        title:
-          type: string
-          description: Post title
-          minLength: 1
-          maxLength: 200
         content:
           type: string
           description: Post content
@@ -158,14 +144,8 @@ paths:
             schema:
               type: object
               required:
-                - title
                 - content
               properties:
-                title:
-                  type: string
-                  description: Post title
-                  minLength: 1
-                  maxLength: 200
                 content:
                   type: string
                   description: Post content
@@ -207,7 +187,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               example:
-                message: "Title and content are required"
+                message: "Content is required"
         401:
           description: Unauthorized - Invalid or missing token
           content:
@@ -237,7 +217,7 @@ paths:
           in: query
           schema:
             type: string
-          description: Search by post title or content
+          description: Search by post content
         - name: isActive
           in: query
           schema:
@@ -349,11 +329,6 @@ paths:
             schema:
               type: object
               properties:
-                title:
-                  type: string
-                  description: Post title
-                  minLength: 1
-                  maxLength: 200
                 content:
                   type: string
                   description: Post content
