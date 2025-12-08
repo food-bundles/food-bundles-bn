@@ -13,12 +13,12 @@ import cloudinary from "../utils/cloudinary.utility";
 // Create Post
 export const createPost = async (req: Request, res: Response) => {
   try {
-    const { title, content, isActive } = req.body;
+    const { content, isActive } = req.body;
     const restaurantId = (req as any).user.id;
 
-    if (!title || !content) {
+    if (!content) {
       return res.status(400).json({
-        message: "Title and content are required",
+        message: "Content is required",
       });
     }
 
@@ -62,7 +62,6 @@ export const createPost = async (req: Request, res: Response) => {
     }
 
     const post = await createPostService({
-      title,
       content,
       images: imageUrls,
       videos: videoUrls,

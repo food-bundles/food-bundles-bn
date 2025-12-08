@@ -1,13 +1,26 @@
 import prisma from "../prisma";
 
 export interface PostData {
-  title: string;
   content: string;
   images?: string[];
   videos?: string[];
   isActive?: boolean;
   restaurantId: string;
 }
+
+// Delete posts older than 24 hours
+const deleteOldPostsService = async () => {
+  const oneDayAgo = new Date();
+  oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+
+  await prisma.post.deleteMany({
+    where: {
+      createdAt: {
+        lt: oneDayAgo,
+      },
+    },
+  });
+};
 
 // Create Post
 export const createPostService = async (postData: PostData) => {
@@ -21,7 +34,6 @@ export const createPostService = async (postData: PostData) => {
 
   const post = await prisma.post.create({
     data: {
-      title: postData.title.trim(),
       content: postData.content.trim(),
       images: postData.images || [],
       videos: postData.videos || [],
@@ -56,6 +68,7 @@ export const getAllPostsService = async ({
   page?: number;
   limit?: number;
 }) => {
+  await deleteOldPostsService();
   const skip = (page - 1) * limit;
 
   const where: any = {};
@@ -69,10 +82,7 @@ export const getAllPostsService = async ({
   }
 
   if (search) {
-    where.OR = [
-      { title: { contains: search, mode: "insensitive" } },
-      { content: { contains: search, mode: "insensitive" } },
-    ];
+    where.OR = [{ content: { contains: search, mode: "insensitive" } }];
   }
 
   const [posts, total] = await Promise.all([
@@ -113,6 +123,7 @@ export const getFeaturedPostsService = async ({
   page?: number;
   limit?: number;
 }) => {
+  await deleteOldPostsService();
   const skip = (page - 1) * limit;
 
   const [posts, total] = await Promise.all([
@@ -173,6 +184,7 @@ export const getFeaturedPostsService = async ({
 
 // Get Post by ID
 export const getPostByIdService = async (postId: string) => {
+  await deleteOldPostsService();
   const post = await prisma.post.findUnique({
     where: { id: postId },
     include: {
@@ -214,9 +226,6 @@ export const updatePostService = async (
   const updatedPost = await prisma.post.update({
     where: { id: postId },
     data: {
-      ...(updateData.title !== undefined && {
-        title: updateData.title.trim(),
-      }),
       ...(updateData.content !== undefined && {
         content: updateData.content.trim(),
       }),
@@ -277,6 +286,7 @@ export const getPostsByRestaurantService = async (
     isActive,
   }: { page?: number; limit?: number; isActive?: boolean }
 ) => {
+  await deleteOldPostsService();
   const skip = (page - 1) * limit;
 
   const where: any = { restaurantId };
