@@ -759,7 +759,7 @@ model Voucher {
   loanId       String?
 
   // Service fee
-  serviceFeeRate Float @default(10) // 10% service fee
+  serviceFeeRate Float @default(0) // 0% service fee
 
   // Timestamps
   usedAt    DateTime?
