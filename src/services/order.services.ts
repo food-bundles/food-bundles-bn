@@ -288,7 +288,7 @@ export const createOrderFromCartService = async (
   });
 
   if (order.totalAmount < 100000 && !activeSubscription?.plan?.freeDelivery) {
-    deliveryFee = 5000;
+    deliveryFee = 0;
   }
 
   if (
