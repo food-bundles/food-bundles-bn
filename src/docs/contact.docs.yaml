@@ -1,8 +1,12 @@
+tags:
+  - name: Contact API Management
+    description: Contact form submissions and email management
+
 paths:
   /contact-submissions:
     post:
       tags:
-        - Contact
+        - Contact API Management
       summary: Create a new contact submission
       description: Submit a contact form and send email notification
       requestBody:
@@ -39,13 +43,13 @@ paths:
                   info:
                     type: object
                   submission:
-                    $ref: '#/components/schemas/ContactSubmission'
+                    $ref: "#/components/schemas/ContactSubmission"
         500:
           description: Failed to send email
-    
+
     get:
       tags:
-        - Contact
+        - Contact API Management
       summary: Get all contact submissions
       description: Retrieve all contact submissions with optional search
       parameters:
@@ -62,14 +66,14 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ContactSubmission'
+                  $ref: "#/components/schemas/ContactSubmission"
         500:
           description: Failed to fetch submissions
 
   /contact-submissions/{id}:
     get:
       tags:
-        - Contact
+        - Contact API Management
       summary: Get a specific contact submission
       parameters:
         - in: path
@@ -84,15 +88,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ContactSubmission'
+                $ref: "#/components/schemas/ContactSubmission"
         404:
           description: Submission not found
         500:
           description: Failed to fetch submission
-    
+
     put:
       tags:
-        - Contact
+        - Contact API Management
       summary: Update a contact submission
       parameters:
         - in: path
@@ -124,13 +128,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ContactSubmission'
+                $ref: "#/components/schemas/ContactSubmission"
         500:
           description: Failed to update submission
-    
+
     delete:
       tags:
-        - Contact
+        - Contact API Management
       summary: Delete a contact submission
       parameters:
         - in: path
@@ -155,7 +159,7 @@ paths:
   /contact-submissions/{id}/respond:
     post:
       tags:
-        - Contact
+        - Contact API Management
       summary: Respond to a contact submission
       description: Send email response to a contact submission
       parameters:

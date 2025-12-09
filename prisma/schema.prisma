@@ -93,7 +93,7 @@ model Affiliator {
   restaurantId String
   password     String
   role         Role    @default(AFFILIATOR)
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -482,7 +482,7 @@ model Order {
 
   // Relations
   restaurant         Restaurant           @relation(fields: [restaurantId], references: [id])
-  affiliator         Affiliator?          @relation(fields: [affiliatorId], references: [id])
+  orderedBy          Affiliator?          @relation(fields: [affiliatorId], references: [id])
   orderItems         OrderItem[]
   logistics          Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
   cart               Cart?                @relation(fields: [cartId], references: [id])
@@ -1039,7 +1039,7 @@ enum PaymentStatus {
   FAILED
   CANCELLED
   REFUNDED
-  VOUCHER_CREDIT 
+  VOUCHER_CREDIT
 }
 
 // Order status enum
@@ -1166,5 +1166,3 @@ enum NotificationTarget {
   ROLE_BASED
   ALL_USERS
 }
-
-

@@ -466,11 +466,9 @@ export const getAllProductsService = async ({
   page?: number;
   limit?: number;
 }) => {
-  const skip = (page - 1) * limit;
-
   const where: any = {
-    status: "ACTIVE", // Only active products
-    quantity: { gt: 0 }, // Only products with quantity > 0
+    status: "ACTIVE",
+    quantity: { gt: 0 },
   };
 
   if (categoryId) {
@@ -484,11 +482,16 @@ export const getAllProductsService = async ({
     ];
   }
 
+  // Skip pagination when searching
+  const usePagination = !search;
+  const skip = usePagination ? (page - 1) * limit : undefined;
+  const take = usePagination ? limit : undefined;
+
   const [products, total] = await Promise.all([
     prisma.product.findMany({
       where,
-      skip,
-      take: limit,
+      ...(skip !== undefined && { skip }),
+      ...(take !== undefined && { take }),
       select: {
         id: true,
         productName: true,
@@ -508,7 +511,6 @@ export const getAllProductsService = async ({
     prisma.product.count({ where }),
   ]);
 
-  // Calculate discounted price for products with bonus
   const productsWithDiscount = products.map((product) => ({
     ...product,
     discountedPrice:
@@ -520,9 +522,9 @@ export const getAllProductsService = async ({
   return {
     products: productsWithDiscount,
     total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
+    page: usePagination ? page : 1,
+    limit: usePagination ? limit : total,
+    totalPages: usePagination ? Math.ceil(total / limit) : 1,
   };
 };
 

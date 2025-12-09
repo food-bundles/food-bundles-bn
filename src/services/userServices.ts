@@ -950,6 +950,14 @@ export const loginService = async (loginData: ILoginData) => {
     }
   }
 
+  // Affiliator login
+  if (!user) {
+    user = await prisma.affiliator.findFirst({
+      where: { email: email || undefined },
+    });
+    if (user) foundUserType = "affiliator";
+  }
+
   // Admin login
   if (!user) {
     user = await prisma.admin.findFirst({
