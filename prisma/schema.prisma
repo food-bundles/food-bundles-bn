@@ -1071,6 +1071,7 @@ enum WalletTransactionType {
   REFUND
   ADJUSTMENT // Manual adjustment by admin
   WITHDRAWAL
+  TRADING
 }
 
 // Enum for transaction status

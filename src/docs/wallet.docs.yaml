@@ -195,30 +195,6 @@ components:
           type: string
           description: Phone number (required for MOBILE_MONEY)
           example: "250788123456"
-        cardDetails:
-          type: object
-          description: Card details (required for CARD)
-          properties:
-            cardNumber:
-              type: string
-              description: Card number
-              example: "5531886652142950"
-            cvv:
-              type: string
-              description: CVV code
-              example: "564"
-            expiryMonth:
-              type: string
-              description: Expiry month (MM)
-              example: "09"
-            expiryYear:
-              type: string
-              description: Expiry year (YYYY)
-              example: "29"
-            pin:
-              type: string
-              description: PIN (optional)
-              example: "3310"
         description:
           type: string
           description: Optional description for the top-up
