@@ -19,9 +19,10 @@ async function processWalletTransaction(
   txRef: string,
   flwRef: string,
   status: string,
-  currency?: string
+  currency?: string,
+  transactionId?: string
 ) {
-  console.log("Processing wallet transaction for reference:", txRef);
+  console.log("Processing wallet transaction for reference:", { txRef, flwRef, transactionId });
 
   const walletTransaction = await retryDatabaseOperation(async () => {
     return await prisma.walletTransaction.findFirst({
@@ -30,7 +31,10 @@ async function processWalletTransaction(
           { flwTxRef: txRef },
           { flwRef: txRef },
           { id: txRef },
-          { flwTxRef: { contains: txRef.split("_").pop() || "" } },
+          { externalTxId: txRef },
+          { flwTxRef: flwRef },
+          { flwRef: flwRef },
+          { externalTxId: flwRef },
         ],
       },
       include: {
@@ -42,7 +46,7 @@ async function processWalletTransaction(
   });
 
   if (!walletTransaction) {
-    console.log("No matching wallet transaction found for txRef:", txRef);
+    console.log("No matching wallet transaction found for:", { txRef, flwRef });
     return null;
   }
 
@@ -67,7 +71,7 @@ async function processWalletTransaction(
             status: "COMPLETED",
             newBalance,
             flwStatus: "successful",
-            externalTxId: flwRef,
+            externalTxId: transactionId || flwRef,
             flwRef: flwRef,
             updatedAt: new Date(),
           },
@@ -700,6 +704,7 @@ const handleChargeCompleted = async (data: any) => {
       data.flw_ref || data.flwRef || data.data?.flw_ref || data.data?.flwRef;
     const status = data.status || data.data?.status;
     const eventType = data["event.type"] || data.event;
+    const transactionType = data.meta_data?.transaction_type || data.data?.meta_data?.transaction_type;
 
     if (!txRef) {
       console.error("No transaction reference found in Flutterwave webhook");
@@ -707,11 +712,14 @@ const handleChargeCompleted = async (data: any) => {
     }
 
     console.log(
-      `Processing transaction: txRef=${txRef}, flwRef=${flwRef}, status=${status}`
+      `Processing transaction: txRef=${txRef}, flwRef=${flwRef}, status=${status}, type=${transactionType}`
     );
 
-    // Check for subscription payments first
-    if (txRef.includes("SUB_")) {
+    // Check transaction type from metadata first
+    if (transactionType === "WALLET_TOPUP") {
+      console.log("Processing wallet top-up via charge.completed (from metadata)");
+      await processWalletTransaction(txRef, flwRef, status, data.currency, data.data?.id?.toString());
+    } else if (txRef.includes("SUB_")) {
       console.log("Processing subscription payment via charge.completed");
       await processSubscriptionPayment(
         txRef,
@@ -733,7 +741,8 @@ const handleChargeCompleted = async (data: any) => {
       txRef &&
       (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))
     ) {
-      await processWalletTransaction(txRef, flwRef, status, data.currency);
+      console.log("Processing wallet top-up via charge.completed (from txRef pattern)");
+      await processWalletTransaction(txRef, flwRef, status, data.currency, data.data?.id?.toString());
     } else {
       await processCheckoutPayment(
         txRef,

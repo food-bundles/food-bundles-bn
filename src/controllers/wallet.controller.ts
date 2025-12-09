@@ -99,8 +99,7 @@ export const getWalletById = async (req: Request, res: Response) => {
  */
 export const topUpWallet = async (req: Request, res: Response) => {
   try {
-    const { amount, paymentMethod, phoneNumber, cardDetails, description } =
-      req.body;
+    const { amount, paymentMethod, phoneNumber, description } = req.body;
     const restaurantId = (req as any).user.id;
 
     // Validate required fields
@@ -123,12 +122,6 @@ export const topUpWallet = async (req: Request, res: Response) => {
       });
     }
 
-    if (paymentMethod.toUpperCase() === "CARD" && !cardDetails) {
-      return res.status(400).json({
-        message: "Card details are required for card payments",
-      });
-    }
-
     // Get wallet by restaurant ID
     let wallet;
     try {
@@ -143,7 +136,6 @@ export const topUpWallet = async (req: Request, res: Response) => {
       amount,
       paymentMethod,
       phoneNumber,
-      cardDetails,
       description,
     });
 
