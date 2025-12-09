@@ -116,15 +116,8 @@ export const getAllPostsService = async ({
 };
 
 // Get Featured Posts (from restaurants with active advertising subscriptions)
-export const getFeaturedPostsService = async ({
-  page = 1,
-  limit = 10,
-}: {
-  page?: number;
-  limit?: number;
-}) => {
+export const getFeaturedPostsService = async () => {
   await deleteOldPostsService();
-  const skip = (page - 1) * limit;
 
   const [posts, total] = await Promise.all([
     prisma.post.findMany({
@@ -141,8 +134,6 @@ export const getFeaturedPostsService = async ({
           },
         },
       },
-      skip,
-      take: limit,
       include: {
         restaurant: {
           select: {
@@ -176,9 +167,6 @@ export const getFeaturedPostsService = async ({
   return {
     posts,
     total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
   };
 };
 

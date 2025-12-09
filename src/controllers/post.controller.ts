@@ -308,21 +308,13 @@ export const getMyPosts = async (req: Request, res: Response) => {
 // Get Featured Posts (public)
 export const getFeaturedPosts = async (req: Request, res: Response) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
-
-    const result = await getFeaturedPostsService({
-      page: parseInt(page as string),
-      limit: parseInt(limit as string),
-    });
+    const result = await getFeaturedPostsService();
 
     res.status(200).json({
       message: "Featured posts retrieved successfully",
       data: result.posts,
       pagination: {
-        page: result.page,
-        limit: result.limit,
         total: result.total,
-        totalPages: result.totalPages,
       },
     });
   } catch (error: any) {
