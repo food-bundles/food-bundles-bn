@@ -118,6 +118,7 @@ export const getAllVouchers = async (req: Request, res: Response) => {
     res.status(200).json({
       message: "Vouchers retrieved successfully",
       data: result.vouchers,
+      statistics: result.statistics,
       pagination: result.pagination,
     });
   } catch (error: any) {
