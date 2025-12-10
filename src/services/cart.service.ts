@@ -1,8 +1,10 @@
 import prisma from "../prisma";
+import { getRestaurantFromAffiliatorService } from "./affiliator.service";
 
 // Interface for adding items to cart
 interface AddToCartData {
-  restaurantId: string;
+  userId: string;
+  userRole: string;
   productId: string;
   quantity: number;
 }
@@ -17,7 +19,14 @@ interface UpdateCartItemData {
  * If product already exists in cart, update the quantity
  */
 export const addToCartService = async (data: AddToCartData) => {
-  const { restaurantId, productId, quantity } = data;
+  const { userId, userRole, productId, quantity } = data;
+
+  // Get restaurant ID based on user role
+  let restaurantId = userId;
+  if (userRole === "AFFILIATOR") {
+    const restaurant = await getRestaurantFromAffiliatorService(userId);
+    restaurantId = restaurant.id;
+  }
 
   // Validate restaurant exists
   const restaurant = await prisma.restaurant.findUnique({
@@ -150,7 +159,17 @@ export const addToCartService = async (data: AddToCartData) => {
 /**
  * Service to get cart by restaurant ID
  */
-export const getCartByRestaurantIdService = async (restaurantId: string) => {
+export const getCartByRestaurantIdService = async (
+  userId: string,
+  userRole?: string
+) => {
+  // Get restaurant ID based on user role
+  let restaurantId = userId;
+  if (userRole === "AFFILIATOR") {
+    const restaurant = await getRestaurantFromAffiliatorService(userId);
+    restaurantId = restaurant.id;
+  }
+
   // Validate restaurant exists
   const restaurant = await prisma.restaurant.findUnique({
     where: { id: restaurantId },
@@ -273,8 +292,15 @@ export const getCartByIdService = async (cartId: string) => {
 export const updateCartItemService = async (
   cartItemId: string,
   data: UpdateCartItemData,
-  restaurantId: string
+  userId: string,
+  userRole?: string
 ) => {
+  // Get restaurant ID based on user role
+  let restaurantId = userId;
+  if (userRole === "AFFILIATOR") {
+    const restaurant = await getRestaurantFromAffiliatorService(userId);
+    restaurantId = restaurant.id;
+  }
   const { quantity } = data;
 
   if (quantity <= 0) {
@@ -338,8 +364,15 @@ export const updateCartItemService = async (
  */
 export const removeCartItemService = async (
   cartItemId: string,
-  restaurantId: string
+  userId: string,
+  userRole?: string
 ) => {
+  // Get restaurant ID based on user role
+  let restaurantId = userId;
+  if (userRole === "AFFILIATOR") {
+    const restaurant = await getRestaurantFromAffiliatorService(userId);
+    restaurantId = restaurant.id;
+  }
   // Find cart item and verify ownership
   const cartItem = await prisma.cartItem.findUnique({
     where: { id: cartItemId },
@@ -376,7 +409,13 @@ export const removeCartItemService = async (
 /**
  * Service to clear entire cart
  */
-export const clearCartService = async (restaurantId: string) => {
+export const clearCartService = async (userId: string, userRole?: string) => {
+  // Get restaurant ID based on user role
+  let restaurantId = userId;
+  if (userRole === "AFFILIATOR") {
+    const restaurant = await getRestaurantFromAffiliatorService(userId);
+    restaurantId = restaurant.id;
+  }
   // Find active cart
   const cart = await prisma.cart.findFirst({
     where: {

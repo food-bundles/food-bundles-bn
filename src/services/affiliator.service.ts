@@ -295,3 +295,36 @@ export const getAllAffiliatorsService = async (filters?: {
     },
   };
 };
+
+/**
+ * Get restaurant from affiliator
+ */
+export const getRestaurantFromAffiliatorService = async (
+  affiliatorId: string
+) => {
+  const affiliator = await prisma.affiliator.findUnique({
+    where: { id: affiliatorId },
+    select: {
+      id: true,
+      restaurantId: true,
+      restaurant: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
+  });
+
+  if (!affiliator) {
+    throw new Error("Affiliator not found");
+  }
+
+  if (!affiliator.restaurantId) {
+    throw new Error("Affiliator is not assigned to any restaurant");
+  }
+
+  return affiliator.restaurant;
+};

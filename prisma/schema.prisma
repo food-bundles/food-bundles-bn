@@ -403,7 +403,7 @@ model CartItem {
 model Order {
   id           String      @id @default(uuid())
   restaurantId String
-  affiliatorId String?
+  orderedBy String?
   logisticsId  String?
   orderNumber  String      @unique
   status       OrderStatus @default(PENDING)
@@ -482,7 +482,7 @@ model Order {
 
   // Relations
   restaurant         Restaurant           @relation(fields: [restaurantId], references: [id])
-  orderedBy          Affiliator?          @relation(fields: [affiliatorId], references: [id])
+  affiliator          Affiliator?          @relation(fields: [orderedBy], references: [id])
   orderItems         OrderItem[]
   logistics          Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
   cart               Cart?                @relation(fields: [cartId], references: [id])

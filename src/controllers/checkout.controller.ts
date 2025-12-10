@@ -41,7 +41,17 @@ export const createCheckout = async (req: Request, res: Response) => {
       otherServices,
     } = req.body;
 
-    const restaurantId = (req as any).user.id;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
 
     // Validate required fields
     if (!cartId || !paymentMethod) {
@@ -112,6 +122,7 @@ export const createCheckout = async (req: Request, res: Response) => {
       const checkoutData = {
         cartId,
         restaurantId,
+        affiliatorId,
         paymentMethod,
         billingName,
         billingEmail,
@@ -144,6 +155,7 @@ export const createCheckout = async (req: Request, res: Response) => {
     const paymentResult = await createCheckoutService({
       cartId,
       restaurantId,
+      affiliatorId,
       paymentMethod,
       billingName,
       billingEmail,

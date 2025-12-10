@@ -40,6 +40,7 @@ import {
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { encryptSecretData } from "../utils/password";
 import { clearCartService } from "./cart.service";
+import { getRestaurantFromAffiliatorService } from "./affiliator.service";
 
 dotenv.config();
 
@@ -66,9 +67,10 @@ type PaymentResult =
   | CashPaymentResult
   | VoucherPaymentResult;
 
-interface CreateCheckoutData {
+export interface CreateCheckoutData {
   cartId: string;
-  restaurantId: string;
+  restaurantId?: string;
+  affiliatorId?: string;
   notes?: string;
   deliveryDate?: Date;
   paymentMethod: PaymentMethod;
@@ -94,13 +96,28 @@ interface CreateCheckoutData {
   currency?: string;
   otherServices?: boolean;
 }
+
 /**
  * Enhanced service to create a new order from cart
  */
 export const createCheckoutService = async (data: CreateCheckoutData) => {
+  // Get restaurant from affiliator if affiliatorId is provided
+  let restaurantId = data.restaurantId;
+  if (data.affiliatorId) {
+    const restaurant = await getRestaurantFromAffiliatorService(
+      data.affiliatorId
+    );
+    restaurantId = restaurant.id;
+  }
+
+  if (!restaurantId) {
+    throw new Error("Restaurant ID or Affiliator ID is required");
+  }
+
   const orderData = {
     cartId: data.cartId,
-    restaurantId: data.restaurantId,
+    restaurantId,
+    affiliatorId: data.affiliatorId,
     status: OrderStatus.PENDING,
     notes: data.notes,
     requestedDelivery: data.deliveryDate,
@@ -132,8 +149,6 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
 
   const orderCreated = await createOrderFromCartService(orderData);
 
-  console.log("orderCreated", orderCreated);
-
   // Process immediate payment
   const paymentResult = await processPaymentService(orderCreated.id!, {
     paymentMethod: data.paymentMethod,
@@ -164,7 +179,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     );
   }
 
-  await clearCartService(data.restaurantId);
+  await clearCartService(restaurantId);
 
   return paymentResult;
 };

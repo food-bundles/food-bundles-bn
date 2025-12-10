@@ -25,7 +25,7 @@ const cartRoutes = Router();
 cartRoutes.post(
   "/add",
   isAuthenticated,
-  checkPermission("RESTAURANT"),
+  checkPermission("RESTAURANT", "AFFILIATOR"),
   addToCart
 );
 
@@ -37,7 +37,7 @@ cartRoutes.post(
 cartRoutes.get(
   "/my-cart",
   isAuthenticated,
-  checkPermission("RESTAURANT"),
+  checkPermission("RESTAURANT", "AFFILIATOR"),
   getMyCart
 );
 
@@ -49,7 +49,7 @@ cartRoutes.get(
 cartRoutes.get(
   "/summary",
   isAuthenticated,
-  checkPermission("RESTAURANT"),
+  checkPermission("RESTAURANT", "AFFILIATOR"),
   getCartSummary
 );
 
@@ -61,7 +61,7 @@ cartRoutes.get(
 cartRoutes.put(
   "/items/:cartItemId",
   isAuthenticated,
-  checkPermission("RESTAURANT"),
+  checkPermission("RESTAURANT", "AFFILIATOR"),
   updateCartItem
 );
 
@@ -73,7 +73,7 @@ cartRoutes.put(
 cartRoutes.delete(
   "/items/:cartItemId",
   isAuthenticated,
-  checkPermission("RESTAURANT"),
+  checkPermission("RESTAURANT", "AFFILIATOR"),
   removeCartItem
 );
 
@@ -85,7 +85,7 @@ cartRoutes.delete(
 cartRoutes.delete(
   "/clear",
   isAuthenticated,
-  checkPermission("RESTAURANT"),
+  checkPermission("RESTAURANT", "AFFILIATOR"),
   clearCart
 );
 
