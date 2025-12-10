@@ -290,14 +290,16 @@ export const createOrderFromCartService = async (
     },
   });
 
-  // Time-based delivery fee: 0 between 4:00 AM to 9:00 AM, 5000 RWF otherwise
-  const currentHour = new Date().getHours();
-  const isOffPeakHours = currentHour >= 4 && currentHour < 9;
+  if (!activeSubscription?.plan?.freeDelivery) {
+    // Time-based delivery fee: 0 between 4:00 AM to 9:00 AM, 5000 RWF otherwise
+    const currentHour = new Date().getHours();
+    const isOffPeakHours = currentHour >= 4 && currentHour < 9;
 
-  if (!isOffPeakHours) {
-    deliveryFee = 5000; // Outside 4:00 AM to 9:00 AM
-  } else {
-    deliveryFee = 0; // Inside 4:00 AM to 9:00 AM (free delivery)
+    if (!isOffPeakHours) {
+      deliveryFee = 5000; // Outside 4:00 AM to 9:00 AM
+    } else {
+      deliveryFee = 0; // Inside 4:00 AM to 9:00 AM (free delivery)
+    }
   }
 
   if (
