@@ -7,6 +7,9 @@ export const getUserById = async (id: string) => {
   const restaurant = await prisma.restaurant.findUnique({ where: { id } });
   if (restaurant) return { ...restaurant, userType: "RESTAURANT" };
 
+  const affiliator = await prisma.affiliator.findUnique({ where: { id } });
+  if (affiliator) return { ...affiliator, userType: "AFFILIATOR" };
+
   const admin = await prisma.admin.findUnique({ where: { id } });
   if (admin) return { ...admin, userType: "ADMIN" };
 
@@ -20,12 +23,14 @@ export const getUserByEmail = async (email: string) => {
   const restaurant = await prisma.restaurant.findUnique({ where: { email } });
   if (restaurant) return { ...restaurant, userType: "RESTAURANT" };
 
+  const affiliator = await prisma.affiliator.findUnique({ where: { email } });
+  if (affiliator) return { ...affiliator, userType: "AFFILIATOR" };
+
   const admin = await prisma.admin.findUnique({ where: { email } });
   if (admin) return { ...admin, userType: "ADMIN" };
 
   return null;
 };
-
 
 export const getUserByPhone = async (phone: string) => {
   const farmer = await prisma.farmer.findUnique({ where: { phone } });
@@ -33,6 +38,9 @@ export const getUserByPhone = async (phone: string) => {
 
   const restaurant = await prisma.restaurant.findUnique({ where: { phone } });
   if (restaurant) return { ...restaurant, userType: "RESTAURANT" };
+
+  const affiliator = await prisma.affiliator.findUnique({ where: { phone } });
+  if (affiliator) return { ...affiliator, userType: "AFFILIATOR" };
 
   return null; // Admin doesn't have phone field
 };

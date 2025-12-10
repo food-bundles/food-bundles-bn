@@ -33,6 +33,7 @@ interface CreateOrderFromCartData {
     pin?: string;
   };
   otherServices?: boolean;
+  affiliatorId?: string;
 }
 
 interface CreateDirectOrderData {
@@ -102,6 +103,7 @@ export const createOrderFromCartService = async (
     billingAddress,
     cardDetails,
     otherServices,
+    affiliatorId,
   } = data;
 
   // Get cart and validate
@@ -193,6 +195,7 @@ export const createOrderFromCartService = async (
           orderNumber,
           cartId,
           restaurantId,
+          orderedBy: affiliatorId,
           totalAmount: cart.totalAmount,
           status: data.status || "PENDING",
           paymentMethod: paymentMethod || "CASH",
@@ -263,7 +266,7 @@ export const createOrderFromCartService = async (
 
   setTimeout(async () => {}, 1000); // Small delay to ensure order is fully created
 
-  // Add delivery fee of 5,000 RWF in case order's total amount is less than 100,000 RWF and add packaging fee of 15,000 Rwf if the restaurantdoes not have an active subscription plan or its subscription does not include otherServices
+  // Calculate delivery fee and packaging fee
   let deliveryFee = 0;
   let packagingFee = 0;
 
@@ -287,8 +290,14 @@ export const createOrderFromCartService = async (
     },
   });
 
-  if (order.totalAmount < 100000 && !activeSubscription?.plan?.freeDelivery) {
-    deliveryFee = 0;
+  // Time-based delivery fee: 0 between 4:00 AM to 9:00 AM, 5000 RWF otherwise
+  const currentHour = new Date().getHours();
+  const isOffPeakHours = currentHour >= 4 && currentHour < 9;
+
+  if (!isOffPeakHours) {
+    deliveryFee = 5000; // Outside 4:00 AM to 9:00 AM
+  } else {
+    deliveryFee = 0; // Inside 4:00 AM to 9:00 AM (free delivery)
   }
 
   if (

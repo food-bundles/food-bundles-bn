@@ -16,7 +16,8 @@ import {
 export const addToCart = async (req: Request, res: Response) => {
   try {
     const { productId, quantity } = req.body;
-    const restaurantId = (req as any).user.id; // Assuming authenticated user
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
 
     // Validate required fields
     if (!productId || !quantity) {
@@ -32,7 +33,8 @@ export const addToCart = async (req: Request, res: Response) => {
     }
 
     const cartItem = await addToCartService({
-      restaurantId,
+      userId,
+      userRole,
       productId,
       quantity: Number(quantity),
     });
@@ -54,9 +56,10 @@ export const addToCart = async (req: Request, res: Response) => {
  */
 export const getMyCart = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
 
-    const cart = await getCartByRestaurantIdService(restaurantId);
+    const cart = await getCartByRestaurantIdService(userId, userRole);
 
     if (!cart) {
       return res.status(200).json({
@@ -105,7 +108,8 @@ export const updateCartItem = async (req: Request, res: Response) => {
   try {
     const { cartItemId } = req.params;
     const { quantity } = req.body;
-    const restaurantId = (req as any).user.id;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
 
     // Validate required fields
     if (!quantity) {
@@ -123,7 +127,8 @@ export const updateCartItem = async (req: Request, res: Response) => {
     const updatedCartItem = await updateCartItemService(
       cartItemId,
       { quantity: Number(quantity) },
-      restaurantId
+      userId,
+      userRole
     );
 
     res.status(200).json({
@@ -144,9 +149,10 @@ export const updateCartItem = async (req: Request, res: Response) => {
 export const removeCartItem = async (req: Request, res: Response) => {
   try {
     const { cartItemId } = req.params;
-    const restaurantId = (req as any).user.id;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
 
-    const result = await removeCartItemService(cartItemId, restaurantId);
+    const result = await removeCartItemService(cartItemId, userId, userRole);
 
     res.status(200).json({
       message: result.message,
@@ -164,9 +170,10 @@ export const removeCartItem = async (req: Request, res: Response) => {
  */
 export const clearCart = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
 
-    const result = await clearCartService(restaurantId);
+    const result = await clearCartService(userId, userRole);
 
     res.status(200).json({
       message: result.message,
@@ -215,9 +222,10 @@ export const getAllCarts = async (req: Request, res: Response) => {
  */
 export const getCartSummary = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
 
-    const cart = await getCartByRestaurantIdService(restaurantId);
+    const cart = await getCartByRestaurantIdService(userId, userRole);
 
     if (!cart) {
       return res.status(200).json({
