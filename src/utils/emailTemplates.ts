@@ -86,6 +86,18 @@ export interface SubscriptionExpiryData {
   isWarning?: boolean;
 }
 
+export interface AdminNotificationData {
+  userType: string;
+  userName: string;
+  userEmail: string;
+  restaurantName?: string;
+  subscriptionPlan?: string;
+  amount?: number;
+  voucherAmount?: number;
+  appliedBy?: string;
+  approvedBy?: string;
+}
+
 // Clean and format phone number for Rwanda
 export const cleanPhoneNumber = (phone: string): string => {
   // Remove all non-digit characters
@@ -1603,5 +1615,345 @@ export async function sendSubscriptionExpiryEmail(
       `Failed to send subscription ${isWarning ? "warning" : "expiry"} email:`,
       error
     );
+  }
+}
+
+// Admin notification templates
+const sendAdminUserCreatedTemplate = (data: AdminNotificationData): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New User Account Created</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .user-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3b82f6; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #3b82f6; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear Admin,</p>
+        <p>A new ${data.userType.toLowerCase()} account has been created on the FoodBundles platform.</p>
+        <div class="user-details">
+          <h2>User Details</h2>
+          <p><span class="highlight">User Type:</span> ${data.userType}</p>
+          <p><span class="highlight">Name/Phone:</span> ${data.userName}</p>
+          ${
+            data.userEmail &&
+            data.userEmail !== "" &&
+            `<p>
+                <span class="highlight">Email:</span> ${data.userEmail}
+              </p>`
+          }
+          ${
+            data.restaurantName
+              ? `<p><span class="highlight">Restaurant:</span> ${data.restaurantName}</p>`
+              : ""
+          }
+        </div>
+      </div>
+      <div class="footer">
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+const sendAdminSubscriptionPaidTemplate = (
+  data: AdminNotificationData
+): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Subscription Payment Successful</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #22c55e, #16a34a); color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .payment-details { background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #22c55e; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #22c55e; font-weight: bold; }
+      .amount { font-size: 24px; font-weight: bold; color: #22c55e; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear Admin,</p>
+        <p>A subscription payment has been successfully processed.</p>
+        <div class="payment-details">
+          <h2>Payment Details</h2>
+          <p><span class="highlight">Restaurant:</span> ${
+            data.restaurantName
+          }</p>
+          <p><span class="highlight">Plan:</span> ${data.subscriptionPlan}</p>
+          <p><span class="highlight">Amount:</span> <span class="amount">${data.amount?.toLocaleString()} RWF</span></p>
+          <p><span class="highlight">Customer:</span> ${data.userName} (${
+    data.userEmail
+  })</p>
+        </div>
+      </div>
+      <div class="footer">
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+const sendAdminVoucherAppliedTemplate = (
+  data: AdminNotificationData
+): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voucher Applied</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .voucher-details { background-color: #faf5ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #8b5cf6; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #8b5cf6; font-weight: bold; }
+      .amount { font-size: 24px; font-weight: bold; color: #8b5cf6; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear Admin,</p>
+        <p>A voucher has been applied on the FoodBundles platform.</p>
+        <div class="voucher-details">
+          <h2>Voucher Details</h2>
+          <p><span class="highlight">Restaurant:</span> ${
+            data.restaurantName
+          }</p>
+          <p><span class="highlight">Voucher Amount:</span> <span class="amount">${data.voucherAmount?.toLocaleString()} RWF</span></p>
+          <p><span class="highlight">Applied By:</span> ${data.appliedBy}</p>
+          <p><span class="highlight">Customer:</span> ${data.userName} (${
+    data.userEmail
+  })</p>
+        </div>
+      </div>
+      <div class="footer">
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+const sendAdminVoucherApprovedTemplate = (
+  data: AdminNotificationData
+): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voucher Approved</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #10b981, #059669); color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .approval-details { background-color: #ecfdf5; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #10b981; font-weight: bold; }
+      .amount { font-size: 24px; font-weight: bold; color: #10b981; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear Admin,</p>
+        <p>A voucher has been approved and issued on the FoodBundles platform.</p>
+        <div class="approval-details">
+          <h2>Approval Details</h2>
+          <p><span class="highlight">Restaurant:</span> ${data.restaurantName}</p>
+          <p><span class="highlight">Voucher Amount:</span> <span class="amount">${data.voucherAmount?.toLocaleString()} RWF</span></p>
+          <p><span class="highlight">Approved By:</span> ${data.approvedBy}</p>
+          <p><span class="highlight">Customer:</span> ${data.userName} (${data.userEmail})</p>
+        </div>
+      </div>
+      <div class="footer">
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Admin notification functions
+export async function sendAdminUserCreatedEmail(data: AdminNotificationData) {
+  if (
+    !process.env.GOOGLE_EMAIL ||
+    !process.env.GOOGLE_PASSWORD ||
+    !process.env.ADMIN_EMAIL
+  ) {
+    console.log("Email credentials or admin email not configured");
+    return;
+  }
+
+  const config = {
+    service: "gmail",
+    auth: {
+      user: process.env.GOOGLE_EMAIL,
+      pass: process.env.GOOGLE_PASSWORD,
+    },
+    tls: { rejectUnauthorized: false },
+  };
+
+  const transporter = nodemailer.createTransport(config);
+
+  const adminEmail = {
+    from: `"FoodBundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `🆕 New ${data.userType} Account Created - ${data.userName}`,
+    html: sendAdminUserCreatedTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(adminEmail);
+    console.log("Admin user created notification sent successfully");
+  } catch (error) {
+    console.error("Failed to send admin user created notification:", error);
+  }
+}
+
+export async function sendAdminSubscriptionPaidEmail(
+  data: AdminNotificationData
+) {
+  if (
+    !process.env.GOOGLE_EMAIL ||
+    !process.env.GOOGLE_PASSWORD ||
+    !process.env.ADMIN_EMAIL
+  ) {
+    console.log("Email credentials or admin email not configured");
+    return;
+  }
+
+  const config = {
+    service: "gmail",
+    auth: {
+      user: process.env.GOOGLE_EMAIL,
+      pass: process.env.GOOGLE_PASSWORD,
+    },
+    tls: { rejectUnauthorized: false },
+  };
+
+  const transporter = nodemailer.createTransport(config);
+
+  const adminEmail = {
+    from: `"FoodBundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `💰 Subscription Payment Successful - ${data.restaurantName} (${data.subscriptionPlan})`,
+    html: sendAdminSubscriptionPaidTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(adminEmail);
+    console.log("Admin subscription paid notification sent successfully");
+  } catch (error) {
+    console.error(
+      "Failed to send admin subscription paid notification:",
+      error
+    );
+  }
+}
+
+export async function sendAdminVoucherAppliedEmail(
+  data: AdminNotificationData
+) {
+  if (
+    !process.env.GOOGLE_EMAIL ||
+    !process.env.GOOGLE_PASSWORD ||
+    !process.env.ADMIN_EMAIL
+  ) {
+    console.log("Email credentials or admin email not configured");
+    return;
+  }
+
+  const config = {
+    service: "gmail",
+    auth: {
+      user: process.env.GOOGLE_EMAIL,
+      pass: process.env.GOOGLE_PASSWORD,
+    },
+    tls: { rejectUnauthorized: false },
+  };
+
+  const transporter = nodemailer.createTransport(config);
+
+  const adminEmail = {
+    from: `"FoodBundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `🎫 Voucher Applied - ${
+      data.restaurantName
+    } (${data.voucherAmount?.toLocaleString()} RWF)`,
+    html: sendAdminVoucherAppliedTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(adminEmail);
+    console.log("Admin voucher applied notification sent successfully");
+  } catch (error) {
+    console.error("Failed to send admin voucher applied notification:", error);
+  }
+}
+
+export async function sendAdminVoucherApprovedEmail(
+  data: AdminNotificationData
+) {
+  if (
+    !process.env.GOOGLE_EMAIL ||
+    !process.env.GOOGLE_PASSWORD ||
+    !process.env.ADMIN_EMAIL
+  ) {
+    console.log("Email credentials or admin email not configured");
+    return;
+  }
+
+  const config = {
+    service: "gmail",
+    auth: {
+      user: process.env.GOOGLE_EMAIL,
+      pass: process.env.GOOGLE_PASSWORD,
+    },
+    tls: { rejectUnauthorized: false },
+  };
+
+  const transporter = nodemailer.createTransport(config);
+
+  const adminEmail = {
+    from: `"FoodBundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `✅ Voucher Approved - ${data.restaurantName} (${data.voucherAmount?.toLocaleString()} RWF)`,
+    html: sendAdminVoucherApprovedTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(adminEmail);
+    console.log("Admin voucher approved notification sent successfully");
+  } catch (error) {
+    console.error("Failed to send admin voucher approved notification:", error);
   }
 }

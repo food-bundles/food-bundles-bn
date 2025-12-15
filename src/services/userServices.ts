@@ -26,6 +26,7 @@ import {
   generateRestaurantPassword,
   sendPasswordSMS,
 } from "../utils/passwordGenerator";
+import { sendAdminUserCreatedEmail } from "../utils/emailTemplates";
 
 // Helper function to check for existing phone/email across all user types
 export const checkExistingUser = async (phone?: string, email?: string) => {
@@ -134,6 +135,12 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
         email: farmer.email,
         registeredAt: new Date().toISOString(),
       },
+    });
+
+    await sendAdminUserCreatedEmail({
+      userType: farmer.role,
+      userName: farmer.phone || "Farmer",
+      userEmail: farmer.email || "",
     });
 
     const { password: _, ...farmerWithoutPassword } = farmer;
@@ -424,6 +431,13 @@ export const createRestaurantService = async (
         email: restaurant.email,
         registeredAt: new Date().toISOString(),
       },
+    });
+
+    await sendAdminUserCreatedEmail({
+      userName: name,
+      userEmail: email,
+      userType: "RESTAURANT",
+      restaurantName: name,
     });
 
     const { password: _, ...restaurantWithoutPassword } = restaurant;
@@ -745,6 +759,12 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
         email: admin.email,
         registeredAt: new Date().toISOString(),
       },
+    });
+
+    await sendAdminUserCreatedEmail({
+      userType: "Admin",
+      userName: admin.username,
+      userEmail: admin.email,
     });
 
     const { password: _, ...adminWithoutPassword } = admin;

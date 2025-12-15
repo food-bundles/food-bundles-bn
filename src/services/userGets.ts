@@ -2,16 +2,18 @@ import prisma from "../prisma";
 
 export const getUserById = async (id: string) => {
   const farmer = await prisma.farmer.findUnique({ where: { id } });
-  if (farmer) return { ...farmer, userType: "FARMER" };
+  if (farmer) return { ...farmer, userType: "FARMER", name: "Farmer" };
 
   const restaurant = await prisma.restaurant.findUnique({ where: { id } });
-  if (restaurant) return { ...restaurant, userType: "RESTAURANT" };
+  if (restaurant)
+    return { ...restaurant, userType: "RESTAURANT", name: restaurant.name };
 
   const affiliator = await prisma.affiliator.findUnique({ where: { id } });
-  if (affiliator) return { ...affiliator, userType: "AFFILIATOR" };
+  if (affiliator)
+    return { ...affiliator, userType: "AFFILIATOR", name: affiliator.name };
 
   const admin = await prisma.admin.findUnique({ where: { id } });
-  if (admin) return { ...admin, userType: "ADMIN" };
+  if (admin) return { ...admin, userType: "ADMIN", name: admin.username };
 
   return null;
 };
