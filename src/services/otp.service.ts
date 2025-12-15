@@ -11,7 +11,7 @@ export class OTPService {
   ): Promise<{ success: boolean; message: string }> {
     try {
       const otp = this.generateOTP();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
 
       await prisma.oTP.deleteMany({
         where: { phone, purpose: "RESTAURANT_SIGNUP", verified: false },
@@ -22,7 +22,7 @@ export class OTPService {
       });
 
       await sendMessage(
-        `Your restaurant registration OTP is: ${otp}. Valid for 10 minutes.`,
+        `Your restaurant registration OTP is: ${otp}. Valid for 48 hours.`,
         phone
       );
       return { success: true, message: "OTP sent successfully" };
