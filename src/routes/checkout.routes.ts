@@ -4,6 +4,7 @@ import {
   processPayment,
   verifyPayment,
   verifyVoucherOTPAndCreateOrder,
+  createAdminOrder,
 } from "../controllers/checkout.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -49,6 +50,18 @@ checkoutRoutes.post(
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR"),
   verifyVoucherOTPAndCreateOrder
+);
+
+/**
+ * Create order on behalf of restaurant by ADMIN/LOGISTICS
+ * POST /checkouts/admin-order
+ * Access: ADMIN or LOGISTICS only
+ */
+checkoutRoutes.post(
+  "/admin-order",
+  isAuthenticated,
+  checkPermission("ADMIN", "LOGISTICS"),
+  createAdminOrder
 );
 
 export default checkoutRoutes;

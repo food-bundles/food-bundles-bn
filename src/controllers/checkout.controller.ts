@@ -3,6 +3,7 @@ import {
   createCheckoutService,
   processPaymentService,
   verifyPaymentStatus,
+  createAdminOrderService,
 } from "../services/checkout.services";
 import { PaymentMethod, PaymentStatus, VoucherStatus } from "@prisma/client";
 import {
@@ -531,6 +532,119 @@ export const validateVoucherForCheckout = async (
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to validate voucher",
+    });
+  }
+};
+
+/**
+ * Create order on behalf of restaurant by ADMIN/LOGISTICS
+ * POST /checkouts/admin-order
+ */
+export const createAdminOrder = async (req: Request, res: Response) => {
+  try {
+    const {
+      restaurantId,
+      products,
+      paymentMethod,
+      voucherCode,
+      phoneNumber,
+      notes,
+      deliveryDate,
+    } = req.body;
+    const userRole = (req as any).user.role;
+
+    // Check if user is ADMIN or LOGISTICS
+    if (!["ADMIN", "LOGISTICS"].includes(userRole)) {
+      return res.status(403).json({
+        message:
+          "Access denied. Only ADMIN or LOGISTICS can create orders on behalf of restaurants",
+      });
+    }
+
+    // Validate required fields
+    if (
+      !restaurantId ||
+      !products ||
+      !Array.isArray(products) ||
+      products.length === 0 ||
+      !paymentMethod
+    ) {
+      return res.status(400).json({
+        message:
+          "Restaurant ID, products array, and payment method are required",
+      });
+    }
+
+    // Validate products array structure
+    for (const product of products) {
+      if (!product.productId || !product.quantity || product.quantity <= 0) {
+        return res.status(400).json({
+          message: "Each product must have productId and quantity > 0",
+        });
+      }
+    }
+
+    // Validate voucher for voucher payments
+    if (paymentMethod === "VOUCHER" && !voucherCode) {
+      return res.status(400).json({
+        message: "Voucher ID or voucher code is required for voucher payments",
+      });
+    }
+
+    const paymentResult = await createAdminOrderService({
+      restaurantId,
+      products,
+      paymentMethod,
+      voucherCode,
+      phoneNumber,
+      notes,
+      deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
+    });
+
+    if (paymentResult.success) {
+      if (paymentResult.redirectUrl) {
+        res.status(201).json({
+          message: "Order created - redirect required for payment",
+          data: {
+            checkout: paymentResult.checkout,
+            transactionId: paymentResult.transactionId,
+            redirectUrl: paymentResult.redirectUrl,
+            status: paymentResult.status,
+            requiresRedirect: true,
+          },
+        });
+      } else if (paymentResult.transferDetails) {
+        res.status(201).json({
+          message: "Order created - bank transfer initiated",
+          data: {
+            checkout: paymentResult.checkout,
+            transactionId: paymentResult.transactionId,
+            transferDetails: paymentResult.transferDetails,
+            status: paymentResult.status,
+          },
+        });
+      } else {
+        res.status(201).json({
+          message:
+            paymentResult.message ||
+            "Order created and payment processed successfully",
+          data: {
+            checkout: paymentResult.checkout,
+            transactionId: paymentResult.transactionId,
+            status: paymentResult.status,
+          },
+        });
+      }
+    } else {
+      res.status(400).json({
+        message: paymentResult.error || "Order creation failed",
+        error: paymentResult.error,
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to create admin order",
+      error: error.message,
     });
   }
 };

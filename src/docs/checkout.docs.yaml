@@ -310,6 +310,117 @@ components:
           description: Client IP address
           example: "192.168.1.100"
 
+    CreateAdminOrderRequest:
+      type: object
+      required:
+        - restaurantId
+        - products
+        - paymentMethod
+      properties:
+        restaurantId:
+          type: string
+          description: ID of the restaurant for which to create the order
+          example: "rest_123456789"
+        products:
+          type: array
+          description: Array of products to include in the order
+          items:
+            type: object
+            required:
+              - productId
+              - quantity
+            properties:
+              productId:
+                type: string
+                description: ID of the product
+                example: "prod_123456789"
+              quantity:
+                type: integer
+                minimum: 1
+                description: Quantity of the product
+                example: 2
+        paymentMethod:
+          type: string
+          enum: [MOBILE_MONEY, CARD, BANK_TRANSFER, CASH, VOUCHER]
+          description: Payment method for the order
+          example: "VOUCHER"
+        voucherCode:
+          type: string
+          description: Voucher code
+          example: "VCH-ABC123"
+        phoneNumber:
+          type: string
+          description: Phone number for payment processing (optional, uses restaurant phone if not provided)
+          example: "250788123456"
+        notes:
+          type: string
+          description: Optional notes for the order
+          example: "Urgent delivery required"
+        deliveryDate:
+          type: string
+          format: date-time
+          description: Optional requested delivery date
+          example: "2024-01-15T10:00:00Z"
+
+    AdminOrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "order_123456789"
+        orderNumber:
+          type: string
+          example: "ORD-1704123456789"
+        restaurantId:
+          type: string
+          example: "rest_123456789"
+        totalAmount:
+          type: number
+          example: 25000
+        deliveryFee:
+          type: number
+          example: 5000
+        paymentMethod:
+          type: string
+          example: "VOUCHER"
+        status:
+          type: string
+          example: "PENDING"
+        paymentStatus:
+          type: string
+          example: "PENDING"
+        restaurant:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+        orderItems:
+          type: array
+          items:
+            type: object
+            properties:
+              productId:
+                type: string
+              quantity:
+                type: integer
+              unitPrice:
+                type: number
+              totalPrice:
+                type: number
+              product:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  productName:
+                    type: string
+                  unitPrice:
+                    type: number
+
     ProcessPaymentRequest:
       type: object
       required:
@@ -811,6 +922,225 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /checkouts/admin-order:
+    post:
+      tags:
+        - Checkout API Management
+      summary: Create order on behalf of restaurant
+      description: Create order on behalf of restaurant by ADMIN/LOGISTICS
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminOrderRequest"
+            examples:
+              mobile_money_payment:
+                summary: Order with mobile money payment
+                value:
+                  restaurantId: "rest_123456789"
+                  products:
+                    - productId: "prod_123456789"
+                      quantity: 2
+                  paymentMethod: "MOBILE_MONEY"
+                  phoneNumber: "250788123456"
+                  notes: "Mobile money payment order"
+                  deliveryDate: "2024-01-15T10:00:00Z"
+              card_payment:
+                summary: Order with card payment
+                value:
+                  restaurantId: "rest_123456789"
+                  products:
+                    - productId: "prod_123456789"
+                      quantity: 1
+                  paymentMethod: "CARD"
+                  notes: "Card payment order"
+              bank_transfer_payment:
+                summary: Order with bank transfer payment
+                value:
+                  restaurantId: "rest_123456789"
+                  products:
+                    - productId: "prod_123456789"
+                      quantity: 2
+                  paymentMethod: "BANK_TRANSFER"
+                  notes: "Bank transfer payment order"
+              cash_payment:
+                summary: Order with cash payment
+                value:
+                  restaurantId: "rest_123456789"
+                  products:
+                    - productId: "prod_123456789"
+                      quantity: 3
+                  paymentMethod: "CASH"
+                  notes: "Cash payment order"
+              voucher_payment:
+                summary: Order with voucher payment
+                value:
+                  restaurantId: "rest_123456789"
+                  products:
+                    - productId: "prod_123456789"
+                      quantity: 2
+                    - productId: "prod_987654321"
+                      quantity: 1
+                  paymentMethod: "VOUCHER"
+                  voucherCode: "VCH-ABC123"
+                  notes: "Admin created order with voucher"
+                  deliveryDate: "2024-01-15T10:00:00Z"
+      responses:
+        201:
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                      data:
+                        type: object
+                        properties:
+                          checkout:
+                            $ref: "#/components/schemas/Checkout"
+                          transactionId:
+                            type: string
+                          status:
+                            type: string
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                      data:
+                        type: object
+                        properties:
+                          checkout:
+                            $ref: "#/components/schemas/Checkout"
+                          transactionId:
+                            type: string
+                          redirectUrl:
+                            type: string
+                          status:
+                            type: string
+                          requiresRedirect:
+                            type: boolean
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                      data:
+                        type: object
+                        properties:
+                          checkout:
+                            $ref: "#/components/schemas/Checkout"
+                          transactionId:
+                            type: string
+                          transferDetails:
+                            type: object
+                          status:
+                            type: string
+              examples:
+                successful_payment:
+                  summary: Order created with successful payment
+                  value:
+                    message: "Order created and payment processed successfully"
+                    data:
+                      checkout:
+                        id: "order_123456789"
+                        totalAmount: 25000
+                        paymentStatus: "COMPLETED"
+                      transactionId: "txn_123456789"
+                      status: "successful"
+                redirect_required:
+                  summary: Order created with redirect required
+                  value:
+                    message: "Order created - redirect required for payment"
+                    data:
+                      checkout:
+                        id: "order_123456789"
+                        totalAmount: 25000
+                        paymentStatus: "PROCESSING"
+                      transactionId: "txn_123456789"
+                      redirectUrl: "https://payment.provider.com/auth"
+                      status: "pending"
+                      requiresRedirect: true
+                bank_transfer:
+                  summary: Order created with bank transfer
+                  value:
+                    message: "Order created - bank transfer initiated"
+                    data:
+                      checkout:
+                        id: "order_123456789"
+                        totalAmount: 25000
+                        paymentStatus: "PROCESSING"
+                      transactionId: "txn_123456789"
+                      transferDetails:
+                        transferReference: "FLW-MOCK-72c3b8b4e8c4a0e5f7d2b1a9"
+                        transferAccount: "0123456789"
+                        transferBank: "Test Bank"
+                        transferAmount: 25000
+                      status: "pending"
+        400:
+          description: Bad request - validation errors or payment failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_fields:
+                  value:
+                    message: "Restaurant ID, products array, and payment method are required"
+                invalid_products:
+                  value:
+                    message: "Each product must have productId and quantity > 0"
+                voucher_required:
+                  value:
+                    message: "Voucher ID or voucher code is required for voucher payments"
+                product_not_found:
+                  value:
+                    message: "Product prod_123 not found"
+                product_unavailable:
+                  value:
+                    message: "Product Sample Product is not available"
+                payment_failed:
+                  value:
+                    message: "Order creation failed"
+                    error: "Payment processing failed: Insufficient balance"
+        403:
+          description: Access denied - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: "Access denied. Only ADMIN or LOGISTICS can create orders on behalf of restaurants"
+        404:
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                restaurant_not_found:
+                  value:
+                    message: "Restaurant not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                server_error:
+                  value:
+                    message: "Failed to create admin order"
+                    error: "Database connection error"
+                payment_error:
+                  value:
+                    message: "Payment processing failed: Database connection issue. Please try again."
+                    error: "Database connection issue. Please try again."
 
   /checkouts/{orderId}/payment:
     post:
