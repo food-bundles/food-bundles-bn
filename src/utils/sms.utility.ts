@@ -10,11 +10,21 @@ const token = process.env.SMS_API_TOKEN;
 
 export const cleanSMSPhoneNumber = (phone: string): string => {
   let cleaned = phone.replace(/\D/g, "");
+  
   if (cleaned.startsWith("07")) {
-    cleaned = "+2507" + cleaned.slice(2);
+    cleaned = "+250" + cleaned.slice(1);
   } else if (cleaned.startsWith("2507")) {
-    cleaned = "+2507" + cleaned.slice(4);
+    cleaned = "+" + cleaned;
+  } else if (cleaned.startsWith("250")) {
+    cleaned = "+" + cleaned;
+  } else if (!cleaned.startsWith("+")) {
+    // If it doesn't start with + and doesn't match Rwanda patterns, assume it's a local number
+    if (cleaned.length === 9 && cleaned.startsWith("7")) {
+      cleaned = "+250" + cleaned;
+    }
   }
+  
+  console.log(`Final cleaned phone number: ${cleaned}`);
   return cleaned;
 };
 
@@ -42,40 +52,51 @@ async function sendViaPindo(messageBody: string, phoneNumber: string) {
 
 async function sendViaTwilio(messageBody: string, phoneNumber: string) {
   const cleanedPhone = cleanSMSPhoneNumber(phoneNumber);
-  const message = await twilio.messages.create({
-    body: `Hello from FoodBundles!\n\n${messageBody}\n\nBuy Now Here ${process.env.CLIENT_PRODUCTION_URL}`,
-    from: process.env.TWILIO_TRIAL_PHONE_NUMBER,
-    to: cleanedPhone,
-  });
-  return message;
+  
+  try {
+    const message = await twilio.messages.create({
+      body: `Hello from FoodBundles!\n${messageBody}`,
+      from: process.env.TWILIO_TRIAL_PHONE_NUMBER,
+      to: cleanedPhone,
+    });
+    return message;
+  } catch (error: any) {
+    console.error('Twilio error details:', {
+      code: error.code,
+      message: error.message,
+      moreInfo: error.moreInfo,
+      status: error.status
+    });
+    throw error;
+  }
 }
 
 export async function sendMessage(messageBody: string, phoneNumber: string) {
-  // Primary: Try Pindo first
-  try {
-    if (token) {
+  
+  // If Pindo is configured, try it first
+  if (token) {
+    try {
       const response = await sendViaPindo(messageBody, phoneNumber);
       console.log({ message: "SMS sent via Pindo", data: response });
       return response;
-    } else {
-      throw new Error("Pindo token not configured");
+    } catch (error: any) {
+      console.log("Pindo failed, falling back to Twilio:", error.message);
     }
-  } catch (error: any) {
-    console.log("Pindo failed, falling back to Twilio:", error.message);
+  } else {
+    console.log("Pindo not configured, using Twilio directly");
+  }
 
-    // Fallback: Try Twilio
-    try {
-      const response = await sendViaTwilio(messageBody, phoneNumber);
-      console.log({
-        message: "SMS sent via Twilio (fallback)",
-        data: response,
-      });
-      return response;
-    } catch (twilioError: any) {
-      console.error("Both SMS providers failed:", twilioError);
-      throw new Error(
-        `SMS sending failed: Pindo - ${error.message}, Twilio - ${twilioError.message}`
-      );
-    }
+  try {
+    const response = await sendViaTwilio(messageBody, phoneNumber);
+    console.log({
+      message: token ? "SMS sent via Twilio (fallback)" : "SMS sent via Twilio (primary)",
+      data: response,
+    });
+    return response;
+  } catch (twilioError: any) {
+    console.error("Twilio SMS failed:", twilioError);
+    throw new Error(
+      `SMS sending failed: ${twilioError.message}`
+    );
   }
 }
