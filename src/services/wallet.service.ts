@@ -13,6 +13,7 @@ import {
   WalletTransactionFilters,
 } from "../types/paymentTypes";
 import axios from "axios";
+import { wsManager } from "../index";
 
 dotenv.config();
 
@@ -229,6 +230,26 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
       },
     });
 
+    // Broadcast wallet update for transaction creation (even if pending)
+    try {
+      wsManager.broadcastWalletUpdate({
+        walletId: wallet.id,
+        restaurantId: wallet.restaurantId,
+        action: "TOP_UP",
+        timestamp: new Date().toISOString(),
+        data: {
+          transactionId: updatedTransaction.id,
+          amount,
+          newBalance: wallet.balance, // Keep current balance for pending
+          previousBalance: wallet.balance,
+          description: description || `Wallet top-up via ${paymentMethod}`,
+          status: updatedTransaction.status,
+        },
+      });
+    } catch (wsError) {
+      console.error("Failed to broadcast wallet update:", wsError);
+    }
+
     // If payment is successful, update wallet balance
     if (paymentResult.success && paymentResult.status === "successful") {
       const newBalance = wallet.balance + amount;
@@ -249,6 +270,26 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
           },
         }),
       ]);
+
+      // Broadcast wallet update via WebSocket
+      try {
+        wsManager.broadcastWalletUpdate({
+          walletId: wallet.id,
+          restaurantId: wallet.restaurantId,
+          action: "TOP_UP",
+          timestamp: new Date().toISOString(),
+          data: {
+            transactionId: txRef,
+            amount,
+            newBalance,
+            previousBalance: wallet.balance,
+            description: description || `Wallet top-up via ${paymentMethod}`,
+            status: "COMPLETED",
+          },
+        });
+      } catch (wsError) {
+        console.error("Failed to broadcast wallet update:", wsError);
+      }
 
       // Send notification email
       if (wallet.restaurant.email) {
