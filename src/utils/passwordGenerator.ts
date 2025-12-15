@@ -36,5 +36,10 @@ export const sendPasswordSMS = async (phone: string, password: string, userType:
      ? `Your account PIN is: ${password}. Please keep it secure. You can now log in at https://www.food.rw/login.`
      : `Your account password is: ${password}. Please keep it secure. You can now log in at https://www.food.rw/login.`;
   
-  await sendMessage(message, phone);
+  
+  try {
+    await sendMessage(message, phone);
+  } catch (error: any) {
+    throw new Error(`SMS sending failed: ${error.message}`);
+  }
 };
