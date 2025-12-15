@@ -1118,6 +1118,31 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
         },
       });
 
+      // Check if wallet transaction exists in database
+      const walletTransaction = await prisma.walletTransaction.findFirst({
+        where: {
+          OR: [
+            { flwTxRef: txRef },
+            { flwRef: txRef },
+            { id: txRef },
+            { externalTxId: txRef },
+            { flwTxRef: flwRef },
+            { flwRef: flwRef },
+            { externalTxId: flwRef },
+          ],
+        },
+      });
+
+      const repaymentTransaction = await prisma.voucherRepayment.findFirst({
+        where: {
+          OR: [
+            { paymentReference: txRef },
+            { paymentReference: flwRef },
+            { paymentReference: { contains: txRef.split("_").pop() || "" } },
+          ],
+        },
+      });
+
       if (subscription) {
         console.log("Found subscription for PayPack webhook:", subscription.id);
         await processSubscriptionPayment(
@@ -1127,7 +1152,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
           "PAYPACK",
           payload
         );
-      } else if (txRef.includes("repay_")) {
+      } else if (repaymentTransaction || txRef.includes("repay_")) {
         console.log("Processing PayPack voucher repayment");
         await processVoucherRepaymentPayment(
           txRef || "",
@@ -1137,6 +1162,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
           payload
         );
       } else if (
+        walletTransaction ||
         transactionType === "WALLET_TOPUP" ||
         txRef.includes("WALLET_TOPUP_") ||
         txRef.startsWith("175")
