@@ -97,8 +97,21 @@ export interface CreateCheckoutData {
   otherServices?: boolean;
 }
 
+export interface CreateAdminOrderData {
+  restaurantId: string;
+  products: {
+    productId: string;
+    quantity: number;
+  }[];
+  paymentMethod: PaymentMethod;
+  voucherCode?: string;
+  phoneNumber?: string;
+  notes?: string;
+  deliveryDate?: Date;
+}
+
 /**
- * Enhanced service to create a new order from cart
+ * Service to create a new order from cart
  */
 export const createCheckoutService = async (data: CreateCheckoutData) => {
   // Get restaurant from affiliator if affiliatorId is provided
@@ -185,7 +198,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
 };
 
 /**
- * Enhanced service to process payment
+ * Service to process payment
  */
 export const processPaymentService = async (
   orderId: string,
@@ -1165,3 +1178,143 @@ async function processVoucherPayment({
     };
   }
 }
+
+/**
+ * Create order on behalf of restaurant by ADMIN/LOGISTICS
+ */
+export const createAdminOrderService = async (data: CreateAdminOrderData) => {
+  const {
+    restaurantId,
+    products,
+    paymentMethod,
+    voucherCode,
+    phoneNumber,
+    notes,
+    deliveryDate,
+  } = data;
+
+  // Validate restaurant exists
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { id: true, name: true, email: true, phone: true },
+  });
+
+  if (!restaurant) {
+    throw new Error("Restaurant not found");
+  }
+  // Find or create the single active cart for this restaurant
+  let tempCart = await prisma.cart.findFirst({
+    where: {
+      restaurantId,
+      status: "ACTIVE",
+    },
+  });
+
+  if (!tempCart) {
+    // Create new cart if none exists
+    tempCart = await prisma.cart.create({
+      data: {
+        restaurantId,
+        status: "ACTIVE",
+      },
+    });
+  }
+
+  // Clear existing cart items and add new products
+  await prisma.cartItem.deleteMany({ where: { cartId: tempCart.id } });
+
+  let cartTotal = 0;
+  for (const item of products) {
+    const product = await prisma.product.findUnique({
+      where: { id: item.productId },
+      select: {
+        id: true,
+        productName: true,
+        unitPrice: true,
+        status: true,
+        unit: true,
+      },
+    });
+
+    if (!product) {
+      throw new Error(`Product ${item.productId} not found`);
+    }
+
+    if (product.status !== "ACTIVE") {
+      throw new Error(`Product ${product.productName} is not available`);
+    }
+
+    const itemSubtotal = product.unitPrice * item.quantity;
+    cartTotal += itemSubtotal;
+
+    await prisma.cartItem.create({
+      data: {
+        cartId: tempCart.id,
+        productId: product.id,
+        quantity: item.quantity,
+        unitPrice: product.unitPrice,
+        subtotal: itemSubtotal,
+      },
+    });
+  }
+
+  // Update cart total amount
+  await prisma.cart.update({
+    where: { id: tempCart.id },
+    data: { totalAmount: cartTotal },
+  });
+
+  // Use createOrderFromCartService to create order
+  const orderData = {
+    cartId: tempCart.id,
+    restaurantId,
+    status: OrderStatus.PENDING,
+    notes,
+    requestedDelivery: deliveryDate,
+    paymentMethod,
+    billingName: restaurant.name,
+    billingEmail: restaurant.email,
+    billingPhone: phoneNumber || restaurant.phone || undefined,
+    billingAddress: "",
+    cardDetails: {
+      cardNumber: "",
+      cvv: "",
+      expiryMonth: "",
+      expiryYear: "",
+      pin: "",
+    },
+    clientIp: "",
+    otherServices: false,
+  };
+
+  const orderCreated = await createOrderFromCartService(orderData);
+
+  // Process payment using processPaymentService
+  const paymentResult = await processPaymentService(orderCreated.id!, {
+    paymentMethod,
+    phoneNumber: phoneNumber || restaurant.phone || undefined,
+    voucherCode,
+    processDirectly: true,
+  });
+
+  // If order uses voucher and reaches successful state, mark voucher as USED
+  if (orderCreated.voucherId && orderCreated.status === OrderStatus.CONFIRMED) {
+    await markVoucherAsUsedService(orderCreated.voucherId, orderCreated.id);
+  }
+
+  // If order is cancelled or failed, rollback voucher payment
+  if (
+    orderCreated.voucherId &&
+    orderCreated.paymentMethod === "VOUCHER" &&
+    orderCreated.status === OrderStatus.PENDING
+  ) {
+    await rollbackVoucherPaymentService(
+      orderCreated.voucherId,
+      orderCreated.id
+    );
+  }
+
+  await clearCartService(restaurantId);
+
+  return paymentResult;
+};
