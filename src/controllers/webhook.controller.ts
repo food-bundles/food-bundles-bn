@@ -3,6 +3,7 @@ import crypto from "crypto";
 import prisma from "../prisma";
 import {
   sendAdminOrderConfirmationEmail,
+  sendAdminSubscriptionPaidEmail,
   sendLogisticsOrderNotificationEmail,
   sendPaymentConfirmationEmail,
   sendPaymentFailedEmail,
@@ -909,6 +910,15 @@ async function processSubscriptionPayment(
       } catch (error) {
         console.error("Failed to send subscription notification:", error);
       }
+
+      await sendAdminSubscriptionPaidEmail({
+        userType: "RESTAURANT",
+        userName: subscription.restaurant.name,
+        userEmail: subscription.restaurant.email,
+        restaurantName: subscription.restaurant.name,
+        subscriptionPlan: subscription.plan.name,
+        amount: subscription.plan.price,
+      });
 
       // Broadcast subscription update via WebSocket
       try {

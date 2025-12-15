@@ -16,7 +16,14 @@ import {
   getWalletByRestaurantIdService,
   debitWalletService,
 } from "./wallet.service";
-import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
+import {
+  cleanPhoneNumber,
+  isValidRwandaPhone,
+  sendAdminVoucherAppliedEmail,
+  sendAdminVoucherApprovedEmail,
+} from "../utils/emailTemplates";
+import { sendMessage } from "../utils/sms.utility";
+import { getUserById } from "./userGets";
 
 // Payment processing functions
 const flw = require("flutterwave-node-v3");
@@ -284,7 +291,7 @@ export const getAllVouchersService = async (filters?: {
     prisma.voucher.count({ where }),
     // Get voucher statistics
     prisma.voucher.groupBy({
-      by: ['status'],
+      by: ["status"],
       _count: {
         id: true,
       },
@@ -316,24 +323,24 @@ export const getAllVouchersService = async (filters?: {
 
   voucherStats.forEach((stat) => {
     switch (stat.status) {
-      case 'ACTIVE':
+      case "ACTIVE":
         stats.activeVouchers = stat._count.id;
         break;
-      case 'USED':
+      case "USED":
         stats.usedVouchers.count = stat._count.id;
         stats.usedVouchers.totalAmount = stat._sum.usedCredit || 0;
         break;
-      case 'SUSPENDED':
+      case "SUSPENDED":
         stats.suspendedVouchers = stat._count.id;
         break;
-      case 'EXPIRED':
+      case "EXPIRED":
         stats.expiredVouchers = stat._count.id;
         break;
-      case 'MATURED':
+      case "MATURED":
         stats.maturedVouchers.count = stat._count.id;
         stats.maturedVouchers.totalAmount = stat._sum.usedCredit || 0;
         break;
-      case 'SETTLED':
+      case "SETTLED":
         stats.settledVouchers.count = stat._count.id;
         stats.settledVouchers.totalAmount = stat._sum.usedCredit || 0;
         break;
@@ -671,10 +678,10 @@ export const submitLoanApplicationService = async (
   // If there are USED or ACTIVE vouchers, check the earliest one
   if (activeUsedVouchers.length > 0 && voucherDays) {
     const earliestVoucher = activeUsedVouchers[0];
-    
+
     if (earliestVoucher.loan?.voucherDays) {
       const existingVoucherDays = earliestVoucher.loan.voucherDays;
-      
+
       if (voucherDays > existingVoucherDays) {
         throw new Error(
           `You can only request up to ${existingVoucherDays} days to match your existing voucher payment terms.`
@@ -731,6 +738,15 @@ export const submitLoanApplicationService = async (
       purpose: loanApplication.purpose,
       voucherDays: loanApplication.voucherDays,
     },
+  });
+
+  await sendAdminVoucherAppliedEmail({
+    userType: "RESTAURANT",
+    userName: restaurant.name,
+    userEmail: restaurant.email,
+    restaurantName: restaurant.name,
+    voucherAmount: requestedAmount,
+    appliedBy: restaurant.name,
   });
 
   // Broadcast loan application submission (if wsManager is available)
@@ -981,6 +997,26 @@ export const approveLoanApplicationService = async (
     return { updatedLoan, voucher };
   });
 
+  const approvedByName = await getUserById(approvedBy);
+  // Send notifications
+  try {
+    await sendMessage(
+      `A ${result.voucher.discountPercentage}% discount voucher worth ${result.voucher.creditLimit} RWF has been issued and approved by ${approvedByName?.name} for restaurant: ${result.updatedLoan.restaurant.name}.`,
+      process.env.PRIVATE_RECEIVER || ""
+    );
+  } catch (smsError) {
+    console.error("Failed to send SMS notification:", smsError);
+  }
+
+  await sendAdminVoucherApprovedEmail({
+    userType: "RESTAURANT",
+    userName: result.updatedLoan.restaurant.name,
+    userEmail: result.updatedLoan.restaurant.email,
+    restaurantName: result.updatedLoan.restaurant.name,
+    voucherAmount: result.voucher.creditLimit,
+    appliedBy: result.updatedLoan.restaurant.name,
+    approvedBy: approvedByName?.name,
+  });
   // Broadcast loan approval
   try {
     const { wsManager } = await import("../index");
