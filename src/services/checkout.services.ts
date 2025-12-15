@@ -334,7 +334,7 @@ export const processPaymentService = async (
             return await debitWalletService({
               walletId: wallet.id,
               amount: order.totalAmount,
-              description: `Payment for order ${orderId} - Order ${order.txOrderId}`,
+              description: `Payment for Order - ${order.orderNumber}`,
               reference: orderId,
               orderId: orderId,
             });
@@ -873,7 +873,7 @@ async function processCardPayment({
       },
       customizations: {
         title: "Food Bundles Payment",
-        description: `Payment for order ${txRef}`,
+        description: `Payment for order `,
         logo: `https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png`,
       },
       payment_options: "card",

@@ -260,7 +260,7 @@ export const getAllVouchersService = async (filters?: {
     where.restaurantId = restaurantId;
   }
 
-  const [vouchers, totalCount] = await Promise.all([
+  const [vouchers, totalCount, voucherStats] = await Promise.all([
     prisma.voucher.findMany({
       where,
       include: {
@@ -282,6 +282,18 @@ export const getAllVouchersService = async (filters?: {
       take: limit,
     }),
     prisma.voucher.count({ where }),
+    // Get voucher statistics
+    prisma.voucher.groupBy({
+      by: ['status'],
+      _count: {
+        id: true,
+      },
+      _sum: {
+        totalCredit: true,
+        usedCredit: true,
+      },
+      where: restaurantId ? { restaurantId } : {},
+    }),
   ]);
 
   // Check and update maturity status for each voucher
@@ -291,8 +303,46 @@ export const getAllVouchersService = async (filters?: {
 
   const totalPages = Math.ceil(totalCount / limit);
 
+  // Process statistics
+  const stats = {
+    totalVouchers: totalCount,
+    activeVouchers: 0,
+    usedVouchers: { count: 0, totalAmount: 0 },
+    suspendedVouchers: 0,
+    expiredVouchers: 0,
+    maturedVouchers: { count: 0, totalAmount: 0 },
+    settledVouchers: { count: 0, totalAmount: 0 },
+  };
+
+  voucherStats.forEach((stat) => {
+    switch (stat.status) {
+      case 'ACTIVE':
+        stats.activeVouchers = stat._count.id;
+        break;
+      case 'USED':
+        stats.usedVouchers.count = stat._count.id;
+        stats.usedVouchers.totalAmount = stat._sum.usedCredit || 0;
+        break;
+      case 'SUSPENDED':
+        stats.suspendedVouchers = stat._count.id;
+        break;
+      case 'EXPIRED':
+        stats.expiredVouchers = stat._count.id;
+        break;
+      case 'MATURED':
+        stats.maturedVouchers.count = stat._count.id;
+        stats.maturedVouchers.totalAmount = stat._sum.usedCredit || 0;
+        break;
+      case 'SETTLED':
+        stats.settledVouchers.count = stat._count.id;
+        stats.settledVouchers.totalAmount = stat._sum.usedCredit || 0;
+        break;
+    }
+  });
+
   return {
     vouchers: updatedVouchers,
+    statistics: stats,
     pagination: {
       page,
       limit,
@@ -596,61 +646,40 @@ export const submitLoanApplicationService = async (
     );
   }
 
-  // Check for existing loans with repayment due dates (approved/disbursed loans)
-  const loansWithDueDates = await prisma.loanApplication.findMany({
+  // Check for vouchers with USED and ACTIVE status (not SETTLED)
+  const activeUsedVouchers = await prisma.voucher.findMany({
     where: {
       restaurantId,
-      status: { in: [LoanStatus.APPROVED, LoanStatus.PAID] },
-      repaymentDueDate: { not: null },
+      status: { in: [VoucherStatus.USED, VoucherStatus.ACTIVE] }, // Check both USED and ACTIVE vouchers
     },
-    orderBy: { createdAt: "asc" }, // Get first loan created
-  });
-
-  // Also check if there are any active loans that would conflict
-  const pendingLoans = await prisma.loanApplication.findMany({
-    where: {
-      restaurantId,
-      status: {
-        in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.DISBURSED],
+    include: {
+      loan: {
+        select: {
+          repaymentDueDate: true,
+          voucherDays: true,
+          createdAt: true,
+        },
       },
-      voucherDays: { not: null },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: {
+      loan: {
+        repaymentDueDate: "asc", // Get voucher with earliest due date
+      },
+    },
   });
 
-  // Priority 1: Check loans with actual due dates (approved/disbursed)
-  if (loansWithDueDates.length > 0 && voucherDays) {
-    const firstLoan = loansWithDueDates[0];
-    const now = new Date();
-    const dueDate = new Date(firstLoan.repaymentDueDate!);
-    const diffMs = dueDate.getTime() - now.getTime();
-
-    if (diffMs > 0) {
-      const remainingDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const remainingHours = Math.floor(
-        (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-      );
-      const remainingMinutes = Math.floor(
-        (diffMs % (1000 * 60 * 60)) / (1000 * 60)
-      );
-
-      if (voucherDays > remainingDays) {
+  // If there are USED or ACTIVE vouchers, check the earliest one
+  if (activeUsedVouchers.length > 0 && voucherDays) {
+    const earliestVoucher = activeUsedVouchers[0];
+    
+    if (earliestVoucher.loan?.voucherDays) {
+      const existingVoucherDays = earliestVoucher.loan.voucherDays;
+      
+      if (voucherDays > existingVoucherDays) {
         throw new Error(
-          `You can only request up to ${remainingDays} days (${remainingHours}h ${remainingMinutes}m) based on your active voucher.`
+          `You can only request up to ${existingVoucherDays} days to match your existing voucher payment terms.`
         );
       }
-    }
-  }
-  // Priority 2: If no approved loans, check pending loans
-  else if (pendingLoans.length > 0 && voucherDays) {
-    const firstPendingLoan = pendingLoans[0];
-    if (
-      firstPendingLoan.voucherDays &&
-      voucherDays > firstPendingLoan.voucherDays
-    ) {
-      throw new Error(
-        `You can only request up to ${firstPendingLoan.voucherDays} days to match your first unpaid loan application.`
-      );
     }
   }
 

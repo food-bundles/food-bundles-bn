@@ -117,6 +117,21 @@ interface VoucherTransactionUpdate {
   };
 }
 
+interface WalletUpdate {
+  walletId: string;
+  restaurantId: string;
+  action: "TOP_UP" | "DEBIT" | "REFUND" | "BALANCE_UPDATE";
+  timestamp: string;
+  data?: {
+    transactionId?: string;
+    amount?: number;
+    newBalance?: number;
+    previousBalance?: number;
+    description?: string;
+    status?: string;
+  };
+}
+
 class WebSocketManager {
   private wss: WebSocketServer | null = null;
   private clients: Map<string, WebSocketClient> = new Map();
@@ -243,6 +258,19 @@ class WebSocketManager {
           this.sendMessage(client.ws, {
             type: "SUBSCRIPTION_CONFIRMED",
             subscription: "loans:all",
+            timestamp: new Date().toISOString(),
+          });
+        }
+        break;
+
+      // Subscribe to wallet updates
+      case "SUBSCRIBE_WALLET":
+        if (message.restaurantId) {
+          client.subscriptions.add(`wallet:${message.restaurantId}`);
+
+          this.sendMessage(client.ws, {
+            type: "SUBSCRIPTION_CONFIRMED",
+            subscription: `wallet:${message.restaurantId}`,
             timestamp: new Date().toISOString(),
           });
         }
@@ -435,6 +463,25 @@ class WebSocketManager {
 
     console.log(
       `Voucher transaction update broadcasted for voucher ${transactionUpdate.voucherId}`
+    );
+  }
+
+  /**
+   * Broadcast wallet updates
+   */
+  broadcastWalletUpdate(walletUpdate: WalletUpdate) {
+    if (!this.wss) return;
+
+    const subscription = `wallet:${walletUpdate.restaurantId}`;
+    const message = {
+      type: "WALLET_UPDATE",
+      data: walletUpdate,
+    };
+
+    this.broadcastToSubscription(subscription, message);
+
+    console.log(
+      `Wallet update broadcasted: ${walletUpdate.action} - ${walletUpdate.walletId}`
     );
   }
 
