@@ -310,7 +310,6 @@ components:
         - type: object
           required:
             - name
-            - email
             - tin
             - password
           properties:

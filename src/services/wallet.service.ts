@@ -191,7 +191,7 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
           phoneNumber: cleanedPhone,
           txRef,
           orderId: pendingTransaction.id,
-          email: wallet.restaurant.email,
+          email: wallet.restaurant.email || "",
           fullname: wallet.restaurant.name,
           currency: wallet.currency,
         });
@@ -708,15 +708,19 @@ export const verifyWalletTopUpService = async (transactionId: string) => {
 
         // Send notification email
         try {
-          await sendWalletNotificationEmail({
-            email: walletTransaction.wallet.restaurant.email,
-            restaurantName: walletTransaction.wallet.restaurant.name,
-            type: "TOP_UP",
-            amount: walletTransaction.amount,
-            newBalance,
-            transactionId: response.data.flw_ref || walletTransaction.id,
-            paymentMethod: walletTransaction.paymentMethod || "Unknown",
-          });
+          console.log("Sending wallet top up email...");
+          {
+            walletTransaction.wallet.restaurant.email &&
+              (await sendWalletNotificationEmail({
+                email: walletTransaction.wallet.restaurant.email,
+                restaurantName: walletTransaction.wallet.restaurant.name,
+                type: "TOP_UP",
+                amount: walletTransaction.amount,
+                newBalance,
+                transactionId: response.data.flw_ref || walletTransaction.id,
+                paymentMethod: walletTransaction.paymentMethod || "Unknown",
+              }));
+          }
         } catch (emailError) {
           console.log("Failed to send wallet notification email:", emailError);
         }
@@ -818,7 +822,7 @@ async function processMobileMoneyTopUp(
         tx_ref: params.txRef,
         amount: params.amount.toString(),
         currency: params.currency,
-        redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/wallet/confirmation`,
+        redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/deposits`,
         customer: {
           email: params.email,
           name: params.fullname,
@@ -889,7 +893,7 @@ async function processCardTopUp(params: any) {
       tx_ref: params.txRef,
       amount: params.amount.toString(),
       currency: params.currency,
-      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/wallet/confirmation`,
+      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/deposits`,
       customer: {
         email: params.email,
         name: params.fullname,

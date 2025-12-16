@@ -743,7 +743,7 @@ export const submitLoanApplicationService = async (
   await sendAdminVoucherAppliedEmail({
     userType: "RESTAURANT",
     userName: restaurant.name,
-    userEmail: restaurant.email,
+    userEmail: restaurant.email || "",
     restaurantName: restaurant.name,
     voucherAmount: requestedAmount,
     appliedBy: restaurant.name,
@@ -1011,7 +1011,7 @@ export const approveLoanApplicationService = async (
   await sendAdminVoucherApprovedEmail({
     userType: "RESTAURANT",
     userName: result.updatedLoan.restaurant.name,
-    userEmail: result.updatedLoan.restaurant.email,
+    userEmail: result.updatedLoan.restaurant.email || "",
     restaurantName: result.updatedLoan.restaurant.name,
     voucherAmount: result.voucher.creditLimit,
     appliedBy: result.updatedLoan.restaurant.name,
@@ -1401,7 +1401,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
     restaurantId,
     voucherId,
     paymentReference,
-    email: restaurant.email,
+    email: restaurant.email || "",
     fullname: restaurant.name,
   });
 

@@ -51,7 +51,7 @@ model Farmer {
 model Restaurant {
   id    String  @id @default(uuid())
   name  String
-  email String  @unique
+  email String?  @unique
   phone String? @unique
   tin   String  @unique
 
