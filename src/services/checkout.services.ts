@@ -294,7 +294,7 @@ export const processPaymentService = async (
           phoneNumber: paymentData.phoneNumber!,
           txRef: order.txRef!,
           orderId: order.txOrderId!,
-          email: order.restaurant.email,
+          email: order.restaurant.email || order.billingEmail || "",
           fullname: order.restaurant.name,
           currency: order.currency || "RWF",
         });
@@ -304,7 +304,7 @@ export const processPaymentService = async (
         paymentResult = await processCardPayment({
           amount: order.totalAmount,
           txRef: order.txRef!,
-          email: order.billingEmail || order.restaurant.email,
+          email: order.billingEmail || order.restaurant.email || "",
           fullname: order.billingName || order.restaurant.name,
           phoneNumber: paymentData.phoneNumber || order.billingPhone || "",
           currency: order.currency || "RWF",
@@ -316,7 +316,7 @@ export const processPaymentService = async (
         paymentResult = await processBankTransfer({
           amount: order.totalAmount,
           txRef: order.txRef!,
-          email: order.billingEmail || order.restaurant.email,
+          email: order.billingEmail || order.restaurant.email || "",
           phoneNumber: paymentData.phoneNumber || order.billingPhone || "",
           currency: order.currency || "RWF",
           clientIp: paymentData.bankDetails?.clientIp || order.clientIp || "",
@@ -1273,7 +1273,7 @@ export const createAdminOrderService = async (data: CreateAdminOrderData) => {
     requestedDelivery: deliveryDate,
     paymentMethod,
     billingName: restaurant.name,
-    billingEmail: restaurant.email,
+    billingEmail: restaurant.email || "",
     billingPhone: phoneNumber || restaurant.phone || undefined,
     billingAddress: "",
     cardDetails: {

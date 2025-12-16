@@ -914,7 +914,7 @@ async function processSubscriptionPayment(
       await sendAdminSubscriptionPaidEmail({
         userType: "RESTAURANT",
         userName: subscription.restaurant.name,
-        userEmail: subscription.restaurant.email,
+        userEmail: subscription.restaurant.email || "",
         restaurantName: subscription.restaurant.name,
         subscriptionPlan: subscription.plan.name,
         amount: subscription.plan.price,

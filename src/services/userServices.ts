@@ -350,8 +350,8 @@ export const createRestaurantService = async (
   } = restaurantData;
 
   // Require fields
-  if (!name || !email || !password) {
-    throw new Error("Name, email, and password are required for restaurants");
+  if (!name || !password) {
+    throw new Error("Name, and password are required for restaurants");
   }
 
   if (!tin) {
