@@ -119,7 +119,7 @@ walletRoutes.get(
  * Access: Admin only
  */
 walletRoutes.patch(
-  "/:walletId/status",
+  "/:walletId",
   isAuthenticated,
   checkPermission("ADMIN"),
   updateWalletStatus
