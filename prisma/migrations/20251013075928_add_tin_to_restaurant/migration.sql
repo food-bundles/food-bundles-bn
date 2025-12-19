@@ -408,8 +408,6 @@ CREATE TABLE "Voucher" (
     "voucherType" "VoucherType" NOT NULL,
     "discountPercentage" DOUBLE PRECISION NOT NULL,
     "creditLimit" DOUBLE PRECISION NOT NULL,
-    "minTransactionAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "maxTransactionAmount" DOUBLE PRECISION,
     "totalCredit" DOUBLE PRECISION NOT NULL,
     "usedCredit" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "remainingCredit" DOUBLE PRECISION NOT NULL,
