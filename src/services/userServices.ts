@@ -1184,6 +1184,8 @@ export const createRestaurantByAdminService = async (
 
   try {
     const generatedPassword = generateRestaurantPassword();
+    console.log("Generated password: ", generatedPassword);
+    console.log("Phone number for SMS: ", phone);
     const hashedPassword = await hashPassword(generatedPassword);
 
     const restaurant = await prisma.restaurant.create({
@@ -1199,7 +1201,11 @@ export const createRestaurantByAdminService = async (
       },
     });
 
-    await sendPasswordSMS(phone, generatedPassword, "restaurant");
+    try {
+      await sendPasswordSMS(phone, generatedPassword, "restaurant");
+    } catch (smsError: any) {
+      console.error("SMS sending failed:", smsError.message);
+    }
 
     const { password: _, ...restaurantWithoutPassword } = restaurant;
     return restaurantWithoutPassword;

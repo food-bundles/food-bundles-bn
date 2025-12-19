@@ -84,6 +84,26 @@ async function processWalletTransaction(
       ]);
     });
 
+    try {
+      wsManager.broadcastWalletUpdate({
+        walletId: walletTransaction.walletId,
+        restaurantId: walletTransaction.wallet.restaurantId,
+        action: "TOP_UP",
+        timestamp: new Date().toISOString(),
+        data: {
+          transactionId: walletTransaction.id,
+          amount: walletTransaction.amount,
+          newBalance,
+          previousBalance: walletTransaction.wallet.balance,
+          description: walletTransaction.description ?? undefined,
+          status: "COMPLETED",
+        },
+      });
+      console.log(`Broadcasted wallet update: ${walletTransaction.walletId}`);
+    } catch (wsError) {
+      console.error("Failed to broadcast wallet update:", wsError);
+    }
+
     // Send notification
     try {
       await sendMessage(
@@ -156,17 +176,19 @@ async function processVoucherRepaymentPayment(
     await retryDatabaseOperation(async () => {
       return await prisma.$transaction(async (tx) => {
         // Update voucher credit for successful payment
-        await tx.voucher.update({
-          where: { id: repaymentTransaction.voucherId! },
-          data: {
-            remainingCredit: {
-              increment: repaymentTransaction.amount,
+        if (repaymentTransaction.voucherId) {
+          await tx.voucher.update({
+            where: { id: repaymentTransaction.voucherId },
+            data: {
+              remainingCredit: {
+                increment: repaymentTransaction.amount,
+              },
+              totalCredit: {
+                increment: repaymentTransaction.amount,
+              },
             },
-            totalCredit: {
-              increment: repaymentTransaction.amount,
-            },
-          },
-        });
+          });
+        }
 
         // If there's a loan, check if it's fully paid
         if (repaymentTransaction.loanId) {
