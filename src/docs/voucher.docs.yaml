@@ -54,17 +54,6 @@ components:
           format: float
           description: Available credit balance
           example: 350000
-        minTransactionAmount:
-          type: number
-          format: float
-          description: Minimum transaction amount
-          example: 10000
-        maxTransactionAmount:
-          type: number
-          format: float
-          nullable: true
-          description: Maximum transaction amount
-          example: 100000
         status:
           type: string
           enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
@@ -99,6 +88,7 @@ components:
         - restaurantId
         - voucherType
         - creditLimit
+        - repaymentDays
       properties:
         restaurantId:
           type: string
@@ -115,18 +105,11 @@ components:
           minimum: 1000
           description: Total credit limit
           example: 500000
-        minTransactionAmount:
+        repaymentDays:
           type: number
-          format: float
-          default: 0
-          description: Minimum transaction amount
-          example: 10000
-        maxTransactionAmount:
-          type: number
-          format: float
-          nullable: true
-          description: Maximum transaction amount
-          example: 100000
+          minimum: 1
+          description: Number of repayment days
+          example: 30
         loanId:
           type: string
           nullable: true
@@ -247,6 +230,7 @@ components:
       type: object
       required:
         - requestedAmount
+        - voucherDays
       properties:
         requestedAmount:
           type: number
@@ -254,6 +238,11 @@ components:
           minimum: 10000
           description: Loan amount requested
           example: 1000000
+        voucherDays:
+          type: number
+          minimum: 1
+          description: Number of repayment days
+          example: 30
         purpose:
           type: string
           description: Purpose/justification for the loan
@@ -592,8 +581,6 @@ paths:
                   restaurantId: "rest-12345"
                   voucherType: "DISCOUNT_20"
                   creditLimit: 500000
-                  minTransactionAmount: 10000
-                  maxTransactionAmount: 100000
                   expiryDate: "2029-12-31T23:59:59Z"
               discount_50:
                 summary: 50% Discount Voucher
@@ -601,7 +588,6 @@ paths:
                   restaurantId: "rest-67890"
                   voucherType: "DISCOUNT_50"
                   creditLimit: 1000000
-                  minTransactionAmount: 50000
                   expiryDate: "2024-06-30T23:59:59Z"
       responses:
         201:
@@ -810,12 +796,6 @@ paths:
                 expiryDate:
                   type: string
                   format: date-time
-                maxTransactionAmount:
-                  type: number
-                  format: float
-                minTransactionAmount:
-                  type: number
-                  format: float
       responses:
         200:
           description: Voucher updated successfully

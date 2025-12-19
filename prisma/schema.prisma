@@ -51,7 +51,7 @@ model Farmer {
 model Restaurant {
   id    String  @id @default(uuid())
   name  String
-  email String?  @unique
+  email String? @unique
   phone String? @unique
   tin   String  @unique
 
@@ -403,7 +403,7 @@ model CartItem {
 model Order {
   id           String      @id @default(uuid())
   restaurantId String
-  orderedBy String?
+  orderedBy    String?
   logisticsId  String?
   orderNumber  String      @unique
   status       OrderStatus @default(PENDING)
@@ -482,7 +482,7 @@ model Order {
 
   // Relations
   restaurant         Restaurant           @relation(fields: [restaurantId], references: [id])
-  affiliator          Affiliator?          @relation(fields: [orderedBy], references: [id])
+  affiliator         Affiliator?          @relation(fields: [orderedBy], references: [id])
   orderItems         OrderItem[]
   logistics          Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
   cart               Cart?                @relation(fields: [cartId], references: [id])
@@ -738,10 +738,8 @@ model Voucher {
   discountPercentage Float // 10, 20, 50, 80, 100
 
   // Credit limits
-  creditLimit          Float
-  minTransactionAmount Float           @default(0)
-  maxTransactionAmount Float?
-  currency             VoucherCurrency @default(RWF)
+  creditLimit Float
+  currency    VoucherCurrency @default(RWF)
 
   // Credit tracking
   totalCredit     Float
@@ -757,6 +755,9 @@ model Voucher {
   // Relations
   restaurantId String
   loanId       String?
+
+  // Repayment days
+  repaymentDays Int @default(7)
 
   // Service fee
   serviceFeeRate Float @default(0) // 0% service fee
@@ -786,6 +787,9 @@ model LoanApplication {
   requestedAmount Float
   purpose         String?
 
+  // Repayment days (from voucher or explicitly set)
+  repaymentDays Int?
+
   // Approval workflow
   status         LoanStatus @default(PENDING)
   approvedAmount Float?
@@ -793,11 +797,10 @@ model LoanApplication {
 
   // Dates
   disbursementDate DateTime?
-  repaymentDueDate DateTime? // 30 days from disbursement
+  repaymentDueDate DateTime? // Calculated based on repaymentDays
 
   // Additional info
-  voucherDays Int?
-  notes       String?
+  notes String?
 
   // Timestamps
   createdAt  DateTime  @default(now())

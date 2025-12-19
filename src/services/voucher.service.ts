@@ -24,6 +24,7 @@ import {
 } from "../utils/emailTemplates";
 import { sendMessage } from "../utils/sms.utility";
 import { getUserById } from "./userGets";
+import { retryDatabaseOperation } from "../utils/db-retry.utls";
 
 // Payment processing functions
 const flw = require("flutterwave-node-v3");
@@ -42,8 +43,7 @@ interface CreateVoucherData {
     | "DISCOUNT_80"
     | "DISCOUNT_100";
   creditLimit: number;
-  minTransactionAmount?: number;
-  maxTransactionAmount?: number;
+  repaymentDays: number;
   expiryDate?: Date;
   loanId?: string;
   approvedBy?: string;
@@ -53,13 +53,13 @@ interface CreateLoanApplicationData {
   restaurantId: string;
   requestedAmount: number;
   purpose?: string;
-  voucherDays?: number;
+  voucherDays: number;
 }
 
 interface ApproveLoanData {
   approvedAmount: number;
   approvedBy: string;
-  repaymentDays?: number; // Default 30 days
+  repaymentDays: number; // Default 30 days
   voucherType:
     | "DISCOUNT_10"
     | "DISCOUNT_20"
@@ -83,6 +83,11 @@ interface RepaymentData {
   paymentReference?: string;
 }
 
+interface LoanEligibilityCheck {
+  isEligible: boolean;
+  reason: string;
+}
+
 // ============================================
 // VOUCHER CRUD SERVICES
 // ============================================
@@ -95,8 +100,7 @@ export const createVoucherService = async (data: CreateVoucherData) => {
     restaurantId,
     voucherType,
     creditLimit,
-    minTransactionAmount = 0,
-    maxTransactionAmount,
+    repaymentDays,
     expiryDate,
     loanId,
     approvedBy,
@@ -128,55 +132,80 @@ export const createVoucherService = async (data: CreateVoucherData) => {
 
   const discountPercentage = discountMap[voucherType];
 
-  // Create voucher
-  const voucher = await prisma.voucher.create({
-    data: {
-      voucherCode,
-      voucherType,
-      discountPercentage,
-      creditLimit,
-      totalCredit: creditLimit,
-      remainingCredit: creditLimit,
-      minTransactionAmount,
-      maxTransactionAmount,
-      expiryDate,
-      restaurantId,
-      loanId,
-      status: VoucherStatus.ACTIVE,
-      approvedBy,
-    },
-    include: {
-      restaurant: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
+  // Create voucher and loan application in a transaction
+  const result = await prisma.$transaction(async (tx) => {
+    // Create loan application if not provided
+    let finalLoanId = loanId;
+    if (!finalLoanId) {
+      const loanApplication = await tx.loanApplication.create({
+        data: {
+          restaurantId,
+          requestedAmount: creditLimit,
+          repaymentDays,
+          status: LoanStatus.APPROVED,
+          purpose: `Loan application for voucher ${voucherCode}`,
         },
+      });
+      finalLoanId = loanApplication.id;
+    } else {
+      // Update existing loan with repayment days if provided
+      await tx.loanApplication.update({
+        where: { id: loanId },
+        data: { repaymentDays },
+      });
+    }
+
+    // Create voucher
+    const voucher = await tx.voucher.create({
+      data: {
+        voucherCode,
+        voucherType,
+        discountPercentage,
+        creditLimit,
+        totalCredit: creditLimit,
+        remainingCredit: creditLimit,
+        repaymentDays,
+        expiryDate,
+        restaurantId,
+        loanId,
+        status: VoucherStatus.ACTIVE,
+        approvedBy,
       },
-      loan: true,
-    },
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        loan: true,
+      },
+    });
+
+    return voucher;
   });
 
   // Broadcast voucher creation
   try {
     wsManager.broadcastVoucherUpdate({
-      voucherId: voucher.id,
-      voucherCode: voucher.voucherCode,
+      voucherId: result.id,
+      voucherCode: result.voucherCode,
       action: "CREATED",
       timestamp: new Date().toISOString(),
-      restaurantId: voucher.restaurantId,
+      restaurantId: result.restaurantId,
       data: {
-        remainingCredit: voucher.remainingCredit,
-        totalCredit: voucher.totalCredit,
-        discountPercentage: voucher.discountPercentage,
-        status: voucher.status,
+        remainingCredit: result.remainingCredit,
+        totalCredit: result.totalCredit,
+        discountPercentage: result.discountPercentage,
+        status: result.status,
       },
     });
   } catch (error) {
     console.error("Failed to broadcast voucher creation:", error);
   }
 
-  return voucher;
+  return result;
 };
 
 /**
@@ -541,13 +570,7 @@ export const getAvailableVouchersForCheckoutService = async (
       restaurantId,
       status: VoucherStatus.ACTIVE,
       remainingCredit: { gte: orderAmount },
-      minTransactionAmount: { lte: orderAmount },
-      OR: [
-        { maxTransactionAmount: null },
-        { maxTransactionAmount: { gte: orderAmount } },
-        { expiryDate: null },
-        { expiryDate: { gte: new Date() } },
-      ],
+      OR: [{ expiryDate: null }, { expiryDate: { gte: new Date() } }],
     },
     include: {
       loan: true,
@@ -574,8 +597,6 @@ export const updateVoucherService = async (
   data: {
     status?: VoucherStatus;
     expiryDate?: Date;
-    maxTransactionAmount?: number;
-    minTransactionAmount?: number;
   }
 ) => {
   const voucher = await prisma.voucher.update({
@@ -586,6 +607,23 @@ export const updateVoucherService = async (
       loan: true,
     },
   });
+
+  // Find and update associated loan application if exists
+  if (voucher.loan) {
+    await prisma.loanApplication.update({
+      where: { id: voucher.loan.id },
+      data: {
+        status:
+          voucher.status === VoucherStatus.ACTIVE
+            ? LoanStatus.APPROVED
+            : voucher.status === VoucherStatus.SUSPENDED
+            ? LoanStatus.REJECTED
+            : voucher.status === VoucherStatus.SETTLED
+            ? LoanStatus.SETTLED
+            : voucher.loan.status,
+      },
+    });
+  }
 
   return voucher;
 };
@@ -636,58 +674,13 @@ export const submitLoanApplicationService = async (
   const { restaurantId, requestedAmount, purpose, voucherDays } = data;
 
   // Check loan eligibility
-  const eligibility = await checkLoanEligibilityService(restaurantId);
+  const eligibility = await checkLoanEligibilityService(
+    restaurantId,
+    voucherDays
+  );
 
   if (!eligibility.isEligible) {
     throw new Error(eligibility.reason);
-  }
-
-  // Get subscription info to validate voucher days
-  const subscriptionInfo = await checkRestaurantSubscription(restaurantId);
-  const maxVoucherDays = subscriptionInfo.plan.voucherPaymentDays;
-
-  // Validate voucherDays against subscription limit
-  if (voucherDays && voucherDays > maxVoucherDays) {
-    throw new Error(
-      `Voucher days cannot exceed ${maxVoucherDays} days as per your subscription plan`
-    );
-  }
-
-  // Check for vouchers with USED and ACTIVE status (not SETTLED)
-  const activeUsedVouchers = await prisma.voucher.findMany({
-    where: {
-      restaurantId,
-      status: { in: [VoucherStatus.USED, VoucherStatus.ACTIVE] }, // Check both USED and ACTIVE vouchers
-    },
-    include: {
-      loan: {
-        select: {
-          repaymentDueDate: true,
-          voucherDays: true,
-          createdAt: true,
-        },
-      },
-    },
-    orderBy: {
-      loan: {
-        repaymentDueDate: "asc", // Get voucher with earliest due date
-      },
-    },
-  });
-
-  // If there are USED or ACTIVE vouchers, check the earliest one
-  if (activeUsedVouchers.length > 0 && voucherDays) {
-    const earliestVoucher = activeUsedVouchers[0];
-
-    if (earliestVoucher.loan?.voucherDays) {
-      const existingVoucherDays = earliestVoucher.loan.voucherDays;
-
-      if (voucherDays > existingVoucherDays) {
-        throw new Error(
-          `You can only request up to ${existingVoucherDays} days to match your existing voucher payment terms.`
-        );
-      }
-    }
   }
 
   // Validate restaurant
@@ -710,7 +703,7 @@ export const submitLoanApplicationService = async (
       restaurantId,
       requestedAmount,
       purpose,
-      voucherDays,
+      repaymentDays: voucherDays,
       status: LoanStatus.PENDING,
     },
     include: {
@@ -736,7 +729,7 @@ export const submitLoanApplicationService = async (
       restaurantId: loanApplication.restaurantId,
       requestedAmount: loanApplication.requestedAmount,
       purpose: loanApplication.purpose,
-      voucherDays: loanApplication.voucherDays,
+      voucherDays: loanApplication.repaymentDays,
     },
   });
 
@@ -882,15 +875,6 @@ export const approveLoanApplicationService = async (
     throw new Error(`Cannot approve loan with status: ${loan.status}`);
   }
 
-  // Get subscription info to use voucherPaymentDays
-  const subscriptionInfo = await checkRestaurantSubscription(loan.restaurantId);
-
-  // Use loan's voucherDays, then repaymentDays, then subscription's voucherPaymentDays
-  const finalRepaymentDays =
-    loan.voucherDays ||
-    repaymentDays ||
-    subscriptionInfo.plan.voucherPaymentDays;
-
   // For multiple loans, ensure they all have the same deadline as the first loan
   const existingActiveLoans = await prisma.loanApplication.findMany({
     where: {
@@ -913,7 +897,7 @@ export const approveLoanApplicationService = async (
   } else {
     // Calculate new due date based on finalRepaymentDays
     repaymentDueDate = new Date();
-    repaymentDueDate.setDate(repaymentDueDate.getDate() + finalRepaymentDays);
+    repaymentDueDate.setDate(repaymentDueDate.getDate() + repaymentDays);
   }
 
   // Calculate dates
@@ -924,6 +908,7 @@ export const approveLoanApplicationService = async (
   expiryDate.setDate(expiryDate.getDate() + 2); // Voucher valid for 2 days
 
   // Approve loan + create voucher in a transaction
+
   const result = await prisma.$transaction(async (tx) => {
     // Update loan to approved
     const updatedLoan = await tx.loanApplication.update({
@@ -936,6 +921,7 @@ export const approveLoanApplicationService = async (
         notes,
         disbursementDate,
         repaymentDueDate,
+        repaymentDays,
       },
       include: {
         restaurant: true,
@@ -961,7 +947,7 @@ export const approveLoanApplicationService = async (
         creditLimit: approvedAmount,
         totalCredit: approvedAmount,
         remainingCredit: approvedAmount,
-        minTransactionAmount: 0,
+        repaymentDays,
         expiryDate,
         restaurantId: updatedLoan.restaurantId,
         loanId: updatedLoan.id,
@@ -1017,6 +1003,7 @@ export const approveLoanApplicationService = async (
     appliedBy: result.updatedLoan.restaurant.name,
     approvedBy: approvedByName?.name,
   });
+
   // Broadcast loan approval
   try {
     const { wsManager } = await import("../index");
@@ -1090,8 +1077,10 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
       restaurantId: loan.restaurantId,
       voucherType,
       creditLimit: loan.approvedAmount ?? 0,
+      repaymentDays: loan.repaymentDays ?? 0,
       expiryDate,
       loanId: loan.id,
+      approvedBy: adminId,
     });
 
     // Update loan status
@@ -1340,19 +1329,6 @@ function validateVoucherEligibility(
   // Check expiry
   if (voucher.expiryDate && new Date() > new Date(voucher.expiryDate)) {
     throw new Error("Voucher has expired");
-  }
-
-  // Check min/max transaction amounts
-  if (amount < voucher.minTransactionAmount) {
-    throw new Error(
-      `Transaction amount must be at least ${voucher.minTransactionAmount}`
-    );
-  }
-
-  if (voucher.maxTransactionAmount && amount > voucher.maxTransactionAmount) {
-    throw new Error(
-      `Transaction amount cannot exceed ${voucher.maxTransactionAmount}`
-    );
   }
 
   // Check remaining credit
@@ -1952,24 +1928,6 @@ export const validateVoucherForCheckoutService = async (
       };
     }
 
-    // Check min/max transaction amounts
-    if (orderAmount < voucher.minTransactionAmount) {
-      return {
-        valid: false,
-        error: `Minimum order amount is ${voucher.minTransactionAmount}`,
-      };
-    }
-
-    if (
-      voucher.maxTransactionAmount &&
-      orderAmount > voucher.maxTransactionAmount
-    ) {
-      return {
-        valid: false,
-        error: `Maximum order amount is ${voucher.maxTransactionAmount}`,
-      };
-    }
-
     // Check remaining credit
     if (voucher.remainingCredit <= 0) {
       return {
@@ -2131,105 +2089,111 @@ export const checkRestaurantSubscription = async (restaurantId: string) => {
  * Check if restaurant can request a new loan
  * Returns eligibility status and details
  */
-export const checkLoanEligibilityService = async (restaurantId: string) => {
-  // Check subscription and voucher access
+export const checkLoanEligibilityService = async (
+  restaurantId: string,
+  requestedRepaymentDays: number
+): Promise<LoanEligibilityCheck> => {
+  // Get subscription info to validate voucher days
   const subscriptionInfo = await checkRestaurantSubscription(restaurantId);
+  const maxVoucherDays = subscriptionInfo.plan.voucherPaymentDays;
 
-  // Get all active loans (PENDING, APPROVED, PAID - not REJECTED or SETTLED)
-  const activeLoans = await prisma.loanApplication.findMany({
+  // Validate voucherDays against subscription limit
+  if (requestedRepaymentDays && requestedRepaymentDays > maxVoucherDays) {
+    return {
+      isEligible: false,
+      reason: `Requested repayment days (${requestedRepaymentDays}) exceeds the maximum voucher payment days (${maxVoucherDays}). Please choose a lower number of repayment days.`,
+    };
+  }
+
+  // Get all vouchers for the restaurant excluding EXPIRED, SETTLED, SUSPENDED
+  const vouchers = await prisma.voucher.findMany({
     where: {
       restaurantId,
       status: {
-        in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.PAID],
+        notIn: ["EXPIRED", "SETTLED", "SUSPENDED"],
       },
     },
     include: {
-      vouchers: true,
+      loan: {
+        select: {
+          id: true,
+          status: true,
+          repaymentDueDate: true,
+          repaymentDays: true,
+        },
+      },
     },
     orderBy: {
-      createdAt: "desc",
+      createdAt: "asc", // Get oldest first for comparison
     },
   });
 
-  const now = new Date();
-  const voucherPaymentDays = subscriptionInfo.plan.voucherPaymentDays;
+  // Check and update maturity status for each voucher
+  for (const voucher of vouchers) {
+    await checkAndUpdateVoucherMaturity(voucher);
+  }
 
-  // Check each loan's payment deadline
-  const loansExceedingDeadline = activeLoans.filter((loan) => {
-    if (!loan.repaymentDueDate) return false;
-
-    const dueDate = new Date(loan.repaymentDueDate);
-    const daysSinceDue = Math.floor(
-      (now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    // Use loan's voucherDays if available, otherwise use subscription's voucherPaymentDays
-    const loanVoucherDays = loan.voucherDays || voucherPaymentDays;
-    return daysSinceDue > loanVoucherDays;
+  // Re-fetch vouchers after maturity check to get updated statuses
+  const updatedVouchers = await prisma.voucher.findMany({
+    where: {
+      restaurantId,
+      status: {
+        notIn: ["EXPIRED", "SETTLED", "SUSPENDED"],
+      },
+    },
+    include: {
+      loan: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
   });
 
-  const hasOverdueLoans = loansExceedingDeadline.length > 0;
+  if (updatedVouchers.length === 0) {
+    return {
+      isEligible: true,
+      reason: "No existing vouchers found. Eligible for new voucher.",
+    };
+  }
 
-  // Calculate statistics
-  const totalActiveLoans = activeLoans.length;
-  const pendingLoans = activeLoans.filter(
-    (l) => l.status === LoanStatus.PENDING
-  ).length;
-  const approvedLoans = activeLoans.filter(
-    (l) => l.status === LoanStatus.APPROVED
-  ).length;
-  const paidLoans = activeLoans.filter(
-    (l) => l.status === LoanStatus.PAID
-  ).length;
+  // Count vouchers by status
+  const maturedVouchers = updatedVouchers.filter((v) => v.status === "MATURED");
 
-  // Eligibility decision
-  const isEligible = !hasOverdueLoans;
+  // Check for any MATURED vouchers - these must be settled first
+  if (maturedVouchers.length > 0) {
+    const maturedCodes = maturedVouchers.map((v) => v.voucherCode).join(", ");
+    return {
+      isEligible: false,
+      reason: `You have ${maturedVouchers.length} matured voucher(s) that need to be settled: ${maturedCodes}. Please settle these before requesting new credit.`,
+    };
+  }
 
+  // Check for vouchers with repayment days
+  const vouchersWithRepaymentDays = updatedVouchers.filter(
+    (v) => v.repaymentDays && v.repaymentDays > 0
+  );
+
+  // Get the first voucher with repayment days (oldest)
+  const firstVoucher = vouchersWithRepaymentDays[0];
+  const firstVoucherRepaymentDays = firstVoucher.repaymentDays;
+
+  // Check repayment days limitation based on first voucher
+  if (requestedRepaymentDays >= firstVoucherRepaymentDays) {
+    return {
+      isEligible: false,
+      reason: `Cannot request voucher with ${requestedRepaymentDays} repayment days. Maximum allowed is ${
+        firstVoucherRepaymentDays - 1
+      } days (less than your first voucher's ${firstVoucherRepaymentDays} days).`,
+    };
+  }
+
+  // If no repayment days specified, provide guidance
   return {
-    isEligible,
-    reason: hasOverdueLoans
-      ? `You have ${loansExceedingDeadline.length} loan(s) that exceeded the ${voucherPaymentDays}-day payment deadline. Please settle overdue loans before requesting new ones.`
-      : "You are eligible to request a new loan.",
-    subscription: {
-      planName: subscriptionInfo.plan.name,
-      voucherPaymentDays,
-      hasVoucherAccess: subscriptionInfo.plan.voucherAccess,
-    },
-    loanStatistics: {
-      totalActiveLoans,
-      pendingLoans,
-      approvedLoans,
-      paidLoans,
-      overdueLoans: loansExceedingDeadline.length,
-    },
-    overdueLoans: loansExceedingDeadline.map((loan) => ({
-      id: loan.id,
-      requestedAmount: loan.requestedAmount,
-      approvedAmount: loan.approvedAmount,
-      repaymentDueDate: loan.repaymentDueDate,
-      daysSinceDue: loan.repaymentDueDate
-        ? Math.floor(
-            (now.getTime() - new Date(loan.repaymentDueDate).getTime()) /
-              (1000 * 60 * 60 * 24)
-          )
-        : 0,
-      status: loan.status,
-    })),
-    withinDeadlineLoans: activeLoans
-      .filter((loan) => !loansExceedingDeadline.includes(loan))
-      .map((loan) => ({
-        id: loan.id,
-        requestedAmount: loan.requestedAmount,
-        approvedAmount: loan.approvedAmount,
-        repaymentDueDate: loan.repaymentDueDate,
-        daysRemaining: loan.repaymentDueDate
-          ? Math.floor(
-              (new Date(loan.repaymentDueDate).getTime() - now.getTime()) /
-                (1000 * 60 * 60 * 24)
-            )
-          : null,
-        status: loan.status,
-      })),
+    isEligible: true,
+    reason: `You can request a new voucher with repayment days less than ${firstVoucherRepaymentDays} days (your first voucher's repayment period). Recommended: ${Math.max(
+      15,
+      Math.floor(firstVoucherRepaymentDays * 0.7)
+    )} days.`,
   };
 };
 

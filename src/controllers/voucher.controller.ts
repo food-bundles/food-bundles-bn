@@ -39,14 +39,8 @@ import { VoucherStatus, LoanStatus } from "@prisma/client";
 export const createVoucher = async (req: Request, res: Response) => {
   try {
     const adminId = (req as any).user.id;
-    const {
-      restaurantId,
-      voucherType,
-      creditLimit,
-      minTransactionAmount,
-      maxTransactionAmount,
-      loanId,
-    } = req.body;
+    const { restaurantId, voucherType, creditLimit, loanId, repaymentDays } =
+      req.body;
 
     // Validate required fields
     if (!restaurantId || !voucherType || !creditLimit) {
@@ -77,12 +71,7 @@ export const createVoucher = async (req: Request, res: Response) => {
       restaurantId,
       voucherType,
       creditLimit: parseFloat(creditLimit),
-      minTransactionAmount: minTransactionAmount
-        ? parseFloat(minTransactionAmount)
-        : undefined,
-      maxTransactionAmount: maxTransactionAmount
-        ? parseFloat(maxTransactionAmount)
-        : undefined,
+      repaymentDays,
       expiryDate,
       loanId,
       approvedBy: adminId,
@@ -257,16 +246,11 @@ export const getAvailableVouchers = async (req: Request, res: Response) => {
 export const updateVoucher = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { status, expiryDate, maxTransactionAmount, minTransactionAmount } =
-      req.body;
+    const { status, expiryDate } = req.body;
 
     const updateData: any = {};
     if (status) updateData.status = status;
     if (expiryDate) updateData.expiryDate = new Date(expiryDate);
-    if (maxTransactionAmount)
-      updateData.maxTransactionAmount = parseFloat(maxTransactionAmount);
-    if (minTransactionAmount)
-      updateData.minTransactionAmount = parseFloat(minTransactionAmount);
 
     const voucher = await updateVoucherService(id, updateData);
 
@@ -379,9 +363,9 @@ export const applyForLoan = async (req: Request, res: Response) => {
     const restaurantId = (req as any).user.id;
     const { requestedAmount, purpose, voucherDays } = req.body;
 
-    if (!requestedAmount) {
+    if (!requestedAmount || !voucherDays) {
       return res.status(400).json({
-        message: "Requested amount is required",
+        message: "Requested amount and voucher days are required",
       });
     }
 
@@ -389,7 +373,7 @@ export const applyForLoan = async (req: Request, res: Response) => {
       restaurantId,
       requestedAmount: parseFloat(requestedAmount),
       purpose,
-      voucherDays: voucherDays ? parseInt(voucherDays) : undefined,
+      voucherDays: parseInt(voucherDays),
     });
 
     res.status(201).json({
@@ -489,16 +473,17 @@ export const approveLoan = async (req: Request, res: Response) => {
     const adminId = (req as any).user.id;
     const { approvedAmount, repaymentDays, voucherType, notes } = req.body;
 
-    if (!approvedAmount || !voucherType) {
+    if (!approvedAmount || !voucherType || !repaymentDays) {
       return res.status(400).json({
-        message: "Approved amount and voucher type are required",
+        message:
+          "Approved amount, repayment days, and voucher type are required",
       });
     }
 
     const loan = await approveLoanApplicationService(id, {
       approvedAmount: parseFloat(approvedAmount),
       approvedBy: adminId,
-      repaymentDays: repaymentDays ? parseInt(repaymentDays) : 30,
+      repaymentDays: parseInt(repaymentDays),
       voucherType,
       notes,
     });
