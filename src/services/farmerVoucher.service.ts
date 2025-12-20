@@ -48,8 +48,8 @@ export const submitFarmerVoucherRequest = async (
     where: {
       OR: [
         { email: farmer.phone + "@farmer.foodbundles.rw" },
-        { phone: farmer.phone }
-      ]
+        { phone: farmer.phone },
+      ],
     },
   });
 
@@ -75,8 +75,8 @@ export const submitFarmerVoucherRequest = async (
   const existingSubscription = await prisma.restaurantSubscription.findFirst({
     where: {
       restaurantId: farmerRestaurant.id,
-      status: "ACTIVE"
-    }
+      status: "ACTIVE",
+    },
   });
 
   if (!existingSubscription) {
@@ -90,11 +90,15 @@ export const submitFarmerVoucherRequest = async (
         data: {
           name: "Basic Farmer Plan",
           description: "Basic plan for farmers to access voucher system",
-          price: 0.00,
+          price: 0.0,
           duration: 365,
           voucherAccess: true,
           voucherPaymentDays: 60,
-          features: ["Voucher Request", "Product Submission", "Payment History"],
+          features: [
+            "Voucher Request",
+            "Product Submission",
+            "Payment History",
+          ],
           isActive: true,
         },
       });
@@ -137,8 +141,8 @@ export const getFarmerVoucherApplications = async (farmerId: string) => {
     where: {
       OR: [
         { email: farmer.phone + "@farmer.foodbundles.rw" },
-        { phone: farmer.phone }
-      ]
+        { phone: farmer.phone },
+      ],
     },
   });
 
@@ -166,8 +170,8 @@ export const getFarmerVouchers = async (farmerId: string) => {
     where: {
       OR: [
         { email: farmer.phone + "@farmer.foodbundles.rw" },
-        { phone: farmer.phone }
-      ]
+        { phone: farmer.phone },
+      ],
     },
   });
 
@@ -201,8 +205,8 @@ export const checkFarmerVoucherEligibility = async (
       where: {
         OR: [
           { email: farmer.phone + "@farmer.foodbundles.rw" },
-          { phone: farmer.phone }
-        ]
+          { phone: farmer.phone },
+        ],
       },
     });
 
@@ -217,7 +221,10 @@ export const checkFarmerVoucherEligibility = async (
     }
 
     // Check eligibility using existing service
-    const eligibility = await checkLoanEligibilityService(farmerRestaurant.id);
+    const eligibility = await checkLoanEligibilityService(
+      farmerRestaurant.id,
+      30
+    );
 
     return {
       isEligible: eligibility.isEligible,
