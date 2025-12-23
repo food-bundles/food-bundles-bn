@@ -37,6 +37,7 @@ import {
   getOrderByIdService,
   updateOrderService,
 } from "./order.services";
+import { applyPromoCodeService } from "./promo.service";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { encryptSecretData } from "../utils/password";
 import { clearCartService } from "./cart.service";
@@ -79,6 +80,7 @@ export interface CreateCheckoutData {
   billingPhone?: string;
   billingAddress?: string;
   voucherCode?: string;
+  promoCode?: string;
   fallbackPaymentMethod?: PaymentMethod;
   cardDetails?: {
     cardNumber: string;
@@ -105,6 +107,7 @@ export interface CreateAdminOrderData {
   }[];
   paymentMethod: PaymentMethod;
   voucherCode?: string;
+  promoCode?: string;
   phoneNumber?: string;
   notes?: string;
   deliveryDate?: Date;
@@ -139,6 +142,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     billingEmail: data.billingEmail,
     billingPhone: data.billingPhone,
     billingAddress: data.billingAddress,
+    promoCode: data.promoCode,
     cardDetails: data.cardDetails
       ? {
           cardNumber: await encryptSecretData(data.cardDetails.cardNumber),
@@ -1272,6 +1276,7 @@ export const createAdminOrderService = async (data: CreateAdminOrderData) => {
     notes,
     requestedDelivery: deliveryDate,
     paymentMethod,
+    promoCode: data.promoCode,
     billingName: restaurant.name,
     billingEmail: restaurant.email || "",
     billingPhone: phoneNumber || restaurant.phone || undefined,

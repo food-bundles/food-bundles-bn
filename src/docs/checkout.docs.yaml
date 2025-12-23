@@ -229,6 +229,10 @@ components:
           type: string
           description: Voucher code (required for VOUCHER payment method)
           example: "VCH-ABC123"
+        promoCode:
+          type: string
+          description: Promo code for discount (optional)
+          example: "SAVE20"
         fallbackPaymentMethod:
           type: string
           enum: [MOBILE_MONEY, BANK_TRANSFER, CARD]
@@ -348,6 +352,10 @@ components:
           type: string
           description: Voucher code
           example: "VCH-ABC123"
+        promoCode:
+          type: string
+          description: Promo code for discount (optional)
+          example: "SAVE20"
         phoneNumber:
           type: string
           description: Phone number for payment processing (optional, uses restaurant phone if not provided)
@@ -731,6 +739,7 @@ paths:
                 value:
                   cartId: "cart123"
                   paymentMethod: "MOBILE_MONEY"
+                  promoCode: "SAVE20"
                   billingPhone: "250788123456"
                   billingAddress: "123 Main St"
                   notes: "Special instructions"
@@ -750,6 +759,7 @@ paths:
                 value:
                   cartId: "cart123"
                   paymentMethod: "CARD"
+                  promoCode: "SAVE20"
                   billingEmail: "foodbundles@example.com"
                   billingName: "John Doe"
                   billingPhone: "250788123456"
@@ -786,6 +796,7 @@ paths:
                   cartId: "cart123"
                   paymentMethod: "VOUCHER"
                   voucherCode: "VCH-100DISC"
+                  promoCode: "SAVE20"
                   billingPhone: "250788123456"
                   billingAddress: "123 Main St"
                   notes: "Using voucher - OTP will be sent"
@@ -987,7 +998,8 @@ paths:
                       quantity: 1
                   paymentMethod: "VOUCHER"
                   voucherCode: "VCH-ABC123"
-                  notes: "Admin created order with voucher"
+                  promoCode: "SAVE20"
+                  notes: "Admin created order with voucher and promo"
                   deliveryDate: "2024-01-15T10:00:00Z"
       responses:
         201:

@@ -8,9 +8,9 @@ import {
 import { ProductData } from "./productService";
 import { processPaymentService } from "./checkout.services";
 import { decryptSecretData, encryptSecretData } from "../utils/password";
-import { DeliveryService } from "./delivery.service";
 import { wsManager } from "../index";
 import { createNotificationService } from "./notification.services";
+import { applyPromoCodeService } from "./promo.service";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -21,6 +21,7 @@ interface CreateOrderFromCartData {
   clientIp?: string;
   requestedDelivery?: Date;
   paymentMethod?: PaymentMethod;
+  promoCode?: string;
   billingName?: string;
   billingEmail?: string;
   billingPhone?: string;
@@ -43,6 +44,7 @@ interface CreateDirectOrderData {
     quantity: number;
   }>;
   paymentMethod?: PaymentMethod;
+  promoCode?: string;
   notes?: string;
   requestedDelivery?: Date;
   billingName?: string;
@@ -97,6 +99,7 @@ export const createOrderFromCartService = async (
     clientIp,
     requestedDelivery,
     paymentMethod,
+    promoCode,
     billingName,
     billingEmail,
     billingPhone,
@@ -176,6 +179,39 @@ export const createOrderFromCartService = async (
     }
   }
 
+  // Prepare cart items for promo code processing
+  const items = cart.cartItems.map((item) => ({
+    productId: item.productId,
+    quantity: item.quantity,
+  }));
+
+  // Apply promo code if provided
+  let originalAmount = cart.totalAmount;
+  let finalAmount = originalAmount;
+  let promoDiscount = 0;
+  let promoDetails = null;
+
+  if (promoCode) {
+    try {
+      const promoResult = await applyPromoCodeService(
+        promoCode,
+        restaurantId,
+        "temp_order_id", // Will be updated after order creation
+        items
+      );
+
+      finalAmount = promoResult.finalAmount;
+      promoDiscount = promoResult.discountAmount;
+      promoDetails = {
+        code: promoResult.promoCode.code,
+        discountAmount: promoResult.discountAmount,
+        discountPercentage: promoResult.discountPercentage,
+      };
+    } catch (error: any) {
+      throw new Error(`Promo code error: ${error.message}`);
+    }
+  }
+
   // Generate unique order number
   const orderNumber = await generateOrderNumber();
 
@@ -189,14 +225,14 @@ export const createOrderFromCartService = async (
   // Create NEW order with extended transaction timeout and optimized operations
   const order = await prisma.$transaction(
     async (tx) => {
-      // Create order
+      // Create order with final amount after promo discount
       const newOrder = await tx.order.create({
         data: {
           orderNumber,
           cartId,
           restaurantId,
           orderedBy: affiliatorId,
-          totalAmount: cart.totalAmount,
+          totalAmount: finalAmount, // Use discounted amount
           status: data.status || "PENDING",
           paymentMethod: paymentMethod || "CASH",
           paymentStatus: PaymentStatus.PENDING,
@@ -223,6 +259,16 @@ export const createOrderFromCartService = async (
           currency: "RWF",
         },
       });
+
+      // Update promo code usage with actual order ID if promo was applied
+      if (promoCode && promoDetails) {
+        await applyPromoCodeService(
+          promoCode,
+          restaurantId,
+          newOrder.id,
+          items
+        );
+      }
 
       // Prepare order items data
       const orderItemsData = cart.cartItems.map((item) => ({
@@ -257,7 +303,7 @@ export const createOrderFromCartService = async (
       // Execute all product updates in parallel
       await Promise.all(productUpdates);
 
-      return newOrder;
+      return { ...newOrder, promoDetails, originalAmount, promoDiscount };
     },
     {
       timeout: 15000,
@@ -309,7 +355,7 @@ export const createOrderFromCartService = async (
     packagingFee = 15000;
   }
 
-  // Add delivery fee and packaging fee to total amount
+  // Add delivery fee and packaging fee to final amount (after promo discount)
   const totalAmount = order.totalAmount + deliveryFee + packagingFee;
 
   // Update order with delivery fee and packaging fee
@@ -321,10 +367,7 @@ export const createOrderFromCartService = async (
       packagingFee,
     },
   });
-  // Note: Delivery OTP will be generated only after successful payment
-  // This is handled in the checkout service when payment is confirmed
 
-  // Return complete order with relations
   return await getOrderByIdService(order.id);
 };
 
