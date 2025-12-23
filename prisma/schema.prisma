@@ -309,6 +309,7 @@ model Admin {
   productCategories     ProductCategory[]
   LoanApplication       LoanApplication[]
   OrderDelivery         OrderDelivery[]
+  promoCodes            PromoCode[]
 }
 
 model Product {
@@ -990,6 +991,68 @@ model ContactSubmission {
   @@map("contact_submissions")
 }
 
+// ============================================
+// PROMO CODE SCHEMA
+// ============================================
+
+model PromoCode {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  name        String // Display name for the promo code
+  description String? // Description of what the promo offers
+
+  // Type and discount configuration
+  type          PromoCodeType
+  discountType  DiscountType  @default(PERCENTAGE)
+  discountValue Float // percentage (0-100) or fixed amount in RWF
+
+  // Usage limits and tracking
+  isReusable        Boolean @default(true)
+  maxUsageCount     Int? // null = unlimited global usage
+  currentUsageCount Int     @default(0)
+  maxUsagePerUser   Int? // null = unlimited per user
+
+  // Minimum requirements
+  minOrderAmount  Float? // Minimum total order amount to use promo
+  minItemQuantity Int? // Minimum quantity of items
+
+  // Application scope
+  applyToAllProducts    Boolean  @default(true)
+  applicableProductIds  String[] // Specific products (if not all)
+  applicableCategoryIds String[] // Specific categories (if not all)
+
+  // Validity period
+  isActive   Boolean   @default(true)
+  startDate  DateTime? // When promo becomes active
+  expiryDate DateTime? // When promo expires
+
+  // Usage tracking - stores JSON array of usage records
+  usageHistory Json? // [{restaurantId, orderId, originalAmount, discountAmount, finalAmount, itemsDiscounted, usedAt}]
+
+  // Exclusions - stores JSON array of excluded restaurants
+  excludedRestaurants Json? // [{restaurantId, reason, excludedBy, excludedAt}]
+
+  // Per-restaurant usage count tracking
+  restaurantUsageCount Json? // {restaurantId: count}
+
+  // Creator information
+  createdBy String? // Admin ID who created the promo
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  admin Admin? @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([code])
+  @@index([type])
+  @@index([isActive])
+  @@index([expiryDate])
+  @@index([startDate])
+  @@index([createdBy])
+}
+
 enum Role {
   FARMER
   RESTAURANT
@@ -1168,4 +1231,19 @@ enum NotificationTarget {
   SPECIFIC_USER
   ROLE_BASED
   ALL_USERS
+}
+
+// ============================================
+// PROMO CODE ENUMS
+// ============================================
+
+enum PromoCodeType {
+  PUBLIC // Available to all users
+  SUBSCRIBERS // Only for users with active subscriptions
+  EXCEPTIONAL // Available to all except explicitly excluded users
+}
+
+enum DiscountType {
+  PERCENTAGE // Discount as percentage (e.g., 10% off)
+  FIXED_AMOUNT // Fixed amount discount (e.g., 5000 RWF off)
 }

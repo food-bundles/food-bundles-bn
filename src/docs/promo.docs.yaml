@@ -1,0 +1,608 @@
+tags:
+  - name: Promo Code Management
+    description: Promo code operations for discounts and promotions
+
+components:
+  schemas:
+    PromoCode:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "promo_123456"
+        code:
+          type: string
+          example: "SAVE20"
+        name:
+          type: string
+          example: "20% Off Summer Sale"
+        description:
+          type: string
+          example: "Get 20% off on all orders above 10,000 RWF"
+        type:
+          type: string
+          enum: [PUBLIC, SUBSCRIBERS, EXCEPTIONAL]
+          example: "PUBLIC"
+        discountType:
+          type: string
+          enum: [PERCENTAGE, FIXED_AMOUNT]
+          example: "PERCENTAGE"
+        discountValue:
+          type: number
+          example: 20
+        isReusable:
+          type: boolean
+          example: true
+        maxUsageCount:
+          type: integer
+          example: 1000
+        currentUsageCount:
+          type: integer
+          example: 45
+        maxUsagePerUser:
+          type: integer
+          example: 3
+        minOrderAmount:
+          type: number
+          example: 10000
+        minItemQuantity:
+          type: integer
+          example: 2
+        applyToAllProducts:
+          type: boolean
+          example: true
+        applicableProductIds:
+          type: array
+          items:
+            type: string
+          example: ["prod_1", "prod_2"]
+        applicableCategoryIds:
+          type: array
+          items:
+            type: string
+          example: ["cat_1", "cat_2"]
+        isActive:
+          type: boolean
+          example: true
+        startDate:
+          type: string
+          format: date-time
+          example: "2024-12-01T00:00:00Z"
+        expiryDate:
+          type: string
+          format: date-time
+          example: "2024-12-31T23:59:59Z"
+        usageHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              restaurantId:
+                type: string
+              orderId:
+                type: string
+              originalAmount:
+                type: number
+              discountAmount:
+                type: number
+              finalAmount:
+                type: number
+              itemsDiscounted:
+                type: integer
+              usedAt:
+                type: string
+                format: date-time
+        excludedRestaurants:
+          type: array
+          items:
+            type: object
+            properties:
+              restaurantId:
+                type: string
+              reason:
+                type: string
+              excludedBy:
+                type: string
+              excludedAt:
+                type: string
+                format: date-time
+        restaurantUsageCount:
+          type: object
+          example: { "rest_1": 2, "rest_2": 1 }
+        createdBy:
+          type: string
+          example: "admin_123"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-12-01T10:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-12-01T10:00:00Z"
+        admin:
+          type: object
+          properties:
+            id:
+              type: string
+            username:
+              type: string
+            email:
+              type: string
+
+    CreatePromoCodeRequest:
+      type: object
+      required:
+        - code
+        - name
+        - type
+        - discountType
+        - discountValue
+      properties:
+        code:
+          type: string
+          example: "SAVE20"
+        name:
+          type: string
+          example: "20% Off Summer Sale"
+        description:
+          type: string
+          example: "Get 20% off on all orders above 10,000 RWF"
+        type:
+          type: string
+          enum: [PUBLIC, SUBSCRIBERS, EXCEPTIONAL]
+          example: "PUBLIC"
+        discountType:
+          type: string
+          enum: [PERCENTAGE, FIXED_AMOUNT]
+          example: "PERCENTAGE"
+        discountValue:
+          type: number
+          example: 20
+        isReusable:
+          type: boolean
+          example: true
+        maxUsageCount:
+          type: integer
+          example: 1000
+        maxUsagePerUser:
+          type: integer
+          example: 3
+        minOrderAmount:
+          type: number
+          example: 10000
+        minItemQuantity:
+          type: integer
+          example: 2
+        applyToAllProducts:
+          type: boolean
+          example: true
+        applicableProductIds:
+          type: array
+          items:
+            type: string
+          example: ["prod_1", "prod_2"]
+        applicableCategoryIds:
+          type: array
+          items:
+            type: string
+          example: ["cat_1", "cat_2"]
+        startDate:
+          type: string
+          format: date-time
+          example: "2024-12-01T00:00:00Z"
+        expiryDate:
+          type: string
+          format: date-time
+          example: "2024-12-31T23:59:59Z"
+
+    ValidatePromoCodeRequest:
+      type: object
+      required:
+        - orderAmount
+      properties:
+        orderAmount:
+          type: number
+          example: 15000
+
+    ApplyPromoCodeRequest:
+      type: object
+      required:
+        - orderId
+        - originalAmount
+        - itemsCount
+      properties:
+        orderId:
+          type: string
+          example: "order_123456"
+        originalAmount:
+          type: number
+          example: 15000
+        itemsCount:
+          type: integer
+          example: 3
+
+    ExcludeRestaurantRequest:
+      type: object
+      required:
+        - restaurantId
+        - reason
+      properties:
+        restaurantId:
+          type: string
+          example: "rest_123456"
+        reason:
+          type: string
+          example: "Violation of terms and conditions"
+
+    PromoCodeResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Promo code created successfully"
+        data:
+          $ref: "#/components/schemas/PromoCode"
+
+    PromoCodeListResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Promo codes retrieved successfully"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromoCode"
+        count:
+          type: integer
+          example: 10
+
+    ValidatePromoCodeResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Promo code is valid"
+        data:
+          type: object
+          properties:
+            promoCode:
+              type: object
+              properties:
+                id:
+                  type: string
+                code:
+                  type: string
+                name:
+                  type: string
+                description:
+                  type: string
+                discountType:
+                  type: string
+                discountValue:
+                  type: number
+            discount:
+              type: object
+              properties:
+                originalAmount:
+                  type: number
+                discountAmount:
+                  type: number
+                finalAmount:
+                  type: number
+                savings:
+                  type: number
+
+    ApplyPromoCodeResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Promo code applied successfully"
+        data:
+          type: object
+          properties:
+            promoCode:
+              $ref: "#/components/schemas/PromoCode"
+            originalAmount:
+              type: number
+            discountAmount:
+              type: number
+            finalAmount:
+              type: number
+            discountPercentage:
+              type: number
+
+paths:
+  /promo:
+    post:
+      tags:
+        - Promo Code Management
+      summary: Create a new promo code
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePromoCodeRequest"
+      responses:
+        201:
+          description: Promo code created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        400:
+          description: Bad request - validation error
+        401:
+          description: Unauthorized - admin access required
+
+    get:
+      tags:
+        - Promo Code Management
+      summary: Get all promo codes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [PUBLIC, SUBSCRIBERS, EXCEPTIONAL]
+          description: Filter by promo code type
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by code or name
+      responses:
+        200:
+          description: Promo codes retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCodeListResponse"
+        401:
+          description: Unauthorized - admin access required
+
+  /promo/{id}:
+    get:
+      tags:
+        - Promo Code Management
+      summary: Get promo code by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Promo code ID
+      responses:
+        200:
+          description: Promo code retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        404:
+          description: Promo code not found
+        401:
+          description: Unauthorized - admin access required
+
+    put:
+      tags:
+        - Promo Code Management
+      summary: Update promo code
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Promo code ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePromoCodeRequest"
+      responses:
+        200:
+          description: Promo code updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        400:
+          description: Bad request - validation error
+        404:
+          description: Promo code not found
+        401:
+          description: Unauthorized - admin access required
+
+    delete:
+      tags:
+        - Promo Code Management
+      summary: Delete promo code
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Promo code ID
+      responses:
+        200:
+          description: Promo code deleted successfully
+        404:
+          description: Promo code not found
+        401:
+          description: Unauthorized - admin access required
+
+  /promo/code/{code}:
+    get:
+      tags:
+        - Promo Code Management
+      summary: Get promo code by code (Restaurant)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Promo code
+      responses:
+        200:
+          description: Promo code retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        404:
+          description: Promo code not found
+        401:
+          description: Unauthorized - restaurant access required
+
+  /promo/validate/{code}:
+    post:
+      tags:
+        - Promo Code Management
+      summary: Validate promo code for order
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Promo code to validate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidatePromoCodeRequest"
+      responses:
+        200:
+          description: Promo code is valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidatePromoCodeResponse"
+        400:
+          description: Invalid promo code or validation failed
+        401:
+          description: Unauthorized - restaurant access required
+
+  /promo/apply/{code}:
+    post:
+      tags:
+        - Promo Code Management
+      summary: Apply promo code to order
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Promo code to apply
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyPromoCodeRequest"
+      responses:
+        200:
+          description: Promo code applied successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplyPromoCodeResponse"
+        400:
+          description: Failed to apply promo code
+        401:
+          description: Unauthorized - restaurant access required
+
+  /promo/{id}/exclude:
+    post:
+      tags:
+        - Promo Code Management
+      summary: Exclude restaurant from promo code
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Promo code ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExcludeRestaurantRequest"
+      responses:
+        200:
+          description: Restaurant excluded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        400:
+          description: Bad request
+        401:
+          description: Unauthorized - admin access required
+
+  /promo/{id}/exclude/{restaurantId}:
+    delete:
+      tags:
+        - Promo Code Management
+      summary: Remove restaurant exclusion from promo code
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Promo code ID
+        - name: restaurantId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Restaurant ID to remove from exclusions
+      responses:
+        200:
+          description: Restaurant exclusion removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        400:
+          description: Bad request
+        401:
+          description: Unauthorized - admin access required
