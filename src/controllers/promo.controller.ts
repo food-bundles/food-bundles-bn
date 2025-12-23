@@ -261,7 +261,7 @@ export const validatePromoCode = async (req: Request, res: Response) => {
 export const applyPromoCode = async (req: Request, res: Response) => {
   try {
     const { code } = req.params;
-    const { orderId, originalAmount, itemsCount } = req.body;
+    const { orderId, items } = req.body;
     const restaurantId = (req as any).user?.id;
 
     if (!restaurantId) {
@@ -270,9 +270,9 @@ export const applyPromoCode = async (req: Request, res: Response) => {
       });
     }
 
-    if (!orderId || !originalAmount || !itemsCount) {
+    if (!orderId || !items || !Array.isArray(items)) {
       return res.status(400).json({
-        message: "Missing required fields: orderId, originalAmount, itemsCount"
+        message: "Missing required fields: orderId, items (array)"
       });
     }
 
@@ -280,8 +280,7 @@ export const applyPromoCode = async (req: Request, res: Response) => {
       code.toUpperCase(),
       restaurantId,
       orderId,
-      originalAmount,
-      itemsCount
+      items
     );
 
     res.status(200).json({

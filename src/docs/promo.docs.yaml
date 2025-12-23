@@ -209,18 +209,30 @@ components:
       type: object
       required:
         - orderId
-        - originalAmount
-        - itemsCount
+        - items
       properties:
         orderId:
           type: string
           example: "order_123456"
-        originalAmount:
-          type: number
-          example: 15000
-        itemsCount:
-          type: integer
-          example: 3
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - productId
+              - quantity
+            properties:
+              productId:
+                type: string
+                example: "prod_123456"
+              quantity:
+                type: integer
+                example: 2
+          example:
+            - productId: "prod_123456"
+              quantity: 2
+            - productId: "prod_789012"
+              quantity: 1
 
     ExcludeRestaurantRequest:
       type: object
@@ -307,12 +319,40 @@ components:
               $ref: "#/components/schemas/PromoCode"
             originalAmount:
               type: number
+              example: 15000
             discountAmount:
               type: number
+              example: 3000
             finalAmount:
               type: number
+              example: 12000
             discountPercentage:
               type: number
+              example: 20
+            discountedItems:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  productId:
+                    type: string
+                  quantity:
+                    type: integer
+                  price:
+                    type: number
+                  originalPrice:
+                    type: number
+                  discountAmount:
+                    type: number
+                  discountedPrice:
+                    type: number
+                  finalItemTotal:
+                    type: number
+            applicableItemsCount:
+              type: integer
+              example: 2
 
 paths:
   /promo:

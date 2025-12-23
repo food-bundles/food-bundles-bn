@@ -196,6 +196,10 @@ components:
           enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
           default: CASH
           description: Payment method for the order
+        promoCode:
+          type: string
+          description: Promo code for discount (optional)
+          example: "SAVE20"
         notes:
           type: string
           description: Special instructions or notes
@@ -428,6 +432,7 @@ paths:
                     - productId: "prod-123"
                       quantity: 10
                   paymentMethod: "MOBILE_MONEY"
+                  promoCode: "SAVE20"
                   notes: "Phone order from customer"
       responses:
         201:
