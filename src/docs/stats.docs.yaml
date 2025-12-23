@@ -423,6 +423,59 @@ components:
                 type: string
                 format: date-time
                 example: "2024-12-01T11:35:14Z"
+        systemMetrics:
+          type: object
+          properties:
+            cpu:
+              type: object
+              properties:
+                cores:
+                  type: integer
+                  example: 8
+                usagePercent:
+                  type: integer
+                  example: 45
+                loadAverage:
+                  type: array
+                  items:
+                    type: number
+                  example: [1.2, 1.5, 1.8]
+            memory:
+              type: object
+              properties:
+                total:
+                  type: integer
+                  example: 16
+                used:
+                  type: integer
+                  example: 8
+                free:
+                  type: integer
+                  example: 8
+                usagePercent:
+                  type: integer
+                  example: 50
+            uptime:
+              type: object
+              properties:
+                seconds:
+                  type: integer
+                  example: 86400
+                formatted:
+                  type: string
+                  example: "1d 0h"
+            platform:
+              type: object
+              properties:
+                os:
+                  type: string
+                  example: "linux"
+                arch:
+                  type: string
+                  example: "x64"
+                hostname:
+                  type: string
+                  example: "foodbundles-server"
 
     StatsFilters:
       type: object

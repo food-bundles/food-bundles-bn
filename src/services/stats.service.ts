@@ -6,6 +6,10 @@ import {
   SubscriptionStatus,
   Role,
 } from "@prisma/client";
+import os from "os";
+import { performance } from "perf_hooks";
+import net from "net";
+import https from "https";
 
 // ============================================
 // TYPES AND INTERFACES
@@ -170,11 +174,161 @@ interface SystemStatus {
     responseTime: number;
     lastChecked: Date;
   }>;
+  systemMetrics?: {
+    cpu: {
+      cores: number;
+      usagePercent: number;
+      loadAverage: number[];
+    };
+    memory: {
+      total: number;
+      used: number;
+      free: number;
+      usagePercent: number;
+    };
+    uptime: {
+      seconds: number;
+      formatted: string;
+    };
+    platform: {
+      os: string;
+      arch: string;
+      hostname: string;
+    };
+  };
 }
 
 // ============================================
-// UTILITY FUNCTIONS
+// SYSTEM MONITORING UTILITIES
 // ============================================
+
+const formatUptime = (seconds: number): string => {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+};
+
+const checkDatabaseConnection = async (): Promise<{
+  isConnected: boolean;
+  responseTime: number;
+}> => {
+  const start = performance.now();
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    const responseTime = Math.round(performance.now() - start);
+    return { isConnected: true, responseTime };
+  } catch (error) {
+    const responseTime = Math.round(performance.now() - start);
+    return { isConnected: false, responseTime };
+  }
+};
+
+const checkPort = async (
+  host: string,
+  port: number,
+  timeout = 5000
+): Promise<{ isOpen: boolean; responseTime: number }> => {
+  return new Promise((resolve) => {
+    const startTime = Date.now();
+    const socket = new net.Socket();
+
+    socket.setTimeout(timeout);
+
+    socket.on("connect", () => {
+      const responseTime = Date.now() - startTime;
+      socket.destroy();
+      resolve({ isOpen: true, responseTime });
+    });
+
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve({ isOpen: false, responseTime: timeout });
+    });
+
+    socket.on("error", () => {
+      socket.destroy();
+      resolve({ isOpen: false, responseTime: Date.now() - startTime });
+    });
+
+    socket.connect(port, host);
+  });
+};
+
+const checkHttpsEndpoint = async (
+  url: string
+): Promise<{
+  isOnline: boolean;
+  responseTime: number;
+  statusCode?: number;
+}> => {
+  return new Promise((resolve) => {
+    const startTime = Date.now();
+
+    const req = https.get(url, { timeout: 10000 }, (res) => {
+      const responseTime = Date.now() - startTime;
+      resolve({
+        isOnline: true,
+        responseTime,
+        statusCode: res.statusCode,
+      });
+      res.resume();
+    });
+
+    req.on("error", () => {
+      resolve({
+        isOnline: false,
+        responseTime: Date.now() - startTime,
+      });
+    });
+
+    req.on("timeout", () => {
+      req.destroy();
+      resolve({
+        isOnline: false,
+        responseTime: 10000,
+      });
+    });
+  });
+};
+
+const getSystemMetrics = () => {
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  const memoryUsagePercent = Math.round((usedMem / totalMem) * 100);
+
+  const cpuLoad = os.loadavg();
+  const cpuUsagePercent = Math.min(Math.round(cpuLoad[0] * 25), 100);
+
+  const uptime = os.uptime();
+
+  return {
+    memory: {
+      total: Math.round(totalMem / 1024 / 1024 / 1024), // GB
+      used: Math.round(usedMem / 1024 / 1024 / 1024), // GB
+      free: Math.round(freeMem / 1024 / 1024 / 1024), // GB
+      usagePercent: memoryUsagePercent,
+    },
+    cpu: {
+      cores: os.cpus().length,
+      usagePercent: cpuUsagePercent,
+      loadAverage: cpuLoad,
+    },
+    uptime: {
+      seconds: uptime,
+      formatted: formatUptime(uptime),
+    },
+    platform: {
+      os: os.platform(),
+      arch: os.arch(),
+      hostname: os.hostname(),
+    },
+  };
+};
 
 const calculatePercentageChange = (
   oldValue: number,
@@ -417,38 +571,53 @@ const getFarmerPayments = async (
   return result._sum.totalAmount || 0;
 };
 
-const getTimeSeriesFinanceData = async (dateFrom: Date, dateTo: Date, isMonthly: boolean) => {
+const getTimeSeriesFinanceData = async (
+  dateFrom: Date,
+  dateTo: Date,
+  isMonthly: boolean
+) => {
   const data = [];
-  
+
   if (isMonthly) {
     // Generate daily data for the month
     const currentDate = new Date(dateFrom);
     while (currentDate <= dateTo) {
       const dayStart = new Date(currentDate);
-      const dayEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 23, 59, 59);
-      
+      const dayEnd = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        currentDate.getDate(),
+        23,
+        59,
+        59
+      );
+
       const [orderRev, subscriptionRev, voucherRev] = await Promise.all([
         getOrderRevenue(dayStart, dayEnd),
         getSubscriptionRevenue(dayStart, dayEnd),
         getVoucherRevenue(dayStart, dayEnd),
       ]);
-      
-      const [usedVoucherExp, maturedVoucherExp, farmerPaymentsExp] = await Promise.all([
-        getUsedVoucherExpenses(dayStart, dayEnd),
-        getMaturedVoucherExpenses(dayStart, dayEnd),
-        getFarmerPayments(dayStart, dayEnd),
-      ]);
-      
+
+      const [usedVoucherExp, maturedVoucherExp, farmerPaymentsExp] =
+        await Promise.all([
+          getUsedVoucherExpenses(dayStart, dayEnd),
+          getMaturedVoucherExpenses(dayStart, dayEnd),
+          getFarmerPayments(dayStart, dayEnd),
+        ]);
+
       const revenue = orderRev + subscriptionRev + voucherRev;
       const expenses = usedVoucherExp + maturedVoucherExp + farmerPaymentsExp;
-      
+
       data.push({
-        period: currentDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        period: currentDate.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
         date: currentDate.toISOString().split("T")[0],
         revenue,
         expenses,
       });
-      
+
       currentDate.setDate(currentDate.getDate() + 1);
     }
   } else {
@@ -457,22 +626,23 @@ const getTimeSeriesFinanceData = async (dateFrom: Date, dateTo: Date, isMonthly:
     for (let month = 0; month < 12; month++) {
       const startOfMonth = new Date(year, month, 1);
       const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
-      
+
       const [orderRev, subscriptionRev, voucherRev] = await Promise.all([
         getOrderRevenue(startOfMonth, endOfMonth),
         getSubscriptionRevenue(startOfMonth, endOfMonth),
         getVoucherRevenue(startOfMonth, endOfMonth),
       ]);
-      
-      const [usedVoucherExp, maturedVoucherExp, farmerPaymentsExp] = await Promise.all([
-        getUsedVoucherExpenses(startOfMonth, endOfMonth),
-        getMaturedVoucherExpenses(startOfMonth, endOfMonth),
-        getFarmerPayments(startOfMonth, endOfMonth),
-      ]);
-      
+
+      const [usedVoucherExp, maturedVoucherExp, farmerPaymentsExp] =
+        await Promise.all([
+          getUsedVoucherExpenses(startOfMonth, endOfMonth),
+          getMaturedVoucherExpenses(startOfMonth, endOfMonth),
+          getFarmerPayments(startOfMonth, endOfMonth),
+        ]);
+
       const revenue = orderRev + subscriptionRev + voucherRev;
       const expenses = usedVoucherExp + maturedVoucherExp + farmerPaymentsExp;
-      
+
       data.push({
         period: startOfMonth.toLocaleDateString("en-US", { month: "short" }),
         month: month + 1,
@@ -481,31 +651,45 @@ const getTimeSeriesFinanceData = async (dateFrom: Date, dateTo: Date, isMonthly:
       });
     }
   }
-  
+
   return data;
 };
 
-const getTimeSeriesOrderStats = async (dateFrom: Date, dateTo: Date, isMonthly: boolean) => {
+const getTimeSeriesOrderStats = async (
+  dateFrom: Date,
+  dateTo: Date,
+  isMonthly: boolean
+) => {
   const orders = await prisma.order.findMany({
     where: { createdAt: { gte: dateFrom, lte: dateTo } },
     select: { createdAt: true, status: true },
   });
-  
-  const ongoingStatuses = [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.IN_TRANSIT];
-  const timeStats = new Map<string, { completed: number; cancelled: number; ongoing: number; total: number }>();
-  
+
+  const ongoingStatuses = [
+    OrderStatus.CONFIRMED,
+    OrderStatus.PREPARING,
+    OrderStatus.READY,
+    OrderStatus.IN_TRANSIT,
+  ];
+  const timeStats = new Map<
+    string,
+    { completed: number; cancelled: number; ongoing: number; total: number }
+  >();
+
   orders.forEach((order) => {
-    const key = isMonthly 
+    const key = isMonthly
       ? order.createdAt.toISOString().split("T")[0]
-      : `${order.createdAt.getFullYear()}-${String(order.createdAt.getMonth() + 1).padStart(2, '0')}`;
-    
+      : `${order.createdAt.getFullYear()}-${String(
+          order.createdAt.getMonth() + 1
+        ).padStart(2, "0")}`;
+
     if (!timeStats.has(key)) {
       timeStats.set(key, { completed: 0, cancelled: 0, ongoing: 0, total: 0 });
     }
-    
+
     const stats = timeStats.get(key)!;
     stats.total++;
-    
+
     if (order.status === OrderStatus.DELIVERED) {
       stats.completed++;
     } else if (order.status === OrderStatus.CANCELLED) {
@@ -514,94 +698,206 @@ const getTimeSeriesOrderStats = async (dateFrom: Date, dateTo: Date, isMonthly: 
       stats.ongoing++;
     }
   });
-  
+
   return Array.from(timeStats.entries())
     .map(([key, stats]) => ({
-      period: isMonthly ? new Date(key).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : new Date(key + "-01").toLocaleDateString("en-US", { month: "short" }),
+      period: isMonthly
+        ? new Date(key).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          })
+        : new Date(key + "-01").toLocaleDateString("en-US", { month: "short" }),
       date: key,
       ...stats,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 };
 
-const getTimeSeriesUserStats = async (dateFrom: Date, dateTo: Date, isMonthly: boolean) => {
+const getTimeSeriesUserStats = async (
+  dateFrom: Date,
+  dateTo: Date,
+  isMonthly: boolean
+) => {
   const users = await Promise.all([
-    prisma.restaurant.findMany({ where: { createdAt: { gte: dateFrom, lte: dateTo } }, select: { createdAt: true } }),
-    prisma.farmer.findMany({ where: { createdAt: { gte: dateFrom, lte: dateTo } }, select: { createdAt: true } }),
-    prisma.admin.findMany({ where: { createdAt: { gte: dateFrom, lte: dateTo } }, select: { createdAt: true } }),
-    prisma.affiliator.findMany({ where: { createdAt: { gte: dateFrom, lte: dateTo } }, select: { createdAt: true } }),
+    prisma.restaurant.findMany({
+      where: { createdAt: { gte: dateFrom, lte: dateTo } },
+      select: { createdAt: true },
+    }),
+    prisma.farmer.findMany({
+      where: { createdAt: { gte: dateFrom, lte: dateTo } },
+      select: { createdAt: true },
+    }),
+    prisma.admin.findMany({
+      where: { createdAt: { gte: dateFrom, lte: dateTo } },
+      select: { createdAt: true },
+    }),
+    prisma.affiliator.findMany({
+      where: { createdAt: { gte: dateFrom, lte: dateTo } },
+      select: { createdAt: true },
+    }),
   ]);
-  
+
   const allUsers = [...users[0], ...users[1], ...users[2], ...users[3]];
-  const timeStats = new Map<string, { restaurants: number; farmers: number; admins: number; affiliators: number; total: number }>();
-  
-  users[0].forEach(user => {
-    const key = isMonthly ? user.createdAt.toISOString().split("T")[0] : `${user.createdAt.getFullYear()}-${String(user.createdAt.getMonth() + 1).padStart(2, '0')}`;
-    if (!timeStats.has(key)) timeStats.set(key, { restaurants: 0, farmers: 0, admins: 0, affiliators: 0, total: 0 });
+  const timeStats = new Map<
+    string,
+    {
+      restaurants: number;
+      farmers: number;
+      admins: number;
+      affiliators: number;
+      total: number;
+    }
+  >();
+
+  users[0].forEach((user) => {
+    const key = isMonthly
+      ? user.createdAt.toISOString().split("T")[0]
+      : `${user.createdAt.getFullYear()}-${String(
+          user.createdAt.getMonth() + 1
+        ).padStart(2, "0")}`;
+    if (!timeStats.has(key))
+      timeStats.set(key, {
+        restaurants: 0,
+        farmers: 0,
+        admins: 0,
+        affiliators: 0,
+        total: 0,
+      });
     timeStats.get(key)!.restaurants++;
     timeStats.get(key)!.total++;
   });
-  
-  users[1].forEach(user => {
-    const key = isMonthly ? user.createdAt.toISOString().split("T")[0] : `${user.createdAt.getFullYear()}-${String(user.createdAt.getMonth() + 1).padStart(2, '0')}`;
-    if (!timeStats.has(key)) timeStats.set(key, { restaurants: 0, farmers: 0, admins: 0, affiliators: 0, total: 0 });
+
+  users[1].forEach((user) => {
+    const key = isMonthly
+      ? user.createdAt.toISOString().split("T")[0]
+      : `${user.createdAt.getFullYear()}-${String(
+          user.createdAt.getMonth() + 1
+        ).padStart(2, "0")}`;
+    if (!timeStats.has(key))
+      timeStats.set(key, {
+        restaurants: 0,
+        farmers: 0,
+        admins: 0,
+        affiliators: 0,
+        total: 0,
+      });
     timeStats.get(key)!.farmers++;
     timeStats.get(key)!.total++;
   });
-  
-  users[2].forEach(user => {
-    const key = isMonthly ? user.createdAt.toISOString().split("T")[0] : `${user.createdAt.getFullYear()}-${String(user.createdAt.getMonth() + 1).padStart(2, '0')}`;
-    if (!timeStats.has(key)) timeStats.set(key, { restaurants: 0, farmers: 0, admins: 0, affiliators: 0, total: 0 });
+
+  users[2].forEach((user) => {
+    const key = isMonthly
+      ? user.createdAt.toISOString().split("T")[0]
+      : `${user.createdAt.getFullYear()}-${String(
+          user.createdAt.getMonth() + 1
+        ).padStart(2, "0")}`;
+    if (!timeStats.has(key))
+      timeStats.set(key, {
+        restaurants: 0,
+        farmers: 0,
+        admins: 0,
+        affiliators: 0,
+        total: 0,
+      });
     timeStats.get(key)!.admins++;
     timeStats.get(key)!.total++;
   });
-  
-  users[3].forEach(user => {
-    const key = isMonthly ? user.createdAt.toISOString().split("T")[0] : `${user.createdAt.getFullYear()}-${String(user.createdAt.getMonth() + 1).padStart(2, '0')}`;
-    if (!timeStats.has(key)) timeStats.set(key, { restaurants: 0, farmers: 0, admins: 0, affiliators: 0, total: 0 });
+
+  users[3].forEach((user) => {
+    const key = isMonthly
+      ? user.createdAt.toISOString().split("T")[0]
+      : `${user.createdAt.getFullYear()}-${String(
+          user.createdAt.getMonth() + 1
+        ).padStart(2, "0")}`;
+    if (!timeStats.has(key))
+      timeStats.set(key, {
+        restaurants: 0,
+        farmers: 0,
+        admins: 0,
+        affiliators: 0,
+        total: 0,
+      });
     timeStats.get(key)!.affiliators++;
     timeStats.get(key)!.total++;
   });
-  
+
   return Array.from(timeStats.entries())
     .map(([key, stats]) => ({
-      period: isMonthly ? new Date(key).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : new Date(key + "-01").toLocaleDateString("en-US", { month: "short" }),
+      period: isMonthly
+        ? new Date(key).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          })
+        : new Date(key + "-01").toLocaleDateString("en-US", { month: "short" }),
       date: key,
       ...stats,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 };
 
-const getTimeSeriesVoucherStats = async (dateFrom: Date, dateTo: Date, isMonthly: boolean) => {
+const getTimeSeriesVoucherStats = async (
+  dateFrom: Date,
+  dateTo: Date,
+  isMonthly: boolean
+) => {
   const vouchers = await prisma.voucher.findMany({
     where: { createdAt: { gte: dateFrom, lte: dateTo } },
-    select: { createdAt: true, status: true, totalCredit: true, usedCredit: true },
+    select: {
+      createdAt: true,
+      status: true,
+      totalCredit: true,
+      usedCredit: true,
+    },
   });
-  
-  const timeStats = new Map<string, { total: number; used: number; matured: number; totalValue: number; usedValue: number }>();
-  
-  vouchers.forEach((voucher) => {
-    const key = isMonthly ? voucher.createdAt.toISOString().split("T")[0] : `${voucher.createdAt.getFullYear()}-${String(voucher.createdAt.getMonth() + 1).padStart(2, '0')}`;
-    
-    if (!timeStats.has(key)) {
-      timeStats.set(key, { total: 0, used: 0, matured: 0, totalValue: 0, usedValue: 0 });
+
+  const timeStats = new Map<
+    string,
+    {
+      total: number;
+      used: number;
+      matured: number;
+      totalValue: number;
+      usedValue: number;
     }
-    
+  >();
+
+  vouchers.forEach((voucher) => {
+    const key = isMonthly
+      ? voucher.createdAt.toISOString().split("T")[0]
+      : `${voucher.createdAt.getFullYear()}-${String(
+          voucher.createdAt.getMonth() + 1
+        ).padStart(2, "0")}`;
+
+    if (!timeStats.has(key)) {
+      timeStats.set(key, {
+        total: 0,
+        used: 0,
+        matured: 0,
+        totalValue: 0,
+        usedValue: 0,
+      });
+    }
+
     const stats = timeStats.get(key)!;
     stats.total++;
     stats.totalValue += voucher.totalCredit;
     stats.usedValue += voucher.usedCredit;
-    
+
     if (voucher.status === VoucherStatus.USED) {
       stats.used++;
     } else if (voucher.status === VoucherStatus.MATURED) {
       stats.matured++;
     }
   });
-  
+
   return Array.from(timeStats.entries())
     .map(([key, stats]) => ({
-      period: isMonthly ? new Date(key).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : new Date(key + "-01").toLocaleDateString("en-US", { month: "short" }),
+      period: isMonthly
+        ? new Date(key).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          })
+        : new Date(key + "-01").toLocaleDateString("en-US", { month: "short" }),
       date: key,
       ...stats,
     }))
@@ -634,7 +930,7 @@ export const getSystemStatsService = async (filters: StatsFilters = {}) => {
   prevDateTo.setTime(dateTo.getTime() - periodDiff);
 
   const isMonthly = !!month;
-  
+
   const [
     userStats,
     orderStats,
@@ -645,11 +941,29 @@ export const getSystemStatsService = async (filters: StatsFilters = {}) => {
     recentActivities,
     systemStatus,
   ] = await Promise.all([
-    getUserStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo, isMonthly }),
-    getOrderStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo, isMonthly }),
+    getUserStatsService({
+      dateFrom,
+      dateTo,
+      prevDateFrom,
+      prevDateTo,
+      isMonthly,
+    }),
+    getOrderStatsService({
+      dateFrom,
+      dateTo,
+      prevDateFrom,
+      prevDateTo,
+      isMonthly,
+    }),
     getFinanceStatsService({ dateFrom, dateTo, isMonthly }),
     getSubscriptionStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo }),
-    getVoucherStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo, isMonthly }),
+    getVoucherStatsService({
+      dateFrom,
+      dateTo,
+      prevDateFrom,
+      prevDateTo,
+      isMonthly,
+    }),
     getQuickStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo }),
     getRecentActivitiesService(),
     getSystemStatusService(),
@@ -809,7 +1123,11 @@ export const getFinanceStatsService = async ({
   const netProfit = totalRevenue - totalExpenses;
   const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-  const timeSeriesData = await getTimeSeriesFinanceData(dateFrom, dateTo, isMonthly);
+  const timeSeriesData = await getTimeSeriesFinanceData(
+    dateFrom,
+    dateTo,
+    isMonthly
+  );
 
   return {
     totalRevenue,
@@ -948,12 +1266,13 @@ export const getVoucherStatsService = async ({
   prevDateTo: Date;
   isMonthly: boolean;
 }): Promise<VoucherStats> => {
-  const [currentStats, prevStats, nearMaturityCount, timeSeriesData] = await Promise.all([
-    getVoucherStatsByPeriod(dateFrom, dateTo),
-    getVoucherStatsByPeriod(prevDateFrom, prevDateTo),
-    getNearMaturityVoucherCount(),
-    getTimeSeriesVoucherStats(dateFrom, dateTo, isMonthly),
-  ]);
+  const [currentStats, prevStats, nearMaturityCount, timeSeriesData] =
+    await Promise.all([
+      getVoucherStatsByPeriod(dateFrom, dateTo),
+      getVoucherStatsByPeriod(prevDateFrom, prevDateTo),
+      getNearMaturityVoucherCount(),
+      getTimeSeriesVoucherStats(dateFrom, dateTo, isMonthly),
+    ]);
 
   return {
     totalVouchers: currentStats.totalVouchers,
@@ -1241,42 +1560,133 @@ export const getRecentActivitiesService = async (): Promise<
 // ============================================
 
 export const getSystemStatusService = async (): Promise<SystemStatus> => {
-  const services = [
-    {
-      name: "API Gateway",
-      status: "Operational" as const,
-      responseTime: Math.floor(Math.random() * 200) + 100,
-      lastChecked: new Date(),
-    },
-    {
-      name: "Database",
-      status: "Operational" as const,
-      responseTime: Math.floor(Math.random() * 50) + 20,
-      lastChecked: new Date(),
-    },
-    {
-      name: "WebSocket",
-      status: "Operational" as const,
-      responseTime: Math.floor(Math.random() * 100) + 200,
-      lastChecked: new Date(),
-    },
-    {
-      name: "External APIs",
-      status: "Operational" as const,
-      responseTime: Math.floor(Math.random() * 150) + 250,
-      lastChecked: new Date(),
-    },
-  ];
+  try {
+    const systemMetrics = getSystemMetrics();
 
-  const avgResponseTime =
-    services.reduce((sum, service) => sum + service.responseTime, 0) /
-    services.length;
-  const uptime = 99.9;
+    // Check database connection
+    const dbCheck = await checkDatabaseConnection();
 
-  return {
-    overallStatus: "Operational",
-    uptime,
-    avgResponseTime: Math.round(avgResponseTime),
-    services,
-  };
+    // Check external services if URLs are provided
+    const externalApiCheck = process.env.EXTERNAL_API_URL
+      ? await checkHttpsEndpoint(process.env.EXTERNAL_API_URL)
+      : { isOnline: true, responseTime: 50 };
+
+    // Check WebSocket port if configured
+    const wsPort = process.env.WS_PORT ? parseInt(process.env.WS_PORT) : 8080;
+    const wsCheck = await checkPort("localhost", wsPort, 3000);
+
+    const services = [
+      {
+        name: "API Gateway",
+        status:
+          systemMetrics.cpu.usagePercent < 80 &&
+          systemMetrics.memory.usagePercent < 85
+            ? ("Operational" as const)
+            : ("Degraded" as const),
+        responseTime: Math.round(performance.now() % 100) + 50, // Simulated API response time
+        lastChecked: new Date(),
+      },
+      {
+        name: "Database",
+        status: dbCheck.isConnected
+          ? ("Operational" as const)
+          : ("Down" as const),
+        responseTime: dbCheck.responseTime,
+        lastChecked: new Date(),
+      },
+      {
+        name: "WebSocket",
+        status: wsCheck.isOpen ? ("Operational" as const) : ("Down" as const),
+        responseTime: wsCheck.responseTime,
+        lastChecked: new Date(),
+      },
+      {
+        name: "External APIs",
+        status: externalApiCheck.isOnline
+          ? ("Operational" as const)
+          : ("Degraded" as const),
+        responseTime: externalApiCheck.responseTime,
+        lastChecked: new Date(),
+      },
+    ];
+
+    // Calculate overall status
+    const downServices = services.filter((s) => s.status === "Down").length;
+    const degradedServices = services.filter(
+      (s) => s.status === "Degraded"
+    ).length;
+
+    let overallStatus: "Operational" | "Degraded" | "Down";
+    if (downServices > 0) {
+      overallStatus = "Down";
+    } else if (
+      degradedServices > 0 ||
+      systemMetrics.cpu.usagePercent > 90 ||
+      systemMetrics.memory.usagePercent > 95
+    ) {
+      overallStatus = "Degraded";
+    } else {
+      overallStatus = "Operational";
+    }
+
+    // Calculate average response time
+    const avgResponseTime = Math.round(
+      services.reduce((sum, service) => sum + service.responseTime, 0) /
+        services.length
+    );
+
+    // Calculate uptime percentage based on system uptime and service availability
+    const serviceAvailability =
+      services.filter((s) => s.status === "Operational").length /
+      services.length;
+    const uptime = Math.min(99.9, serviceAvailability * 100);
+
+    return {
+      overallStatus,
+      uptime: Math.round(uptime * 100) / 100,
+      avgResponseTime,
+      services,
+      systemMetrics: {
+        cpu: systemMetrics.cpu,
+        memory: systemMetrics.memory,
+        uptime: systemMetrics.uptime,
+        platform: systemMetrics.platform,
+      },
+    };
+  } catch (error) {
+    console.error("Error getting system status:", error);
+
+    // Fallback status when monitoring fails
+    return {
+      overallStatus: "Degraded",
+      uptime: 95.0,
+      avgResponseTime: 500,
+      services: [
+        {
+          name: "API Gateway",
+          status: "Degraded",
+          responseTime: 500,
+          lastChecked: new Date(),
+        },
+        {
+          name: "Database",
+          status: "Down",
+          responseTime: 1000,
+          lastChecked: new Date(),
+        },
+        {
+          name: "WebSocket",
+          status: "Down",
+          responseTime: 1000,
+          lastChecked: new Date(),
+        },
+        {
+          name: "External APIs",
+          status: "Degraded",
+          responseTime: 800,
+          lastChecked: new Date(),
+        },
+      ],
+    };
+  }
 };
