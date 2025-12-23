@@ -93,11 +93,14 @@ export const getUserStats = async (req: Request, res: Response) => {
     const prevStartDate = new Date(startDate.getTime() - periodDiff);
     const prevEndDate = new Date(endDate.getTime() - periodDiff);
 
+    const isMonthly = !!parsedMonth;
+
     const userStats = await getUserStatsService({
       dateFrom: startDate,
       dateTo: endDate,
       prevDateFrom: prevStartDate,
       prevDateTo: prevEndDate,
+      isMonthly,
     });
 
     res.status(200).json({
@@ -150,11 +153,14 @@ export const getOrderStats = async (req: Request, res: Response) => {
     const prevStartDate = new Date(startDate.getTime() - periodDiff);
     const prevEndDate = new Date(endDate.getTime() - periodDiff);
 
+    const isMonthly = !!parsedMonth;
+
     const orderStats = await getOrderStatsService({
       dateFrom: startDate,
       dateTo: endDate,
       prevDateFrom: prevStartDate,
       prevDateTo: prevEndDate,
+      isMonthly,
     });
 
     res.status(200).json({
@@ -202,10 +208,12 @@ export const getFinanceStats = async (req: Request, res: Response) => {
       endDate = new Date(parsedYear, 11, 31, 23, 59, 59);
     }
 
+    const isMonthly = !!parsedMonth;
+
     const financeStats = await getFinanceStatsService({
       dateFrom: startDate,
       dateTo: endDate,
-      year: parsedYear,
+      isMonthly,
     });
 
     res.status(200).json({
@@ -315,11 +323,14 @@ export const getVoucherStats = async (req: Request, res: Response) => {
     const prevStartDate = new Date(startDate.getTime() - periodDiff);
     const prevEndDate = new Date(endDate.getTime() - periodDiff);
 
+    const isMonthly = !!parsedMonth;
+
     const voucherStats = await getVoucherStatsService({
       dateFrom: startDate,
       dateTo: endDate,
       prevDateFrom: prevStartDate,
       prevDateTo: prevEndDate,
+      isMonthly,
     });
 
     res.status(200).json({

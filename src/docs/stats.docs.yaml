@@ -4,7 +4,6 @@ tags:
 
 components:
   schemas:
-    # Main Dashboard Stats Response
     DashboardStatsResponse:
       type: object
       properties:
@@ -38,83 +37,94 @@ components:
         filters:
           $ref: "#/components/schemas/StatsFilters"
 
-    # User Statistics Schema
     UserStats:
       type: object
       properties:
         totalUsers:
           type: integer
-          description: Total number of users across all roles
           example: 1250
         restaurants:
           type: integer
-          description: Number of restaurant users
           example: 340
         farmers:
           type: integer
-          description: Number of farmer users
           example: 850
         admins:
           type: integer
-          description: Number of admin users
           example: 60
         affiliators:
           type: integer
-          description: Number of affiliator users
           example: 45
         logistics:
           type: integer
-          description: Number of logistics users
           example: 15
+        timeSeriesData:
+          type: array
+          items:
+            type: object
+            properties:
+              period:
+                type: string
+                example: "Dec 1"
+              date:
+                type: string
+                example: "2024-12-01"
+              restaurants:
+                type: integer
+                example: 5
+              farmers:
+                type: integer
+                example: 12
+              admins:
+                type: integer
+                example: 1
+              affiliators:
+                type: integer
+                example: 2
+              total:
+                type: integer
+                example: 20
         growth:
           type: object
           properties:
             totalChange:
               type: number
-              description: Percentage change in total users
               example: 12.5
             restaurantChange:
               type: number
-              description: Percentage change in restaurant users
               example: 8.2
             farmerChange:
               type: number
-              description: Percentage change in farmer users
               example: 15.3
             adminChange:
               type: number
-              description: Percentage change in admin users
               example: 3.4
-No token found
-    # Order Statistics Schema
+
     OrderStats:
       type: object
       properties:
         totalOrders:
           type: integer
-          description: Total number of orders
           example: 2840
         completedOrders:
           type: integer
-          description: Number of completed orders
           example: 2156
         cancelledOrders:
           type: integer
-          description: Number of cancelled orders
           example: 284
         ongoingOrders:
           type: integer
-          description: Number of ongoing orders (confirmed, preparing, ready, in-transit)
           example: 400
-        dailyOrders:
+        timeSeriesData:
           type: array
-          description: Daily order breakdown for the last 30 days
           items:
             type: object
             properties:
+              period:
+                type: string
+                example: "Dec 1"
               date:
                 type: string
-                format: date
                 example: "2024-12-01"
               completed:
                 type: integer
@@ -125,47 +135,48 @@ No token found
               ongoing:
                 type: integer
                 example: 22
+              total:
+                type: integer
+                example: 85
         growth:
           type: object
           properties:
             totalChange:
               type: number
-              description: Percentage change in total orders
               example: 8.2
             completedChange:
               type: number
-              description: Percentage change in completed orders
               example: 15.3
 
-    # Finance Statistics Schema
     FinanceStats:
       type: object
       properties:
         totalRevenue:
           type: number
-          description: Total revenue in RWF
           example: 45600000
         totalExpenses:
           type: number
-          description: Total expenses in RWF
           example: 12300000
         netProfit:
           type: number
-          description: Net profit (revenue - expenses) in RWF
           example: 33300000
         profitMargin:
           type: number
-          description: Profit margin percentage
           example: 77.9
-        monthlyFinance:
+        timeSeriesData:
           type: array
-          description: Monthly revenue vs expenses for the last 12 months
           items:
             type: object
             properties:
-              month:
+              period:
                 type: string
-                example: "Jan"
+                example: "Dec 1"
+              date:
+                type: string
+                example: "2024-12-01"
+              month:
+                type: integer
+                example: 12
               revenue:
                 type: number
                 example: 4800000
@@ -177,55 +188,43 @@ No token found
           properties:
             orders:
               type: number
-              description: Revenue from completed orders
               example: 38000000
             subscriptions:
               type: number
-              description: Revenue from subscription payments
               example: 5600000
             vouchers:
               type: number
-              description: Revenue from voucher repayments
               example: 2000000
         expenseBreakdown:
           type: object
           properties:
             usedVouchers:
               type: number
-              description: Expenses from used vouchers
               example: 8000000
             maturedVouchers:
               type: number
-              description: Expenses from matured vouchers
               example: 2000000
             nearMaturityVouchers:
               type: number
-              description: Expenses from near-maturity vouchers (1-2 days remaining)
               example: 500000
             farmerPayments:
               type: number
-              description: Payments made to farmers for supplies
               example: 1800000
 
-    # Subscription Statistics Schema
     SubscriptionStats:
       type: object
       properties:
         totalSubscriptions:
           type: integer
-          description: Total number of subscriptions created
           example: 220
         activeSubscriptions:
           type: integer
-          description: Number of active subscriptions
           example: 180
         expiredSubscriptions:
           type: integer
-          description: Number of expired subscriptions
           example: 40
         planBreakdown:
           type: array
-          description: Breakdown by subscription plan
           items:
             type: object
             properties:
@@ -243,54 +242,68 @@ No token found
           properties:
             totalChange:
               type: number
-              description: Percentage change in total subscriptions
               example: 5.7
             activeChange:
               type: number
-              description: Percentage change in active subscriptions
               example: -2.1
 
-    # Voucher Statistics Schema
     VoucherStats:
       type: object
       properties:
         totalVouchers:
           type: integer
-          description: Total number of vouchers (used + matured)
           example: 450
         usedVouchers:
           type: integer
-          description: Number of used vouchers
           example: 320
         maturedVouchers:
           type: integer
-          description: Number of matured vouchers
           example: 130
         nearMaturityVouchers:
           type: integer
-          description: Number of vouchers near maturity (1-2 payment days remaining)
           example: 25
         totalValue:
           type: number
-          description: Total value of all vouchers
           example: 15000000
         usedValue:
           type: number
-          description: Total value of used vouchers
           example: 12000000
+        timeSeriesData:
+          type: array
+          items:
+            type: object
+            properties:
+              period:
+                type: string
+                example: "Dec 1"
+              date:
+                type: string
+                example: "2024-12-01"
+              total:
+                type: integer
+                example: 15
+              used:
+                type: integer
+                example: 12
+              matured:
+                type: integer
+                example: 3
+              totalValue:
+                type: number
+                example: 500000
+              usedValue:
+                type: number
+                example: 400000
         growth:
           type: object
           properties:
             totalChange:
               type: number
-              description: Percentage change in total vouchers
               example: -2.1
             usedChange:
               type: number
-              description: Percentage change in used vouchers
               example: 3.4
 
-    # Quick Statistics Schema
     QuickStats:
       type: object
       properties:
@@ -302,7 +315,6 @@ No token found
               example: 1250
             change:
               type: number
-              description: Percentage change from previous period
               example: 12.5
         totalOrders:
           type: object
@@ -345,13 +357,11 @@ No token found
           properties:
             value:
               type: number
-              description: Order completion rate percentage
               example: 75.9
             change:
               type: number
               example: 3.4
 
-    # Recent Activity Schema
     RecentActivity:
       type: object
       properties:
@@ -377,12 +387,10 @@ No token found
           example: "2024-12-01T11:28:13Z"
         metadata:
           type: object
-          description: Additional activity-specific data
           example:
             amount: 125000
             currency: "RWF"
 
-    # System Status Schema
     SystemStatus:
       type: object
       properties:
@@ -392,11 +400,9 @@ No token found
           example: "Operational"
         uptime:
           type: number
-          description: System uptime percentage
           example: 99.9
         avgResponseTime:
           type: integer
-          description: Average response time in milliseconds
           example: 275
         services:
           type: array
@@ -412,43 +418,39 @@ No token found
                 example: "Operational"
               responseTime:
                 type: integer
-                description: Service response time in milliseconds
                 example: 185
               lastChecked:
                 type: string
                 format: date-time
                 example: "2024-12-01T11:35:14Z"
 
-    # Stats Filters Schema
     StatsFilters:
       type: object
       properties:
         year:
           type: integer
-          description: Year filter applied
           example: 2024
         month:
           type: integer
-          description: Month filter applied (1-12)
           example: 12
         dateFrom:
           type: string
           format: date-time
-          description: Start date of the filtered period
           example: "2024-12-01T00:00:00Z"
         dateTo:
           type: string
           format: date-time
-          description: End date of the filtered period
           example: "2024-12-31T23:59:59Z"
 
-    # Error Response Schema
-    StatsErrorResponse:
+    ErrorResponse:
       type: object
       properties:
         message:
           type: string
           example: "Failed to retrieve dashboard statistics"
+
+security:
+  - BearerAuth: []
 
 paths:
   /stats/dashboard:
@@ -490,17 +492,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StatsErrorResponse"
+                $ref: "#/components/schemas/ErrorResponse"
         401:
           description: Unauthorized - Invalid or missing token
         403:
           description: Forbidden - Admin access required
         500:
           description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StatsErrorResponse"
 
   /stats/users:
     get:
@@ -513,15 +511,11 @@ paths:
       parameters:
         - name: year
           in: query
-          description: Year filter
-          required: false
           schema:
             type: integer
             example: 2024
         - name: month
           in: query
-          description: Month filter (1-12)
-          required: false
           schema:
             type: integer
             minimum: 1
@@ -529,16 +523,12 @@ paths:
             example: 12
         - name: dateFrom
           in: query
-          description: Start date filter (ISO 8601 format)
-          required: false
           schema:
             type: string
             format: date
             example: "2024-12-01"
         - name: dateTo
           in: query
-          description: End date filter (ISO 8601 format)
-          required: false
           schema:
             type: string
             format: date
@@ -576,15 +566,11 @@ paths:
       parameters:
         - name: year
           in: query
-          description: Year filter
-          required: false
           schema:
             type: integer
             example: 2024
         - name: month
           in: query
-          description: Month filter (1-12)
-          required: false
           schema:
             type: integer
             minimum: 1
@@ -592,16 +578,12 @@ paths:
             example: 12
         - name: dateFrom
           in: query
-          description: Start date filter
-          required: false
           schema:
             type: string
             format: date
             example: "2024-12-01"
         - name: dateTo
           in: query
-          description: End date filter
-          required: false
           schema:
             type: string
             format: date
@@ -639,15 +621,11 @@ paths:
       parameters:
         - name: year
           in: query
-          description: Year filter
-          required: false
           schema:
             type: integer
             example: 2024
         - name: month
           in: query
-          description: Month filter (1-12)
-          required: false
           schema:
             type: integer
             minimum: 1
@@ -655,16 +633,12 @@ paths:
             example: 12
         - name: dateFrom
           in: query
-          description: Start date filter
-          required: false
           schema:
             type: string
             format: date
             example: "2024-12-01"
         - name: dateTo
           in: query
-          description: End date filter
-          required: false
           schema:
             type: string
             format: date
@@ -702,15 +676,11 @@ paths:
       parameters:
         - name: year
           in: query
-          description: Year filter
-          required: false
           schema:
             type: integer
             example: 2024
         - name: month
           in: query
-          description: Month filter (1-12)
-          required: false
           schema:
             type: integer
             minimum: 1
@@ -718,16 +688,12 @@ paths:
             example: 12
         - name: dateFrom
           in: query
-          description: Start date filter
-          required: false
           schema:
             type: string
             format: date
             example: "2024-12-01"
         - name: dateTo
           in: query
-          description: End date filter
-          required: false
           schema:
             type: string
             format: date
@@ -765,15 +731,11 @@ paths:
       parameters:
         - name: year
           in: query
-          description: Year filter
-          required: false
           schema:
             type: integer
             example: 2024
         - name: month
           in: query
-          description: Month filter (1-12)
-          required: false
           schema:
             type: integer
             minimum: 1
@@ -781,16 +743,12 @@ paths:
             example: 12
         - name: dateFrom
           in: query
-          description: Start date filter
-          required: false
           schema:
             type: string
             format: date
             example: "2024-12-01"
         - name: dateTo
           in: query
-          description: End date filter
-          required: false
           schema:
             type: string
             format: date
@@ -828,15 +786,11 @@ paths:
       parameters:
         - name: year
           in: query
-          description: Year filter
-          required: false
           schema:
             type: integer
             example: 2024
         - name: month
           in: query
-          description: Month filter (1-12)
-          required: false
           schema:
             type: integer
             minimum: 1
@@ -844,16 +798,12 @@ paths:
             example: 12
         - name: dateFrom
           in: query
-          description: Start date filter
-          required: false
           schema:
             type: string
             format: date
             example: "2024-12-01"
         - name: dateTo
           in: query
-          description: End date filter
-          required: false
           schema:
             type: string
             format: date

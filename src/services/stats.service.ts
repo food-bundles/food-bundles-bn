@@ -25,6 +25,15 @@ interface UserStats {
   admins: number;
   affiliators: number;
   logistics: number;
+  timeSeriesData: Array<{
+    period: string;
+    date: string;
+    restaurants: number;
+    farmers: number;
+    admins: number;
+    affiliators: number;
+    total: number;
+  }>;
   growth: {
     totalChange: number;
     restaurantChange: number;
@@ -38,11 +47,13 @@ interface OrderStats {
   completedOrders: number;
   cancelledOrders: number;
   ongoingOrders: number;
-  dailyOrders: Array<{
+  timeSeriesData: Array<{
+    period: string;
     date: string;
     completed: number;
     cancelled: number;
     ongoing: number;
+    total: number;
   }>;
   growth: {
     totalChange: number;
@@ -55,8 +66,10 @@ interface FinanceStats {
   totalExpenses: number;
   netProfit: number;
   profitMargin: number;
-  monthlyFinance: Array<{
-    month: string;
+  timeSeriesData: Array<{
+    period: string;
+    date?: string;
+    month?: number;
     revenue: number;
     expenses: number;
   }>;
@@ -95,6 +108,15 @@ interface VoucherStats {
   nearMaturityVouchers: number;
   totalValue: number;
   usedValue: number;
+  timeSeriesData: Array<{
+    period: string;
+    date: string;
+    total: number;
+    used: number;
+    matured: number;
+    totalValue: number;
+    usedValue: number;
+  }>;
   growth: {
     totalChange: number;
     usedChange: number;
@@ -395,37 +417,195 @@ const getFarmerPayments = async (
   return result._sum.totalAmount || 0;
 };
 
-const getMonthlyFinanceData = async (year: number) => {
-  const monthlyData = [];
-
-  for (let month = 0; month < 12; month++) {
-    const startOfMonth = new Date(year, month, 1);
-    const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
-
-    const [orderRev, subscriptionRev, voucherRev] = await Promise.all([
-      getOrderRevenue(startOfMonth, endOfMonth),
-      getSubscriptionRevenue(startOfMonth, endOfMonth),
-      getVoucherRevenue(startOfMonth, endOfMonth),
-    ]);
-
-    const [usedVoucherExp, maturedVoucherExp, farmerPaymentsExp] =
-      await Promise.all([
+const getTimeSeriesFinanceData = async (dateFrom: Date, dateTo: Date, isMonthly: boolean) => {
+  const data = [];
+  
+  if (isMonthly) {
+    // Generate daily data for the month
+    const currentDate = new Date(dateFrom);
+    while (currentDate <= dateTo) {
+      const dayStart = new Date(currentDate);
+      const dayEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 23, 59, 59);
+      
+      const [orderRev, subscriptionRev, voucherRev] = await Promise.all([
+        getOrderRevenue(dayStart, dayEnd),
+        getSubscriptionRevenue(dayStart, dayEnd),
+        getVoucherRevenue(dayStart, dayEnd),
+      ]);
+      
+      const [usedVoucherExp, maturedVoucherExp, farmerPaymentsExp] = await Promise.all([
+        getUsedVoucherExpenses(dayStart, dayEnd),
+        getMaturedVoucherExpenses(dayStart, dayEnd),
+        getFarmerPayments(dayStart, dayEnd),
+      ]);
+      
+      const revenue = orderRev + subscriptionRev + voucherRev;
+      const expenses = usedVoucherExp + maturedVoucherExp + farmerPaymentsExp;
+      
+      data.push({
+        period: currentDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        date: currentDate.toISOString().split("T")[0],
+        revenue,
+        expenses,
+      });
+      
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+  } else {
+    // Generate monthly data for the year
+    const year = dateFrom.getFullYear();
+    for (let month = 0; month < 12; month++) {
+      const startOfMonth = new Date(year, month, 1);
+      const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+      
+      const [orderRev, subscriptionRev, voucherRev] = await Promise.all([
+        getOrderRevenue(startOfMonth, endOfMonth),
+        getSubscriptionRevenue(startOfMonth, endOfMonth),
+        getVoucherRevenue(startOfMonth, endOfMonth),
+      ]);
+      
+      const [usedVoucherExp, maturedVoucherExp, farmerPaymentsExp] = await Promise.all([
         getUsedVoucherExpenses(startOfMonth, endOfMonth),
         getMaturedVoucherExpenses(startOfMonth, endOfMonth),
         getFarmerPayments(startOfMonth, endOfMonth),
       ]);
-
-    const revenue = orderRev + subscriptionRev + voucherRev;
-    const expenses = usedVoucherExp + maturedVoucherExp + farmerPaymentsExp;
-
-    monthlyData.push({
-      month: startOfMonth.toLocaleDateString("en-US", { month: "short" }),
-      revenue,
-      expenses,
-    });
+      
+      const revenue = orderRev + subscriptionRev + voucherRev;
+      const expenses = usedVoucherExp + maturedVoucherExp + farmerPaymentsExp;
+      
+      data.push({
+        period: startOfMonth.toLocaleDateString("en-US", { month: "short" }),
+        month: month + 1,
+        revenue,
+        expenses,
+      });
+    }
   }
+  
+  return data;
+};
 
-  return monthlyData;
+const getTimeSeriesOrderStats = async (dateFrom: Date, dateTo: Date, isMonthly: boolean) => {
+  const orders = await prisma.order.findMany({
+    where: { createdAt: { gte: dateFrom, lte: dateTo } },
+    select: { createdAt: true, status: true },
+  });
+  
+  const ongoingStatuses = [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.IN_TRANSIT];
+  const timeStats = new Map<string, { completed: number; cancelled: number; ongoing: number; total: number }>();
+  
+  orders.forEach((order) => {
+    const key = isMonthly 
+      ? order.createdAt.toISOString().split("T")[0]
+      : `${order.createdAt.getFullYear()}-${String(order.createdAt.getMonth() + 1).padStart(2, '0')}`;
+    
+    if (!timeStats.has(key)) {
+      timeStats.set(key, { completed: 0, cancelled: 0, ongoing: 0, total: 0 });
+    }
+    
+    const stats = timeStats.get(key)!;
+    stats.total++;
+    
+    if (order.status === OrderStatus.DELIVERED) {
+      stats.completed++;
+    } else if (order.status === OrderStatus.CANCELLED) {
+      stats.cancelled++;
+    } else if (ongoingStatuses.includes(order.status as any)) {
+      stats.ongoing++;
+    }
+  });
+  
+  return Array.from(timeStats.entries())
+    .map(([key, stats]) => ({
+      period: isMonthly ? new Date(key).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : new Date(key + "-01").toLocaleDateString("en-US", { month: "short" }),
+      date: key,
+      ...stats,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+};
+
+const getTimeSeriesUserStats = async (dateFrom: Date, dateTo: Date, isMonthly: boolean) => {
+  const users = await Promise.all([
+    prisma.restaurant.findMany({ where: { createdAt: { gte: dateFrom, lte: dateTo } }, select: { createdAt: true } }),
+    prisma.farmer.findMany({ where: { createdAt: { gte: dateFrom, lte: dateTo } }, select: { createdAt: true } }),
+    prisma.admin.findMany({ where: { createdAt: { gte: dateFrom, lte: dateTo } }, select: { createdAt: true } }),
+    prisma.affiliator.findMany({ where: { createdAt: { gte: dateFrom, lte: dateTo } }, select: { createdAt: true } }),
+  ]);
+  
+  const allUsers = [...users[0], ...users[1], ...users[2], ...users[3]];
+  const timeStats = new Map<string, { restaurants: number; farmers: number; admins: number; affiliators: number; total: number }>();
+  
+  users[0].forEach(user => {
+    const key = isMonthly ? user.createdAt.toISOString().split("T")[0] : `${user.createdAt.getFullYear()}-${String(user.createdAt.getMonth() + 1).padStart(2, '0')}`;
+    if (!timeStats.has(key)) timeStats.set(key, { restaurants: 0, farmers: 0, admins: 0, affiliators: 0, total: 0 });
+    timeStats.get(key)!.restaurants++;
+    timeStats.get(key)!.total++;
+  });
+  
+  users[1].forEach(user => {
+    const key = isMonthly ? user.createdAt.toISOString().split("T")[0] : `${user.createdAt.getFullYear()}-${String(user.createdAt.getMonth() + 1).padStart(2, '0')}`;
+    if (!timeStats.has(key)) timeStats.set(key, { restaurants: 0, farmers: 0, admins: 0, affiliators: 0, total: 0 });
+    timeStats.get(key)!.farmers++;
+    timeStats.get(key)!.total++;
+  });
+  
+  users[2].forEach(user => {
+    const key = isMonthly ? user.createdAt.toISOString().split("T")[0] : `${user.createdAt.getFullYear()}-${String(user.createdAt.getMonth() + 1).padStart(2, '0')}`;
+    if (!timeStats.has(key)) timeStats.set(key, { restaurants: 0, farmers: 0, admins: 0, affiliators: 0, total: 0 });
+    timeStats.get(key)!.admins++;
+    timeStats.get(key)!.total++;
+  });
+  
+  users[3].forEach(user => {
+    const key = isMonthly ? user.createdAt.toISOString().split("T")[0] : `${user.createdAt.getFullYear()}-${String(user.createdAt.getMonth() + 1).padStart(2, '0')}`;
+    if (!timeStats.has(key)) timeStats.set(key, { restaurants: 0, farmers: 0, admins: 0, affiliators: 0, total: 0 });
+    timeStats.get(key)!.affiliators++;
+    timeStats.get(key)!.total++;
+  });
+  
+  return Array.from(timeStats.entries())
+    .map(([key, stats]) => ({
+      period: isMonthly ? new Date(key).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : new Date(key + "-01").toLocaleDateString("en-US", { month: "short" }),
+      date: key,
+      ...stats,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+};
+
+const getTimeSeriesVoucherStats = async (dateFrom: Date, dateTo: Date, isMonthly: boolean) => {
+  const vouchers = await prisma.voucher.findMany({
+    where: { createdAt: { gte: dateFrom, lte: dateTo } },
+    select: { createdAt: true, status: true, totalCredit: true, usedCredit: true },
+  });
+  
+  const timeStats = new Map<string, { total: number; used: number; matured: number; totalValue: number; usedValue: number }>();
+  
+  vouchers.forEach((voucher) => {
+    const key = isMonthly ? voucher.createdAt.toISOString().split("T")[0] : `${voucher.createdAt.getFullYear()}-${String(voucher.createdAt.getMonth() + 1).padStart(2, '0')}`;
+    
+    if (!timeStats.has(key)) {
+      timeStats.set(key, { total: 0, used: 0, matured: 0, totalValue: 0, usedValue: 0 });
+    }
+    
+    const stats = timeStats.get(key)!;
+    stats.total++;
+    stats.totalValue += voucher.totalCredit;
+    stats.usedValue += voucher.usedCredit;
+    
+    if (voucher.status === VoucherStatus.USED) {
+      stats.used++;
+    } else if (voucher.status === VoucherStatus.MATURED) {
+      stats.matured++;
+    }
+  });
+  
+  return Array.from(timeStats.entries())
+    .map(([key, stats]) => ({
+      period: isMonthly ? new Date(key).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : new Date(key + "-01").toLocaleDateString("en-US", { month: "short" }),
+      date: key,
+      ...stats,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 };
 
 // ============================================
@@ -453,6 +633,8 @@ export const getSystemStatsService = async (filters: StatsFilters = {}) => {
   prevDateFrom.setTime(dateFrom.getTime() - periodDiff);
   prevDateTo.setTime(dateTo.getTime() - periodDiff);
 
+  const isMonthly = !!month;
+  
   const [
     userStats,
     orderStats,
@@ -463,11 +645,11 @@ export const getSystemStatsService = async (filters: StatsFilters = {}) => {
     recentActivities,
     systemStatus,
   ] = await Promise.all([
-    getUserStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo }),
-    getOrderStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo }),
-    getFinanceStatsService({ dateFrom, dateTo, year }),
+    getUserStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo, isMonthly }),
+    getOrderStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo, isMonthly }),
+    getFinanceStatsService({ dateFrom, dateTo, isMonthly }),
     getSubscriptionStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo }),
-    getVoucherStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo }),
+    getVoucherStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo, isMonthly }),
     getQuickStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo }),
     getRecentActivitiesService(),
     getSystemStatusService(),
@@ -500,15 +682,18 @@ export const getUserStatsService = async ({
   dateTo,
   prevDateFrom,
   prevDateTo,
+  isMonthly,
 }: {
   dateFrom: Date;
   dateTo: Date;
   prevDateFrom: Date;
   prevDateTo: Date;
+  isMonthly: boolean;
 }): Promise<UserStats> => {
-  const [currentStats, prevStats] = await Promise.all([
+  const [currentStats, prevStats, timeSeriesData] = await Promise.all([
     getUserStatsByPeriod(dateFrom, dateTo),
     getUserStatsByPeriod(prevDateFrom, prevDateTo),
+    getTimeSeriesUserStats(dateFrom, dateTo, isMonthly),
   ]);
 
   return {
@@ -518,6 +703,7 @@ export const getUserStatsService = async ({
     admins: currentStats.admins,
     affiliators: currentStats.affiliators,
     logistics: currentStats.logistics,
+    timeSeriesData,
     growth: {
       totalChange: calculatePercentageChange(
         prevStats.totalUsers,
@@ -548,16 +734,18 @@ export const getOrderStatsService = async ({
   dateTo,
   prevDateFrom,
   prevDateTo,
+  isMonthly,
 }: {
   dateFrom: Date;
   dateTo: Date;
   prevDateFrom: Date;
   prevDateTo: Date;
+  isMonthly: boolean;
 }): Promise<OrderStats> => {
-  const [currentOrders, prevOrders, dailyOrders] = await Promise.all([
+  const [currentOrders, prevOrders, timeSeriesData] = await Promise.all([
     getOrderStatsByPeriod(dateFrom, dateTo),
     getOrderStatsByPeriod(prevDateFrom, prevDateTo),
-    getDailyOrderStats(dateFrom, dateTo),
+    getTimeSeriesOrderStats(dateFrom, dateTo, isMonthly),
   ]);
 
   return {
@@ -565,7 +753,7 @@ export const getOrderStatsService = async ({
     completedOrders: currentOrders.completedOrders,
     cancelledOrders: currentOrders.cancelledOrders,
     ongoingOrders: currentOrders.ongoingOrders,
-    dailyOrders,
+    timeSeriesData,
     growth: {
       totalChange: calculatePercentageChange(
         prevOrders.totalOrders,
@@ -586,11 +774,11 @@ export const getOrderStatsService = async ({
 export const getFinanceStatsService = async ({
   dateFrom,
   dateTo,
-  year,
+  isMonthly,
 }: {
   dateFrom: Date;
   dateTo: Date;
-  year: number;
+  isMonthly: boolean;
 }): Promise<FinanceStats> => {
   const [orderRevenue, subscriptionRevenue, voucherRevenue] = await Promise.all(
     [
@@ -621,14 +809,14 @@ export const getFinanceStatsService = async ({
   const netProfit = totalRevenue - totalExpenses;
   const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-  const monthlyFinance = await getMonthlyFinanceData(year);
+  const timeSeriesData = await getTimeSeriesFinanceData(dateFrom, dateTo, isMonthly);
 
   return {
     totalRevenue,
     totalExpenses,
     netProfit,
     profitMargin,
-    monthlyFinance,
+    timeSeriesData,
     revenueBreakdown: {
       orders: orderRevenue,
       subscriptions: subscriptionRevenue,
@@ -752,16 +940,19 @@ export const getVoucherStatsService = async ({
   dateTo,
   prevDateFrom,
   prevDateTo,
+  isMonthly,
 }: {
   dateFrom: Date;
   dateTo: Date;
   prevDateFrom: Date;
   prevDateTo: Date;
+  isMonthly: boolean;
 }): Promise<VoucherStats> => {
-  const [currentStats, prevStats, nearMaturityCount] = await Promise.all([
+  const [currentStats, prevStats, nearMaturityCount, timeSeriesData] = await Promise.all([
     getVoucherStatsByPeriod(dateFrom, dateTo),
     getVoucherStatsByPeriod(prevDateFrom, prevDateTo),
     getNearMaturityVoucherCount(),
+    getTimeSeriesVoucherStats(dateFrom, dateTo, isMonthly),
   ]);
 
   return {
@@ -771,6 +962,7 @@ export const getVoucherStatsService = async ({
     nearMaturityVouchers: nearMaturityCount,
     totalValue: currentStats.totalValue,
     usedValue: currentStats.usedValue,
+    timeSeriesData,
     growth: {
       totalChange: calculatePercentageChange(
         prevStats.totalVouchers,
