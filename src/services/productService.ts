@@ -2,6 +2,7 @@ import prisma from "../prisma";
 import { createNotificationService } from "./notification.services";
 
 export interface ProductData {
+  tableTronicId?: number | null;
   productName: string;
   unitPrice: number;
   purchasePrice: number;
@@ -44,6 +45,7 @@ export const createProductService = async (productData: ProductData) => {
   // Create the product with proper admin connection
   const product = await prisma.product.create({
     data: {
+      tableTronicId: productData.tableTronicId,
       productName: productData.productName,
       unitPrice: Number(productData.unitPrice),
       purchasePrice: Number(productData.purchasePrice),
@@ -207,6 +209,9 @@ export const updateProductService = async (
   const updatedProduct = await prisma.product.update({
     where: { id: productId },
     data: {
+      ...(updateData.tableTronicId !== undefined && {
+        tableTronicId: updateData.tableTronicId,
+      }),
       ...(updateData.productName !== undefined && {
         productName: updateData.productName,
       }),

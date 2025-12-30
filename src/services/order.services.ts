@@ -54,6 +54,7 @@ interface CreateDirectOrderData {
 }
 
 export interface UpdateOrderData {
+  ebmReference?: string;
   status?: OrderStatus;
   notes?: string;
   requestedDelivery?: Date;

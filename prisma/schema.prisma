@@ -314,7 +314,7 @@ model Admin {
 
 model Product {
   id                String              @id @default(uuid())
-  tableTronicId     Int?             @unique
+  tableTronicId     Int?                @unique
   unitPrice         Float
   purchasePrice     Float
   unit              String
