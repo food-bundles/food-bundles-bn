@@ -193,7 +193,7 @@ export const createVoucherService = async (data: CreateVoucherData) => {
       voucherCode: result.voucherCode,
       action: "CREATED",
       timestamp: new Date().toISOString(),
-      restaurantId: result.restaurantId,
+      restaurantId: result.restaurantId || "",
       data: {
         remainingCredit: result.remainingCredit,
         totalCredit: result.totalCredit,
@@ -649,7 +649,7 @@ export const deactivateVoucherService = async (
       voucherCode: voucher.voucherCode,
       action: "SUSPENDED",
       timestamp: new Date().toISOString(),
-      restaurantId: voucher.restaurantId,
+      restaurantId: voucher.restaurantId || "",
       data: {
         status: voucher.status,
       },
@@ -748,7 +748,7 @@ export const submitLoanApplicationService = async (
       loanId: loanApplication.id,
       action: "SUBMITTED",
       timestamp: new Date().toISOString(),
-      restaurantId: loanApplication.restaurantId,
+      restaurantId: loanApplication.restaurantId || "",
       data: {
         requestedAmount: loanApplication.requestedAmount,
         status: loanApplication.status,
@@ -971,7 +971,7 @@ export const approveLoanApplicationService = async (
       message: `A ${voucher.discountPercentage}% discount voucher worth ${voucher.creditLimit} RWF has been issued`,
       eventType: "VOUCHER_ISSUED",
       targetType: "SPECIFIC_USER",
-      targetId: voucher.restaurantId,
+      targetId: voucher.restaurantId || "",
       metadata: {
         voucherId: voucher.id,
         voucherCode: voucher.voucherCode,
@@ -987,7 +987,11 @@ export const approveLoanApplicationService = async (
   // Send notifications
   try {
     await sendMessage(
-      `A ${result.voucher.discountPercentage}% discount voucher worth ${result.voucher.creditLimit} RWF has been issued and approved by ${approvedByName?.name} for restaurant: ${result.updatedLoan.restaurant.name}.`,
+      `A ${result.voucher.discountPercentage}% discount voucher worth ${
+        result.voucher.creditLimit
+      } RWF has been issued and approved by ${
+        approvedByName?.name
+      } for restaurant: ${result.updatedLoan.restaurant?.name || ""}.`,
       process.env.PRIVATE_RECEIVER || ""
     );
   } catch (smsError) {
@@ -996,11 +1000,11 @@ export const approveLoanApplicationService = async (
 
   await sendAdminVoucherApprovedEmail({
     userType: "RESTAURANT",
-    userName: result.updatedLoan.restaurant.name,
-    userEmail: result.updatedLoan.restaurant.email || "",
-    restaurantName: result.updatedLoan.restaurant.name,
+    userName: result.updatedLoan.restaurant?.name || "",
+    userEmail: result.updatedLoan.restaurant?.email || "",
+    restaurantName: result.updatedLoan.restaurant?.name,
     voucherAmount: result.voucher.creditLimit,
-    appliedBy: result.updatedLoan.restaurant.name,
+    appliedBy: result.updatedLoan.restaurant?.name,
     approvedBy: approvedByName?.name,
   });
 
@@ -1011,7 +1015,7 @@ export const approveLoanApplicationService = async (
       loanId: result.updatedLoan.id,
       action: "APPROVED",
       timestamp: new Date().toISOString(),
-      restaurantId: result.updatedLoan.restaurantId,
+      restaurantId: result.updatedLoan.restaurantId || "",
       data: {
         requestedAmount: result.updatedLoan.requestedAmount,
         approvedAmount: result.updatedLoan.approvedAmount ?? 0,
@@ -1026,7 +1030,7 @@ export const approveLoanApplicationService = async (
       voucherCode: result.voucher.voucherCode,
       action: "CREATED",
       timestamp: new Date().toISOString(),
-      restaurantId: result.voucher.restaurantId,
+      restaurantId: result.voucher.restaurantId || "",
       data: {
         remainingCredit: result.voucher.remainingCredit,
         totalCredit: result.voucher.totalCredit,
@@ -1074,7 +1078,7 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
   const result = await prisma.$transaction(async (tx) => {
     // Create voucher
     const voucher = await createVoucherService({
-      restaurantId: loan.restaurantId,
+      restaurantId: loan.restaurantId || "",
       voucherType,
       creditLimit: loan.approvedAmount ?? 0,
       repaymentDays: loan.repaymentDays ?? 0,
@@ -1106,7 +1110,7 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
       loanId: result.loan.id,
       action: "PAID",
       timestamp: new Date().toISOString(),
-      restaurantId: result.loan.restaurantId,
+      restaurantId: result.loan.restaurantId || "",
       data: {
         approvedAmount: result.loan.approvedAmount ?? 0,
         status: result.loan.status,
@@ -1153,7 +1157,7 @@ export const rejectLoanApplicationService = async (
       loanId: updatedLoan.id,
       action: "REJECTED",
       timestamp: new Date().toISOString(),
-      restaurantId: updatedLoan.restaurantId,
+      restaurantId: updatedLoan.restaurantId || "",
       data: {
         requestedAmount: updatedLoan.requestedAmount,
         status: updatedLoan.status,
@@ -1278,7 +1282,7 @@ export const processVoucherPaymentService = async (
       voucherCode: result.voucher.voucherCode,
       action: "CREATED",
       timestamp: new Date().toISOString(),
-      restaurantId: result.voucher.restaurantId,
+      restaurantId: result.voucher.restaurantId || "",
       data: {
         remainingCredit: result.voucher.remainingCredit,
         totalCredit: result.voucher.totalCredit,
@@ -1596,7 +1600,7 @@ export const calculatePenaltiesService = async (
           voucherId: voucher.id,
           action: "APPLIED",
           timestamp: new Date().toISOString(),
-          restaurantId: loan.restaurantId,
+          restaurantId: loan.restaurantId || "",
           data: {
             penaltyAmount: penalty.penaltyAmount,
             reason: penalty.reason || "",
@@ -1623,7 +1627,7 @@ export const calculatePenaltiesService = async (
             voucherCode: voucher.voucherCode,
             action: "SUSPENDED",
             timestamp: new Date().toISOString(),
-            restaurantId: loan.restaurantId,
+            restaurantId: loan.restaurantId || "",
             data: {
               status: VoucherStatus.SUSPENDED,
             },
@@ -1701,11 +1705,11 @@ export const waivePenaltyService = async (
   try {
     wsManager.broadcastPenaltyUpdate({
       penaltyId: penalty.id,
-      loanId: existingPenalty.voucher.restaurantId, // This should be loanId from voucher
+      loanId: existingPenalty.voucher.restaurantId || "", // This should be loanId from voucher
       voucherId: penalty.voucherId,
       action: "WAIVED",
       timestamp: new Date().toISOString(),
-      restaurantId: existingPenalty.voucher.restaurantId,
+      restaurantId: existingPenalty.voucher.restaurantId || "",
       data: {
         penaltyAmount: penalty.penaltyAmount,
         reason: reason || "Waived by admin",
@@ -2245,7 +2249,7 @@ export const markVoucherAsUsedService = async (
       voucherCode: updatedVoucher.voucherCode,
       action: "USED",
       timestamp: new Date().toISOString(),
-      restaurantId: updatedVoucher.restaurantId,
+      restaurantId: updatedVoucher.restaurantId || "",
       data: {
         status: VoucherStatus.USED,
       },
@@ -2320,7 +2324,7 @@ export const rollbackVoucherPaymentService = async (
       voucherCode: result.voucherCode,
       action: "SUSPENDED",
       timestamp: new Date().toISOString(),
-      restaurantId: result.restaurantId,
+      restaurantId: result.restaurantId || "",
       data: {
         remainingCredit: result.remainingCredit,
         status: result.status,
@@ -2389,7 +2393,7 @@ export const deleteLoanApplicationService = async (
       loanId: loan.id,
       action: "SETTLED",
       timestamp: new Date().toISOString(),
-      restaurantId: loan.restaurantId,
+      restaurantId: loan.restaurantId || "",
       data: {
         requestedAmount: loan.requestedAmount,
         status: loan.status,

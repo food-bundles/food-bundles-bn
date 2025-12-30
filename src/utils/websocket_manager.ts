@@ -49,7 +49,7 @@ interface VoucherUpdate {
   voucherCode: string;
   action: "CREATED" | "USED" | "SUSPENDED" | "SETTLED" | "EXPIRED";
   timestamp: string;
-  restaurantId: string;
+  restaurantId?: string;
   data?: {
     remainingCredit?: number;
     totalCredit?: number;

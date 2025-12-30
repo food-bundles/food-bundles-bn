@@ -1506,7 +1506,7 @@ export const getRecentActivitiesService = async (): Promise<
       id: voucher.id,
       type: "voucher",
       title: "Voucher Used",
-      description: `${voucher.voucherCode} - ${voucher.restaurant.name}`,
+      description: `${voucher.voucherCode} - ${voucher.restaurant?.name || ""}`,
       status: voucher.status.toLowerCase(),
       timestamp: voucher.usedAt || voucher.createdAt,
       metadata: { discountPercentage: voucher.discountPercentage },
@@ -1527,7 +1527,9 @@ export const getRecentActivitiesService = async (): Promise<
       id: subscription.id,
       type: "subscription",
       title: "Subscription Renewed",
-      description: `${subscription.restaurant.name} - ${subscription.plan.name}`,
+      description: `${subscription.restaurant?.name || ""} - ${
+        subscription.plan.name
+      }`,
       status: subscription.status.toLowerCase(),
       timestamp: subscription.createdAt,
     });

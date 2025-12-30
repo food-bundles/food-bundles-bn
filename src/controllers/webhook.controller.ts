@@ -254,7 +254,7 @@ async function processVoucherRepaymentPayment(
         voucherId: repaymentTransaction.voucherId || "",
         action: "PROCESSED",
         timestamp: new Date().toISOString(),
-        restaurantId: repaymentTransaction.restaurantId,
+        restaurantId: repaymentTransaction.restaurantId || "",
         data: {
           amount: repaymentTransaction.amount,
           paymentMethod: repaymentTransaction.paymentMethod,
@@ -285,7 +285,7 @@ async function processVoucherRepaymentPayment(
         voucherId: repaymentTransaction.voucherId || "",
         action: "FAILED",
         timestamp: new Date().toISOString(),
-        restaurantId: repaymentTransaction.restaurantId,
+        restaurantId: repaymentTransaction.restaurantId || "",
         data: {
           amount: repaymentTransaction.amount,
           paymentMethod: repaymentTransaction.paymentMethod,
@@ -926,8 +926,10 @@ async function processSubscriptionPayment(
 
       try {
         await sendMessage(
-          `Dear ${subscription.restaurant.name}, Your subscription to ${subscription.plan.name} has been activated successfully. Thank you!`,
-          subscription.restaurant.phone || ""
+          `Dear ${subscription.restaurant?.name || ""}, Your subscription to ${
+            subscription.plan.name
+          } has been activated successfully. Thank you!`,
+          subscription.restaurant?.phone || ""
         );
       } catch (error) {
         console.error("Failed to send subscription notification:", error);
@@ -935,9 +937,9 @@ async function processSubscriptionPayment(
 
       await sendAdminSubscriptionPaidEmail({
         userType: "RESTAURANT",
-        userName: subscription.restaurant.name,
-        userEmail: subscription.restaurant.email || "",
-        restaurantName: subscription.restaurant.name,
+        userName: subscription.restaurant?.name || "",
+        userEmail: subscription.restaurant?.email || "",
+        restaurantName: subscription.restaurant?.name || "",
         subscriptionPlan: subscription.plan.name,
         amount: subscription.plan.price,
       });
@@ -949,7 +951,7 @@ async function processSubscriptionPayment(
           status: "ACTIVE",
           paymentStatus: "COMPLETED",
           timestamp: new Date().toISOString(),
-          restaurantId: subscription.restaurantId,
+          restaurantId: subscription.restaurantId || "",
         });
 
         console.log(`Broadcasted subscription activation: ${subscription.id}`);
@@ -988,8 +990,10 @@ async function processSubscriptionPayment(
       // Send failure notification
       try {
         await sendMessage(
-          `Dear ${subscription.restaurant.name}, Your subscription payment failed. Please try again or contact support.`,
-          subscription.restaurant.phone || ""
+          `Dear ${
+            subscription.restaurant?.name || ""
+          }, Your subscription payment failed. Please try again or contact support.`,
+          subscription.restaurant?.phone || ""
         );
       } catch (error) {
         console.error("Failed to send failure notification:", error);
@@ -1002,7 +1006,7 @@ async function processSubscriptionPayment(
           status: "CANCELLED",
           paymentStatus: "FAILED",
           timestamp: new Date().toISOString(),
-          restaurantId: subscription.restaurantId,
+          restaurantId: subscription.restaurantId || "",
         });
 
         console.log(

@@ -74,8 +74,10 @@ async function processSubscriptionPayment(
     // Send success notification
     try {
       await sendMessage(
-        `Dear ${subscription.restaurant.name}, Your subscription to ${subscription.plan.name} has been activated successfully. Thank you!`,
-        subscription.restaurant.phone || ""
+        `Dear ${subscription.restaurant?.name || ""}, Your subscription to ${
+          subscription.plan.name
+        } has been activated successfully. Thank you!`,
+        subscription.restaurant?.phone || ""
       );
     } catch (error) {
       console.error("Failed to send subscription notification:", error);
@@ -88,7 +90,7 @@ async function processSubscriptionPayment(
         status: "ACTIVE",
         paymentStatus: "COMPLETED",
         timestamp: new Date().toISOString(),
-        restaurantId: subscription.restaurantId,
+        restaurantId: subscription.restaurantId || "",
       });
 
       console.log(`Broadcasted subscription activation: ${subscription.id}`);
@@ -123,8 +125,10 @@ async function processSubscriptionPayment(
     // Send failure notification
     try {
       await sendMessage(
-        `Dear ${subscription.restaurant.name}, Your subscription payment failed. Please try again or contact support.`,
-        subscription.restaurant.phone || ""
+        `Dear ${
+          subscription.restaurant?.name || ""
+        }, Your subscription payment failed. Please try again or contact support.`,
+        subscription.restaurant?.phone || ""
       );
     } catch (error) {
       console.error("Failed to send subscription failure notification:", error);
@@ -137,7 +141,7 @@ async function processSubscriptionPayment(
         status: "PENDING",
         paymentStatus: "FAILED",
         timestamp: new Date().toISOString(),
-        restaurantId: subscription.restaurantId,
+        restaurantId: subscription.restaurantId || "",
       });
 
       console.log(

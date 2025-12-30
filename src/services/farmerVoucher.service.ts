@@ -1,10 +1,4 @@
 import prisma from "../prisma";
-import {
-  submitLoanApplicationService,
-  getRestaurantLoanApplicationsService,
-  getMyVouchersService,
-  checkLoanEligibilityService,
-} from "./voucher.service";
 
 /**
  * Farmer Voucher Service
@@ -27,7 +21,6 @@ interface FarmerVoucherEligibility {
 
 /**
  * Submit voucher request for farmer
- * Maps farmer data to restaurant voucher system
  */
 export const submitFarmerVoucherRequest = async (
   data: FarmerVoucherRequest
@@ -43,38 +36,10 @@ export const submitFarmerVoucherRequest = async (
     throw new Error("Farmer not found");
   }
 
-  // Create or get farmer's "restaurant" record for voucher system
-  let farmerRestaurant = await prisma.restaurant.findFirst({
-    where: {
-      OR: [
-        { email: farmer.phone + "@farmer.foodbundles.rw" },
-        { phone: farmer.phone },
-      ],
-    },
-  });
-
-  if (!farmerRestaurant) {
-    // Create a restaurant record for the farmer
-    farmerRestaurant = await prisma.restaurant.create({
-      data: {
-        name: `Farmer ${farmer.phone}`,
-        email: farmer.phone + "@farmer.foodbundles.rw",
-        phone: farmer.phone,
-        province: farmer.province,
-        district: farmer.district,
-        sector: farmer.sector,
-        cell: farmer.cell,
-        village: farmer.village,
-        tin: `FARMER-${farmer.phone}`,
-        password: "default123",
-      },
-    });
-  }
-
   // Ensure farmer has an active subscription
-  const existingSubscription = await prisma.restaurantSubscription.findFirst({
+  let existingSubscription = await prisma.restaurantSubscription.findFirst({
     where: {
-      restaurantId: farmerRestaurant.id,
+      farmerId,
       status: "ACTIVE",
     },
   });
@@ -84,14 +49,13 @@ export const submitFarmerVoucherRequest = async (
       where: { name: "Basic Farmer Plan" },
     });
 
-    // Create the plan if it doesn't exist
     if (!defaultPlan) {
       defaultPlan = await prisma.subscriptionPlan.create({
         data: {
           name: "Basic Farmer Plan",
           description: "Basic plan for farmers to access voucher system",
           price: 0.0,
-          duration: 365,
+          duration: 30,
           voucherAccess: true,
           voucherPaymentDays: 60,
           features: [
@@ -104,23 +68,25 @@ export const submitFarmerVoucherRequest = async (
       });
     }
 
-    await prisma.restaurantSubscription.create({
+    existingSubscription = await prisma.restaurantSubscription.create({
       data: {
-        restaurantId: farmerRestaurant.id,
+        farmerId,
         planId: defaultPlan.id,
         status: "ACTIVE",
         startDate: new Date(),
-        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
+        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       },
     });
   }
 
-  // Submit loan application using the voucher service
-  return await submitLoanApplicationService({
-    restaurantId: farmerRestaurant.id,
-    requestedAmount,
-    purpose,
-    voucherDays,
+  // Create loan application directly for farmer
+  return await prisma.loanApplication.create({
+    data: {
+      farmerId,
+      requestedAmount,
+      purpose,
+      status: "PENDING",
+    },
   });
 };
 
@@ -136,21 +102,10 @@ export const getFarmerVoucherApplications = async (farmerId: string) => {
     throw new Error("Farmer not found");
   }
 
-  // Find farmer's restaurant record
-  const farmerRestaurant = await prisma.restaurant.findFirst({
-    where: {
-      OR: [
-        { email: farmer.phone + "@farmer.foodbundles.rw" },
-        { phone: farmer.phone },
-      ],
-    },
+  return await prisma.loanApplication.findMany({
+    where: { farmerId },
+    orderBy: { createdAt: "desc" },
   });
-
-  if (!farmerRestaurant) {
-    return [];
-  }
-
-  return await getRestaurantLoanApplicationsService(farmerRestaurant.id);
 };
 
 /**
@@ -165,21 +120,13 @@ export const getFarmerVouchers = async (farmerId: string) => {
     throw new Error("Farmer not found");
   }
 
-  // Find farmer's restaurant record
-  const farmerRestaurant = await prisma.restaurant.findFirst({
-    where: {
-      OR: [
-        { email: farmer.phone + "@farmer.foodbundles.rw" },
-        { phone: farmer.phone },
-      ],
+  return await prisma.voucher.findMany({
+    where: { farmerId },
+    include: {
+      transactions: true,
     },
+    orderBy: { createdAt: "desc" },
   });
-
-  if (!farmerRestaurant) {
-    return [];
-  }
-
-  return await getMyVouchersService(farmerRestaurant.id);
 };
 
 /**
@@ -200,37 +147,55 @@ export const checkFarmerVoucherEligibility = async (
       };
     }
 
-    // Find farmer's restaurant record
-    const farmerRestaurant = await prisma.restaurant.findFirst({
-      where: {
-        OR: [
-          { email: farmer.phone + "@farmer.foodbundles.rw" },
-          { phone: farmer.phone },
-        ],
-      },
-    });
+    // Check existing applications and vouchers
+    const [applications, vouchers] = await Promise.all([
+      prisma.loanApplication.findMany({ where: { farmerId } }),
+      prisma.voucher.findMany({ where: { farmerId } }),
+    ]);
 
-    if (!farmerRestaurant) {
-      // New farmer is eligible for first voucher
+    // Check for pending applications
+    const pendingApplications = applications.filter(
+      (app) => app.status === "PENDING"
+    );
+    if (pendingApplications.length > 0) {
+      return {
+        isEligible: false,
+        reason: "You have pending loan applications",
+      };
+    }
+
+    // Check for overdue vouchers
+    const overdueVouchers = vouchers.filter(
+      (v) =>
+        v.status === "ACTIVE" &&
+        new Date() >
+          new Date(
+            v.createdAt.getTime() + v.repaymentDays * 24 * 60 * 60 * 1000
+          )
+    );
+    if (overdueVouchers.length > 0) {
+      return {
+        isEligible: false,
+        reason: "You have overdue voucher payments",
+      };
+    }
+
+    // New farmer eligibility
+    if (applications.length === 0) {
       return {
         isEligible: true,
         reason: "New farmer eligible for first voucher",
-        maxAmount: 100000, // 100,000 RWF for new farmers
+        maxAmount: 100000,
         maxDays: 30,
       };
     }
 
-    // Check eligibility using existing service
-    const eligibility = await checkLoanEligibilityService(
-      farmerRestaurant.id,
-      30
-    );
-
+    // Existing farmer eligibility
     return {
-      isEligible: eligibility.isEligible,
-      reason: eligibility.reason,
-      maxAmount: eligibility.isEligible ? 500000 : undefined, // 500,000 RWF max for existing farmers
-      maxDays: eligibility.isEligible ? 60 : undefined,
+      isEligible: true,
+      reason: "Eligible for voucher",
+      maxAmount: 500000,
+      maxDays: 60,
     };
   } catch (error: any) {
     return {

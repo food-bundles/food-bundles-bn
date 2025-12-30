@@ -17,6 +17,8 @@ export interface ISessionData {
   language?: "KINY" | "ENG" | "FRE";
   languageSelected?: boolean;
   selectedNewLanguage?: "KINY" | "ENG" | "FRE";
+  userType?: 'FARMER' | 'RESTAURANT';
+  userId?: string;
 
   // Registration location flow
   locationStep?:
@@ -410,7 +412,9 @@ export type TranslationKey =
   | "approved"
   | "rejected"
   | "paid"
-  | "settled";
+  | "voucherStatus"
+  | "usedVouchers"
+  | "noActiveVouchers"
 
 // Translation object with support for Kinyarwanda, English, and French
 
@@ -714,6 +718,9 @@ export const translations = {
     rejected: "byanze",
     paid: "byishyuwe",
     settled: "byarangiye",
+    voucherStatus: "Uko voucher imeze",
+    usedVouchers: "Voucher zakoreshejwe",
+    noActiveVouchers: "Nta voucher zikora ufite",
   },
   ENG: {
     welcome: "Welcome to FoodBundles!",
@@ -1013,6 +1020,9 @@ export const translations = {
     rejected: "rejected",
     paid: "paid",
     settled: "settled",
+    voucherStatus: "Voucher Status",
+    usedVouchers: "Used Vouchers",
+    noActiveVouchers: "No active vouchers",
   },
   FRE: {
     welcome: "Bienvenue à FoodBundles!",
@@ -1315,6 +1325,9 @@ export const translations = {
     rejected: "rejeté",
     paid: "payé",
     settled: "réglé",
+    voucherStatus: "Statut du bon",
+    usedVouchers: "Bons utilisés",
+    noActiveVouchers: "Aucun bon actif",
   },
 };
 
