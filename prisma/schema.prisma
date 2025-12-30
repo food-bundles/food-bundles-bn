@@ -69,6 +69,7 @@ model Restaurant {
   village  String?
 
   password          String
+  ussdPin           String? // Optional 4-digit PIN for USSD authentication
   role              Role    @default(RESTAURANT)
   verified          Boolean @default(false)
   agreed            Boolean @default(false)

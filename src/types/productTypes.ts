@@ -39,6 +39,7 @@ export interface ISessionData {
 
   // Registration data
   password?: string;
+  ussdPin?: string;
   currentPinVerified?: boolean;
   newPhoneNumber?: string;
   newPin?: string;
@@ -415,6 +416,12 @@ export type TranslationKey =
   | "voucherStatus"
   | "usedVouchers"
   | "noActiveVouchers"
+  | "ussdPinNotSet"
+  | "firstTimeSetup"
+  | "createUssdPin"
+  | "enterFourDigits"
+  | "confirmUssdPin"
+  | "pinCreationFailed"
 
 // Translation object with support for Kinyarwanda, English, and French
 
@@ -721,6 +728,12 @@ export const translations = {
     voucherStatus: "Uko voucher imeze",
     usedVouchers: "Voucher zakoreshejwe",
     noActiveVouchers: "Nta voucher zikora ufite",
+    ussdPinNotSet: "PIN ya USSD ntiyashyizweho",
+    firstTimeSetup: "Gushyiraho bwa mbere",
+    createUssdPin: "Koresha PIN ya USSD y'imibare 4",
+    enterFourDigits: "Andika imibare 4",
+    confirmUssdPin: "Emeza PIN ya USSD",
+    pinCreationFailed: "Gukora PIN byanze",
   },
   ENG: {
     welcome: "Welcome to FoodBundles!",
@@ -1023,6 +1036,12 @@ export const translations = {
     voucherStatus: "Voucher Status",
     usedVouchers: "Used Vouchers",
     noActiveVouchers: "No active vouchers",
+    ussdPinNotSet: "USSD PIN not set",
+    firstTimeSetup: "First time setup",
+    createUssdPin: "Create 4-digit USSD PIN",
+    enterFourDigits: "Enter 4 digits",
+    confirmUssdPin: "Confirm USSD PIN",
+    pinCreationFailed: "PIN creation failed",
   },
   FRE: {
     welcome: "Bienvenue à FoodBundles!",
@@ -1328,6 +1347,12 @@ export const translations = {
     voucherStatus: "Statut du bon",
     usedVouchers: "Bons utilisés",
     noActiveVouchers: "Aucun bon actif",
+    ussdPinNotSet: "PIN USSD non défini",
+    firstTimeSetup: "Configuration initiale",
+    createUssdPin: "Créer un PIN USSD à 4 chiffres",
+    enterFourDigits: "Entrez 4 chiffres",
+    confirmUssdPin: "Confirmer le PIN USSD",
+    pinCreationFailed: "Échec de la création du PIN",
   },
 };
 

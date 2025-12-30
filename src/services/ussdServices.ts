@@ -546,6 +546,7 @@ async function checkUserExists(phoneNumber: string): Promise<{
   exists: boolean;
   userType?: "FARMER" | "RESTAURANT";
   userId?: string;
+  hasUssdPin?: boolean;
 }> {
   try {
     const farmer = await prisma.farmer.findUnique({
@@ -553,15 +554,20 @@ async function checkUserExists(phoneNumber: string): Promise<{
       select: { id: true },
     });
     if (farmer) {
-      return { exists: true, userType: "FARMER", userId: farmer.id };
+      return { exists: true, userType: "FARMER", userId: farmer.id, hasUssdPin: true };
     }
 
     const restaurant = await prisma.restaurant.findUnique({
       where: { phone: phoneNumber },
-      select: { id: true },
+      select: { id: true, ussdPin: true },
     });
     if (restaurant) {
-      return { exists: true, userType: "RESTAURANT", userId: restaurant.id };
+      return { 
+        exists: true, 
+        userType: "RESTAURANT", 
+        userId: restaurant.id,
+        hasUssdPin: !!restaurant.ussdPin
+      };
     }
 
     return { exists: false };
@@ -720,6 +726,62 @@ function addToHistory(session: ISessionData, step: string, data?: any) {
     session.previousSteps = [];
   }
   session.previousSteps.push({ step, data });
+}
+
+// Helper function to verify restaurant USSD PIN
+async function verifyRestaurantUssdPin(
+  phoneNumber: string,
+  pin: string
+): Promise<{ isValid: boolean; message?: TranslationKey }> {
+  try {
+    if (!/^\d{4}$/.test(pin)) {
+      return { isValid: false, message: "invalidPinFormat" };
+    }
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { phone: phoneNumber },
+      select: { ussdPin: true },
+    });
+
+    if (!restaurant || !restaurant.ussdPin) {
+      return { isValid: false, message: "ussdPinNotSet" };
+    }
+
+    const isValid = await comparePassword(pin, restaurant.ussdPin);
+    return { isValid, message: isValid ? undefined : "incorrectPin" };
+  } catch (error) {
+    console.error("Error verifying restaurant USSD PIN:", error);
+    return { isValid: false, message: "pinVerificationFailed" };
+  }
+}
+
+// Helper function to create restaurant USSD PIN
+async function createRestaurantUssdPin(
+  phoneNumber: string,
+  pin: string
+): Promise<boolean> {
+  try {
+    const hashedPin = await hashPassword(pin);
+    await prisma.restaurant.update({
+      where: { phone: phoneNumber },
+      data: { ussdPin: hashedPin },
+    });
+    return true;
+  } catch (error) {
+    console.error("Error creating restaurant USSD PIN:", error);
+    return false;
+  }
+}
+
+// Show first-time restaurant setup menu
+function showRestaurantFirstTimeSetup(lang: "KINY" | "ENG" | "FRE" = "KINY"): string {
+  return `CON ${getTranslation(lang, "welcome")}
+${getTranslation(lang, "firstTimeSetup")}
+
+${getTranslation(lang, "selectLanguage")}
+1. Kinyarwanda
+2. English
+3. Français`;
 }
 
 // Helper function to verify user PIN
@@ -1526,7 +1588,7 @@ ${getTranslation(lang, "purpose")}: ${session.voucherPurpose?.substring(
 0. ${getTranslation(lang, "back")}`;
           }
 
-          const pinResult = await verifyUserPin(phoneNumber, pinInput);
+          const pinResult = await verifyRestaurantUssdPin(phoneNumber, pinInput);
           if (!pinResult.isValid) {
             return `CON ${getTranslation(
               lang,
@@ -1580,7 +1642,7 @@ ID: ${voucherRequest.id.substring(0, 8)}`;
 0. ${getTranslation(lang, "back")}`;
           }
 
-          const pinResult = await verifyUserPin(phoneNumber, pinInput);
+          const pinResult = await verifyRestaurantUssdPin(phoneNumber, pinInput);
           if (!pinResult.isValid) {
             return `END ${getTranslation(
               lang,
@@ -1656,7 +1718,7 @@ ID: ${voucherRequest.id.substring(0, 8)}`;
 0. ${getTranslation(lang, "back")}`;
           }
 
-          const pinResult = await verifyUserPin(phoneNumber, pinInput);
+          const pinResult = await verifyRestaurantUssdPin(phoneNumber, pinInput);
           if (!pinResult.isValid) {
             return `END ${getTranslation(
               lang,
@@ -1829,8 +1891,12 @@ export async function handleUssdLogic({
       return showLanguageSelection(lang);
     }
 
-    // For returning users on first access, show main menu directly
+    // For returning users on first access, show main menu directly or setup
     if (text === "" && userInfo.exists && session.languageSelected) {
+      // Check if restaurant needs first-time USSD setup
+      if (userInfo.userType === "RESTAURANT" && !userInfo.hasUssdPin) {
+        return showRestaurantFirstTimeSetup(lang);
+      }
       return showMainMenuForUserType(lang, session.userType!);
     }
 
@@ -1861,6 +1927,63 @@ export async function handleUssdLogic({
         );
       } else {
         return showLanguageSelection(lang);
+      }
+    }
+
+    // Handle restaurant first-time setup
+    if (userInfo.exists && userInfo.userType === "RESTAURANT" && !userInfo.hasUssdPin) {
+      if (!session.languageSelected) {
+        const langChoice = parts[0];
+        const languageMap: Record<string, "KINY" | "ENG" | "FRE"> = {
+          "1": "KINY",
+          "2": "ENG",
+          "3": "FRE",
+        };
+
+        const selectedLanguage = languageMap[langChoice];
+        if (selectedLanguage) {
+          session.language = selectedLanguage;
+          session.languageSelected = true;
+          await updateUserLanguage(phoneNumber, selectedLanguage);
+          return `CON ${getTranslation(selectedLanguage, "createUssdPin")}
+${getTranslation(selectedLanguage, "enterFourDigits")}`;
+        } else {
+          return showRestaurantFirstTimeSetup(lang);
+        }
+      }
+
+      // Handle PIN creation
+      if (parts.length === 2 && !session.ussdPin) {
+        const pin = parts[1];
+        if (!/^\d{4}$/.test(pin)) {
+          return `CON ${getTranslation(lang, "invalidPinFormat")}
+
+${getTranslation(lang, "createUssdPin")}
+${getTranslation(lang, "enterFourDigits")}`;
+        }
+        session.ussdPin = pin;
+        return `CON ${getTranslation(lang, "confirmUssdPin")}`;
+      }
+
+      // Handle PIN confirmation
+      if (parts.length === 3 && session.ussdPin) {
+        const confirmPin = parts[2];
+        if (confirmPin !== session.ussdPin) {
+          delete session.ussdPin;
+          return `CON ${getTranslation(lang, "pinMismatch")}
+
+${getTranslation(lang, "createUssdPin")}
+${getTranslation(lang, "enterFourDigits")}`;
+        }
+
+        // Save USSD PIN
+        const success = await createRestaurantUssdPin(phoneNumber, confirmPin);
+        if (success) {
+          delete session.ussdPin;
+          return showMainMenuForUserType(lang, "RESTAURANT");
+        } else {
+          return `END ${getTranslation(lang, "pinCreationFailed")}`;
+        }
       }
     }
 
