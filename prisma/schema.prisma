@@ -314,6 +314,7 @@ model Admin {
 
 model Product {
   id                String              @id @default(uuid())
+  tableTronicId     Int?             @unique
   unitPrice         Float
   purchasePrice     Float
   unit              String
@@ -470,6 +471,7 @@ model Order {
 
   // Transaction status and references
   transactionId String?
+  ebmReference  String?
 
   // Response fields
   flwStatus   String?
