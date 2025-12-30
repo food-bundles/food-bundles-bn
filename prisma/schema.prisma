@@ -46,6 +46,12 @@ model Farmer {
   FarmerPrimaryCrop      FarmerPrimaryCrop[]
   SupportTicket          SupportTicket[]
   CallbackRequest        CallbackRequest[]
+  Voucher                Voucher[]
+  LoanApplication        LoanApplication[]
+  VoucherTransaction     VoucherTransaction[]
+  VoucherRepayment       VoucherRepayment[]
+  VoucherPenalty         VoucherPenalty[]
+  RestaurantSubscription RestaurantSubscription[]
 }
 
 model Restaurant {
@@ -62,10 +68,12 @@ model Restaurant {
   cell     String?
   village  String?
 
-  password String
-  role     Role    @default(RESTAURANT)
-  verified Boolean @default(false)
-  agreed   Boolean @default(false)
+  password          String
+  ussdPin           String? // Optional 4-digit PIN for USSD authentication
+  role              Role    @default(RESTAURANT)
+  verified          Boolean @default(false)
+  agreed            Boolean @default(false)
+  preferredLanguage String? @default("KINY")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -656,7 +664,8 @@ model SubscriptionPlan {
 // Restaurant Subscription model
 model RestaurantSubscription {
   id            String             @id @default(uuid())
-  restaurantId  String
+  restaurantId  String?
+  farmerId      String?
   planId        String
   status        SubscriptionStatus @default(ACTIVE)
   startDate     DateTime           @default(now())
@@ -675,12 +684,14 @@ model RestaurantSubscription {
   updatedAt DateTime @updatedAt
 
   // Relations
-  restaurant Restaurant            @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant?           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  farmer     Farmer?               @relation(fields: [farmerId], references: [id], onDelete: Cascade)
   plan       SubscriptionPlan      @relation(fields: [planId], references: [id])
   payments   SubscriptionPayment[]
   history    SubscriptionHistory[]
 
   @@index([restaurantId])
+  @@index([farmerId])
   @@index([planId])
   @@index([status])
   @@index([endDate])
@@ -756,7 +767,8 @@ model Voucher {
   approvedBy String?
 
   // Relations
-  restaurantId String
+  restaurantId String?
+  farmerId     String?
   loanId       String?
 
   // Repayment days
@@ -771,7 +783,8 @@ model Voucher {
   updatedAt DateTime  @updatedAt
 
   // Relations
-  restaurant   Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant?          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  farmer       Farmer?              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
   loan         LoanApplication?     @relation(fields: [loanId], references: [id])
   transactions VoucherTransaction[]
   repayments   VoucherRepayment[]
@@ -779,6 +792,7 @@ model Voucher {
   orders       Order[]
 
   @@index([restaurantId])
+  @@index([farmerId])
   @@index([status])
   @@index([voucherCode])
   @@index([loanId])
@@ -786,7 +800,8 @@ model Voucher {
 
 model LoanApplication {
   id              String  @id @default(uuid())
-  restaurantId    String
+  restaurantId    String?
+  farmerId        String?
   requestedAmount Float
   purpose         String?
 
@@ -811,21 +826,24 @@ model LoanApplication {
   approvedAt DateTime?
 
   // Relations
-  restaurant Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant?        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  farmer     Farmer?            @relation(fields: [farmerId], references: [id], onDelete: Cascade)
   approver   Admin?             @relation(fields: [approvedBy], references: [id])
   vouchers   Voucher[]
   repayments VoucherRepayment[]
 
   @@index([restaurantId])
+  @@index([farmerId])
   @@index([status])
   @@index([approvedBy])
 }
 
 model VoucherTransaction {
-  id           String @id @default(uuid())
+  id           String  @id @default(uuid())
   voucherId    String
   orderId      String
-  restaurantId String
+  restaurantId String?
+  farmerId     String?
 
   // Transaction amounts
   originalAmount     Float
@@ -840,20 +858,23 @@ model VoucherTransaction {
   createdAt       DateTime @default(now())
 
   // Relations
-  voucher    Voucher    @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  voucher    Voucher     @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  farmer     Farmer?     @relation(fields: [farmerId], references: [id], onDelete: Cascade)
 
   @@index([voucherId])
   @@index([orderId])
   @@index([restaurantId])
+  @@index([farmerId])
   @@index([transactionDate])
 }
 
 model VoucherRepayment {
   id           String  @id @default(uuid())
   voucherId    String?
-  restaurantId String
+  restaurantId String?
+  farmerId     String?
   loanId       String
 
   // Payment details
@@ -873,19 +894,22 @@ model VoucherRepayment {
 
   // Relations
   voucher    Voucher?        @relation(fields: [voucherId], references: [id])
-  restaurant Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant?     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  farmer     Farmer?         @relation(fields: [farmerId], references: [id], onDelete: Cascade)
   loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
 
   @@index([voucherId])
   @@index([restaurantId])
+  @@index([farmerId])
   @@index([loanId])
   @@index([paymentDate])
 }
 
 model VoucherPenalty {
-  id           String @id @default(uuid())
+  id           String  @id @default(uuid())
   voucherId    String
-  restaurantId String
+  restaurantId String?
+  farmerId     String?
 
   // Penalty details
   penaltyAmount Float
@@ -902,11 +926,13 @@ model VoucherPenalty {
   createdAt   DateTime  @default(now())
 
   // Relations
-  voucher    Voucher    @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  voucher    Voucher     @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  farmer     Farmer?     @relation(fields: [farmerId], references: [id], onDelete: Cascade)
 
   @@index([voucherId])
   @@index([restaurantId])
+  @@index([farmerId])
   @@index([status])
   @@index([appliedDate])
 }

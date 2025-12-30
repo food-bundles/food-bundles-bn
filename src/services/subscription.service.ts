@@ -599,8 +599,8 @@ export const processSubscriptionPaymentService = async (
           amount: subscription.plan.price,
           phoneNumber: paymentData.phoneNumber,
           txRef: subscription.txRef!,
-          email: subscription.restaurant.email,
-          fullname: subscription.restaurant.name,
+          email: subscription.restaurant?.email,
+          fullname: subscription.restaurant?.name || "",
           currency: "RWF",
         });
         break;
@@ -609,10 +609,10 @@ export const processSubscriptionPaymentService = async (
         paymentResult = await processSubscriptionCardPayment({
           amount: subscription.plan.price,
           txRef: subscription.txRef!,
-          email: subscription.restaurant.email,
-          fullname: subscription.restaurant.name,
+          email: subscription.restaurant?.email,
+          fullname: subscription.restaurant?.name || "",
           phoneNumber:
-            paymentData.phoneNumber || subscription.restaurant.phone || "",
+            paymentData.phoneNumber || subscription.restaurant?.phone || "",
           currency: "RWF",
           cardDetails: paymentData.cardDetails,
         });
@@ -622,9 +622,9 @@ export const processSubscriptionPaymentService = async (
         paymentResult = await processSubscriptionBankTransfer({
           amount: subscription.plan.price,
           txRef: subscription.txRef!,
-          email: subscription.restaurant.email,
+          email: subscription.restaurant?.email,
           phoneNumber:
-            paymentData.phoneNumber || subscription.restaurant.phone || "",
+            paymentData.phoneNumber || subscription.restaurant?.phone || "",
           currency: "RWF",
           clientIp: paymentData.bankDetails?.clientIp || "",
           narration: `Subscription payment for ${subscription.plan.name}`,
@@ -674,8 +674,12 @@ export const processSubscriptionPaymentService = async (
         // Send success notification
         try {
           await sendMessage(
-            `Dear ${subscription.restaurant.name}, Your subscription to ${subscription.plan.name} has been activated successfully. Thank you!`,
-            subscription.restaurant.phone || ""
+            `Dear ${
+              subscription.restaurant?.name || ""
+            }, Your subscription to ${
+              subscription.plan.name
+            } has been activated successfully. Thank you!`,
+            subscription.restaurant?.phone || ""
           );
         } catch (error) {
           console.error("Failed to send subscription notification:", error);
@@ -706,8 +710,10 @@ export const processSubscriptionPaymentService = async (
       // Send failure notification
       try {
         await sendMessage(
-          `Dear ${subscription.restaurant.name}, Your subscription payment failed. Please try again or contact support.`,
-          subscription.restaurant.phone || ""
+          `Dear ${
+            subscription.restaurant?.name || ""
+          }, Your subscription payment failed. Please try again or contact support.`,
+          subscription.restaurant?.phone || ""
         );
       } catch (error) {
         console.error("Failed to send failure notification:", error);
@@ -1392,7 +1398,7 @@ export const checkExpiredSubscriptionsService = async () => {
         message: `Your ${subscription.plan.name} subscription has expired. Renew to continue enjoying premium features`,
         eventType: "SUBSCRIPTION_EXPIRED",
         targetType: "SPECIFIC_USER",
-        targetId: subscription.restaurantId,
+        targetId: subscription.restaurantId || "",
         metadata: {
           subscriptionId: subscription.id,
           planName: subscription.plan.name,
