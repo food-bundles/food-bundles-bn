@@ -268,6 +268,7 @@ export const updateOrder = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     const {
+      ebmReference,
       status,
       notes,
       requestedDelivery,
@@ -276,13 +277,13 @@ export const updateOrder = async (req: Request, res: Response) => {
       paymentMethod,
       paymentStatus,
       paymentReference,
+
       otp, // For DELIVERED status verification
     } = req.body;
 
     const userRole = (req as any).user.role;
     const userId = (req as any).user.id;
-    const restaurantId =
-      userRole === "RESTAURANT" ? userId : undefined;
+    const restaurantId = userRole === "RESTAURANT" ? userId : undefined;
 
     // Validate status if provided
     if (status && !Object.values(OrderStatus).includes(status)) {
@@ -329,9 +330,15 @@ export const updateOrder = async (req: Request, res: Response) => {
         }
 
         // Verify OTP using delivery service
-        const { DeliveryService } = await import("../services/delivery.service");
-        const otpResult = await DeliveryService.verifyDeliveryOTP(orderId, otp, userId);
-        
+        const { DeliveryService } = await import(
+          "../services/delivery.service"
+        );
+        const otpResult = await DeliveryService.verifyDeliveryOTP(
+          orderId,
+          otp,
+          userId
+        );
+
         if (!otpResult.success) {
           return res.status(400).json({
             message: otpResult.message,
@@ -349,6 +356,7 @@ export const updateOrder = async (req: Request, res: Response) => {
     }
 
     const updateData: any = {};
+    if (ebmReference !== undefined) updateData.ebmReference = ebmReference;
     if (status !== undefined) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
     if (requestedDelivery !== undefined)
@@ -625,7 +633,7 @@ export const getOrderByNumber = async (req: Request, res: Response) => {
 export const testWebSocket = async (req: Request, res: Response) => {
   try {
     const { orderId, restaurantId } = req.body;
-    
+
     if (!orderId || !restaurantId) {
       return res.status(400).json({
         message: "orderId and restaurantId are required",

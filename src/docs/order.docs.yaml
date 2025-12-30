@@ -70,6 +70,10 @@ components:
           type: string
           nullable: true
           description: Payment gateway reference
+        ebmReference:
+          type: string
+          nullable: true
+          description: Ebm payment reference
         createdAt:
           type: string
           format: date-time
@@ -251,6 +255,9 @@ components:
         paymentReference:
           type: string
           description: Payment reference (Admin only)
+        ebmReference:
+          type: string
+          description: Ebm payment reference (Admin only)
 
     CancelOrderRequest:
       type: object
