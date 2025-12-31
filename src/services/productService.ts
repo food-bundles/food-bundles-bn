@@ -1,8 +1,10 @@
 import prisma from "../prisma";
 import { createNotificationService } from "./notification.services";
+import { getProductUnitByIdService } from "./unit.service";
 
 export interface ProductData {
   tableTronicId?: number | null;
+  unitId?: string | null;
   productName: string;
   unitPrice: number;
   purchasePrice: number;
@@ -42,10 +44,20 @@ export const createProductService = async (productData: ProductData) => {
     throw new Error("SKU already exists");
   }
 
+  // Check if product unit already exists
+  if (productData.unitId) {
+    const existingUnit = await getProductUnitByIdService(productData.unitId);
+
+    if (!existingUnit) {
+      throw new Error("Product unit not found");
+    }
+  }
+
   // Create the product with proper admin connection
   const product = await prisma.product.create({
     data: {
       tableTronicId: productData.tableTronicId,
+      unitId: productData.unitId,
       productName: productData.productName,
       unitPrice: Number(productData.unitPrice),
       purchasePrice: Number(productData.purchasePrice),
@@ -205,12 +217,24 @@ export const updateProductService = async (
     }
   }
 
+  // Check if product unit already exists
+  if (updateData.unitId) {
+    const existingUnit = await getProductUnitByIdService(updateData.unitId);
+
+    if (!existingUnit) {
+      throw new Error("Product unit not found");
+    }
+  }
+
   // Update product
   const updatedProduct = await prisma.product.update({
     where: { id: productId },
     data: {
       ...(updateData.tableTronicId !== undefined && {
         tableTronicId: updateData.tableTronicId,
+      }),
+      ...(updateData.unitId !== undefined && {
+        unitId: updateData.unitId,
       }),
       ...(updateData.productName !== undefined && {
         productName: updateData.productName,

@@ -13,6 +13,9 @@ components:
         tableTronicId:
           type: integer
           description: Unique product identifier from TableTronic system
+        unitId:
+          type: string
+          description: Unique product unit identifier
         productName:
           type: string
           description: Name of the product
@@ -165,6 +168,9 @@ components:
         tableTronicId:
           type: integer
           description: Unique product identifier from TableTronic system
+        unitId:
+          type: string
+          description: Unique product unit identifier
         productName:
           type: string
           description: Name of the product
@@ -203,6 +209,9 @@ components:
         tableTronicId:
           type: integer
           description: Unique product identifier from TableTronic system
+        unitId:
+          type: string
+          description: Unique product unit identifier
         productName:
           type: string
           description: Name of the product

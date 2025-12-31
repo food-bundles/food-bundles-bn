@@ -1,0 +1,388 @@
+tags:
+  - name: ProductUnit Management
+    description: Operations related to product unit management
+
+components:
+  schemas:
+    ProductUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique unit identifier
+        tableTronicId:
+          type: string
+          description: TableTronic Unit ID (optional)
+        name:
+          type: string
+          description: Unit name (unique)
+        description:
+          type: string
+          nullable: true
+          description: Unit description
+        isActive:
+          type: boolean
+          description: Whether the unit is active
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Unit creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        createdBy:
+          type: string
+          description: ID of the admin who created the unit
+        admin:
+          $ref: "#/components/schemas/AdminInfo"
+
+    ActiveProductUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique unit identifier
+        name:
+          type: string
+          description: Unit name
+        description:
+          type: string
+          nullable: true
+          description: Unit description
+
+    CreateProductUnitRequest:
+      type: object
+      required:
+        - name
+      properties:
+        tableTronicId:
+          type: string
+          description: TableTronic Unit ID (optional)
+        name:
+          type: string
+          description: Unit name (must be unique)
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          description: Unit description (optional)
+          maxLength: 500
+        isActive:
+          type: boolean
+          description: Whether the unit should be active
+          default: true
+
+    UpdateProductUnitRequest:
+      type: object
+      properties:
+        tableTronicId:
+          type: string
+          description: TableTronic Unit ID (optional)
+        name:
+          type: string
+          description: Unit name (must be unique)
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          description: Unit description
+          maxLength: 500
+        isActive:
+          type: boolean
+          description: Whether the unit is active
+
+    BulkUpdateStatusRequest:
+      type: object
+      required:
+        - unitIds
+        - isActive
+      properties:
+        unitIds:
+          type: array
+          items:
+            type: string
+          description: Array of unit IDs to update
+          minItems: 1
+        isActive:
+          type: boolean
+          description: New active status for the units
+
+paths:
+  /unit:
+    post:
+      tags:
+        - ProductUnit Management
+      summary: Create a new product unit
+      description: Create a new product unit (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductUnitRequest"
+      responses:
+        201:
+          description: Product unit created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product unit created successfully"
+                  data:
+                    $ref: "#/components/schemas/ProductUnit"
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_name:
+                  value:
+                    message: "Unit name is required"
+                duplicate_name:
+                  value:
+                    message: "Product unit name already exists"
+        401:
+          description: Unauthorized - Invalid or missing token
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Internal server error
+
+    get:
+      tags:
+        - ProductUnit Management
+      summary: Get all product units
+      description: Retrieve all product units with optional filtering and pagination
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by unit name or description
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of units per page
+      responses:
+        200:
+          description: Product units retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product units retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProductUnit"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+        401:
+          description: Unauthorized - Invalid or missing token
+        403:
+          description: Forbidden - Insufficient permissions
+        500:
+          description: Internal server error
+
+  /unit/{unitId}:
+    get:
+      tags:
+        - ProductUnit Management
+      summary: Get product unit by ID
+      description: Retrieve a specific product unit by its ID
+      parameters:
+        - name: unitId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique unit identifier
+      responses:
+        200:
+          description: Product unit retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product unit retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/ProductUnit"
+        404:
+          description: Product unit not found
+        500:
+          description: Internal server error
+
+    patch:
+      tags:
+        - ProductUnit Management
+      summary: Update product unit
+      description: Update an existing product unit (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: unitId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique unit identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductUnitRequest"
+      responses:
+        200:
+          description: Product unit updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product unit updated successfully"
+                  data:
+                    $ref: "#/components/schemas/ProductUnit"
+        400:
+          description: Bad request - Invalid input
+        401:
+          description: Unauthorized - Invalid or missing token
+        403:
+          description: Forbidden - Admin access required
+        404:
+          description: Product unit not found
+        500:
+          description: Internal server error
+
+    delete:
+      tags:
+        - ProductUnit Management
+      summary: Delete product unit
+      description: Delete a product unit (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: unitId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique unit identifier
+      responses:
+        200:
+          description: Product unit deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Product unit deleted successfully"
+        401:
+          description: Unauthorized - Invalid or missing token
+        403:
+          description: Forbidden - Admin access required
+        404:
+          description: Product unit not found
+        500:
+          description: Internal server error
+
+  /unit/active:
+    get:
+      tags:
+        - ProductUnit Management
+      summary: Get active product units
+      description: Retrieve all active product units for dropdown/selection purposes
+      responses:
+        200:
+          description: Active product units retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Active product units retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActiveProductUnit"
+        500:
+          description: Internal server error
+
+  /unit/bulk-status:
+    patch:
+      tags:
+        - ProductUnit Management
+      summary: Bulk update unit status
+      description: Update the active status of multiple units at once (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkUpdateStatusRequest"
+      responses:
+        200:
+          description: Units updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "3 units updated successfully"
+                  data:
+                    type: object
+                    properties:
+                      updatedCount:
+                        type: integer
+                        example: 3
+        400:
+          description: Bad request - Invalid input
+        401:
+          description: Unauthorized - Invalid or missing token
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Internal server error

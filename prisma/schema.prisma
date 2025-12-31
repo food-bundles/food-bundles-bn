@@ -317,6 +317,7 @@ model Admin {
   logisticsAssignments  Order[]             @relation("LOGISTICS")
   products              Product[]
   productCategories     ProductCategory[]
+  productUnits          ProductUnit[]
   LoanApplication       LoanApplication[]
   OrderDelivery         OrderDelivery[]
   promoCodes            PromoCode[]
@@ -329,6 +330,7 @@ model Product {
   unitPrice         Float
   purchasePrice     Float
   unit              String
+  unitId            String?
   createdAt         DateTime            @default(now())
   bonus             Int
   createdBy         String
@@ -352,6 +354,25 @@ model Product {
   CartItem          CartItem[]
   category          ProductCategory     @relation(fields: [categoryId], references: [id])
   FarmerPrimaryCrop FarmerPrimaryCrop[]
+  productUnit       ProductUnit?        @relation(fields: [unitId], references: [id])
+}
+
+model ProductUnit {
+  id            String   @id @default(uuid())
+  tableTronicId Int?     @unique
+  name          String   @unique
+  description   String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String
+
+  // Relations
+  admin   Admin     @relation(fields: [createdBy], references: [id])
+  Product Product[]
+
+  @@index([name])
+  @@index([isActive])
 }
 
 model ProductCategory {
