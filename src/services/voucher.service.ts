@@ -1478,37 +1478,6 @@ export const calculateOutstandingBalanceService = async (loanId: string) => {
   };
 };
 
-/**
- * Mark penalties as paid
- */
-async function markPenaltiesAsPaid(loanId: string, amountPaid: number) {
-  const penalties = await prisma.voucherPenalty.findMany({
-    where: {
-      voucher: { loanId },
-      status: PenaltyStatus.PENDING,
-    },
-    orderBy: { appliedDate: "asc" }, // Pay oldest first
-  });
-
-  let remainingAmount = amountPaid;
-
-  for (const penalty of penalties) {
-    if (remainingAmount <= 0) break;
-
-    if (remainingAmount >= penalty.penaltyAmount) {
-      // Fully pay this penalty
-      await prisma.voucherPenalty.update({
-        where: { id: penalty.id },
-        data: {
-          status: PenaltyStatus.PAID,
-          paidDate: new Date(),
-        },
-      });
-      remainingAmount -= penalty.penaltyAmount;
-    }
-  }
-}
-
 // ============================================
 // PENALTY SERVICES
 // ============================================

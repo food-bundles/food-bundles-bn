@@ -3,12 +3,8 @@ tags:
     description: Operations for managing vouchers, credit limits, and discount applications
   - name: Loan Management
     description: Loan application, approval, and disbursement workflows
-  - name: Voucher Payments
-    description: Voucher payment processing during checkout
   - name: Repayment & Penalties
     description: Repayment processing and penalty management
-  - name: Credit Analytics
-    description: Credit summary and outstanding balance tracking
 
 components:
   schemas:
@@ -1397,7 +1393,7 @@ paths:
 
   /vouchers/checkout/voucher:
     post:
-      tags: [Voucher Payments]
+      tags: [Voucher Management]
       summary: Process voucher payment during checkout
       description: Apply voucher to order and process payment using voucher credit
       security:
@@ -1716,12 +1712,12 @@ paths:
           description: Internal server error
 
   # ========================================
-  # CREDIT ANALYTICS ENDPOINTS
+  # Voucher Management ENDPOINTS
   # ========================================
 
   /vouchers/credit-summary:
     get:
-      tags: [Credit Analytics]
+      tags: [Voucher Management]
       summary: Get restaurant credit summary
       description: Retrieve comprehensive credit summary for the authenticated restaurant
       security:

@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 
 export interface ProductCategoryData {
+  tableTronicId?: number;
   name: string;
   description?: string;
   isActive?: boolean;
@@ -37,6 +38,7 @@ export const createProductCategoryService = async (
   // Create the product category
   const productCategory = await prisma.productCategory.create({
     data: {
+      tableTronicId: categoryData.tableTronicId,
       name: categoryData.name.trim(),
       description: categoryData.description?.trim(),
       isActive: categoryData.isActive ?? true,
@@ -207,6 +209,9 @@ export const updateProductCategoryService = async (
   const updatedCategory = await prisma.productCategory.update({
     where: { id: categoryId },
     data: {
+      ...(updateData.tableTronicId !== undefined && {
+        tableTronicId: updateData.tableTronicId,
+      }),
       ...(updateData.name !== undefined && {
         name: updateData.name.trim(),
       }),

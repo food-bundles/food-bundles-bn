@@ -168,6 +168,7 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
       flwTxRef: txRef,
       paymentMethod,
       status: "PENDING",
+      restaurantId: wallet.restaurantId,
     },
   });
 
@@ -329,6 +330,132 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
 
     throw new Error(`Wallet top-up failed: ${error.message}`);
   }
+};
+
+/**
+ * Admin deposit to restaurant wallet
+ */
+export const adminDepositToWalletService = async (data: {
+  restaurantId: string;
+  amount: number;
+  adminId: string;
+  description?: string;
+}) => {
+  const { restaurantId, amount, adminId, description } = data;
+
+  // Validate amount
+  if (amount <= 0) {
+    throw new Error("Deposit amount must be greater than 0");
+  }
+
+  // Verify admin exists
+  const admin = await prisma.admin.findUnique({
+    where: { id: adminId },
+    select: { id: true, username: true },
+  });
+
+  if (!admin) {
+    throw new Error("Admin not found");
+  }
+
+  // Get or create wallet
+  let wallet = await prisma.wallet.findUnique({
+    where: { restaurantId },
+    include: {
+      restaurant: {
+        select: { id: true, name: true, email: true, phone: true },
+      },
+    },
+  });
+
+  if (!wallet) {
+    // Create wallet if it doesn't exist
+    wallet = await createWalletService({ restaurantId });
+  }
+
+  if (!wallet.isActive) {
+    throw new Error("Wallet is inactive");
+  }
+
+  const previousBalance = wallet.balance;
+  const newBalance = previousBalance + amount;
+
+  // Create transaction and update wallet balance
+  const result = await prisma.$transaction(async (tx) => {
+    // Update wallet balance
+    const updatedWallet = await tx.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        balance: newBalance,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Create transaction record
+    const transaction = await tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        type: "TOP_UP",
+        amount,
+        previousBalance,
+        newBalance,
+        description: description || `Admin deposit by ${admin.username}`,
+        paymentMethod: "ADMIN_DEPOSIT",
+        status: "COMPLETED",
+        metadata: {
+          adminId,
+          adminUsername: admin.username,
+          depositType: "ADMIN_DEPOSIT",
+        },
+        adminId: adminId,
+      },
+    });
+
+    return { wallet: updatedWallet, transaction };
+  });
+
+  // Broadcast wallet update via WebSocket
+  try {
+    wsManager.broadcastWalletUpdate({
+      walletId: wallet.id,
+      restaurantId: wallet.restaurantId,
+      action: "BALANCE_UPDATE",
+      timestamp: new Date().toISOString(),
+      data: {
+        transactionId: result.transaction.id,
+        amount,
+        newBalance,
+        previousBalance,
+        description: description || `Admin deposit by ${admin.username}`,
+        status: "COMPLETED",
+      },
+    });
+  } catch (wsError) {
+    console.error("Failed to broadcast wallet update:", wsError);
+  }
+
+  // Send notification email
+  if (wallet.restaurant.email) {
+    try {
+      await sendWalletNotificationEmail({
+        email: wallet.restaurant.email,
+        restaurantName: wallet.restaurant.name,
+        type: "TOP_UP",
+        amount,
+        newBalance,
+        transactionId: result.transaction.id,
+        paymentMethod: "ADMIN_DEPOSIT",
+      });
+    } catch (emailError) {
+      console.log("Failed to send wallet notification email:", emailError);
+    }
+  }
+
+  return {
+    success: true,
+    wallet: await getWalletByIdService(wallet.id),
+    transaction: result.transaction,
+  };
 };
 
 /**

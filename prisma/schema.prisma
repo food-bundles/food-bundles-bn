@@ -91,6 +91,7 @@ model Restaurant {
   VoucherPenalty     VoucherPenalty[]
   posts              Post[]
   affiliators        Affiliator[]
+  walletTransactions WalletTransaction[]
 }
 
 model Affiliator {
@@ -106,8 +107,9 @@ model Affiliator {
   updatedAt DateTime @updatedAt
 
   // Relations
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  orders     Order[]
+  restaurant         Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders             Order[]
+  walletTransactions WalletTransaction[]
 
   @@index([restaurantId])
 }
@@ -311,13 +313,14 @@ model Admin {
   cell     String?
   village  String?
 
-  aggregatorAssignments FarmerSubmission[] @relation("Aggregator")
-  logisticsAssignments  Order[]            @relation("LOGISTICS")
+  aggregatorAssignments FarmerSubmission[]  @relation("Aggregator")
+  logisticsAssignments  Order[]             @relation("LOGISTICS")
   products              Product[]
   productCategories     ProductCategory[]
   LoanApplication       LoanApplication[]
   OrderDelivery         OrderDelivery[]
   promoCodes            PromoCode[]
+  walletTransactions    WalletTransaction[]
 }
 
 model Product {
@@ -352,13 +355,14 @@ model Product {
 }
 
 model ProductCategory {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  createdBy   String
+  id            String   @id @default(uuid())
+  tableTronicId Int?     @unique
+  name          String   @unique
+  description   String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String
 
   // Relations
   admin             Admin              @relation(fields: [createdBy], references: [id])
@@ -594,6 +598,9 @@ model Wallet {
 model WalletTransaction {
   id              String                @id @default(uuid())
   walletId        String
+  adminId         String?
+  restaurantId    String?
+  affiliatorId    String?
   type            WalletTransactionType
   amount          Float // Positive for credit, negative for debit
   previousBalance Float
@@ -616,13 +623,19 @@ model WalletTransaction {
   updatedAt DateTime @updatedAt
 
   // Relations
-  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  wallet     Wallet      @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  admin      Admin?      @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  affiliator Affiliator? @relation(fields: [affiliatorId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([type])
   @@index([status])
   @@index([createdAt])
   @@index([flwTxRef])
+  @@index([adminId])
+  @@index([restaurantId])
+  @@index([affiliatorId])
 }
 
 model POSSale {

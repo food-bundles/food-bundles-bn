@@ -10,6 +10,7 @@ import {
   verifyWalletTopUp,
   adjustWalletBalance,
   getWalletTransactionById,
+  adminDepositToWallet,
 } from "../controllers/wallet.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -123,6 +124,18 @@ walletRoutes.patch(
   isAuthenticated,
   checkPermission("ADMIN"),
   updateWalletStatus
+);
+
+/**
+ * Admin deposit to restaurant wallet
+ * POST /wallets/admin-deposit
+ * Access: Admin only
+ */
+walletRoutes.post(
+  "/admin-deposit",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  adminDepositToWallet
 );
 
 /**

@@ -12,7 +12,7 @@ import {
 // Create ProductCategory
 export const createProductCategory = async (req: Request, res: Response) => {
   try {
-    const { name, description, isActive } = req.body;
+    const { tableTronicId, name, description, isActive } = req.body;
     const adminId = (req as any).user.id;
 
     // Validate required fields
@@ -23,6 +23,7 @@ export const createProductCategory = async (req: Request, res: Response) => {
     }
 
     const productCategory = await createProductCategoryService({
+      tableTronicId,
       name,
       description,
       isActive,
@@ -191,7 +192,11 @@ export const updateCategoryStatus = async (req: Request, res: Response) => {
     const adminId = (req as any).user.id;
 
     // Validate required fields
-    if (!categoryIds || !Array.isArray(categoryIds) || categoryIds.length === 0) {
+    if (
+      !categoryIds ||
+      !Array.isArray(categoryIds) ||
+      categoryIds.length === 0
+    ) {
       return res.status(400).json({
         message: "Category IDs array is required",
       });
