@@ -177,6 +177,7 @@ export interface DebitWalletData {
   description?: string;
   reference?: string;
   orderId?: string;
+  voucherId?: string;
 }
 
 export interface WalletTransactionFilters {
@@ -187,8 +188,6 @@ export interface WalletTransactionFilters {
   page?: number;
   limit?: number;
 }
-
-
 
 export interface VoucherPaymentSubmissionData {
   voucherCode: string;
