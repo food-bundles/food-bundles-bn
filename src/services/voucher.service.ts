@@ -2420,18 +2420,35 @@ export const processRepaymentPaymentService = async (data: {
 
       case "CASH":
         const wallet = await getWalletByRestaurantIdService(restaurantId);
-        await debitWalletService({
+
+        if (!wallet.isActive) {
+          throw new Error("Wallet is inactive. Please contact support.");
+        }
+
+        if (wallet.balance < amount) {
+          throw new Error(
+            `Insufficient wallet balance. Available: ${wallet.balance} ${wallet.currency}, Required: ${amount} RWF`
+          );
+        }
+
+        const walletDebitResult = await debitWalletService({
           walletId: wallet.id,
           amount,
           description: `Voucher repayment for ${data.voucherId}`,
           reference: `repay_${data.voucherId}`,
-          orderId: `repay_${data.voucherId}`,
+          voucherId: `repay_${data.voucherId}`,
         });
+
         return {
           success: true,
           transactionId: `WALLET_${Date.now()}`,
-          reference: `CASH-${Date.now()}`,
-          message: "Cash payment recorded successfully",
+          reference: `WALLET-${Date.now()}`,
+          message: "Repayment completed using wallet balance",
+          walletDetails: {
+            previousBalance: walletDebitResult.transaction.previousBalance,
+            newBalance: walletDebitResult.newBalance,
+            transactionId: walletDebitResult.transaction.id,
+          },
         };
 
       default:
@@ -2503,154 +2520,6 @@ async function processFlutterwaveHostedPayment({
       reference: "",
       status: "failed",
       message: error.message || `${paymentMethod} payment failed`,
-    };
-  }
-}
-
-async function processMobileMoneyPayment({
-  amount,
-  phoneNumber,
-  txRef,
-  orderId,
-  email,
-  fullname,
-  currency = "RWF",
-}: any) {
-  try {
-    const cleanedPhoneNumber = cleanPhoneNumber(phoneNumber);
-    if (!isValidRwandaPhone(cleanedPhoneNumber)) {
-      throw new Error("Invalid mobile number format");
-    }
-
-    console.log("cleanedPhoneNumber:", cleanedPhoneNumber);
-
-    try {
-      const response = await paypack.cashin({
-        number: cleanedPhoneNumber,
-        amount: amount,
-        environment:
-          process.env.NODE_ENV === "production" ? "production" : "development",
-      });
-
-      console.log("response:", response);
-
-      if (response?.data) {
-        return {
-          success: true,
-          transactionId: response.data.ref || txRef,
-          reference: response.data.ref || txRef,
-          flwRef: response.data.ref || txRef,
-          status: "pending",
-          message:
-            "Payment request sent to your phone number, please confirm it.",
-        };
-      }
-    } catch (error) {
-      console.log("PayPack failed, trying Flutterwave...");
-    }
-
-    const standardPayload = {
-      tx_ref: txRef,
-      amount: amount.toString(),
-      currency: currency,
-      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
-      customer: {
-        email: email,
-        name: fullname,
-        phonenumber: cleanedPhoneNumber,
-      },
-      payment_options: "mobilemoney",
-    };
-
-    const response = await axios.post(
-      "https://api.flutterwave.com/v3/payments",
-      standardPayload,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (response.data?.status === "success" && response.data?.data?.link) {
-      return {
-        success: true,
-        transactionId: txRef,
-        reference: txRef,
-        flwRef: txRef,
-        status: "pending",
-        message: "Redirect to complete mobile money payment",
-        authorizationDetails: {
-          mode: "redirect",
-          redirectUrl: response.data.data.link,
-        },
-      };
-    }
-    throw new Error("Mobile money payment failed");
-  } catch (error: any) {
-    return {
-      success: false,
-      transactionId: "",
-      reference: "",
-      status: "failed",
-      message: error.message || "Mobile money payment failed",
-    };
-  }
-}
-
-async function processCardPayment({
-  amount,
-  txRef,
-  email,
-  fullname,
-  phoneNumber,
-  currency = "RWF",
-  cardDetails,
-}: any) {
-  try {
-    const standardPayload = {
-      tx_ref: txRef,
-      amount: amount.toString(),
-      currency: currency,
-      redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
-      customer: {
-        email: email,
-        name: fullname,
-        phonenumber: phoneNumber,
-      },
-      payment_options: "card",
-    };
-
-    const response = await axios.post(
-      "https://api.flutterwave.com/v3/payments",
-      standardPayload,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (response.data?.status === "success" && response.data?.data?.link) {
-      return {
-        success: true,
-        transactionId: txRef,
-        reference: txRef,
-        status: "pending",
-        message: "Redirect to complete card payment",
-        redirectUrl: response.data.data.link,
-      };
-    }
-    throw new Error("Card payment failed");
-  } catch (error: any) {
-    return {
-      success: false,
-      transactionId: "",
-      reference: "",
-      status: "failed",
-      message: error.message || "Card payment failed",
     };
   }
 }

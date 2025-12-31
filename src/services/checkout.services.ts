@@ -347,14 +347,12 @@ export const processPaymentService = async (
             );
           }
 
-          const walletDebitResult = await retryDatabaseOperation(async () => {
-            return await debitWalletService({
-              walletId: wallet.id,
-              amount: order.totalAmount,
-              description: `Payment for Order - ${order.orderNumber}`,
-              reference: orderId,
-              orderId: orderId,
-            });
+          const walletDebitResult = await debitWalletService({
+            walletId: wallet.id,
+            amount: order.totalAmount,
+            description: `Payment for Order - ${order.orderNumber}`,
+            reference: orderId,
+            orderId: orderId,
           });
 
           paymentResult = {
