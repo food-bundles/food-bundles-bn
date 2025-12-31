@@ -11,6 +11,7 @@ import {
   updateWalletStatusService,
   getAllWalletsService,
   verifyWalletTopUpService,
+  adminDepositToWalletService,
 } from "../services/wallet.service";
 import { WalletTransactionType, TransactionStatus } from "@prisma/client";
 
@@ -426,6 +427,64 @@ export const adjustWalletBalance = async (req: Request, res: Response) => {
 
     res.status(500).json({
       message: error.message || "Failed to adjust wallet balance",
+    });
+  }
+};
+
+/**
+ * Admin deposit to restaurant wallet
+ * POST /wallets/admin-deposit
+ */
+export const adminDepositToWallet = async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, amount, description } = req.body;
+    const adminId = (req as any).user.id;
+
+    // Validate required fields
+    if (!restaurantId) {
+      return res.status(400).json({
+        message: "Restaurant ID is required",
+      });
+    }
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        message: "Valid amount is required",
+      });
+    }
+
+    const result = await adminDepositToWalletService({
+      restaurantId,
+      amount,
+      adminId,
+      description,
+    });
+
+    res.status(200).json({
+      message: "Admin deposit successful",
+      data: result,
+    });
+  } catch (error: any) {
+    if (error.message === "Admin not found") {
+      return res.status(404).json({
+        message: "Admin not found",
+      });
+    }
+
+    if (error.message === "Restaurant not found") {
+      return res.status(404).json({
+        message: "Restaurant not found",
+      });
+    }
+
+    if (error.message === "Wallet is inactive") {
+      return res.status(400).json({
+        message: "Cannot deposit to inactive wallet",
+      });
+    }
+
+    res.status(500).json({
+      message: error.message || "Failed to process admin deposit",
     });
   }
 };

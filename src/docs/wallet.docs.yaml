@@ -200,6 +200,28 @@ components:
           description: Optional description for the top-up
           example: "Wallet top-up"
 
+    AdminDepositRequest:
+      type: object
+      required:
+        - restaurantId
+        - amount
+      properties:
+        restaurantId:
+          type: string
+          format: uuid
+          description: Restaurant ID to deposit to
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        amount:
+          type: number
+          format: float
+          description: Deposit amount
+          example: 25000.00
+          minimum: 0.01
+        description:
+          type: string
+          description: Optional description for the deposit
+          example: "Admin deposit for promotional credit"
+
     WalletAdjustmentRequest:
       type: object
       required:
@@ -735,6 +757,93 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/admin-deposit:
+    post:
+      tags: [Wallet Management]
+      summary: Admin deposit to restaurant wallet
+      description: Allow admin to deposit funds directly to a restaurant's wallet
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminDepositRequest"
+      responses:
+        200:
+          description: Admin deposit successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Admin deposit successful"
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      wallet:
+                        $ref: "#/components/schemas/Wallet"
+                      transaction:
+                        $ref: "#/components/schemas/WalletTransaction"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_amount:
+                  value:
+                    message: "Valid amount is required"
+                    error: "Amount must be greater than 0"
+                    code: "INVALID_AMOUNT"
+                inactive_wallet:
+                  value:
+                    message: "Cannot deposit to inactive wallet"
+                    error: "Wallet is inactive"
+                    code: "INACTIVE_WALLET"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                admin_not_found:
+                  value:
+                    message: "Admin not found"
+                    error: "Admin account not found"
+                    code: "ADMIN_NOT_FOUND"
+                restaurant_not_found:
+                  value:
+                    message: "Restaurant not found"
+                    error: "Restaurant account not found"
+                    code: "RESTAURANT_NOT_FOUND"
         500:
           description: Internal server error
           content:
