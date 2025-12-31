@@ -28,7 +28,7 @@ import inviteRoutes from "./invite.routes";
 import affiliatorRoutes from "./affiliator.routes";
 import statsRoutes from "./stats.routes";
 import promoRoutes from "./promo.routes";
-
+import unitRoutes from "./unit.routes";
 
 const routes = Router();
 
@@ -57,6 +57,7 @@ routes.use("/invites", inviteRoutes);
 routes.use("/contact-submissions", contactRoutes);
 routes.use("/stats", statsRoutes);
 routes.use("/promo", promoRoutes);
+routes.use("/unit", unitRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

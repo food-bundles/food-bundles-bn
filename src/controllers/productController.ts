@@ -29,6 +29,7 @@ export const createProduct = async (req: Request, res: Response) => {
       quantity,
       expiryDate,
       unit,
+      unitId,
     } = req.body;
     const adminId = (req as any).user.id;
 
@@ -53,6 +54,7 @@ export const createProduct = async (req: Request, res: Response) => {
 
     const product = await createProductService({
       tableTronicId,
+      unitId,
       productName,
       unitPrice,
       purchasePrice,
