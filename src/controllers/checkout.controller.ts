@@ -5,7 +5,7 @@ import {
   verifyPaymentStatus,
   createAdminOrderService,
 } from "../services/checkout.services";
-import { PaymentMethod, PaymentStatus, VoucherStatus } from "@prisma/client";
+import { PaymentStatus } from "@prisma/client";
 import {
   getOrderByIdService,
   updateOrderService,
@@ -69,86 +69,90 @@ export const createCheckout = async (req: Request, res: Response) => {
     if (paymentMethodId) {
       // Get payment method to check if it's voucher
       try {
-        const { getPaymentMethodByIdService } = await import("../services/payment-method.service");
-        const paymentMethodConfig = await getPaymentMethodByIdService(paymentMethodId);
+        const { getPaymentMethodByIdService } = await import(
+          "../services/payment-method.service"
+        );
+        const paymentMethodConfig = await getPaymentMethodByIdService(
+          paymentMethodId
+        );
         const paymentMethodName = paymentMethodConfig.name.toUpperCase();
-        
+
         if (paymentMethodName === "VOUCHER" && !voucherCode) {
           return res.status(400).json({
             message: "Voucher code is required for voucher payments",
           });
         }
-        
+
         // For voucher payments, validate voucher first before sending OTP
         if (paymentMethodName === "VOUCHER") {
-      // Get cart to calculate total
-      const cart = await prisma.cart.findUnique({
-        where: { id: cartId },
-        include: { cartItems: true },
-      });
+          // Get cart to calculate total
+          const cart = await prisma.cart.findUnique({
+            where: { id: cartId },
+            include: { cartItems: true },
+          });
 
-      if (!cart) {
-        return res.status(404).json({ message: "Cart not found" });
-      }
+          if (!cart) {
+            return res.status(404).json({ message: "Cart not found" });
+          }
 
-      const cartTotal = cart.cartItems.reduce(
-        (sum, item) => sum + item.subtotal,
-        0
-      );
+          const cartTotal = cart.cartItems.reduce(
+            (sum, item) => sum + item.subtotal,
+            0
+          );
 
-      // Validate voucher for checkout
-      const voucherValidation = await validateVoucherForCheckoutService(
-        voucherCode,
-        restaurantId,
-        cartTotal
-      );
+          // Validate voucher for checkout
+          const voucherValidation = await validateVoucherForCheckoutService(
+            voucherCode,
+            restaurantId,
+            cartTotal
+          );
 
-      if (!voucherValidation.valid) {
-        return res.status(400).json({
-          message: voucherValidation.error,
-        });
-      }
+          if (!voucherValidation.valid) {
+            return res.status(400).json({
+              message: voucherValidation.error,
+            });
+          }
 
-      const otpResult = await OTPService.sendOTPToRestaurant(restaurantId);
+          const otpResult = await OTPService.sendOTPToRestaurant(restaurantId);
 
-      if (!otpResult.success) {
-        return res.status(400).json({
-          message: otpResult.message,
-        });
-      }
+          if (!otpResult.success) {
+            return res.status(400).json({
+              message: otpResult.message,
+            });
+          }
 
-      // Store checkout data temporarily for OTP verification
-      const checkoutData = {
-        cartId,
-        restaurantId,
-        affiliatorId,
-        paymentMethodId,
-        billingName,
-        billingEmail,
-        billingPhone,
-        billingAddress,
-        notes,
-        deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
-        clientIp: req.ip,
-        deviceFingerprint,
-        narration,
-        currency,
-        voucherCode,
-        promoCode,
-        fallbackPaymentMethod,
-        cardDetails,
-        bankDetails,
-        otherServices,
-      };
+          // Store checkout data temporarily for OTP verification
+          const checkoutData = {
+            cartId,
+            restaurantId,
+            affiliatorId,
+            paymentMethodId,
+            billingName,
+            billingEmail,
+            billingPhone,
+            billingAddress,
+            notes,
+            deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
+            clientIp: req.ip,
+            deviceFingerprint,
+            narration,
+            currency,
+            voucherCode,
+            promoCode,
+            fallbackPaymentMethod,
+            cardDetails,
+            bankDetails,
+            otherServices,
+          };
 
-      return res.status(200).json({
-        message:
-          "OTP sent to your registered phone number. Please verify to complete voucher payment.",
-        requiresOTP: true,
-        checkoutSessionId: Buffer.from(JSON.stringify(checkoutData)).toString(
-          "base64"
-        ),
-      });
+          return res.status(200).json({
+            message:
+              "OTP sent to your registered phone number. Please verify to complete voucher payment.",
+            requiresOTP: true,
+            checkoutSessionId: Buffer.from(
+              JSON.stringify(checkoutData)
+            ).toString("base64"),
+          });
         }
       } catch (error: any) {
         return res.status(400).json({

@@ -3,7 +3,6 @@ import prisma from "../prisma";
 import {
   VoucherStatus,
   LoanStatus,
-  PaymentMethod,
   PenaltyStatus,
   SubscriptionStatus,
   OrderStatus,
@@ -78,7 +77,7 @@ interface VoucherPaymentData {
 
 interface RepaymentData {
   restaurantId: string;
-  paymentMethod: PaymentMethod;
+  paymentMethod: string;
   voucherId: string;
   paymentReference?: string;
 }
@@ -2380,7 +2379,7 @@ export const deleteLoanApplicationService = async (
  */
 export const processRepaymentPaymentService = async (data: {
   amount: number;
-  paymentMethod: PaymentMethod;
+  paymentMethod: string;
   restaurantId: string;
   voucherId: string;
   paymentReference?: string;

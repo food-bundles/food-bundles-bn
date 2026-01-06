@@ -11,7 +11,7 @@ import {
   getOrderStatisticsService,
   createOrderFromCartService,
 } from "../services/order.services";
-import { OrderStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
+import { OrderStatus, PaymentStatus } from "@prisma/client";
 import prisma from "../prisma";
 import { wsManager } from "../index";
 
@@ -84,16 +84,6 @@ export const createDirectOrder = async (req: Request, res: Response) => {
           message: "Each item must have productId and quantity > 0",
         });
       }
-    }
-
-    // Validate payment method if provided
-    if (
-      paymentMethod &&
-      !Object.values(PaymentMethod).includes(paymentMethod)
-    ) {
-      return res.status(400).json({
-        message: "Invalid payment method",
-      });
     }
 
     const order = await createDirectOrderService({
@@ -299,16 +289,6 @@ export const updateOrder = async (req: Request, res: Response) => {
     ) {
       return res.status(400).json({
         message: "Invalid payment status",
-      });
-    }
-
-    // Validate payment method if provided
-    if (
-      paymentMethod &&
-      !Object.values(PaymentMethod).includes(paymentMethod)
-    ) {
-      return res.status(400).json({
-        message: "Invalid payment method",
       });
     }
 
