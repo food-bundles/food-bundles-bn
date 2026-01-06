@@ -1,10 +1,5 @@
 import prisma from "../prisma";
-import {
-  OrderStatus,
-  PaymentMethod,
-  PaymentStatus,
-  SubscriptionStatus,
-} from "@prisma/client";
+import { OrderStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
 import { ProductData } from "./productService";
 import { processPaymentService } from "./checkout.services";
 import { decryptSecretData, encryptSecretData } from "../utils/password";
@@ -20,7 +15,7 @@ interface CreateOrderFromCartData {
   notes?: string;
   clientIp?: string;
   requestedDelivery?: Date;
-  paymentMethod?: PaymentMethod;
+  paymentMethod?: string;
   promoCode?: string;
   billingName?: string;
   billingEmail?: string;
@@ -43,7 +38,7 @@ interface CreateDirectOrderData {
     productId: string;
     quantity: number;
   }>;
-  paymentMethod?: PaymentMethod;
+  paymentMethod?: string;
   promoCode?: string;
   notes?: string;
   requestedDelivery?: Date;
@@ -60,7 +55,7 @@ export interface UpdateOrderData {
   requestedDelivery?: Date;
   estimatedDelivery?: Date;
   actualDelivery?: Date;
-  paymentMethod?: PaymentMethod;
+  paymentMethod?: string;
   paymentStatus?: PaymentStatus;
   paymentReference?: string;
   billingName?: string;

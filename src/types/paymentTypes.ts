@@ -1,6 +1,5 @@
 import {
   OrderStatus,
-  PaymentMethod,
   PaymentStatus,
   TransactionStatus,
   WalletTransactionType,
@@ -8,7 +7,7 @@ import {
 
 // Enhanced interface for updating checkout
 export interface UpdateCheckoutData {
-  paymentMethod?: PaymentMethod;
+  paymentMethod?: string;
   billingName?: string;
   billingEmail?: string;
   billingPhone?: string;

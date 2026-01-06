@@ -1,10 +1,6 @@
 import dotenv from "dotenv";
 import prisma from "../prisma";
-import {
-  SubscriptionStatus,
-  PaymentMethod,
-  PaymentStatus,
-} from "@prisma/client";
+import { SubscriptionStatus, PaymentStatus } from "@prisma/client";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { sendMessage } from "../utils/sms.utility";
 import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
@@ -89,7 +85,7 @@ interface CreateRestaurantSubscriptionData {
   restaurantId: string;
   planId: string;
   autoRenew?: boolean;
-  paymentMethod?: PaymentMethod;
+  paymentMethod?: string;
   phoneNumber?: string;
   cardDetails?: {
     cardNumber: string;
@@ -522,7 +518,7 @@ export const createRestaurantSubscriptionService = async (
 export const processSubscriptionPaymentService = async (
   subscriptionId: string,
   paymentData: {
-    paymentMethod: PaymentMethod;
+    paymentMethod: string;
     phoneNumber?: string;
     cardDetails?: {
       cardNumber: string;

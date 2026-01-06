@@ -132,7 +132,7 @@ model FarmerSubmission {
   aggregatorId         String?
   submittedAt          DateTime              @default(now())
   verifiedAt           DateTime?
-  paymentMethod        PaymentMethod?
+  paymentMethod        String?
   approvedAt           DateTime?
   paidAt               DateTime?
   acceptedPrice        Float?
@@ -725,7 +725,7 @@ model RestaurantSubscription {
   startDate     DateTime           @default(now())
   endDate       DateTime
   autoRenew     Boolean            @default(true)
-  paymentMethod PaymentMethod?
+  paymentMethod String?
   paymentStatus PaymentStatus      @default(PENDING)
 
   // Payment tracking
@@ -756,7 +756,7 @@ model SubscriptionPayment {
   id             String        @id @default(uuid())
   subscriptionId String
   amount         Float
-  paymentMethod  PaymentMethod
+  paymentMethod  String
   paymentStatus  PaymentStatus @default(PENDING)
 
   // Payment integration fields
@@ -933,7 +933,7 @@ model VoucherRepayment {
 
   // Payment details
   amount           Float
-  paymentMethod    PaymentMethod
+  paymentMethod    String
   paymentReference String?
 
   // Allocation breakdown
@@ -1168,15 +1168,6 @@ enum CartStatus {
   ACTIVE // Cart is active and can be modified
   CHECKED_OUT // Cart has been converted to an order
   ABANDONED // Cart has been abandoned (optional for cleanup)
-}
-
-// Payment method enum
-enum PaymentMethod {
-  CASH
-  MOBILE_MONEY // Mobile money for Rwanda
-  BANK_TRANSFER
-  CARD
-  VOUCHER
 }
 
 // Payment status enum

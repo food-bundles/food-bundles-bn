@@ -15,7 +15,7 @@ import {
   checkExpiredSubscriptionsService,
   processSubscriptionPaymentService,
 } from "../services/subscription.service";
-import { SubscriptionStatus, PaymentMethod } from "@prisma/client";
+import { SubscriptionStatus } from "@prisma/client";
 import prisma from "../prisma";
 
 // ==================== SUBSCRIPTION PLAN CONTROLLERS ====================
@@ -234,15 +234,6 @@ export const createRestaurantSubscription = async (
       });
     }
 
-    if (
-      paymentMethod &&
-      !Object.values(PaymentMethod).includes(paymentMethod)
-    ) {
-      return res.status(400).json({
-        message: "Invalid payment method",
-      });
-    }
-
     // Validate payment method specific requirements
     if (paymentMethod === "MOBILE_MONEY" && !phoneNumber) {
       return res.status(400).json({
@@ -299,12 +290,6 @@ export const processSubscriptionPayment = async (
     if (!paymentMethod) {
       return res.status(400).json({
         message: "Payment method is required",
-      });
-    }
-
-    if (!Object.values(PaymentMethod).includes(paymentMethod)) {
-      return res.status(400).json({
-        message: "Invalid payment method",
       });
     }
 

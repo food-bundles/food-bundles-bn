@@ -27,12 +27,7 @@ import {
   UpdateCheckoutData,
   VoucherPaymentResult,
 } from "../types/paymentTypes";
-import {
-  OrderStatus,
-  PaymentMethod,
-  PaymentStatus,
-  VoucherStatus,
-} from "@prisma/client";
+import { OrderStatus, PaymentStatus, VoucherStatus } from "@prisma/client";
 import {
   createOrderFromCartService,
   getOrderByIdService,
@@ -82,7 +77,7 @@ export interface CreateCheckoutData {
   billingAddress?: string;
   voucherCode?: string;
   promoCode?: string;
-  fallbackPaymentMethod?: PaymentMethod;
+  fallbackPaymentMethod?: string;
   cardDetails?: {
     cardNumber: string;
     cvv: string;
@@ -106,7 +101,7 @@ export interface CreateAdminOrderData {
     productId: string;
     quantity: number;
   }[];
-  paymentMethod: PaymentMethod;
+  paymentMethod: string;
   voucherCode?: string;
   promoCode?: string;
   phoneNumber?: string;
@@ -132,8 +127,10 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
   }
 
   // Get payment method from DB
-  const paymentMethodConfig = await getPaymentMethodByIdService(data.paymentMethodId);
-  const paymentMethod = paymentMethodConfig.name.toUpperCase() as PaymentMethod;
+  const paymentMethodConfig = await getPaymentMethodByIdService(
+    data.paymentMethodId
+  );
+  const paymentMethod = paymentMethodConfig.name.toUpperCase();
 
   const orderData = {
     cartId: data.cartId,
@@ -212,7 +209,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
 export const processPaymentService = async (
   orderId: string,
   paymentData: {
-    paymentMethod: PaymentMethod;
+    paymentMethod: string;
     phoneNumber?: string;
     cardDetails?: {
       cardNumber: string;
@@ -225,7 +222,7 @@ export const processPaymentService = async (
       clientIp?: string;
     };
     voucherCode?: string;
-    fallbackPaymentMethod?: PaymentMethod;
+    fallbackPaymentMethod?: string;
     processDirectly?: boolean;
   }
 ) => {
