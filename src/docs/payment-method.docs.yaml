@@ -1,0 +1,423 @@
+tags:
+  - name: PaymentMethod Management
+    description: Operations related to payment method management
+
+components:
+  schemas:
+    PaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique payment method identifier
+        tableTronicId:
+          type: string
+          description: TableTronic Payment Method ID (optional)
+        name:
+          type: string
+          description: Payment method name (unique)
+        description:
+          type: string
+          nullable: true
+          description: Payment method description
+        isActive:
+          type: boolean
+          description: Whether the payment method is active
+          default: true
+        isPublic:
+          type: boolean
+          description: Whether the payment method is public
+          default: false
+        createdAt:
+          type: string
+          format: date-time
+          description: Payment method creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        createdBy:
+          type: string
+          description: ID of the admin who created the payment method
+        admin:
+          $ref: "#/components/schemas/AdminInfo"
+
+    ActivePaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique payment method identifier
+        name:
+          type: string
+          description: Payment method name
+        description:
+          type: string
+          nullable: true
+          description: Payment method description
+
+    CreatePaymentMethodRequest:
+      type: object
+      required:
+        - name
+      properties:
+        tableTronicId:
+          type: string
+          description: TableTronic Payment Method ID (optional)
+        name:
+          type: string
+          description: Payment method name (must be unique)
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          description: Payment method description (optional)
+          maxLength: 500
+        isActive:
+          type: boolean
+          description: Whether the payment method should be active
+          default: true
+        isPublic:
+          type: boolean
+          description: Whether the payment method should be public
+          default: false
+
+    UpdatePaymentMethodRequest:
+      type: object
+      properties:
+        tableTronicId:
+          type: string
+          description: TableTronic Payment Method ID (optional)
+        name:
+          type: string
+          description: Payment method name (must be unique)
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          description: Payment method description
+          maxLength: 500
+        isActive:
+          type: boolean
+          description: Whether the payment method is active
+        isPublic:
+          type: boolean
+          description: Whether the payment method is public
+
+    BulkUpdateStatusRequest:
+      type: object
+      required:
+        - methodIds
+        - isActive
+      properties:
+        methodIds:
+          type: array
+          items:
+            type: string
+          description: Array of payment method IDs to update
+          minItems: 1
+        isActive:
+          type: boolean
+          description: New active status for the payment methods
+
+paths:
+  /payment-method:
+    post:
+      tags:
+        - PaymentMethod Management
+      summary: Create a new payment method
+      description: Create a new payment method (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentMethodRequest"
+      responses:
+        201:
+          description: Payment method created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Payment method created successfully"
+                  data:
+                    $ref: "#/components/schemas/PaymentMethod"
+        400:
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_name:
+                  value:
+                    message: "Payment method name is required"
+                duplicate_name:
+                  value:
+                    message: "Payment method name already exists"
+        401:
+          description: Unauthorized - Invalid or missing token
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Internal server error
+
+    get:
+      tags:
+        - PaymentMethod Management
+      summary: Get all payment methods
+      description: Retrieve all payment methods with optional filtering and pagination
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by payment method name or description
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of payment methods per page
+      responses:
+        200:
+          description: Payment methods retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Payment methods retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PaymentMethod"
+                  pagination:
+                    $ref: "#/components/schemas/PaginationInfo"
+        401:
+          description: Unauthorized - Invalid or missing token
+        403:
+          description: Forbidden - Insufficient permissions
+        500:
+          description: Internal server error
+
+  /payment-method/{methodId}:
+    get:
+      tags:
+        - PaymentMethod Management
+      summary: Get payment method by ID
+      description: Retrieve a specific payment method by its ID
+      parameters:
+        - name: methodId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique payment method identifier
+      responses:
+        200:
+          description: Payment method retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Payment method retrieved successfully"
+                  data:
+                    $ref: "#/components/schemas/PaymentMethod"
+        404:
+          description: Payment method not found
+        500:
+          description: Internal server error
+
+    patch:
+      tags:
+        - PaymentMethod Management
+      summary: Update payment method
+      description: Update an existing payment method (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: methodId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique payment method identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePaymentMethodRequest"
+      responses:
+        200:
+          description: Payment method updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Payment method updated successfully"
+                  data:
+                    $ref: "#/components/schemas/PaymentMethod"
+        400:
+          description: Bad request - Invalid input
+        401:
+          description: Unauthorized - Invalid or missing token
+        403:
+          description: Forbidden - Admin access required
+        404:
+          description: Payment method not found
+        500:
+          description: Internal server error
+
+    delete:
+      tags:
+        - PaymentMethod Management
+      summary: Delete payment method
+      description: Delete a payment method (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: methodId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique payment method identifier
+      responses:
+        200:
+          description: Payment method deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Payment method deleted successfully"
+        401:
+          description: Unauthorized - Invalid or missing token
+        403:
+          description: Forbidden - Admin access required
+        404:
+          description: Payment method not found
+        500:
+          description: Internal server error
+
+  /payment-method/public:
+    get:
+      tags:
+        - PaymentMethod Management
+      summary: Get public payment methods
+      description: Retrieve all public payment methods for all users (no authentication required)
+      responses:
+        200:
+          description: Public payment methods retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Public payment methods retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActivePaymentMethod"
+        500:
+          description: Internal server error
+
+  /payment-method/active:
+    get:
+      tags:
+        - PaymentMethod Management
+      summary: Get active payment methods
+      description: Retrieve all active payment methods for dropdown/selection purposes
+      responses:
+        200:
+          description: Active payment methods retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Active payment methods retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActivePaymentMethod"
+        500:
+          description: Internal server error
+
+  /payment-method/bulk-status:
+    patch:
+      tags:
+        - PaymentMethod Management
+      summary: Bulk update payment method status
+      description: Update the active status of multiple payment methods at once (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkUpdateStatusRequest"
+      responses:
+        200:
+          description: Payment methods updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "3 payment methods updated successfully"
+                  data:
+                    type: object
+                    properties:
+                      updatedCount:
+                        type: integer
+                        example: 3
+        400:
+          description: Bad request - Invalid input
+        401:
+          description: Unauthorized - Invalid or missing token
+        403:
+          description: Forbidden - Admin access required
+        500:
+          description: Internal server error

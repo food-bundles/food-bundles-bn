@@ -25,7 +25,7 @@ export const createCheckout = async (req: Request, res: Response) => {
   try {
     const {
       cartId,
-      paymentMethod,
+      paymentMethodId,
       billingName,
       billingEmail,
       billingPhone,
@@ -56,16 +56,9 @@ export const createCheckout = async (req: Request, res: Response) => {
     }
 
     // Validate required fields
-    if (!cartId || !paymentMethod) {
+    if (!cartId || !paymentMethodId) {
       return res.status(400).json({
-        message: "Cart ID and payment method are required",
-      });
-    }
-
-    // Validate payment method
-    if (!Object.values(PaymentMethod).includes(paymentMethod)) {
-      return res.status(400).json({
-        message: "Invalid payment method",
+        message: "Cart ID and payment method ID are required",
       });
     }
 
@@ -73,17 +66,21 @@ export const createCheckout = async (req: Request, res: Response) => {
     // Flutterwave handles all payment details through their hosted checkout
 
     // Validate voucher-specific requirements
-    if (paymentMethod === "VOUCHER" && !voucherCode) {
-      return res.status(400).json({
-        message: "Voucher code is required for voucher payments",
-      });
-    }
-
-    // For Flutterwave CARD payments, no card details validation needed
-    // Flutterwave handles all card details through their hosted checkout
-
-    // For voucher payments, validate voucher first before sending OTP
-    if (paymentMethod === "VOUCHER") {
+    if (paymentMethodId) {
+      // Get payment method to check if it's voucher
+      try {
+        const { getPaymentMethodByIdService } = await import("../services/payment-method.service");
+        const paymentMethodConfig = await getPaymentMethodByIdService(paymentMethodId);
+        const paymentMethodName = paymentMethodConfig.name.toUpperCase();
+        
+        if (paymentMethodName === "VOUCHER" && !voucherCode) {
+          return res.status(400).json({
+            message: "Voucher code is required for voucher payments",
+          });
+        }
+        
+        // For voucher payments, validate voucher first before sending OTP
+        if (paymentMethodName === "VOUCHER") {
       // Get cart to calculate total
       const cart = await prisma.cart.findUnique({
         where: { id: cartId },
@@ -125,7 +122,7 @@ export const createCheckout = async (req: Request, res: Response) => {
         cartId,
         restaurantId,
         affiliatorId,
-        paymentMethod,
+        paymentMethodId,
         billingName,
         billingEmail,
         billingPhone,
@@ -152,6 +149,12 @@ export const createCheckout = async (req: Request, res: Response) => {
           "base64"
         ),
       });
+        }
+      } catch (error: any) {
+        return res.status(400).json({
+          message: "Invalid payment method ID",
+        });
+      }
     }
 
     // For non-voucher payments, process normally
@@ -159,7 +162,7 @@ export const createCheckout = async (req: Request, res: Response) => {
       cartId,
       restaurantId,
       affiliatorId,
-      paymentMethod,
+      paymentMethodId,
       billingName,
       billingEmail,
       billingPhone,

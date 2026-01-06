@@ -11,6 +11,7 @@ import {
   processVoucherPaymentService,
   rollbackVoucherPaymentService,
 } from "./voucher.service";
+import { getPaymentMethodByIdService } from "./payment-method.service";
 import {
   sendPaymentNotificationEmail,
   cleanPhoneNumber,
@@ -74,7 +75,7 @@ export interface CreateCheckoutData {
   affiliatorId?: string;
   notes?: string;
   deliveryDate?: Date;
-  paymentMethod: PaymentMethod;
+  paymentMethodId: string;
   billingName?: string;
   billingEmail?: string;
   billingPhone?: string;
@@ -130,6 +131,10 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     throw new Error("Restaurant ID or Affiliator ID is required");
   }
 
+  // Get payment method from DB
+  const paymentMethodConfig = await getPaymentMethodByIdService(data.paymentMethodId);
+  const paymentMethod = paymentMethodConfig.name.toUpperCase() as PaymentMethod;
+
   const orderData = {
     cartId: data.cartId,
     restaurantId,
@@ -137,7 +142,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     status: OrderStatus.PENDING,
     notes: data.notes,
     requestedDelivery: data.deliveryDate,
-    paymentMethod: data.paymentMethod,
+    paymentMethod: paymentMethod,
     billingName: data.billingName,
     billingEmail: data.billingEmail,
     billingPhone: data.billingPhone,
@@ -168,7 +173,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
 
   // Process immediate payment
   const paymentResult = await processPaymentService(orderCreated.id!, {
-    paymentMethod: data.paymentMethod,
+    paymentMethod: paymentMethod,
     phoneNumber: data.billingPhone,
     cardDetails: data.cardDetails,
     bankDetails: data.bankDetails,

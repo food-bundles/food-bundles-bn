@@ -29,6 +29,7 @@ import affiliatorRoutes from "./affiliator.routes";
 import statsRoutes from "./stats.routes";
 import promoRoutes from "./promo.routes";
 import unitRoutes from "./unit.routes";
+import paymentMethodRoutes from "./payment-method.routes";
 
 const routes = Router();
 
@@ -58,6 +59,7 @@ routes.use("/contact-submissions", contactRoutes);
 routes.use("/stats", statsRoutes);
 routes.use("/promo", promoRoutes);
 routes.use("/unit", unitRoutes);
+routes.use("/payment-method", paymentMethodRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);
