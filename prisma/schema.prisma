@@ -364,7 +364,6 @@ model PaymentMethodConfig {
   name          String   @unique
   description   String?
   isActive      Boolean  @default(true)
-  isPublic      Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   createdBy     String
@@ -374,7 +373,6 @@ model PaymentMethodConfig {
 
   @@index([name])
   @@index([isActive])
-  @@index([isPublic])
 }
 
 model ProductUnit {
@@ -546,6 +544,7 @@ model Order {
   Voucher            Voucher?             @relation(fields: [voucherId], references: [id])
   DeliveryOTP        DeliveryOTP?
   OrderDelivery      OrderDelivery?
+  paymentMethodConfig PaymentMethodConfig? @relation(fields: [paymentMethod], references: [name])
 
   @@index([restaurantId])
   @@index([status])
