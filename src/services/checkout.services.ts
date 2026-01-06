@@ -33,7 +33,6 @@ import {
   getOrderByIdService,
   updateOrderService,
 } from "./order.services";
-import { applyPromoCodeService } from "./promo.service";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { encryptSecretData } from "../utils/password";
 import { clearCartService } from "./cart.service";

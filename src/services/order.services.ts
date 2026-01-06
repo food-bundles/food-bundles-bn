@@ -541,6 +541,7 @@ export const getOrderByIdService = async (
           },
         },
       },
+      paymentMethodConfig: true,
     },
   });
 
@@ -614,6 +615,7 @@ export const getAllOrdersService = async ({
             },
           },
         },
+        paymentMethodConfig: true,
         _count: {
           select: {
             orderItems: true,
