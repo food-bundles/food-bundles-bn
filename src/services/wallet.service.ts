@@ -333,6 +333,95 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
 };
 
 /**
+ * Get wallet transactions with filtering (Admin only)
+ */
+export const getWalletTransactionsService = async ({
+  page = 1,
+  limit = 10,
+  restaurantId,
+  type,
+  status,
+  startDate,
+  endDate,
+}: {
+  page?: number;
+  limit?: number;
+  restaurantId?: string;
+  type?: string;
+  status?: string;
+  startDate?: Date;
+  endDate?: Date;
+}) => {
+  const skip = (page - 1) * limit;
+
+  const where: any = {};
+
+  if (restaurantId) {
+    where.restaurantId = restaurantId;
+  }
+
+  if (type) {
+    where.type = type;
+  }
+
+  if (status) {
+    where.status = status;
+  }
+
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) {
+      where.createdAt.gte = startDate;
+    }
+    if (endDate) {
+      where.createdAt.lte = endDate;
+    }
+  }
+
+  const [transactions, total] = await Promise.all([
+    prisma.walletTransaction.findMany({
+      where,
+      skip,
+      take: limit,
+      include: {
+        wallet: {
+          select: {
+            id: true,
+            currency: true,
+            restaurant: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        admin: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+    prisma.walletTransaction.count({ where }),
+  ]);
+
+  return {
+    transactions,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+};
+
+/**
  * Admin deposit to restaurant wallet
  */
 export const adminDepositToWalletService = async (data: {
@@ -597,58 +686,6 @@ export const refundToWalletService = async (data: DebitWalletData) => {
     wallet: updatedWallet,
     transaction,
     newBalance,
-  };
-};
-
-/**
- * Get wallet transactions with filtering
- */
-export const getWalletTransactionsService = async (
-  walletId: string,
-  filters: WalletTransactionFilters = {}
-) => {
-  const { type, status, startDate, endDate, page = 1, limit = 20 } = filters;
-  const skip = (page - 1) * limit;
-
-  const where: any = { walletId };
-  if (type) where.type = type;
-  if (status) where.status = status;
-  if (startDate || endDate) {
-    where.createdAt = {};
-    if (startDate) where.createdAt.gte = startDate;
-    if (endDate) where.createdAt.lte = endDate;
-  }
-
-  const [transactions, total] = await Promise.all([
-    prisma.walletTransaction.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      include: {
-        wallet: {
-          select: {
-            id: true,
-            currency: true,
-            restaurant: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
-    }),
-    prisma.walletTransaction.count({ where }),
-  ]);
-
-  return {
-    transactions,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
   };
 };
 
