@@ -216,15 +216,14 @@ components:
       type: object
       required:
         - cartId
-        - paymentMethod
+        - paymentMethodId
       properties:
         cartId:
           type: string
           description: ID of the cart to checkout
-        paymentMethod:
+        paymentMethodId:
           type: string
-          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
-          description: Selected payment method
+          description: Payment method configuration ID
         voucherCode:
           type: string
           description: Voucher code (required for VOUCHER payment method)
@@ -738,7 +737,7 @@ paths:
                 summary: Mobile Money Payment
                 value:
                   cartId: "cart123"
-                  paymentMethod: "MOBILE_MONEY"
+                  paymentMethodId: "pm_mobile_money_123"
                   promoCode: "SAVE20"
                   billingPhone: "250788123456"
                   billingAddress: "123 Main St"
@@ -749,7 +748,7 @@ paths:
                 summary: Cash Payment
                 value:
                   cartId: "cart123"
-                  paymentMethod: "CASH"
+                  paymentMethodId: "pm_cash_123"
                   billingAddress: "123 Main St"
                   notes: "Special instructions"
                   deliveryDate: "2023-06-30"
@@ -758,7 +757,7 @@ paths:
                 summary: Card Payment
                 value:
                   cartId: "cart123"
-                  paymentMethod: "CARD"
+                  paymentMethodId: "pm_card_123"
                   promoCode: "SAVE20"
                   billingEmail: "foodbundles@example.com"
                   billingName: "John Doe"
@@ -778,7 +777,7 @@ paths:
                 summary: Bank Transfer
                 value:
                   cartId: "cart123"
-                  paymentMethod: "BANK_TRANSFER"
+                  paymentMethodId: "pm_bank_transfer_123"
                   billingEmail: "foodbundles@example.com"
                   billingPhone: "250788123456"
                   billingAddress: "123 Main St"
@@ -794,7 +793,7 @@ paths:
                 summary: Voucher Payment (Requires OTP)
                 value:
                   cartId: "cart123"
-                  paymentMethod: "VOUCHER"
+                  paymentMethodId: "pm_voucher_123"
                   voucherCode: "VCH-100DISC"
                   promoCode: "SAVE20"
                   billingPhone: "250788123456"
@@ -844,7 +843,7 @@ paths:
                     message: "Failed to send OTP. Please try again."
                 missing_fields:
                   value:
-                    message: "Cart ID and payment method are required"
+                    message: "Cart ID and payment method ID are required"
                 invalid_payment_method:
                   value:
                     message: "Invalid payment method"
