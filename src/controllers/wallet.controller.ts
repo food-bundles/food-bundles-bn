@@ -224,7 +224,15 @@ export const getMyWalletTransactions = async (req: Request, res: Response) => {
       limit: parseInt(limit as string),
     };
 
-    const result = await getWalletTransactionsService(wallet.id, filters);
+    const result = await getWalletTransactionsService({
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+      restaurantId: wallet.restaurantId,
+      type: type as string,
+      status: status as string,
+      startDate: startDate ? new Date(startDate as string) : undefined,
+      endDate: endDate ? new Date(endDate as string) : undefined,
+    });
 
     res.status(200).json({
       message: "Wallet transactions retrieved successfully",
@@ -513,6 +521,52 @@ export const verifyWalletTopUp = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to verify payment",
+    });
+  }
+};
+
+/**
+ * Get all wallet transactions (Admin only)
+ * GET /wallets/admin/transactions
+ */
+export const getAdminWalletTransactions = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const {
+      restaurantId,
+      type,
+      status,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 20,
+    } = req.query;
+
+    const result = await getWalletTransactionsService({
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+      restaurantId: restaurantId as string,
+      type: type as string,
+      status: status as string,
+      startDate: startDate ? new Date(startDate as string) : undefined,
+      endDate: endDate ? new Date(endDate as string) : undefined,
+    });
+
+    res.status(200).json({
+      message: "Wallet transactions retrieved successfully",
+      data: result.transactions,
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get wallet transactions",
     });
   }
 };

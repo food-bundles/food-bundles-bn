@@ -11,6 +11,7 @@ import {
   adjustWalletBalance,
   getWalletTransactionById,
   adminDepositToWallet,
+  getAdminWalletTransactions,
 } from "../controllers/wallet.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -58,11 +59,11 @@ walletRoutes.post(
 
 /**
  * Get current restaurant's wallet transactions
- * GET /wallets/transactions
+ * GET /wallets/my-wallet-transactions
  * Access: Restaurant only
  */
 walletRoutes.get(
-  "/transactions",
+  "/my-wallet-transactions",
   isAuthenticated,
   checkPermission("RESTAURANT"),
   getMyWalletTransactions
@@ -101,6 +102,18 @@ walletRoutes.get(
  * Access: Admin only
  */
 walletRoutes.get("/", isAuthenticated, checkPermission("ADMIN"), getAllWallets);
+
+/**
+ * Get all wallet transactions
+ * GET /wallets/transactions
+ * Access: Admin only
+ */
+walletRoutes.get(
+  "/transactions",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAdminWalletTransactions
+);
 
 /**
  * Get wallet by ID
