@@ -313,11 +313,12 @@ model Admin {
   cell     String?
   village  String?
 
-  aggregatorAssignments FarmerSubmission[]  @relation("Aggregator")
-  logisticsAssignments  Order[]             @relation("LOGISTICS")
+  aggregatorAssignments FarmerSubmission[]    @relation("Aggregator")
+  logisticsAssignments  Order[]               @relation("LOGISTICS")
   products              Product[]
   productCategories     ProductCategory[]
   productUnits          ProductUnit[]
+  paymentMethods        PaymentMethodConfig[]
   LoanApplication       LoanApplication[]
   OrderDelivery         OrderDelivery[]
   promoCodes            PromoCode[]
@@ -355,6 +356,25 @@ model Product {
   category          ProductCategory     @relation(fields: [categoryId], references: [id])
   FarmerPrimaryCrop FarmerPrimaryCrop[]
   productUnit       ProductUnit?        @relation(fields: [unitId], references: [id])
+}
+
+model PaymentMethodConfig {
+  id            String   @id @default(uuid())
+  tableTronicId Int?     @unique
+  name          String   @unique
+  description   String?
+  isActive      Boolean  @default(true)
+  isPublic      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String
+
+  // Relations
+  admin Admin @relation(fields: [createdBy], references: [id])
+
+  @@index([name])
+  @@index([isActive])
+  @@index([isPublic])
 }
 
 model ProductUnit {
