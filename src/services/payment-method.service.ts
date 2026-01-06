@@ -5,16 +5,27 @@ export interface PaymentMethodData {
   name: string;
   description?: string;
   isActive?: boolean;
-  isPublic?: boolean;
   createdBy: string;
 }
 
 // Create PaymentMethod
-export const createPaymentMethodService = async (methodData: PaymentMethodData) => {
+export const createPaymentMethodService = async (
+  methodData: PaymentMethodData
+) => {
   // Validate payment method name against accepted values
-  const acceptedPaymentMethods = ['MOBILE_MONEY', 'CARD', 'BANK_TRANSFER', 'CASH', 'VOUCHER'];
+  const acceptedPaymentMethods = [
+    "MOBILE_MONEY",
+    "CARD",
+    "BANK_TRANSFER",
+    "CASH",
+    "VOUCHER",
+  ];
   if (!acceptedPaymentMethods.includes(methodData.name.toUpperCase())) {
-    throw new Error(`Invalid payment method. Accepted methods are: ${acceptedPaymentMethods.join(', ')}`);
+    throw new Error(
+      `Invalid payment method. Accepted methods are: ${acceptedPaymentMethods.join(
+        ", "
+      )}`
+    );
   }
 
   // Check if admin exists and has permission
@@ -47,7 +58,6 @@ export const createPaymentMethodService = async (methodData: PaymentMethodData) 
       name: methodData.name.trim(),
       description: methodData.description?.trim(),
       isActive: methodData.isActive ?? true,
-      isPublic: methodData.isPublic ?? false,
       createdBy: methodData.createdBy,
     },
     include: {
@@ -170,9 +180,19 @@ export const updatePaymentMethodService = async (
   // Check name uniqueness if name is being updated
   if (updateData.name && updateData.name !== existingMethod.name) {
     // Validate payment method name against accepted values
-    const acceptedPaymentMethods = ['MOBILE_MONEY', 'CARD', 'BANK_TRANSFER', 'CASH', 'VOUCHER'];
+    const acceptedPaymentMethods = [
+      "MOBILE_MONEY",
+      "CARD",
+      "BANK_TRANSFER",
+      "CASH",
+      "VOUCHER",
+    ];
     if (!acceptedPaymentMethods.includes(updateData.name.toUpperCase())) {
-      throw new Error(`Invalid payment method. Accepted methods are: ${acceptedPaymentMethods.join(', ')}`);
+      throw new Error(
+        `Invalid payment method. Accepted methods are: ${acceptedPaymentMethods.join(
+          ", "
+        )}`
+      );
     }
 
     const existingName = await prisma.paymentMethodConfig.findFirst({
@@ -207,9 +227,6 @@ export const updatePaymentMethodService = async (
       }),
       ...(updateData.isActive !== undefined && {
         isActive: updateData.isActive,
-      }),
-      ...(updateData.isPublic !== undefined && {
-        isPublic: updateData.isPublic,
       }),
     },
     include: {
@@ -250,26 +267,6 @@ export const getActivePaymentMethodsService = async () => {
   const methods = await prisma.paymentMethodConfig.findMany({
     where: {
       isActive: true,
-    },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-    },
-    orderBy: {
-      name: "asc",
-    },
-  });
-
-  return methods;
-};
-
-// Get public PaymentMethods for all users
-export const getPublicPaymentMethodsService = async () => {
-  const methods = await prisma.paymentMethodConfig.findMany({
-    where: {
-      isActive: true,
-      isPublic: true,
     },
     select: {
       id: true,

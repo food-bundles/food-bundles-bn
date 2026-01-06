@@ -3,7 +3,6 @@ import {
   createPaymentMethod,
   getAllPaymentMethods,
   getActivePaymentMethods,
-  getPublicPaymentMethods,
   getPaymentMethodById,
   updatePaymentMethod,
   deletePaymentMethod,
@@ -15,9 +14,6 @@ const paymentMethodRoutes = Router();
 
 // Get active payment methods for dropdown/selection (accessible to authenticated users)
 paymentMethodRoutes.get("/active", getActivePaymentMethods);
-
-// Get public payment methods for all users (no authentication required)
-paymentMethodRoutes.get("/public", getPublicPaymentMethods);
 
 // Bulk update method status (Admin only)
 paymentMethodRoutes.patch(

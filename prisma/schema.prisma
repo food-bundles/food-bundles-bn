@@ -364,17 +364,16 @@ model PaymentMethodConfig {
   name          String   @unique
   description   String?
   isActive      Boolean  @default(true)
-  isPublic      Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   createdBy     String
 
   // Relations
-  admin Admin @relation(fields: [createdBy], references: [id])
+  admin  Admin   @relation(fields: [createdBy], references: [id])
+  orders Order[]
 
   @@index([name])
   @@index([isActive])
-  @@index([isPublic])
 }
 
 model ProductUnit {
@@ -482,10 +481,10 @@ model Order {
   packagingFee      Float     @default(0)
 
   // Payment information
-  paymentMethod    PaymentMethod?
-  paymentStatus    PaymentStatus  @default(PENDING)
+  paymentMethod    String?
+  paymentStatus    PaymentStatus @default(PENDING)
   paymentReference String?
-  paymentProvider  String?        @default("FLUTTERWAVE")
+  paymentProvider  String?       @default("FLUTTERWAVE")
   paymentType      String?
 
   // Enhanced Payment Fields 
@@ -537,15 +536,16 @@ model Order {
   paidAt    DateTime?
 
   // Relations
-  restaurant         Restaurant           @relation(fields: [restaurantId], references: [id])
-  affiliator         Affiliator?          @relation(fields: [orderedBy], references: [id])
-  orderItems         OrderItem[]
-  logistics          Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
-  cart               Cart?                @relation(fields: [cartId], references: [id])
-  VoucherTransaction VoucherTransaction[]
-  Voucher            Voucher?             @relation(fields: [voucherId], references: [id])
-  DeliveryOTP        DeliveryOTP?
-  OrderDelivery      OrderDelivery?
+  restaurant          Restaurant           @relation(fields: [restaurantId], references: [id])
+  affiliator          Affiliator?          @relation(fields: [orderedBy], references: [id])
+  orderItems          OrderItem[]
+  logistics           Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
+  cart                Cart?                @relation(fields: [cartId], references: [id])
+  VoucherTransaction  VoucherTransaction[]
+  Voucher             Voucher?             @relation(fields: [voucherId], references: [id])
+  DeliveryOTP         DeliveryOTP?
+  OrderDelivery       OrderDelivery?
+  paymentMethodConfig PaymentMethodConfig? @relation(fields: [paymentMethod], references: [name])
 
   @@index([restaurantId])
   @@index([status])

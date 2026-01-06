@@ -6,14 +6,13 @@ import {
   updatePaymentMethodService,
   deletePaymentMethodService,
   getActivePaymentMethodsService,
-  getPublicPaymentMethodsService,
   updateMethodStatusService,
 } from "../services/payment-method.service";
 
 // Create PaymentMethod
 export const createPaymentMethod = async (req: Request, res: Response) => {
   try {
-    const { tableTronicId, name, description, isActive, isPublic } = req.body;
+    const { tableTronicId, name, description, isActive } = req.body;
     const adminId = (req as any).user.id;
 
     // Validate required fields
@@ -28,7 +27,6 @@ export const createPaymentMethod = async (req: Request, res: Response) => {
       name,
       description,
       isActive,
-      isPublic,
       createdBy: adminId,
     });
 
@@ -84,22 +82,6 @@ export const getActivePaymentMethods = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to get active payment methods",
-    });
-  }
-};
-
-// Get public PaymentMethods for all users
-export const getPublicPaymentMethods = async (req: Request, res: Response) => {
-  try {
-    const methods = await getPublicPaymentMethodsService();
-
-    res.status(200).json({
-      message: "Public payment methods retrieved successfully",
-      data: methods,
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      message: error.message || "Failed to get public payment methods",
     });
   }
 };
@@ -209,7 +191,11 @@ export const updateMethodStatus = async (req: Request, res: Response) => {
       });
     }
 
-    const result = await updateMethodStatusService(methodIds, isActive, adminId);
+    const result = await updateMethodStatusService(
+      methodIds,
+      isActive,
+      adminId
+    );
 
     res.status(200).json({
       message: result.message,

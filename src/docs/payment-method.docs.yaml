@@ -24,10 +24,6 @@ components:
           type: boolean
           description: Whether the payment method is active
           default: true
-        isPublic:
-          type: boolean
-          description: Whether the payment method is public
-          default: false
         createdAt:
           type: string
           format: date-time
@@ -77,10 +73,6 @@ components:
           type: boolean
           description: Whether the payment method should be active
           default: true
-        isPublic:
-          type: boolean
-          description: Whether the payment method should be public
-          default: false
 
     UpdatePaymentMethodRequest:
       type: object
@@ -100,9 +92,6 @@ components:
         isActive:
           type: boolean
           description: Whether the payment method is active
-        isPublic:
-          type: boolean
-          description: Whether the payment method is public
 
     BulkUpdateStatusRequest:
       type: object
@@ -331,30 +320,6 @@ paths:
           description: Forbidden - Admin access required
         404:
           description: Payment method not found
-        500:
-          description: Internal server error
-
-  /payment-method/public:
-    get:
-      tags:
-        - PaymentMethod Management
-      summary: Get public payment methods
-      description: Retrieve all public payment methods for all users (no authentication required)
-      responses:
-        200:
-          description: Public payment methods retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Public payment methods retrieved successfully"
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ActivePaymentMethod"
         500:
           description: Internal server error
 
