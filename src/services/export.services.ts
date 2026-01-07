@@ -209,6 +209,7 @@ export const exportPaymentsService = async (format: ExportFormat) => {
 export const exportProductsService = async (format: ExportFormat) => {
   const products = await prisma.product.findMany({
     select: {
+      tableTronicProductId: true,
       productName: true,
       unitPrice: true,
       purchasePrice: true,

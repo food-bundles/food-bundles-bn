@@ -19,7 +19,7 @@ import { wsManager } from "../index";
 export const createProduct = async (req: Request, res: Response) => {
   try {
     const {
-      tableTronicId,
+      tableTronicProductId,
       productName,
       unitPrice,
       purchasePrice,
@@ -53,7 +53,7 @@ export const createProduct = async (req: Request, res: Response) => {
     }
 
     const product = await createProductService({
-      tableTronicId,
+      tableTronicProductId,
       unitId,
       productName,
       unitPrice,

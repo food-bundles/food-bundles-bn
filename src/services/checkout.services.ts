@@ -252,6 +252,7 @@ export const processPaymentService = async (
               product: {
                 select: {
                   id: true,
+                  tableTronicProductId: true,
                   productName: true,
                   unitPrice: true,
                   unit: true,
@@ -1232,6 +1233,7 @@ export const createAdminOrderService = async (data: CreateAdminOrderData) => {
       where: { id: item.productId },
       select: {
         id: true,
+        tableTronicProductId: true,
         productName: true,
         unitPrice: true,
         status: true,

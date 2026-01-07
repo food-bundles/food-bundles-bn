@@ -555,6 +555,7 @@ export const getRestaurantByIdService = async (id: string) => {
               unitPrice: true,
               product: {
                 select: {
+                  tableTronicProductId: true,
                   productName: true,
                   category: true,
                 },

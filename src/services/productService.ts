@@ -3,7 +3,7 @@ import { createNotificationService } from "./notification.services";
 import { getProductUnitByIdService } from "./unit.service";
 
 export interface ProductData {
-  tableTronicId?: number | null;
+  tableTronicProductId?: number | null;
   unitId?: string | null;
   productName: string;
   unitPrice: number;
@@ -56,7 +56,7 @@ export const createProductService = async (productData: ProductData) => {
   // Create the product with proper admin connection
   const product = await prisma.product.create({
     data: {
-      tableTronicId: productData.tableTronicId,
+      tableTronicProductId: productData.tableTronicProductId,
       unitId: productData.unitId,
       productName: productData.productName,
       unitPrice: Number(productData.unitPrice),
@@ -159,6 +159,7 @@ export const updateProductQuantityFromSubmissionService = async ({
         approvedProduct: {
           select: {
             id: true,
+            tableTronicProductId: true,
             productName: true,
             sku: true,
             unitPrice: true,
@@ -230,8 +231,8 @@ export const updateProductService = async (
   const updatedProduct = await prisma.product.update({
     where: { id: productId },
     data: {
-      ...(updateData.tableTronicId !== undefined && {
-        tableTronicId: updateData.tableTronicId,
+      ...(updateData.tableTronicProductId !== undefined && {
+        tableTronicProductId: updateData.tableTronicProductId,
       }),
       ...(updateData.unitId !== undefined && {
         unitId: updateData.unitId,
@@ -388,6 +389,7 @@ export const createProductFromSubmissionService = async ({
         approvedProduct: {
           select: {
             id: true,
+            tableTronicProductId: true,
             productName: true,
             sku: true,
             unitPrice: true,
@@ -523,6 +525,7 @@ export const getAllProductsService = async ({
       ...(take !== undefined && { take }),
       select: {
         id: true,
+        tableTronicProductId: true,
         productName: true,
         unitPrice: true,
         category: true,
@@ -596,6 +599,7 @@ export const getProductsByRoleService = async ({
     case "ADMIN":
       selectFields = {
         id: true,
+        tableTronicProductId: true,
         productName: true,
         unitPrice: true,
         purchasePrice: true,
@@ -626,6 +630,7 @@ export const getProductsByRoleService = async ({
     case "AGGREGATOR":
       selectFields = {
         id: true,
+        tableTronicProductId: true,
         productName: true,
         unitPrice: true,
         purchasePrice: true,
@@ -643,6 +648,7 @@ export const getProductsByRoleService = async ({
     case "LOGISTICS":
       selectFields = {
         id: true,
+        tableTronicProductId: true,
         productName: true,
         unitPrice: true,
         category: true,
@@ -658,6 +664,7 @@ export const getProductsByRoleService = async ({
     default:
       selectFields = {
         id: true,
+        tableTronicProductId: true,
         productName: true,
         unitPrice: true,
         category: true,
@@ -910,6 +917,7 @@ export const getDiscountedProductsService = async () => {
     where,
     select: {
       id: true,
+      tableTronicProductId: true,
       productName: true,
       unitPrice: true,
       category: true,

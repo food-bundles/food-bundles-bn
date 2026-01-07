@@ -32,7 +32,11 @@ export class DeliveryService {
 
       // Check if payment is completed
       if (order.paymentStatus !== "COMPLETED") {
-        return { success: false, message: "Order payment must be completed before generating delivery OTP" };
+        return {
+          success: false,
+          message:
+            "Order payment must be completed before generating delivery OTP",
+        };
       }
 
       // Generate OTP
@@ -269,6 +273,7 @@ export class DeliveryService {
               product: {
                 select: {
                   id: true,
+                  tableTronicProductId: true,
                   productName: true,
                   unitPrice: true,
                   unit: true,
@@ -439,6 +444,7 @@ export class DeliveryService {
                 product: {
                   select: {
                     id: true,
+                    tableTronicProductId: true,
                     productName: true,
                     unitPrice: true,
                     unit: true,
@@ -484,6 +490,7 @@ export class DeliveryService {
               product: {
                 select: {
                   id: true,
+                  tableTronicProductId: true,
                   productName: true,
                   unitPrice: true,
                   unit: true,

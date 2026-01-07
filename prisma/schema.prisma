@@ -326,47 +326,47 @@ model Admin {
 }
 
 model Product {
-  id                String              @id @default(uuid())
-  tableTronicId     Int?                @unique
-  unitPrice         Float
-  purchasePrice     Float
-  unit              String
-  unitId            String?
-  createdAt         DateTime            @default(now())
-  bonus             Int
-  createdBy         String
-  expiryDate        DateTime?
-  images            String[]
-  quantity          Float
-  sku               String              @unique
-  updatedAt         DateTime            @updatedAt
-  categoryId        String
-  productName       String              @unique
-  status            ProductStatus       @default(ACTIVE)
-  inactiveReason    String?
-  province          String?
-  district          String?
-  sector            String?
-  cell              String?
-  village           String?
-  farmerSubmissions FarmerSubmission[]
-  orderItems        OrderItem[]
-  admin             Admin               @relation(fields: [createdBy], references: [id])
-  CartItem          CartItem[]
-  category          ProductCategory     @relation(fields: [categoryId], references: [id])
-  FarmerPrimaryCrop FarmerPrimaryCrop[]
-  productUnit       ProductUnit?        @relation(fields: [unitId], references: [id])
+  id                   String              @id @default(uuid())
+  tableTronicProductId Int?                @unique @map("tableTronicProductId")
+  unitPrice            Float
+  purchasePrice        Float
+  unit                 String
+  unitId               String?
+  createdAt            DateTime            @default(now())
+  bonus                Int
+  createdBy            String
+  expiryDate           DateTime?
+  images               String[]
+  quantity             Float
+  sku                  String              @unique
+  updatedAt            DateTime            @updatedAt
+  categoryId           String
+  productName          String              @unique
+  status               ProductStatus       @default(ACTIVE)
+  inactiveReason       String?
+  province             String?
+  district             String?
+  sector               String?
+  cell                 String?
+  village              String?
+  farmerSubmissions    FarmerSubmission[]
+  orderItems           OrderItem[]
+  admin                Admin               @relation(fields: [createdBy], references: [id])
+  CartItem             CartItem[]
+  category             ProductCategory     @relation(fields: [categoryId], references: [id])
+  FarmerPrimaryCrop    FarmerPrimaryCrop[]
+  productUnit          ProductUnit?        @relation(fields: [unitId], references: [id])
 }
 
 model PaymentMethodConfig {
-  id            String   @id @default(uuid())
-  tableTronicId Int?     @unique
-  name          String   @unique
-  description   String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  createdBy     String
+  id                         String   @id @default(uuid())
+  tableTronicPaymentMethodId Int?     @unique
+  name                       String   @unique
+  description                String?
+  isActive                   Boolean  @default(true)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  createdBy                  String
 
   // Relations
   admin  Admin   @relation(fields: [createdBy], references: [id])
@@ -377,14 +377,14 @@ model PaymentMethodConfig {
 }
 
 model ProductUnit {
-  id            String   @id @default(uuid())
-  tableTronicId Int?     @unique
-  name          String   @unique
-  description   String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  createdBy     String
+  id                String   @id @default(uuid())
+  tableTronicUnitId Int?     @unique
+  name              String   @unique
+  description       String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String
 
   // Relations
   admin   Admin     @relation(fields: [createdBy], references: [id])
@@ -395,14 +395,14 @@ model ProductUnit {
 }
 
 model ProductCategory {
-  id            String   @id @default(uuid())
-  tableTronicId Int?     @unique
-  name          String   @unique
-  description   String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  createdBy     String
+  id                    String   @id @default(uuid())
+  tableTronicCategoryId Int?     @unique
+  name                  String   @unique
+  description           String?
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  createdBy             String
 
   // Relations
   admin             Admin              @relation(fields: [createdBy], references: [id])

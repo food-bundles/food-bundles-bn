@@ -1,7 +1,7 @@
 import prisma from "../prisma";
 
 export interface ProductUnitData {
-  tableTronicId?: number;
+  tableTronicUnitId?: number;
   name: string;
   description?: string;
   isActive?: boolean;
@@ -36,7 +36,7 @@ export const createProductUnitService = async (unitData: ProductUnitData) => {
   // Create the product unit
   const productUnit = await prisma.productUnit.create({
     data: {
-      tableTronicId: unitData.tableTronicId,
+      tableTronicUnitId: unitData.tableTronicUnitId,
       name: unitData.name.trim(),
       description: unitData.description?.trim(),
       isActive: unitData.isActive ?? true,
@@ -182,8 +182,8 @@ export const updateProductUnitService = async (
   const updatedUnit = await prisma.productUnit.update({
     where: { id: unitId },
     data: {
-      ...(updateData.tableTronicId !== undefined && {
-        tableTronicId: updateData.tableTronicId,
+      ...(updateData.tableTronicUnitId !== undefined && {
+        tableTronicUnitId: updateData.tableTronicUnitId,
       }),
       ...(updateData.name !== undefined && {
         name: updateData.name.trim(),

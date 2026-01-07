@@ -1,7 +1,7 @@
 import prisma from "../prisma";
 
 export interface PaymentMethodData {
-  tableTronicId?: number;
+  tableTronicPaymentMethodId?: number;
   name: string;
   description?: string;
   isActive?: boolean;
@@ -54,7 +54,7 @@ export const createPaymentMethodService = async (
   // Create the payment method
   const paymentMethod = await prisma.paymentMethodConfig.create({
     data: {
-      tableTronicId: methodData.tableTronicId,
+      tableTronicPaymentMethodId: methodData.tableTronicPaymentMethodId,
       name: methodData.name.trim(),
       description: methodData.description?.trim(),
       isActive: methodData.isActive ?? true,
@@ -216,8 +216,8 @@ export const updatePaymentMethodService = async (
   const updatedMethod = await prisma.paymentMethodConfig.update({
     where: { id: methodId },
     data: {
-      ...(updateData.tableTronicId !== undefined && {
-        tableTronicId: updateData.tableTronicId,
+      ...(updateData.tableTronicPaymentMethodId !== undefined && {
+        tableTronicPaymentMethodId: updateData.tableTronicPaymentMethodId,
       }),
       ...(updateData.name !== undefined && {
         name: updateData.name.trim(),

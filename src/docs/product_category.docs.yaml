@@ -10,7 +10,7 @@ components:
         id:
           type: string
           description: Unique category identifier
-        tableTronicId:
+        tableTronicCategoryId:
           type: string
           description: TableTronic Category ID (optional)
         name:
@@ -87,7 +87,7 @@ components:
       required:
         - name
       properties:
-        tableTronicId:
+        tableTronicCategoryId:
           type: string
           description: TableTronic Category ID (optional)
         name:
@@ -107,7 +107,7 @@ components:
     UpdateProductCategoryRequest:
       type: object
       properties:
-        tableTronicId:
+        tableTronicCategoryId:
           type: string
           description: TableTronic Category ID (optional)
         name:
