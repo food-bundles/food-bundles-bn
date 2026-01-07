@@ -569,6 +569,7 @@ export const getOrderByNumber = async (req: Request, res: Response) => {
             product: {
               select: {
                 id: true,
+                tableTronicProductId: true,
                 productName: true,
                 unitPrice: true,
                 unit: true,

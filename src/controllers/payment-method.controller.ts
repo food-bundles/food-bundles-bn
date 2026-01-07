@@ -12,7 +12,7 @@ import {
 // Create PaymentMethod
 export const createPaymentMethod = async (req: Request, res: Response) => {
   try {
-    const { tableTronicId, name, description, isActive } = req.body;
+    const { tableTronicPaymentMethodId, name, description, isActive } = req.body;
     const adminId = (req as any).user.id;
 
     // Validate required fields
@@ -23,7 +23,7 @@ export const createPaymentMethod = async (req: Request, res: Response) => {
     }
 
     const paymentMethod = await createPaymentMethodService({
-      tableTronicId,
+      tableTronicPaymentMethodId,
       name,
       description,
       isActive,

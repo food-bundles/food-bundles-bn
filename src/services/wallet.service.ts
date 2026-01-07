@@ -14,6 +14,7 @@ import {
 } from "../types/paymentTypes";
 import axios from "axios";
 import { wsManager } from "../index";
+import { getRestaurantFromAffiliatorService } from "./affiliator.service";
 
 dotenv.config();
 
@@ -137,7 +138,27 @@ export const getWalletByIdService = async (walletId: string) => {
  * Top up wallet
  */
 export const topUpWalletService = async (data: TopUpWalletData) => {
-  const { walletId, amount, paymentMethod, phoneNumber, description } = data;
+  const {
+    walletId,
+    affiliatorId,
+    amount,
+    paymentMethod,
+    phoneNumber,
+    description,
+  } = data;
+
+  // Get restaurant from affiliator if affiliatorId is provided
+  let restaurantId = data.restaurantId;
+  if (data.affiliatorId) {
+    const restaurant = await getRestaurantFromAffiliatorService(
+      data.affiliatorId
+    );
+    restaurantId = restaurant.id;
+  }
+
+  if (!restaurantId) {
+    throw new Error("Restaurant ID or Affiliator ID is required");
+  }
 
   // Validate amount
   if (amount <= 0) {
@@ -168,7 +189,8 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
       flwTxRef: txRef,
       paymentMethod,
       status: "PENDING",
-      restaurantId: wallet.restaurantId,
+      restaurantId: restaurantId || wallet.restaurantId,
+      affiliatorId: affiliatorId,
     },
   });
 

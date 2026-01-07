@@ -157,6 +157,8 @@ export interface CreateWalletData {
 
 export interface TopUpWalletData {
   walletId: string;
+  restaurantId?: string;
+  affiliatorId?: string;
   amount: number;
   paymentMethod: string;
   phoneNumber?: string;

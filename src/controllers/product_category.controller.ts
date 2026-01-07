@@ -12,7 +12,7 @@ import {
 // Create ProductCategory
 export const createProductCategory = async (req: Request, res: Response) => {
   try {
-    const { tableTronicId, name, description, isActive } = req.body;
+    const { tableTronicCategoryId, name, description, isActive } = req.body;
     const adminId = (req as any).user.id;
 
     // Validate required fields
@@ -23,7 +23,7 @@ export const createProductCategory = async (req: Request, res: Response) => {
     }
 
     const productCategory = await createProductCategoryService({
-      tableTronicId,
+      tableTronicCategoryId,
       name,
       description,
       isActive,

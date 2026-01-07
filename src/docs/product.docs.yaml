@@ -10,7 +10,7 @@ components:
         id:
           type: string
           description: Unique product identifier
-        tableTronicId:
+        tableTronicProductId:
           type: integer
           description: Unique product identifier from TableTronic system
         unitId:
@@ -165,7 +165,7 @@ components:
         - quantity
         - unit
       properties:
-        tableTronicId:
+        tableTronicProductId:
           type: integer
           description: Unique product identifier from TableTronic system
         unitId:
@@ -206,7 +206,7 @@ components:
     UpdateProductRequest:
       type: object
       properties:
-        tableTronicId:
+        tableTronicProductId:
           type: integer
           description: Unique product identifier from TableTronic system
         unitId:

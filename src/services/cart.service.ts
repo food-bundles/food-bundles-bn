@@ -109,6 +109,7 @@ export const addToCartService = async (data: AddToCartData) => {
         product: {
           select: {
             id: true,
+            tableTronicProductId: true,
             productName: true,
             unitPrice: true,
             images: true,
@@ -131,6 +132,7 @@ export const addToCartService = async (data: AddToCartData) => {
         product: {
           select: {
             id: true,
+            tableTronicProductId: true,
             productName: true,
             unitPrice: true,
             images: true,
@@ -191,6 +193,7 @@ export const getCartByRestaurantIdService = async (
           product: {
             select: {
               id: true,
+              tableTronicProductId: true,
               productName: true,
               unitPrice: true,
               images: true,
@@ -255,6 +258,7 @@ export const getCartByIdService = async (cartId: string) => {
           product: {
             select: {
               id: true,
+              tableTronicProductId: true,
               productName: true,
               unitPrice: true,
               images: true,
@@ -344,6 +348,7 @@ export const updateCartItemService = async (
       product: {
         select: {
           id: true,
+          tableTronicProductId: true,
           productName: true,
           unitPrice: true,
           images: true,
@@ -482,6 +487,7 @@ export const getAllCartsService = async ({
             product: {
               select: {
                 id: true,
+                tableTronicProductId: true,
                 productName: true,
                 unitPrice: true,
               },

@@ -101,7 +101,18 @@ export const getWalletById = async (req: Request, res: Response) => {
 export const topUpWallet = async (req: Request, res: Response) => {
   try {
     const { amount, paymentMethod, phoneNumber, description } = req.body;
-    const restaurantId = (req as any).user.id;
+
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
 
     // Validate required fields
     if (!amount || amount <= 0) {
@@ -134,6 +145,8 @@ export const topUpWallet = async (req: Request, res: Response) => {
 
     const result = await topUpWalletService({
       walletId: wallet.id,
+      restaurantId,
+      affiliatorId,
       amount,
       paymentMethod,
       phoneNumber,

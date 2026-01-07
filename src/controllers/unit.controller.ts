@@ -12,7 +12,7 @@ import {
 // Create ProductUnit
 export const createProductUnit = async (req: Request, res: Response) => {
   try {
-    const { tableTronicId, name, description, isActive } = req.body;
+    const { tableTronicUnitId, name, description, isActive } = req.body;
     const adminId = (req as any).user.id;
 
     // Validate required fields
@@ -23,7 +23,7 @@ export const createProductUnit = async (req: Request, res: Response) => {
     }
 
     const productUnit = await createProductUnitService({
-      tableTronicId,
+      tableTronicUnitId,
       name,
       description,
       isActive,

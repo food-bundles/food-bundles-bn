@@ -522,6 +522,7 @@ export const getOrderByIdService = async (
           product: {
             select: {
               id: true,
+              tableTronicProductId: true,
               productName: true,
               unitPrice: true,
               unit: true,
@@ -608,6 +609,7 @@ export const getAllOrdersService = async ({
             product: {
               select: {
                 id: true,
+                tableTronicProductId: true,
                 productName: true,
                 unitPrice: true,
                 unit: true,
@@ -971,6 +973,7 @@ export const reOrderFromExistingOrderService = async (
           product: {
             select: {
               id: true,
+              tableTronicProductId: true,
               productName: true,
               unitPrice: true,
               images: true,
