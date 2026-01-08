@@ -53,7 +53,25 @@ export const createAffiliator = async (req: Request, res: Response) => {
  */
 export const getMyAffiliators = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    let restaurantId: string;
+
+    if (user.role === "RESTAURANT") {
+      restaurantId = user.id;
+    } else if (user.role === "AFFILIATOR") {
+      restaurantId = user.restaurantId;
+    } else if (user.role === "ADMIN") {
+      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
+      if (!restaurantId) {
+        return res.status(400).json({
+          message: "Restaurant ID is required for admin to view affiliators",
+        });
+      }
+    } else {
+      return res.status(403).json({
+        message: "Unauthorized: Invalid role",
+      });
+    }
 
     const affiliators = await getRestaurantAffiliatorsService(restaurantId);
 
@@ -108,9 +126,13 @@ export const getAffiliatorById = async (req: Request, res: Response) => {
     const affiliator = await getAffiliatorByIdService(id);
 
     // Check authorization
-    if (userRole === "RESTAURANT" && affiliator.restaurantId !== userId) {
+    const isOwner = (userRole === "RESTAURANT" && affiliator.restaurantId === userId) ||
+      (userRole === "AFFILIATOR" && affiliator.restaurantId === (req as any).user.restaurantId) ||
+      (userRole === "ADMIN");
+
+    if (!isOwner) {
       return res.status(403).json({
-        message: "Unauthorized: Affiliator does not belong to this restaurant",
+        message: "Unauthorized: Affiliator does not belong to your restaurant",
       });
     }
 

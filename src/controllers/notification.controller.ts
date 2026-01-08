@@ -84,14 +84,17 @@ export const getAllNotifications = async (req: Request, res: Response) => {
 // Get my notifications (for authenticated user)
 export const getMyNotifications = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userId = user.id;
+    const userRole = user.role;
+    const restaurantId = userRole === "AFFILIATOR" ? user.restaurantId : undefined;
     const { page = 1, limit = 10, isRead } = req.query;
 
     const result = await getUserNotificationsService(userId, userRole, {
       page: parseInt(page as string),
       limit: parseInt(limit as string),
       isRead: isRead ? isRead === "true" : undefined,
+      restaurantId,
     });
 
     res.status(200).json({
@@ -162,8 +165,10 @@ export const markAsRead = async (req: Request, res: Response) => {
 // Mark all my notifications as read
 export const markAllAsRead = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userId = user.id;
+    const userRole = user.role;
+    const restaurantId = userRole === "AFFILIATOR" ? user.restaurantId : undefined;
 
     const result = await markAllUserNotificationsAsReadService(
       userId,
@@ -209,10 +214,12 @@ export const deleteNotification = async (req: Request, res: Response) => {
 // Get unread count
 export const getUnreadCount = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userId = user.id;
+    const userRole = user.role;
+    const restaurantId = userRole === "AFFILIATOR" ? user.restaurantId : undefined;
 
-    const result = await getUnreadCountService(userId, userRole);
+    const result = await getUnreadCountService(userId, userRole, restaurantId);
 
     res.status(200).json({
       message: "Unread count retrieved successfully",

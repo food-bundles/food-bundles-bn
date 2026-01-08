@@ -91,16 +91,24 @@ export const getUserNotificationsService = async (
     page = 1,
     limit = 10,
     isRead,
-  }: { page?: number; limit?: number; isRead?: boolean }
+    restaurantId,
+  }: { page?: number; limit?: number; isRead?: boolean; restaurantId?: string }
 ) => {
   const skip = (page - 1) * limit;
 
+  const orConditions: any[] = [
+    { targetType: "ALL_USERS" },
+    { targetType: "SPECIFIC_USER", targetId: userId },
+    { targetType: "ROLE_BASED", targetRole: userRole as any },
+  ];
+
+  if (restaurantId) {
+    orConditions.push({ targetType: "SPECIFIC_USER", targetId: restaurantId });
+    orConditions.push({ targetType: "ROLE_BASED", targetRole: "RESTAURANT" });
+  }
+
   const where: any = {
-    OR: [
-      { targetType: "ALL_USERS" },
-      { targetType: "SPECIFIC_USER", targetId: userId },
-      { targetType: "ROLE_BASED", targetRole: userRole as any },
-    ],
+    OR: orConditions,
   };
 
   if (isRead !== undefined) {
@@ -162,7 +170,8 @@ export const markNotificationAsReadService = async (notificationId: string) => {
 // Mark all user notifications as read
 export const markAllUserNotificationsAsReadService = async (
   userId: string,
-  userRole: string
+  userRole: string,
+  restaurantId?: string
 ) => {
   const result = await prisma.notification.updateMany({
     where: {
@@ -170,6 +179,12 @@ export const markAllUserNotificationsAsReadService = async (
         { targetType: "ALL_USERS" },
         { targetType: "SPECIFIC_USER", targetId: userId },
         { targetType: "ROLE_BASED", targetRole: userRole as any },
+        ...(restaurantId
+          ? [
+            { targetType: "SPECIFIC_USER" as any, targetId: restaurantId },
+            { targetType: "ROLE_BASED" as any, targetRole: "RESTAURANT" as any },
+          ]
+          : []),
       ],
       isRead: false,
     },
@@ -202,7 +217,8 @@ export const deleteNotificationService = async (notificationId: string) => {
 // Get unread count for user
 export const getUnreadCountService = async (
   userId: string,
-  userRole: string
+  userRole: string,
+  restaurantId?: string
 ) => {
   const count = await prisma.notification.count({
     where: {
@@ -210,6 +226,12 @@ export const getUnreadCountService = async (
         { targetType: "ALL_USERS" },
         { targetType: "SPECIFIC_USER", targetId: userId },
         { targetType: "ROLE_BASED", targetRole: userRole as any },
+        ...(restaurantId
+          ? [
+            { targetType: "SPECIFIC_USER" as any, targetId: restaurantId },
+            { targetType: "ROLE_BASED" as any, targetRole: "RESTAURANT" as any },
+          ]
+          : []),
       ],
       isRead: false,
     },
