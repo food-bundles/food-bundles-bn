@@ -23,7 +23,8 @@ import { wsManager } from "../index";
 export const createOrderFromCart = async (req: Request, res: Response) => {
   try {
     const { cartId, notes, requestedDelivery } = req.body;
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId;
 
     // Validate required fields
     if (!cartId) {
@@ -60,9 +61,14 @@ export const createOrderFromCart = async (req: Request, res: Response) => {
 export const createDirectOrder = async (req: Request, res: Response) => {
   try {
     const { items, paymentMethod, notes, requestedDelivery } = req.body;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : req.body.restaurantId;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : req.body.restaurantId;
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -115,9 +121,14 @@ export const createDirectOrder = async (req: Request, res: Response) => {
 export const getOrderById = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     const order = await getOrderByIdService(orderId, restaurantId);
 
@@ -146,6 +157,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
       restaurantId,
       dateFrom,
       dateTo,
+      search,
     } = req.query;
 
     // Validate status if provided
@@ -173,6 +185,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
       restaurantId: restaurantId as string,
       dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
       dateTo: dateTo ? new Date(dateTo as string) : undefined,
+      search: search as string,
     });
 
     res.status(200).json({
@@ -198,7 +211,25 @@ export const getAllOrders = async (req: Request, res: Response) => {
  */
 export const getMyOrders = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    let restaurantId: string;
+
+    if (user.role === "RESTAURANT") {
+      restaurantId = user.id;
+    } else if (user.role === "AFFILIATOR") {
+      restaurantId = user.restaurantId;
+    } else if (user.role === "ADMIN") {
+      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
+      if (!restaurantId) {
+        return res.status(400).json({
+          message: "Restaurant ID is required for admin to view specific orders",
+        });
+      }
+    } else {
+      return res.status(403).json({
+        message: "Unauthorized: Invalid role for this operation",
+      });
+    }
     const {
       page = 1,
       limit = 10,
@@ -272,9 +303,15 @@ export const updateOrder = async (req: Request, res: Response) => {
       otp, // For DELIVERED status verification
     } = req.body;
 
-    const userRole = (req as any).user.role;
-    const userId = (req as any).user.id;
-    const restaurantId = userRole === "RESTAURANT" ? userId : undefined;
+    const user = (req as any).user;
+    const userRole = user.role;
+    const userId = user.id;
+    const restaurantId =
+      userRole === "RESTAURANT"
+        ? userId
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     // Validate status if provided
     if (status && !Object.values(OrderStatus).includes(status)) {
@@ -311,14 +348,8 @@ export const updateOrder = async (req: Request, res: Response) => {
         }
 
         // Verify OTP using delivery service
-        const { DeliveryService } = await import(
-          "../services/delivery.service"
-        );
-        const otpResult = await DeliveryService.verifyDeliveryOTP(
-          orderId,
-          otp,
-          userId
-        );
+        const { DeliveryService } = await import("../services/delivery.service");
+        const otpResult = await DeliveryService.verifyDeliveryOTP(orderId, otp, userId);
 
         if (!otpResult.success) {
           return res.status(400).json({
@@ -381,9 +412,14 @@ export const cancelOrder = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     const { reason } = req.body;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     const result = await cancelOrderService(orderId, restaurantId, reason);
 
@@ -406,7 +442,8 @@ export const reOrderFromExistingOrder = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
 
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId;
 
     const paymentResult = await reOrderFromExistingOrderService(
       orderId,
@@ -517,13 +554,20 @@ export const deleteOrder = async (req: Request, res: Response) => {
 export const getOrderStatistics = async (req: Request, res: Response) => {
   try {
     const { restaurantId, dateFrom, dateTo } = req.query;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
 
-    // If user is restaurant, only show their statistics
-    const targetRestaurantId =
-      userRole === "RESTAURANT"
-        ? (req as any).user.id
-        : (restaurantId as string);
+    // Determine the target restaurant ID based on role
+    let targetRestaurantId: string | undefined;
+
+    if (userRole === "RESTAURANT") {
+      targetRestaurantId = user.id;
+    } else if (userRole === "AFFILIATOR") {
+      targetRestaurantId = user.restaurantId;
+    } else {
+      // For ADMIN or others, use the provided restaurantId from query
+      targetRestaurantId = restaurantId as string;
+    }
 
     const statistics = await getOrderStatisticsService({
       restaurantId: targetRestaurantId,
@@ -549,9 +593,14 @@ export const getOrderStatistics = async (req: Request, res: Response) => {
 export const getOrderByNumber = async (req: Request, res: Response) => {
   try {
     const { orderNumber } = req.params;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     // Find order by order number
     const order = await prisma.order.findUnique({

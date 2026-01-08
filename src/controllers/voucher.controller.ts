@@ -123,7 +123,26 @@ export const getAllVouchers = async (req: Request, res: Response) => {
  */
 export const getMyVouchers = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    let restaurantId: string;
+
+    if (user.role === "RESTAURANT") {
+      restaurantId = user.id;
+    } else if (user.role === "AFFILIATOR") {
+      restaurantId = user.restaurantId;
+    } else if (user.role === "ADMIN") {
+      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
+      if (!restaurantId) {
+        return res.status(400).json({
+          message: "Restaurant ID is required for admin to view vouchers",
+        });
+      }
+    } else {
+      return res.status(403).json({
+        message: "Unauthorized: Invalid role",
+      });
+    }
+
     const { status, activeOnly } = req.query;
 
     const filters: any = {};
@@ -156,9 +175,13 @@ export const getVoucherById = async (req: Request, res: Response) => {
     const voucher = await getVoucherByIdService(id);
 
     // Check authorization
-    if (userRole === "RESTAURANT" && voucher.restaurantId !== userId) {
+    const isOwner = (userRole === "RESTAURANT" && voucher.restaurantId === userId) ||
+      (userRole === "AFFILIATOR" && voucher.restaurantId === (req as any).user.restaurantId) ||
+      (userRole === "ADMIN");
+
+    if (!isOwner) {
       return res.status(403).json({
-        message: "Unauthorized: Voucher does not belong to this restaurant",
+        message: "Unauthorized: Voucher does not belong to your restaurant",
       });
     }
 
@@ -185,7 +208,11 @@ export const getRestaurantVouchers = async (req: Request, res: Response) => {
     const userId = (req as any).user.id;
 
     // Check authorization
-    if (userRole === "RESTAURANT" && restaurantId !== userId) {
+    const isAuthorized = (userRole === "RESTAURANT" && restaurantId === userId) ||
+      (userRole === "AFFILIATOR" && restaurantId === (req as any).user.restaurantId) ||
+      (userRole === "ADMIN");
+
+    if (!isAuthorized) {
       return res.status(403).json({
         message: "Unauthorized: Cannot access other restaurant's vouchers",
       });
@@ -214,7 +241,8 @@ export const getRestaurantVouchers = async (req: Request, res: Response) => {
  */
 export const getAvailableVouchers = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId || (req.query.restaurantId as string);
     const { amount } = req.query;
 
     if (!amount) {
@@ -301,9 +329,13 @@ export const getVoucherTransactions = async (req: Request, res: Response) => {
     const voucher = await getVoucherByIdService(id);
 
     // Check authorization
-    if (userRole === "RESTAURANT" && voucher.restaurantId !== userId) {
+    const isOwner = (userRole === "RESTAURANT" && voucher.restaurantId === userId) ||
+      (userRole === "AFFILIATOR" && voucher.restaurantId === (req as any).user.restaurantId) ||
+      (userRole === "ADMIN");
+
+    if (!isOwner) {
       return res.status(403).json({
-        message: "Unauthorized: Voucher does not belong to this restaurant",
+        message: "Unauthorized: Voucher does not belong to your restaurant",
       });
     }
 
@@ -333,9 +365,13 @@ export const getVoucherByCode = async (req: Request, res: Response) => {
     const voucher = await getVoucherByCodeService(voucherCode);
 
     // Check authorization - restaurants can only see their own vouchers
-    if (userRole === "RESTAURANT" && voucher.restaurantId !== userId) {
+    const isOwner = (userRole === "RESTAURANT" && voucher.restaurantId === userId) ||
+      (userRole === "AFFILIATOR" && voucher.restaurantId === (req as any).user.restaurantId) ||
+      (userRole === "ADMIN");
+
+    if (!isOwner) {
       return res.status(403).json({
-        message: "Unauthorized: Voucher does not belong to this restaurant",
+        message: "Unauthorized: Voucher does not belong to your restaurant",
       });
     }
 
@@ -360,7 +396,8 @@ export const getVoucherByCode = async (req: Request, res: Response) => {
  */
 export const applyForLoan = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId || req.body.restaurantId;
     const { requestedAmount, purpose, voucherDays } = req.body;
 
     if (!requestedAmount || !voucherDays) {
@@ -393,7 +430,25 @@ export const applyForLoan = async (req: Request, res: Response) => {
  */
 export const getMyLoanApplications = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    let restaurantId: string;
+
+    if (user.role === "RESTAURANT") {
+      restaurantId = user.id;
+    } else if (user.role === "AFFILIATOR") {
+      restaurantId = user.restaurantId;
+    } else if (user.role === "ADMIN") {
+      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
+      if (!restaurantId) {
+        return res.status(400).json({
+          message: "Restaurant ID is required for admin to view loan applications",
+        });
+      }
+    } else {
+      return res.status(403).json({
+        message: "Unauthorized: Invalid role",
+      });
+    }
 
     const loans = await getRestaurantLoanApplicationsService(restaurantId);
 
@@ -446,9 +501,13 @@ export const getLoanApplicationById = async (req: Request, res: Response) => {
     const loan = await getLoanApplicationByIdService(id);
 
     // Check authorization
-    if (userRole === "RESTAURANT" && loan.restaurantId !== userId) {
+    const isOwner = (userRole === "RESTAURANT" && loan.restaurantId === userId) ||
+      (userRole === "AFFILIATOR" && loan.restaurantId === (req as any).user.restaurantId) ||
+      (userRole === "ADMIN");
+
+    if (!isOwner) {
       return res.status(403).json({
-        message: "Unauthorized: Loan does not belong to this restaurant",
+        message: "Unauthorized: Loan does not belong to your restaurant",
       });
     }
 
@@ -554,7 +613,8 @@ export const rejectLoan = async (req: Request, res: Response) => {
  */
 export const processVoucherPayment = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId || req.body.restaurantId;
     const { voucherId, orderId, originalAmount } = req.body;
 
     if (!voucherId || !orderId || !originalAmount) {
@@ -592,7 +652,8 @@ export const processVoucherPayment = async (req: Request, res: Response) => {
 export const makeRepayment = async (req: Request, res: Response) => {
   try {
     const { id: voucherId } = req.params;
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId || req.body.restaurantId;
     const { paymentMethod, paymentReference } = req.body;
 
     if (!paymentMethod) {
@@ -670,9 +731,13 @@ export const getOutstandingBalance = async (req: Request, res: Response) => {
     const voucher = await getVoucherByIdService(voucherId);
 
     // Check authorization
-    if (userRole === "RESTAURANT" && voucher.restaurantId !== userId) {
+    const isOwner = (userRole === "RESTAURANT" && voucher.restaurantId === userId) ||
+      (userRole === "AFFILIATOR" && voucher.restaurantId === (req as any).user.restaurantId) ||
+      (userRole === "ADMIN");
+
+    if (!isOwner) {
       return res.status(403).json({
-        message: "Unauthorized: Voucher does not belong to this restaurant",
+        message: "Unauthorized: Voucher does not belong to your restaurant",
       });
     }
 
@@ -739,9 +804,13 @@ export const getVoucherPenalties = async (req: Request, res: Response) => {
     const voucher = await getVoucherByIdService(voucherId);
 
     // Check authorization
-    if (userRole === "RESTAURANT" && voucher.restaurantId !== userId) {
+    const isOwner = (userRole === "RESTAURANT" && voucher.restaurantId === userId) ||
+      (userRole === "AFFILIATOR" && voucher.restaurantId === (req as any).user.restaurantId) ||
+      (userRole === "ADMIN");
+
+    if (!isOwner) {
       return res.status(403).json({
-        message: "Unauthorized: Voucher does not belong to this restaurant",
+        message: "Unauthorized: Voucher does not belong to your restaurant",
       });
     }
 
@@ -822,7 +891,25 @@ export const getRestaurantCreditSummary = async (
   res: Response
 ) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    let restaurantId: string;
+
+    if (user.role === "RESTAURANT") {
+      restaurantId = user.id;
+    } else if (user.role === "AFFILIATOR") {
+      restaurantId = user.restaurantId;
+    } else if (user.role === "ADMIN") {
+      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
+      if (!restaurantId) {
+        return res.status(400).json({
+          message: "Restaurant ID is required for admin to view credit summary",
+        });
+      }
+    } else {
+      return res.status(403).json({
+        message: "Unauthorized: Invalid role",
+      });
+    }
 
     const summary = await getRestaurantCreditSummaryService(restaurantId);
 

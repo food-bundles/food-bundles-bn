@@ -218,9 +218,14 @@ export const createRestaurantSubscription = async (
       cardDetails,
       bankDetails,
     } = req.body;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : req.body.restaurantId;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : req.body.restaurantId;
 
     if (!planId) {
       return res.status(400).json({
@@ -283,9 +288,14 @@ export const processSubscriptionPayment = async (
   try {
     const { subscriptionId } = req.params;
     const { paymentMethod, phoneNumber, cardDetails, bankDetails } = req.body;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     if (!paymentMethod) {
       return res.status(400).json({
@@ -348,7 +358,25 @@ export const processSubscriptionPayment = async (
  */
 export const getMySubscriptions = async (req: Request, res: Response) => {
   try {
-    const restaurantId = (req as any).user.id;
+    const user = (req as any).user;
+    let restaurantId: string;
+
+    if (user.role === "RESTAURANT") {
+      restaurantId = user.id;
+    } else if (user.role === "AFFILIATOR") {
+      restaurantId = user.restaurantId;
+    } else if (user.role === "ADMIN") {
+      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
+      if (!restaurantId) {
+        return res.status(400).json({
+          message: "Restaurant ID is required for admin to view specific subscriptions",
+        });
+      }
+    } else {
+      return res.status(403).json({
+        message: "Unauthorized: Invalid role for this operation",
+      });
+    }
     const { page = 1, limit = 10, status } = req.query;
 
     if (
@@ -390,9 +418,14 @@ export const getMySubscriptions = async (req: Request, res: Response) => {
 export const getSubscriptionById = async (req: Request, res: Response) => {
   try {
     const { subscriptionId } = req.params;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     const subscription = await getSubscriptionByIdService(
       subscriptionId,
@@ -423,9 +456,14 @@ export const updateRestaurantSubscription = async (
   try {
     const { subscriptionId } = req.params;
     const { status, autoRenew, endDate } = req.body;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     if (status && !Object.values(SubscriptionStatus).includes(status)) {
       return res.status(400).json({
@@ -470,9 +508,14 @@ export const cancelSubscription = async (req: Request, res: Response) => {
   try {
     const { subscriptionId } = req.params;
     const { reason } = req.body;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     const subscription = await cancelSubscriptionService(
       subscriptionId,
@@ -498,9 +541,14 @@ export const cancelSubscription = async (req: Request, res: Response) => {
 export const renewSubscription = async (req: Request, res: Response) => {
   try {
     const { subscriptionId } = req.params;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     const subscription = await renewSubscriptionService(
       subscriptionId,
@@ -586,9 +634,14 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
   try {
     const { subscriptionId } = req.params;
     const { newPlanId } = req.body;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     if (!newPlanId) {
       return res.status(400).json({
@@ -672,9 +725,14 @@ export const downgradeSubscription = async (req: Request, res: Response) => {
   try {
     const { subscriptionId } = req.params;
     const { newPlanId } = req.body;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     if (!newPlanId) {
       return res.status(400).json({
@@ -753,9 +811,14 @@ export const downgradeSubscription = async (req: Request, res: Response) => {
 export const getSubscriptionHistory = async (req: Request, res: Response) => {
   try {
     const { subscriptionId } = req.params;
-    const userRole = (req as any).user.role;
+    const user = (req as any).user;
+    const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT" ? (req as any).user.id : undefined;
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+          ? user.restaurantId
+          : undefined;
 
     // Verify subscription access
     await getSubscriptionByIdService(subscriptionId, restaurantId);

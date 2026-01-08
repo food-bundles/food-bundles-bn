@@ -570,6 +570,7 @@ export const getAllOrdersService = async ({
   restaurantId,
   dateFrom,
   dateTo,
+  search,
 }: {
   page?: number;
   limit?: number;
@@ -578,6 +579,7 @@ export const getAllOrdersService = async ({
   restaurantId?: string;
   dateFrom?: Date;
   dateTo?: Date;
+  search?: string;
 }) => {
   const skip = (page - 1) * limit;
 
@@ -589,6 +591,26 @@ export const getAllOrdersService = async ({
     where.createdAt = {};
     if (dateFrom) where.createdAt.gte = dateFrom;
     if (dateTo) where.createdAt.lte = dateTo;
+  }
+
+  // Add search functionality for restaurant name or order number
+  if (search) {
+    where.OR = [
+      {
+        orderNumber: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        restaurant: {
+          name: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+      },
+    ];
   }
 
   const [orders, total] = await Promise.all([

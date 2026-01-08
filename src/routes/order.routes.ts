@@ -72,7 +72,7 @@ orderRoutes.post("/direct", isAuthenticated, createDirectOrder);
 orderRoutes.get(
   "/my-orders",
   isAuthenticated,
-  checkPermission("RESTAURANT"),
+  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
   getMyOrders
 );
 

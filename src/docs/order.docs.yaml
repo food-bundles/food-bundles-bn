@@ -1232,6 +1232,11 @@ paths:
           schema:
             type: string
           description: Filter by specific restaurant
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by restaurant name or order number
         - name: dateFrom
           in: query
           schema:
