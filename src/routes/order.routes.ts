@@ -12,6 +12,7 @@ import {
   getOrderByNumber,
   reOrderFromExistingOrder,
   testWebSocket,
+  generateEBMInvoice,
 } from "../controllers/order.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -113,6 +114,18 @@ orderRoutes.post(
   "/:orderId/reorder",
   isAuthenticated,
   reOrderFromExistingOrder
+);
+
+/**
+ * Generate EBM invoice for an order
+ * POST /orders/:orderId/generate-ebm-invoice
+ * Access: Admin only
+ */
+orderRoutes.post(
+  "/:orderId/generate-ebm-invoice",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  generateEBMInvoice
 );
 
 /**

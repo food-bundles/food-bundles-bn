@@ -778,6 +778,129 @@ export const cancelOrderService = async (
 };
 
 /**
+ * Service to generate EBM invoice for an order
+ */
+export const generateEBMInvoiceService = async (orderId: string) => {
+  // Get order with all required details
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      restaurant: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          tin: true,
+        },
+      },
+      orderItems: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              tableTronicProductId: true,
+              productName: true,
+              unitPrice: true,
+              unit: true,
+            },
+          },
+        },
+      },
+      paymentMethodConfig: {
+        select: {
+          tableTronicPaymentMethodId: true,
+        },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  if (!order.restaurant.tin) {
+    throw new Error("Restaurant TIN is required for EBM invoice");
+  }
+
+  // Prepare TableTronic API payload
+  const payload = {
+    customerId: null,
+    customerName: order.billingName || order.restaurant.name,
+    customerPhone: order.billingPhone || order.restaurant.phone,
+    customerTin: order.restaurant.tin,
+    date: new Date().toISOString(),
+    discount: 0,
+    invoiceNumber: Date.now(),
+    items: order.orderItems.map((item) => ({
+      name: item.productName,
+      id: item.product?.tableTronicProductId || 0,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+    })),
+    paidAmount: order.totalAmount,
+    payments: [
+      {
+        method: order.paymentMethodConfig?.tableTronicPaymentMethodId || 17,
+        amount: order.totalAmount,
+      },
+    ],
+    purchaseCode: "",
+    status: "completed",
+    terms:
+      "Thank you for your order. Please keep this invoice for your records.",
+  };
+
+  try {
+    // Make API call to TableTronic
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_TABLE_TRONIC_BASE_URL}/api/sales`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.NEXT_PUBLIC_TABLE_TRONIC_API_KEY!,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    console.log("Received EBM Response", response);
+
+    if (!response.ok) {
+      throw new Error(
+        `TableTronic API error: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const invoiceData = await response.json();
+
+    console.log("Received EBM invoiceData", invoiceData);
+
+    // Update order with EBM reference
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        ebmReference: invoiceData.ebmInvoiceUrl,
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log("Received EBM updatedOrder", updatedOrder);
+
+    return {
+      success: true,
+      ebmInvoiceUrl: invoiceData.ebmInvoiceUrl,
+      invoiceData,
+      order: updatedOrder,
+    };
+  } catch (error: any) {
+    console.error("EBM invoice generation failed:", error);
+    throw new Error(`Failed to generate EBM invoice: ${error.message}`);
+  }
+};
+
+/**
  * Service to re-order from an existing order
  * Creates a new checkout from any existing order (successful or failed)
  */
