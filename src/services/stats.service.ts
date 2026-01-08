@@ -16,6 +16,7 @@ import https from "https";
 // ============================================
 
 interface StatsFilters {
+  period?: 'lifetime' | 'year' | 'month' | 'week' | 'today';
   year?: number;
   month?: number;
   dateFrom?: Date;
@@ -342,29 +343,53 @@ const calculatePercentageChange = (
 // HELPER FUNCTIONS
 // ============================================
 
-const getUserStatsByPeriod = async (dateFrom: Date, dateTo: Date) => {
+const getDateRange = (filters: StatsFilters): { dateFrom?: Date; dateTo?: Date } => {
+  const now = new Date();
+  
+  if (filters.period === 'lifetime' || !filters.period) {
+    return {}; // No date filter for lifetime
+  }
+  
+  if (filters.period === 'today') {
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    return { dateFrom: startOfDay, dateTo: endOfDay };
+  }
+  
+  if (filters.period === 'week') {
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    return { dateFrom: startOfWeek, dateTo: now };
+  }
+  
+  if (filters.period === 'month') {
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { dateFrom: startOfMonth, dateTo: now };
+  }
+  
+  if (filters.period === 'year') {
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    return { dateFrom: startOfYear, dateTo: now };
+  }
+  
+  // Custom date range
+  return { dateFrom: filters.dateFrom, dateTo: filters.dateTo };
+};
+
+const getUserStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
+  const whereClause = dateFrom && dateTo ? { createdAt: { gte: dateFrom, lte: dateTo } } : {};
+  
   const [restaurants, farmers, admins, affiliators, logistics] =
     await Promise.all([
-      prisma.restaurant.count({
-        where: { createdAt: { gte: dateFrom, lte: dateTo } },
-      }),
-      prisma.farmer.count({
-        where: { createdAt: { gte: dateFrom, lte: dateTo } },
-      }),
+      prisma.restaurant.count({ where: whereClause }),
+      prisma.farmer.count({ where: whereClause }),
       prisma.admin.count({
-        where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
-          role: Role.ADMIN,
-        },
+        where: { ...whereClause, role: Role.ADMIN },
       }),
-      prisma.affiliator.count({
-        where: { createdAt: { gte: dateFrom, lte: dateTo } },
-      }),
+      prisma.affiliator.count({ where: whereClause }),
       prisma.admin.count({
-        where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
-          role: Role.LOGISTICS,
-        },
+        where: { ...whereClause, role: Role.LOGISTICS },
       }),
     ]);
 
@@ -378,7 +403,8 @@ const getUserStatsByPeriod = async (dateFrom: Date, dateTo: Date) => {
   };
 };
 
-const getOrderStatsByPeriod = async (dateFrom: Date, dateTo: Date) => {
+const getOrderStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
+  const whereClause = dateFrom && dateTo ? { createdAt: { gte: dateFrom, lte: dateTo } } : {};
   const ongoingStatuses = [
     OrderStatus.CONFIRMED,
     OrderStatus.PREPARING,
@@ -388,26 +414,15 @@ const getOrderStatsByPeriod = async (dateFrom: Date, dateTo: Date) => {
 
   const [totalOrders, completedOrders, cancelledOrders, ongoingOrders] =
     await Promise.all([
+      prisma.order.count({ where: whereClause }),
       prisma.order.count({
-        where: { createdAt: { gte: dateFrom, lte: dateTo } },
+        where: { ...whereClause, status: OrderStatus.DELIVERED },
       }),
       prisma.order.count({
-        where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
-          status: OrderStatus.DELIVERED,
-        },
+        where: { ...whereClause, status: OrderStatus.CANCELLED },
       }),
       prisma.order.count({
-        where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
-          status: OrderStatus.CANCELLED,
-        },
-      }),
-      prisma.order.count({
-        where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
-          status: { in: ongoingStatuses },
-        },
+        where: { ...whereClause, status: { in: ongoingStatuses } },
       }),
     ]);
 
@@ -909,25 +924,32 @@ const getTimeSeriesVoucherStats = async (
 // ============================================
 
 export const getSystemStatsService = async (filters: StatsFilters = {}) => {
+  const { dateFrom, dateTo } = getDateRange(filters);
   const { year = new Date().getFullYear(), month } = filters;
 
   const currentDate = new Date();
-  const startOfYear = new Date(year, 0, 1);
-  const endOfYear = new Date(year, 11, 31, 23, 59, 59);
+  let startDate = dateFrom;
+  let endDate = dateTo;
 
-  let dateFrom = startOfYear;
-  let dateTo = endOfYear;
+  // If no specific date range from period filter, use year/month logic
+  if (!startDate || !endDate) {
+    const startOfYear = new Date(year, 0, 1);
+    const endOfYear = new Date(year, 11, 31, 23, 59, 59);
+    
+    startDate = startOfYear;
+    endDate = endOfYear;
 
-  if (month) {
-    dateFrom = new Date(year, month - 1, 1);
-    dateTo = new Date(year, month, 0, 23, 59, 59);
+    if (month) {
+      startDate = new Date(year, month - 1, 1);
+      endDate = new Date(year, month, 0, 23, 59, 59);
+    }
   }
 
-  const prevDateFrom = new Date(dateFrom);
-  const prevDateTo = new Date(dateTo);
-  const periodDiff = dateTo.getTime() - dateFrom.getTime();
-  prevDateFrom.setTime(dateFrom.getTime() - periodDiff);
-  prevDateTo.setTime(dateTo.getTime() - periodDiff);
+  const prevDateFrom = new Date(startDate);
+  const prevDateTo = new Date(endDate);
+  const periodDiff = endDate.getTime() - startDate.getTime();
+  prevDateFrom.setTime(startDate.getTime() - periodDiff);
+  prevDateTo.setTime(endDate.getTime() - periodDiff);
 
   const isMonthly = !!month;
 
@@ -942,29 +964,29 @@ export const getSystemStatsService = async (filters: StatsFilters = {}) => {
     systemStatus,
   ] = await Promise.all([
     getUserStatsService({
-      dateFrom,
-      dateTo,
+      dateFrom: startDate,
+      dateTo: endDate,
       prevDateFrom,
       prevDateTo,
       isMonthly,
     }),
     getOrderStatsService({
-      dateFrom,
-      dateTo,
+      dateFrom: startDate,
+      dateTo: endDate,
       prevDateFrom,
       prevDateTo,
       isMonthly,
     }),
-    getFinanceStatsService({ dateFrom, dateTo, isMonthly }),
-    getSubscriptionStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo }),
+    getFinanceStatsService({ dateFrom: startDate, dateTo: endDate, isMonthly }),
+    getSubscriptionStatsService({ dateFrom: startDate, dateTo: endDate, prevDateFrom, prevDateTo }),
     getVoucherStatsService({
-      dateFrom,
-      dateTo,
+      dateFrom: startDate,
+      dateTo: endDate,
       prevDateFrom,
       prevDateTo,
       isMonthly,
     }),
-    getQuickStatsService({ dateFrom, dateTo, prevDateFrom, prevDateTo }),
+    getQuickStatsService({ dateFrom: startDate, dateTo: endDate, prevDateFrom, prevDateTo }),
     getRecentActivitiesService(),
     getSystemStatusService(),
   ]);
@@ -979,10 +1001,11 @@ export const getSystemStatsService = async (filters: StatsFilters = {}) => {
     recentActivities,
     systemStatus,
     filters: {
+      period: filters.period || 'lifetime',
       year,
       month,
-      dateFrom,
-      dateTo,
+      dateFrom: startDate,
+      dateTo: endDate,
     },
   };
 };
