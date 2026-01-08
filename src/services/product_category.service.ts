@@ -151,7 +151,6 @@ export const getProductCategoryByIdService = async (categoryId: string) => {
         where: {
           status: "ACTIVE",
         },
-        take: 10, // Limit to prevent large responses
       },
     },
   });

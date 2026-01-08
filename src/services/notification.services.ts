@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 import { sendMessage } from "../utils/sms.utility";
 import { sendPriceUpdateEmail, PriceUpdateData } from "../utils/emailTemplates";
+import { NotificationEvent } from "@prisma/client";
 
 export interface NotificationData {
   title: string;
@@ -307,6 +308,7 @@ export const sendPriceUpdateNotificationsService = async () => {
       process.env.PRIVATE_RECEIVER,
       process.env.LOGISTICS_NUMBER_ONE,
       process.env.LOGISTICS_NUMBER_TWO,
+      process.env.LOGISTICS_NUMBER_THREE,
     ].filter(Boolean);
 
     privateNumbers.forEach((phone) => {
@@ -376,7 +378,7 @@ export const sendPriceUpdateNotificationsService = async () => {
     await createNotificationService({
       title: "Product Prices Updated",
       message: `Product prices updated including: ${productNames}. Check the latest prices for your orders.`,
-      eventType: "PRODUCT_PRICE_UPDATED",
+      eventType: NotificationEvent.PRODUCT_PRICE_UPDATED,
       targetType: "ROLE_BASED",
       targetRole: "RESTAURANT",
       metadata: {
@@ -391,7 +393,7 @@ export const sendPriceUpdateNotificationsService = async () => {
     await createNotificationService({
       title: "Product Prices Updated",
       message: `Product prices updated including: ${productNames}.`,
-      eventType: "PRODUCT_PRICE_UPDATED",
+      eventType: NotificationEvent.PRODUCT_PRICE_UPDATED,
       targetType: "ROLE_BASED",
       targetRole: "ADMIN",
       metadata: {
@@ -406,7 +408,7 @@ export const sendPriceUpdateNotificationsService = async () => {
     await createNotificationService({
       title: "Product Prices Updated",
       message: `Product prices updated including: ${productNames}.`,
-      eventType: "PRODUCT_PRICE_UPDATED",
+      eventType: NotificationEvent.PRODUCT_PRICE_UPDATED,
       targetType: "ROLE_BASED",
       targetRole: "LOGISTICS",
       metadata: {
