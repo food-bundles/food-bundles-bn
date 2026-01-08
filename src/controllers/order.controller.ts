@@ -156,6 +156,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
       restaurantId,
       dateFrom,
       dateTo,
+      search,
     } = req.query;
 
     // Validate status if provided
@@ -183,6 +184,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
       restaurantId: restaurantId as string,
       dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
       dateTo: dateTo ? new Date(dateTo as string) : undefined,
+      search: search as string,
     });
 
     res.status(200).json({
