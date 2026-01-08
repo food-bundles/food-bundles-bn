@@ -485,6 +485,17 @@ async function processCheckoutPayment(
       await sendMessage(
         `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
 
+        process.env.LOGISTICS_NUMBER_THREE || ""
+      );
+    } catch (smsError) {
+      console.error("Failed to send SMS notification:", smsError);
+    }
+
+    // Send notifications
+    try {
+      await sendMessage(
+        `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
+
         process.env.PRIVATE_RECEIVER || ""
       );
     } catch (smsError) {

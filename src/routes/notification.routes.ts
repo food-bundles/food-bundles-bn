@@ -1,67 +1,14 @@
-import { Router } from "express";
-import {
-  createNotification,
-  getAllNotifications,
-  getMyNotifications,
-  getNotificationById,
-  markAsRead,
-  markAllAsRead,
-  deleteNotification,
-  getUnreadCount,
-} from "../controllers/notification.controller";
+import express from "express";
+import { sendPriceUpdateNotifications } from "../controllers/notification.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
-const notificationRoutes = Router();
+const router = express.Router();
 
-// Get my notifications (for authenticated user)
-notificationRoutes.get(
-  "/my-notifications",
+router.post(
+  "/price-update",
   isAuthenticated,
-  getMyNotifications
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  sendPriceUpdateNotifications
 );
 
-// Get unread count (for authenticated user)
-notificationRoutes.get(
-  "/unread-count",
-  isAuthenticated,
-  getUnreadCount
-);
-
-// Mark all my notifications as read (for authenticated user)
-notificationRoutes.patch(
-  "/mark-all-read",
-  isAuthenticated,
-  markAllAsRead
-);
-
-// Create new notification (Admin only)
-notificationRoutes.post(
-  "/",
-  isAuthenticated,
-  checkPermission("ADMIN"),
-  createNotification
-);
-
-// Get all notifications (Admin only)
-notificationRoutes.get(
-  "/",
-  isAuthenticated,
-  checkPermission("ADMIN"),
-  getAllNotifications
-);
-
-// Get notification by ID
-notificationRoutes.get("/:notificationId", isAuthenticated, getNotificationById);
-
-// Mark notification as read
-notificationRoutes.patch("/:notificationId/read", isAuthenticated, markAsRead);
-
-// Delete notification (Admin only)
-notificationRoutes.delete(
-  "/:notificationId",
-  isAuthenticated,
-  checkPermission("ADMIN"),
-  deleteNotification
-);
-
-export default notificationRoutes;
+export default router;

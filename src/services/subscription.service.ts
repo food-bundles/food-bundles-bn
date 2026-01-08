@@ -184,6 +184,17 @@ const checkAndUpdateSubscriptionExpiry = async (subscription: any) => {
 
     // Send expiry notification only once (when status changes from ACTIVE to EXPIRED)
     try {
+      await sendMessage(
+        `Dear ${subscription.restaurant?.name || ""}, Your subscription ${
+          subscription.plan.name
+        } has expired. Please renew your subscription to continue using our services. Thank you!`,
+        subscription.restaurant?.phone || ""
+      );
+    } catch (error) {
+      console.error("Failed to send subscription notification:", error);
+    }
+
+    try {
       await sendSubscriptionExpiryEmail({
         email: subscription.restaurant?.email || "",
         restaurantName: subscription.restaurant?.name || "Restaurant",
@@ -210,7 +221,19 @@ const checkAndUpdateSubscriptionExpiry = async (subscription: any) => {
     );
 
     // Send warning only when exactly 3 days remain (prevents multiple sends)
+
     if (daysUntilExpiry === 3) {
+      try {
+        await sendMessage(
+          `Dear ${subscription.restaurant?.name || ""}, Your subscription ${
+            subscription.plan.name
+          } is about to expire in 3 days. Please renew your subscription to continue using our services. Thank you!`,
+          subscription.restaurant?.phone || ""
+        );
+      } catch (error) {
+        console.error("Failed to send subscription notification:", error);
+      }
+
       try {
         await sendSubscriptionExpiryEmail({
           email: subscription.restaurant?.email || "",
