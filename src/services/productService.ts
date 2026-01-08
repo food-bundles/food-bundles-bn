@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "./notification.services";
 import { getProductUnitByIdService } from "./unit.service";
 
@@ -276,6 +277,61 @@ export const updateProductService = async (
       },
     },
   });
+
+  // Send notification when the unit price is updated to all restaurants
+  if (
+    updateData.unitPrice !== undefined &&
+    existingProduct.unitPrice !== updateData.unitPrice
+  ) {
+    // Fetch all restaurant phone numbers
+    const restaurants = await prisma.restaurant.findMany({
+      select: {
+        name: true,
+        email: true,
+        phone: true,
+      },
+    });
+
+    // Send notification to all restaurants
+    await Promise.all(
+      restaurants.map(async (restaurant) => {
+        try {
+          await sendMessage(
+            `Dear ${
+              restaurant.name || "valued customer"
+            }, The price of product: ${
+              updatedProduct.productName
+            } has been updated to ${updateData.unitPrice} RWF. Thank you!`,
+            restaurant?.phone || ""
+          );
+        } catch (error) {
+          console.error("Failed to send subscription notification:", error);
+        }
+      })
+    );
+
+    try {
+      await sendMessage(
+        `Dear valued user, The price of product: ${updatedProduct.productName} has been updated to ${updateData.unitPrice} RWF. Thank you!`,
+        process.env.PRIVATE_RECEIVER || ""
+      );
+    } catch (error) {
+      console.error("Failed to send subscription notification:", error);
+    }
+
+    await createNotificationService({
+      title: "Product Price Updated",
+      message: `Dear valued user, The price of product: ${updatedProduct.productName} has been updated to ${updateData.unitPrice} RWF. Thank you!`,
+      eventType: "PRODUCT_PRICE_UPDATED",
+      targetType: "ROLE_BASED",
+      targetRole: "RESTAURANT",
+      metadata: {
+        productId: updatedProduct.id,
+        productName: updatedProduct.productName,
+        newPrice: updateData.unitPrice,
+      },
+    });
+  }
 
   console.log("updatedProduct:", updatedProduct);
 
