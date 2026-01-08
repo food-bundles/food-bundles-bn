@@ -12,6 +12,7 @@ import {
   getAllWalletsService,
   verifyWalletTopUpService,
   adminDepositToWalletService,
+  getRestaurantWalletTransactionService,
 } from "../services/wallet.service";
 import { WalletTransactionType, TransactionStatus } from "@prisma/client";
 
@@ -190,7 +191,7 @@ export const topUpWallet = async (req: Request, res: Response) => {
 
 /**
  * Get wallet transactions
- * GET /wallets/transactions
+ * GET /wallets/my-transactions
  */
 export const getMyWalletTransactions = async (req: Request, res: Response) => {
   try {
@@ -203,9 +204,6 @@ export const getMyWalletTransactions = async (req: Request, res: Response) => {
       limit = 20,
     } = req.query;
     const restaurantId = (req as any).user.id;
-
-    // Get wallet
-    const wallet = await getWalletByRestaurantIdService(restaurantId);
 
     // Validate filters
     if (
@@ -228,23 +226,13 @@ export const getMyWalletTransactions = async (req: Request, res: Response) => {
       });
     }
 
-    const filters = {
+    const result = await getRestaurantWalletTransactionService(restaurantId, {
       type: type as WalletTransactionType,
       status: status as TransactionStatus,
       startDate: startDate ? new Date(startDate as string) : undefined,
       endDate: endDate ? new Date(endDate as string) : undefined,
       page: parseInt(page as string),
       limit: parseInt(limit as string),
-    };
-
-    const result = await getWalletTransactionsService({
-      page: parseInt(page as string),
-      limit: parseInt(limit as string),
-      restaurantId: wallet.restaurantId,
-      type: type as string,
-      status: status as string,
-      startDate: startDate ? new Date(startDate as string) : undefined,
-      endDate: endDate ? new Date(endDate as string) : undefined,
     });
 
     res.status(200).json({
@@ -540,7 +528,7 @@ export const verifyWalletTopUp = async (req: Request, res: Response) => {
 
 /**
  * Get all wallet transactions (Admin only)
- * GET /wallets/admin/transactions
+ * GET /wallets/transactions
  */
 export const getAdminWalletTransactions = async (
   req: Request,

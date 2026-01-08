@@ -59,11 +59,11 @@ walletRoutes.post(
 
 /**
  * Get current restaurant's wallet transactions
- * GET /wallets/my-wallet-transactions
+ * GET /wallets/my-transactions
  * Access: Restaurant only
  */
 walletRoutes.get(
-  "/my-wallet-transactions",
+  "/my-transactions",
   isAuthenticated,
   checkPermission("RESTAURANT"),
   getMyWalletTransactions

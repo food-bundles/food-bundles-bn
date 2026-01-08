@@ -586,10 +586,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /wallets/my-wallet-transactions:
+  /wallets/my-transactions:
     get:
       tags: [Wallet Management]
-      summary: Get wallet transactions
+      summary: Get wallet transactions for authenticated restaurant
       description: Retrieve authenticated restaurant's wallet transactions with filtering
       security:
         - BearerAuth: []
