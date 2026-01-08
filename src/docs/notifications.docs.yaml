@@ -18,7 +18,20 @@ components:
           description: Notification message
         eventType:
           type: string
-          enum: [NEW_ORDER_PLACED, ORDER_CONFIRMED, ORDER_DELIVERED, PAYMENT_PROCESSED, PAYMENT_FAILED, USER_SIGNUP, PRODUCT_APPROVED, VOUCHER_ISSUED, SUBSCRIPTION_EXPIRED, LOW_STOCK_ALERT, SYSTEM_MAINTENANCE]
+          enum:
+            [
+              NEW_ORDER_PLACED,
+              ORDER_CONFIRMED,
+              ORDER_DELIVERED,
+              PAYMENT_PROCESSED,
+              PAYMENT_FAILED,
+              USER_SIGNUP,
+              PRODUCT_APPROVED,
+              VOUCHER_ISSUED,
+              SUBSCRIPTION_EXPIRED,
+              LOW_STOCK_ALERT,
+              SYSTEM_MAINTENANCE,
+            ]
           description: Type of event that triggered the notification
         targetType:
           type: string
@@ -70,7 +83,20 @@ components:
           maxLength: 1000
         eventType:
           type: string
-          enum: [NEW_ORDER_PLACED, ORDER_CONFIRMED, ORDER_DELIVERED, PAYMENT_PROCESSED, PAYMENT_FAILED, USER_SIGNUP, PRODUCT_APPROVED, VOUCHER_ISSUED, SUBSCRIPTION_EXPIRED, LOW_STOCK_ALERT, SYSTEM_MAINTENANCE]
+          enum:
+            [
+              NEW_ORDER_PLACED,
+              ORDER_CONFIRMED,
+              ORDER_DELIVERED,
+              PAYMENT_PROCESSED,
+              PAYMENT_FAILED,
+              USER_SIGNUP,
+              PRODUCT_APPROVED,
+              VOUCHER_ISSUED,
+              SUBSCRIPTION_EXPIRED,
+              LOW_STOCK_ALERT,
+              SYSTEM_MAINTENANCE,
+            ]
           description: Type of event that triggered the notification
         targetType:
           type: string
@@ -177,7 +203,20 @@ paths:
           in: query
           schema:
             type: string
-            enum: [NEW_ORDER_PLACED, ORDER_CONFIRMED, ORDER_DELIVERED, PAYMENT_PROCESSED, PAYMENT_FAILED, USER_SIGNUP, PRODUCT_APPROVED, VOUCHER_ISSUED, SUBSCRIPTION_EXPIRED, LOW_STOCK_ALERT, SYSTEM_MAINTENANCE]
+            enum:
+              [
+                NEW_ORDER_PLACED,
+                ORDER_CONFIRMED,
+                ORDER_DELIVERED,
+                PAYMENT_PROCESSED,
+                PAYMENT_FAILED,
+                USER_SIGNUP,
+                PRODUCT_APPROVED,
+                VOUCHER_ISSUED,
+                SUBSCRIPTION_EXPIRED,
+                LOW_STOCK_ALERT,
+                SYSTEM_MAINTENANCE,
+              ]
           description: Filter by event type
         - name: targetType
           in: query
@@ -521,3 +560,77 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/price-update:
+    post:
+      tags:
+        - Notification Management
+      summary: Send price update notifications
+      description: Send notifications to all restaurants, admins, and logistics users about recent product price updates via SMS, email, and in-app notifications
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Price update notifications sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Price update notifications sent successfully"
+                      productsCount:
+                        type: integer
+                        example: 3
+                      restaurantsNotified:
+                        type: integer
+                        example: 25
+                      adminsNotified:
+                        type: integer
+                        example: 5
+        "401":
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. No token provided."
+        "403":
+          description: Forbidden - Admin role required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Access denied. Admin role required."
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Failed to send price update notifications"

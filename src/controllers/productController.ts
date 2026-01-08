@@ -10,7 +10,6 @@ import {
   approveSubmissionService,
   createProductService,
   updateProductQuantityFromSubmissionService,
-  sendPriceUpdateNotificationsService,
 } from "../services/productService";
 import { uploadImages } from "../utils/imageUpload";
 import prisma from "../prisma";
@@ -473,35 +472,6 @@ export const getDiscountedProducts = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to get discounted products",
-    });
-  }
-};
-
-// Send price update notifications
-export const sendPriceUpdateNotifications = async (req: Request, res: Response) => {
-  try {
-    const adminId = (req as any).user.id;
-
-    // Verify admin
-    const admin = await prisma.admin.findUnique({
-      where: { id: adminId },
-    });
-
-    if (!admin || admin.role !== "ADMIN") {
-      return res.status(403).json({
-        message: "Only ADMIN users can send price update notifications",
-      });
-    }
-
-    const result = await sendPriceUpdateNotificationsService();
-
-    res.status(200).json({
-      message: "Price update notifications sent successfully",
-      data: result,
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      message: error.message || "Failed to send price update notifications",
     });
   }
 };

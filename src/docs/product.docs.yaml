@@ -612,6 +612,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
   /products/discounted:
     get:
       tags:

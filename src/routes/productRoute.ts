@@ -8,7 +8,6 @@ import {
   getProductsByRole,
   updateProductStatus,
   getDiscountedProducts,
-  sendPriceUpdateNotifications,
 } from "../controllers/productController";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 import productImagesUpload from "../middleware/multer";
@@ -62,14 +61,6 @@ productRoutes.patch(
   isAuthenticated,
   checkPermission("ADMIN"),
   updateProductStatus
-);
-
-// Send price update notifications (Admin only)
-productRoutes.post(
-  "/notifications/price-update",
-  isAuthenticated,
-  checkPermission("ADMIN"),
-  sendPriceUpdateNotifications
 );
 
 export default productRoutes;
