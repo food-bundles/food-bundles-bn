@@ -14,6 +14,7 @@ import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { wsManager } from "../index";
 import { OrderStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
 import { createNotificationService } from "../services/notification.services";
+import { generateEBMInvoiceService } from "../services/order.services";
 
 // Process wallet transactions with WebSocket notification
 async function processWalletTransaction(
@@ -710,6 +711,18 @@ async function processCheckoutPayment(
     });
 
     console.log(`Checkout payment failed: ${orderData.id}`);
+  }
+
+  // Generate invoice when status is successful
+  if (status === "successful") {
+    try {
+      await generateEBMInvoiceService(orderData.id);
+      console.log(`Generated invoice for order ${orderData.id}`);
+    } catch (invoiceError) {
+      console.error(
+        `Failed to generate invoice for order ${orderData.id}: ${invoiceError}`
+      );
+    }
   }
 
   return orderData;

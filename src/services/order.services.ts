@@ -815,6 +815,8 @@ export const generateEBMInvoiceService = async (orderId: string) => {
     },
   });
 
+  console.log("Sent EBM order", order);
+
   if (!order) {
     throw new Error("Order not found");
   }
@@ -850,6 +852,8 @@ export const generateEBMInvoiceService = async (orderId: string) => {
     terms:
       "Thank you for your order. Please keep this invoice for your records.",
   };
+
+  console.log("Sent EBM payload", payload);
 
   try {
     // Make API call to TableTronic
