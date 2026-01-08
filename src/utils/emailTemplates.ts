@@ -98,6 +98,17 @@ export interface AdminNotificationData {
   approvedBy?: string;
 }
 
+export interface PriceUpdateData {
+  products: {
+    id: string;
+    name: string;
+    oldPrice?: number;
+    newPrice: number;
+    updatedAt: Date;
+  }[];
+  recipientName?: string;
+}
+
 // Clean and format phone number for Rwanda
 export const cleanPhoneNumber = (phone: string): string => {
   // Remove all non-digit characters
@@ -1955,5 +1966,103 @@ export async function sendAdminVoucherApprovedEmail(
     console.log("Admin voucher approved notification sent successfully");
   } catch (error) {
     console.error("Failed to send admin voucher approved notification:", error);
+  }
+}
+
+/**
+ * Generate price update email template
+ */
+const sendPriceUpdateTemplate = (data: PriceUpdateData): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Product Prices Updated - FoodBundles</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .update-box { background-color: #fef3c7; color: #92400e; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b; }
+      .products-list { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #22c55e; }
+      .product-item { padding: 10px 0; border-bottom: 1px solid #e2e8f0; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #f59e0b; font-weight: bold; }
+      .price { font-weight: bold; color: #22c55e; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear ${data.recipientName || 'Valued Customer'},</p>
+        
+        <p>We want to inform you that some product prices have been updated on the FoodBundles platform.</p>
+        
+        <div class="update-box">
+          <h2>📢 Price Update Notice</h2>
+          <p>The following products have had their prices updated recently. Please review the changes for your next orders.</p>
+        </div>
+        
+        <div class="products-list">
+          <h3>Recently Updated Products:</h3>
+          ${data.products.map(product => `
+            <div class="product-item">
+              <strong>${product.name}</strong><br>
+              <span class="highlight">New Price:</span> <span class="price">${product.newPrice.toLocaleString()} RWF</span><br>
+              <small>Updated: ${new Date(product.updatedAt).toLocaleDateString()}</small>
+            </div>
+          `).join('')}
+        </div>
+        
+        <p>These price updates reflect current market conditions and ensure we continue to provide you with quality products.</p>
+        
+        <p>Thank you for your continued partnership with FoodBundles!</p>
+      </div>
+      <div class="footer">
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Send price update email
+export async function sendPriceUpdateEmail(
+  email: string,
+  data: PriceUpdateData
+) {
+  if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+    console.log('Email credentials not configured');
+    return;
+  }
+
+  const config = {
+    service: 'gmail',
+    auth: {
+      user: process.env.GOOGLE_EMAIL,
+      pass: process.env.GOOGLE_PASSWORD,
+    },
+    tls: { rejectUnauthorized: false },
+  };
+
+  const transporter = nodemailer.createTransport(config);
+
+  const priceUpdateEmail = {
+    from: `"FoodBundles" <${process.env.GOOGLE_EMAIL}>`,
+    to: email,
+    subject: 'Product Prices Updated - FoodBundles',
+    html: sendPriceUpdateTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(priceUpdateEmail);
+    console.log('Price update email sent successfully');
+  } catch (error) {
+    console.error('Failed to send price update email:', error);
   }
 }
