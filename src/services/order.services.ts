@@ -515,6 +515,7 @@ export const getOrderByIdService = async (
           name: true,
           email: true,
           phone: true,
+          tin: true,
         },
       },
       orderItems: {
@@ -602,6 +603,7 @@ export const getAllOrdersService = async ({
             name: true,
             email: true,
             phone: true,
+            tin: true,
           },
         },
         orderItems: {
