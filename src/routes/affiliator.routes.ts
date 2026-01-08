@@ -29,7 +29,7 @@ affiliatorRoutes.post(
 affiliatorRoutes.get(
   "/my-affiliators",
   isAuthenticated,
-  checkPermission("RESTAURANT"),
+  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
   getMyAffiliators
 );
 
@@ -48,18 +48,33 @@ affiliatorRoutes.get(
  * Get affiliator by ID
  * GET /affiliators/:id
  */
-affiliatorRoutes.get("/:id", isAuthenticated, getAffiliatorById);
+affiliatorRoutes.get(
+  "/:id",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
+  getAffiliatorById
+);
 
 /**
  * Update affiliator
  * PATCH /affiliators/:id
  */
-affiliatorRoutes.patch("/:id", isAuthenticated, updateAffiliator);
+affiliatorRoutes.patch(
+  "/:id",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "ADMIN"),
+  updateAffiliator
+);
 
 /**
  * Delete affiliator
  * DELETE /affiliators/:id
  */
-affiliatorRoutes.delete("/:id", isAuthenticated, deleteAffiliator);
+affiliatorRoutes.delete(
+  "/:id",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "ADMIN"),
+  deleteAffiliator
+);
 
 export default affiliatorRoutes;
