@@ -80,6 +80,92 @@ export const createWalletService = async (data: CreateWalletData) => {
 };
 
 /**
+ * Get wallet transactions for a restaurant
+ */
+export const getRestaurantWalletTransactionService = async (
+  restaurantId: string,
+  filters: WalletTransactionFilters = {}
+) => {
+  const {
+    page = 1,
+    limit = 10,
+    type,
+    status,
+    startDate,
+    endDate,
+  } = filters;
+
+  const skip = (page - 1) * limit;
+
+  // Get wallet for the restaurant
+  const wallet = await prisma.wallet.findUnique({
+    where: { restaurantId },
+    select: { id: true },
+  });
+
+  if (!wallet) {
+    throw new Error("Wallet not found for this restaurant");
+  }
+
+  // Build where clause
+  const where: any = {
+    walletId: wallet.id,
+  };
+
+  if (type) {
+    where.type = type;
+  }
+
+  if (status) {
+    where.status = status;
+  }
+
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) {
+      where.createdAt.gte = new Date(startDate);
+    }
+    if (endDate) {
+      where.createdAt.lte = new Date(endDate);
+    }
+  }
+
+  const [transactions, total] = await Promise.all([
+    prisma.walletTransaction.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: {
+        createdAt: "desc",
+      },
+      include: {
+        admin: {
+          select: {
+            id: true,
+            username: true,
+          },
+        },
+        affiliator: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    }),
+    prisma.walletTransaction.count({ where }),
+  ]);
+
+  return {
+    transactions,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+};
+
+/**
  * Get wallet by restaurant ID
  */
 export const getWalletByRestaurantIdService = async (restaurantId: string) => {

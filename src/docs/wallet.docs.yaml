@@ -586,7 +586,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /wallets/my-wallet-transactions:
+  /wallets/my-transactions:
     get:
       tags: [Wallet Management]
       summary: Get wallet transactions
