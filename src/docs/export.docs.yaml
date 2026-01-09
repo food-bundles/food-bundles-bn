@@ -19,6 +19,8 @@ components:
               farmers,
               logistics,
               aggregators,
+              subscriptions,
+              wallets,
             ]
         description:
           type: string
@@ -115,6 +117,8 @@ paths:
                 farmers,
                 logistics,
                 aggregators,
+                subscriptions,
+                wallets,
               ]
           description: Type of data to export
         - name: format
@@ -124,6 +128,20 @@ paths:
             type: string
             enum: [csv, excel, pdf, html]
           description: Export format
+        - name: orientation
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [landscape, portrait]
+          description: Optional. PDF page orientation. Defaults to 'landscape'. Only applies when `format=pdf`.
+        - name: dateFormat
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [iso, local]
+          description: Optional. Date format for timestamps in the exported output. Use `iso` (default) or `local` for localized date/time strings.
       responses:
         200:
           description: Data exported successfully
@@ -307,3 +325,35 @@ paths:
             text/html:
               schema:
                 type: string
+    /export/subscriptions/csv:
+      get:
+        tags:
+          - Data Export
+        summary: Export subscriptions as CSV
+        description: Export all restaurant and farmer subscriptions in CSV format
+        security:
+          - BearerAuth: []
+        responses:
+          200:
+            description: Subscriptions exported as CSV
+            content:
+              text/csv:
+                schema:
+                  type: string
+
+    /export/wallets/excel:
+      get:
+        tags:
+          - Data Export
+        summary: Export wallets as Excel
+        description: Export wallet balances and activity in Excel format
+        security:
+          - BearerAuth: []
+        responses:
+          200:
+            description: Wallets exported as Excel
+            content:
+              application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+                schema:
+                  type: string
+                  format: binary

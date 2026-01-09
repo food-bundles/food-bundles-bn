@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 import * as ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
+import { formatDate } from "../utils/date-formatter.utils";
 
 export type ExportFormat = "pdf" | "csv" | "excel" | "html";
 export type ExportType =
@@ -11,13 +12,86 @@ export type ExportType =
   | "products"
   | "farmers"
   | "logistics"
-  | "aggregators";
+  | "aggregators"
+  | "subscriptions"
+  | "wallets";
 
 interface ExportHeader {
   title: string;
   description: string;
   logo: string;
 }
+
+export interface ExportOptions {
+  orientation?: "landscape" | "portrait";
+  dateFormat?: "iso" | "local";
+}
+
+const formatPossibleDate = (
+  val: any,
+  dateFormat: ExportOptions["dateFormat"] = "iso"
+) => {
+  if (val == null) return val;
+  // If value is already a Date
+  if (val instanceof Date) {
+    const d = val as Date;
+    if (dateFormat === "local") return d.toLocaleString();
+    return d
+      .toISOString()
+      .replace("T", " ")
+      .replace(/\.[0-9]+Z$/, " UTC");
+  }
+
+  // If value is an ISO date string
+  if (
+    typeof val === "string" &&
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)
+  ) {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      if (dateFormat === "local") return d.toLocaleString();
+      return d
+        .toISOString()
+        .replace("T", " ")
+        .replace(/\.[0-9]+Z$/, " UTC");
+    }
+  }
+
+  return val;
+};
+
+const normalizeDataDates = (
+  data: any[],
+  dateFormat?: ExportOptions["dateFormat"]
+) => {
+  // Only format fields that look like dates by key name or value type
+  const dateKeyPatterns = [
+    /date/i,
+    /at$/i,
+    /created/i,
+    /updated/i,
+    /start/i,
+    /end/i,
+    /paid/i,
+    /time/i,
+  ];
+  return data.map((row) => {
+    const out: any = {};
+    Object.entries(row).forEach(([k, v]) => {
+      const isDateKey = dateKeyPatterns.some((rx) => rx.test(k));
+      if (
+        isDateKey ||
+        v instanceof Date ||
+        (typeof v === "string" && /\d{4}-\d{2}-\d{2}T/.test(v))
+      ) {
+        out[k] = formatPossibleDate(v, dateFormat);
+      } else {
+        out[k] = v;
+      }
+    });
+    return out;
+  });
+};
 
 const EXPORT_HEADERS: Record<ExportType, ExportHeader> = {
   users: {
@@ -68,10 +142,25 @@ const EXPORT_HEADERS: Record<ExportType, ExportHeader> = {
       "Aggregator network with administrative access and contact information",
     logo: "https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png",
   },
+  subscriptions: {
+    title: "Subscriptions Export",
+    description:
+      "Subscription records for restaurants and farmers including plan, status, and payment details",
+    logo: "https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png",
+  },
+  wallets: {
+    title: "Wallets Export",
+    description:
+      "Wallet balances for restaurants along with transaction counts and activity status",
+    logo: "https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png",
+  },
 };
 
 // Export Users
-export const exportUsersService = async (format: ExportFormat) => {
+export const exportUsersService = async (
+  format: ExportFormat,
+  options?: ExportOptions
+) => {
   const users = await prisma.restaurant.findMany({
     select: {
       name: true,
@@ -93,11 +182,14 @@ export const exportUsersService = async (format: ExportFormat) => {
     provinces: new Set(users.map((u) => u.province)).size,
   };
 
-  return await formatData(users, format, "users", stats);
+  return await formatData(users, format, "users", stats, options);
 };
 
 // Export Orders
-export const exportOrdersService = async (format: ExportFormat) => {
+export const exportOrdersService = async (
+  format: ExportFormat,
+  options?: ExportOptions
+) => {
   const orders = await prisma.order.findMany({
     select: {
       orderNumber: true,
@@ -106,14 +198,23 @@ export const exportOrdersService = async (format: ExportFormat) => {
       paymentStatus: true,
       paymentMethod: true,
       createdAt: true,
-      restaurant: { select: { name: true, email: true } },
+      restaurant: {
+        select: { name: true, email: true, tin: true, phone: true },
+      },
     },
   });
 
   const formattedOrders = orders.map((order) => ({
-    ...order,
-    restaurant: order.restaurant.name,
-    restaurantEmail: order.restaurant.email,
+    orderNumber: order.orderNumber,
+    totalAmount: order.totalAmount,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    paymentMethod: order.paymentMethod,
+    createdAt: order.createdAt,
+    restaurantName: order.restaurant?.name,
+    restaurantEmail: order.restaurant?.email,
+    restaurantTIN: order.restaurant?.tin,
+    restaurantPhone: order.restaurant?.phone,
   }));
 
   const stats = {
@@ -124,11 +225,14 @@ export const exportOrdersService = async (format: ExportFormat) => {
     paidOrders: orders.filter((o) => o.paymentStatus === "COMPLETED").length,
   };
 
-  return await formatData(formattedOrders, format, "orders", stats);
+  return await formatData(formattedOrders, format, "orders", stats, options);
 };
 
 // Export Restaurants
-export const exportRestaurantsService = async (format: ExportFormat) => {
+export const exportRestaurantsService = async (
+  format: ExportFormat,
+  options?: ExportOptions
+) => {
   const restaurants = await prisma.restaurant.findMany({
     select: {
       name: true,
@@ -164,11 +268,121 @@ export const exportRestaurantsService = async (format: ExportFormat) => {
     activeRestaurants: restaurants.filter((r) => r._count.orders > 0).length,
   };
 
-  return await formatData(formattedRestaurants, format, "restaurants", stats);
+  return await formatData(
+    formattedRestaurants,
+    format,
+    "restaurants",
+    stats,
+    options
+  );
+};
+
+// Export Subscriptions
+export const exportSubscriptionsService = async (
+  format: ExportFormat,
+  options?: ExportOptions
+) => {
+  const subscriptions = await prisma.restaurantSubscription.findMany({
+    select: {
+      id: true,
+      restaurantId: true,
+      farmerId: true,
+      planId: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      autoRenew: true,
+      paymentMethod: true,
+      paymentStatus: true,
+      amountPaid: true,
+      createdAt: true,
+      restaurant: { select: { name: true, tin: true, phone: true } },
+      farmer: { select: { phone: true, email: true } },
+      plan: { select: { name: true } },
+      payments: { select: { amount: true, paymentStatus: true, paidAt: true } },
+    },
+  });
+
+  // Compute amountPaid per subscription from related SubscriptionPayment records
+  const formatted = subscriptions.map((s) => {
+    return {
+      subscription: (s as any).plan?.name || s.id,
+      restaurantName: (s as any).restaurant?.name,
+      restaurantTIN: (s as any).restaurant?.tin,
+      restaurantPhone: (s as any).restaurant?.phone,
+      farmerPhone: (s as any).farmer?.phone,
+      farmerEmail: (s as any).farmer?.email,
+      subscriptionStatus: s.status,
+      startDate: formatDate(s.startDate),
+      endDate: formatDate(s.endDate),
+      paymentMethod: s.paymentMethod,
+      paymentStatus: s.paymentStatus,
+      amountPaid: s.amountPaid || 0,
+    };
+  });
+
+  const stats = {
+    total: subscriptions.length,
+    active: subscriptions.filter((s) => s.status === "ACTIVE").length,
+    autoRenew: subscriptions.filter((s) => s.autoRenew).length,
+    totalAmountPaid: formatted.reduce((sum, s) => sum + (s.amountPaid || 0), 0),
+  };
+
+  return await formatData(formatted, format, "subscriptions", stats, options);
+};
+
+// Export Wallets
+export const exportWalletsService = async (
+  format: ExportFormat,
+  options?: ExportOptions
+) => {
+  const wallets = await prisma.wallet.findMany({
+    select: {
+      id: true,
+      restaurantId: true,
+      balance: true,
+      currency: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      restaurant: { select: { name: true, tin: true, phone: true } },
+      _count: { select: { transactions: true } },
+    },
+  });
+
+  const formatted = wallets.map((w) => ({
+    restaurantName: (w as any).restaurant?.name,
+    restaurantTIN: (w as any).restaurant?.tin,
+    restaurantPhone: (w as any).restaurant?.phone,
+    balance: w.balance,
+    currency: w.currency,
+    isActive: w.isActive,
+    transactionsCount: (w as any)._count?.transactions || 0,
+    createdAt: w.createdAt,
+    updatedAt: w.updatedAt,
+  }));
+
+  const stats = {
+    total: wallets.length,
+    active: wallets.filter((w) => w.isActive).length,
+    totalBalance: wallets.reduce((sum, w) => sum + (w.balance || 0), 0),
+    averageBalance:
+      wallets.length > 0
+        ? wallets.reduce((sum, w) => sum + (w.balance || 0), 0) / wallets.length
+        : 0,
+    walletsWithTransactions: wallets.filter(
+      (w) => (w as any)._count?.transactions > 0
+    ).length,
+  };
+
+  return await formatData(formatted, format, "wallets", stats, options);
 };
 
 // Export Payments
-export const exportPaymentsService = async (format: ExportFormat) => {
+export const exportPaymentsService = async (
+  format: ExportFormat,
+  options?: ExportOptions
+) => {
   const payments = await prisma.order.findMany({
     select: {
       orderNumber: true,
@@ -202,11 +416,20 @@ export const exportPaymentsService = async (format: ExportFormat) => {
     ),
   };
 
-  return await formatData(formattedPayments, format, "payments", stats);
+  return await formatData(
+    formattedPayments,
+    format,
+    "payments",
+    stats,
+    options
+  );
 };
 
 // Export Products
-export const exportProductsService = async (format: ExportFormat) => {
+export const exportProductsService = async (
+  format: ExportFormat,
+  options?: ExportOptions
+) => {
   const products = await prisma.product.findMany({
     select: {
       tableTronicProductId: true,
@@ -245,11 +468,20 @@ export const exportProductsService = async (format: ExportFormat) => {
         : 0,
   };
 
-  return await formatData(formattedProducts, format, "products", stats);
+  return await formatData(
+    formattedProducts,
+    format,
+    "products",
+    stats,
+    options
+  );
 };
 
 // Export Farmers
-export const exportFarmersService = async (format: ExportFormat) => {
+export const exportFarmersService = async (
+  format: ExportFormat,
+  options?: ExportOptions
+) => {
   const farmers = await prisma.farmer.findMany({
     select: {
       phone: true,
@@ -281,11 +513,14 @@ export const exportFarmersService = async (format: ExportFormat) => {
     activeFarmers: farmers.filter((f) => f._count.submissions > 0).length,
   };
 
-  return await formatData(formattedFarmers, format, "farmers", stats);
+  return await formatData(formattedFarmers, format, "farmers", stats, options);
 };
 
 // Export Logistics
-export const exportLogisticsService = async (format: ExportFormat) => {
+export const exportLogisticsService = async (
+  format: ExportFormat,
+  options?: ExportOptions
+) => {
   const logistics = await prisma.admin.findMany({
     where: { role: "LOGISTICS" },
     select: {
@@ -304,11 +539,14 @@ export const exportLogisticsService = async (format: ExportFormat) => {
     withEmail: logistics.filter((l) => l.email).length,
   };
 
-  return await formatData(logistics, format, "logistics", stats);
+  return await formatData(logistics, format, "logistics", stats, options);
 };
 
 // Export Aggregators
-export const exportAggregatorsService = async (format: ExportFormat) => {
+export const exportAggregatorsService = async (
+  format: ExportFormat,
+  options?: ExportOptions
+) => {
   const aggregators = await prisma.admin.findMany({
     where: { role: "AGGREGATOR" },
     select: {
@@ -327,7 +565,7 @@ export const exportAggregatorsService = async (format: ExportFormat) => {
     withEmail: aggregators.filter((a) => a.email).length,
   };
 
-  return await formatData(aggregators, format, "aggregators", stats);
+  return await formatData(aggregators, format, "aggregators", stats, options);
 };
 
 // Format data based on export format
@@ -335,18 +573,21 @@ const formatData = async (
   data: any[],
   format: ExportFormat,
   type: ExportType,
-  stats: any
+  stats: any,
+  options?: ExportOptions
 ) => {
   const header = EXPORT_HEADERS[type];
+  // Normalize date/time fields in the data
+  const normalized = normalizeDataDates(data, options?.dateFormat);
   switch (format) {
     case "csv":
-      return generateCSV(data, header, stats);
+      return generateCSV(normalized, header, stats);
     case "excel":
-      return await generateExcel(data, header, stats);
+      return await generateExcel(normalized, header, stats);
     case "pdf":
-      return await generatePDF(data, header, stats);
+      return await generatePDF(normalized, header, stats, options);
     case "html":
-      return generateHTML(data, header, stats);
+      return generateHTML(normalized, header, stats);
     default:
       throw new Error("Unsupported format");
   }
@@ -469,10 +710,17 @@ const generateExcel = async (data: any[], header: ExportHeader, stats: any) => {
 };
 
 // Generate PDF
-const generatePDF = async (data: any[], header: ExportHeader, stats: any) => {
+const generatePDF = async (
+  data: any[],
+  header: ExportHeader,
+  stats: any,
+  options?: ExportOptions
+) => {
   return new Promise<Buffer>(async (resolve, reject) => {
     try {
-      const doc = new PDFDocument({ layout: "landscape", margin: 30 });
+      const layout =
+        options?.orientation === "portrait" ? "portrait" : "landscape";
+      const doc = new PDFDocument({ layout, margin: 30 });
       const chunks: Buffer[] = [];
 
       doc.on("data", (chunk) => chunks.push(chunk));
@@ -507,7 +755,9 @@ const generatePDF = async (data: any[], header: ExportHeader, stats: any) => {
       Object.entries(stats).forEach(([key, value]) => {
         doc.text(`${key}: ${value}`);
       });
-      doc.text(`Generated: ${new Date().toISOString()}`);
+      doc.text(
+        `Generated: ${formatPossibleDate(new Date(), options?.dateFormat)}`
+      );
       doc.moveDown(2);
 
       if (data.length > 0) {
@@ -530,7 +780,7 @@ const generatePDF = async (data: any[], header: ExportHeader, stats: any) => {
         data.slice(0, 100).forEach((row) => {
           yPosition = doc.y;
           if (yPosition > doc.page.height - 50) {
-            doc.addPage({ layout: "landscape", margin: 30 });
+            doc.addPage({ layout, margin: 30 });
             yPosition = 30;
           }
           headers.forEach((header, index) => {
