@@ -11,7 +11,9 @@ export type ExportType =
   | "products"
   | "farmers"
   | "logistics"
-  | "aggregators";
+  | "aggregators"
+  | "subscriptions"
+  | "wallets";
 
 interface ExportHeader {
   title: string;
@@ -66,6 +68,18 @@ const EXPORT_HEADERS: Record<ExportType, ExportHeader> = {
     title: "Aggregators Export",
     description:
       "Aggregator network with administrative access and contact information",
+    logo: "https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png",
+  },
+  subscriptions: {
+    title: "Subscriptions Export",
+    description:
+      "Subscription records for restaurants and farmers including plan, status, and payment details",
+    logo: "https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png",
+  },
+  wallets: {
+    title: "Wallets Export",
+    description:
+      "Wallet balances for restaurants along with transaction counts and activity status",
     logo: "https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png",
   },
 };
@@ -165,6 +179,84 @@ export const exportRestaurantsService = async (format: ExportFormat) => {
   };
 
   return await formatData(formattedRestaurants, format, "restaurants", stats);
+};
+
+// Export Subscriptions
+export const exportSubscriptionsService = async (format: ExportFormat) => {
+  const subscriptions = await prisma.restaurantSubscription.findMany({
+    select: {
+      id: true,
+      restaurantId: true,
+      farmerId: true,
+      planId: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      autoRenew: true,
+      paymentMethod: true,
+      paymentStatus: true,
+      amountPaid: true,
+      createdAt: true,
+      restaurant: { select: { name: true } },
+      plan: { select: { name: true } },
+    },
+  });
+
+  const formatted = subscriptions.map((s) => ({
+    ...s,
+    restaurantName: (s as any).restaurant?.name,
+    planName: (s as any).plan?.name,
+  }));
+
+  const stats = {
+    total: subscriptions.length,
+    active: subscriptions.filter((s) => s.status === "ACTIVE").length,
+    autoRenew: subscriptions.filter((s) => s.autoRenew).length,
+    totalAmountPaid: subscriptions.reduce(
+      (sum, s) => sum + (s.amountPaid || 0),
+      0
+    ),
+  };
+
+  return await formatData(formatted, format, "subscriptions", stats);
+};
+
+// Export Wallets
+export const exportWalletsService = async (format: ExportFormat) => {
+  const wallets = await prisma.wallet.findMany({
+    select: {
+      id: true,
+      restaurantId: true,
+      balance: true,
+      currency: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      restaurant: { select: { name: true } },
+      _count: { select: { transactions: true } },
+    },
+  });
+
+  const formatted = wallets.map((w) => ({
+    ...w,
+    restaurantName: (w as any).restaurant?.name,
+    transactionsCount: (w as any)._count?.transactions || 0,
+  }));
+
+  const stats = {
+    total: wallets.length,
+    active: wallets.filter((w) => w.isActive).length,
+    totalBalance: wallets.reduce((sum, w) => sum + (w.balance || 0), 0),
+    averageBalance:
+      wallets.length > 0
+        ? wallets.reduce((sum, w) => sum + (w.balance || 0), 0) / wallets.length
+        : 0,
+    walletsWithTransactions: wallets.filter(
+      (w) => (w as any)._count?.transactions > 0
+    ).length,
+  };
+
+  return await formatData(formatted, format, "wallets", stats);
 };
 
 // Export Payments
