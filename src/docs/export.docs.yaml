@@ -128,6 +128,20 @@ paths:
             type: string
             enum: [csv, excel, pdf, html]
           description: Export format
+        - name: orientation
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [landscape, portrait]
+          description: Optional. PDF page orientation. Defaults to 'landscape'. Only applies when `format=pdf`.
+        - name: dateFormat
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [iso, local]
+          description: Optional. Date format for timestamps in the exported output. Use `iso` (default) or `local` for localized date/time strings.
       responses:
         200:
           description: Data exported successfully
