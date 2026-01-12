@@ -20,6 +20,7 @@ import {
 } from "../services/subscription.service";
 import { SubscriptionStatus } from "@prisma/client";
 import prisma from "../prisma";
+import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 
 // ==================== SUBSCRIPTION PLAN CONTROLLERS ====================
 
@@ -221,14 +222,23 @@ export const createRestaurantSubscription = async (
       cardDetails,
       bankDetails,
     } = req.body;
-    const user = (req as any).user;
-    const userRole = user.role;
-    const restaurantId =
-      userRole === "RESTAURANT"
-        ? user.id
-        : userRole === "AFFILIATOR"
-        ? user.restaurantId
-        : req.body.restaurantId;
+
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     if (!planId) {
       return res.status(400).json({

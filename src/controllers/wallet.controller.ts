@@ -15,6 +15,7 @@ import {
   getRestaurantWalletTransactionService,
 } from "../services/wallet.service";
 import { WalletTransactionType, TransactionStatus } from "@prisma/client";
+import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 
 /**
  * Create wallet for restaurant
@@ -113,6 +114,11 @@ export const topUpWallet = async (req: Request, res: Response) => {
     if (userRole === "AFFILIATOR") {
       affiliatorId = userId;
       restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
     }
 
     // Validate required fields

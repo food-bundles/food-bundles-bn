@@ -480,6 +480,10 @@ components:
     StatsFilters:
       type: object
       properties:
+        period:
+          type: string
+          enum: [lifetime, year, month, week, today]
+          example: "lifetime"
         year:
           type: integer
           example: 2024
@@ -515,9 +519,17 @@ paths:
       security:
         - BearerAuth: []
       parameters:
+        - name: period
+          in: query
+          description: Time period filter
+          required: false
+          schema:
+            type: string
+            enum: [lifetime, year, month, week, today]
+            example: "lifetime"
         - name: year
           in: query
-          description: Year filter (defaults to current year)
+          description: Year filter (optional)
           required: false
           schema:
             type: integer
@@ -562,6 +574,14 @@ paths:
       security:
         - BearerAuth: []
       parameters:
+        - name: period
+          in: query
+          description: Time period filter
+          required: false
+          schema:
+            type: string
+            enum: [lifetime, year, month, week, today]
+            example: "lifetime"
         - name: year
           in: query
           schema:

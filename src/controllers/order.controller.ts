@@ -15,6 +15,7 @@ import {
 import { OrderStatus, PaymentStatus } from "@prisma/client";
 import prisma from "../prisma";
 import { wsManager } from "../index";
+import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 
 /**
  * Controller to create order from cart
@@ -24,7 +25,8 @@ export const createOrderFromCart = async (req: Request, res: Response) => {
   try {
     const { cartId, notes, requestedDelivery } = req.body;
     const user = (req as any).user;
-    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId;
+    const restaurantId =
+      user.role === "RESTAURANT" ? user.id : user.restaurantId;
 
     // Validate required fields
     if (!cartId) {
@@ -61,14 +63,23 @@ export const createOrderFromCart = async (req: Request, res: Response) => {
 export const createDirectOrder = async (req: Request, res: Response) => {
   try {
     const { items, paymentMethod, notes, requestedDelivery } = req.body;
-    const user = (req as any).user;
-    const userRole = user.role;
-    const restaurantId =
-      userRole === "RESTAURANT"
-        ? user.id
-        : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : req.body.restaurantId;
+
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -127,8 +138,8 @@ export const getOrderById = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
     const order = await getOrderByIdService(orderId, restaurantId);
 
@@ -219,10 +230,12 @@ export const getMyOrders = async (req: Request, res: Response) => {
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
     } else if (user.role === "ADMIN") {
-      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
+      restaurantId =
+        (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
         return res.status(400).json({
-          message: "Restaurant ID is required for admin to view specific orders",
+          message:
+            "Restaurant ID is required for admin to view specific orders",
         });
       }
     } else {
@@ -310,8 +323,8 @@ export const updateOrder = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? userId
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
     // Validate status if provided
     if (status && !Object.values(OrderStatus).includes(status)) {
@@ -348,8 +361,14 @@ export const updateOrder = async (req: Request, res: Response) => {
         }
 
         // Verify OTP using delivery service
-        const { DeliveryService } = await import("../services/delivery.service");
-        const otpResult = await DeliveryService.verifyDeliveryOTP(orderId, otp, userId);
+        const { DeliveryService } = await import(
+          "../services/delivery.service"
+        );
+        const otpResult = await DeliveryService.verifyDeliveryOTP(
+          orderId,
+          otp,
+          userId
+        );
 
         if (!otpResult.success) {
           return res.status(400).json({
@@ -418,8 +437,8 @@ export const cancelOrder = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
     const result = await cancelOrderService(orderId, restaurantId, reason);
 
@@ -443,7 +462,8 @@ export const reOrderFromExistingOrder = async (req: Request, res: Response) => {
     const { orderId } = req.params;
 
     const user = (req as any).user;
-    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId;
+    const restaurantId =
+      user.role === "RESTAURANT" ? user.id : user.restaurantId;
 
     const paymentResult = await reOrderFromExistingOrderService(
       orderId,
@@ -599,8 +619,8 @@ export const getOrderByNumber = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
     // Find order by order number
     const order = await prisma.order.findUnique({

@@ -17,6 +17,7 @@ import {
 import prisma from "../prisma";
 import { OTPService } from "../services/otp.service";
 import { getPaymentMethodByIdService } from "../services/payment-method.service";
+import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 
 /**
  * Enhanced controller to create a new order from cart
@@ -54,6 +55,11 @@ export const createCheckout = async (req: Request, res: Response) => {
     if (userRole === "AFFILIATOR") {
       affiliatorId = userId;
       restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
     }
 
     // Validate required fields
@@ -240,7 +246,22 @@ export const verifyVoucherOTPAndCreateOrder = async (
 ) => {
   try {
     const { otp, checkoutSessionId } = req.body;
-    const restaurantId = (req as any).user.id;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     console.log("checkoutSessionId, otp ", checkoutSessionId, otp);
 
@@ -343,6 +364,7 @@ export const verifyVoucherOTPAndCreateOrder = async (
       });
     }
   } catch (error: any) {
+    console.log("Error in verifyVoucherOTPAndCreateOrder", error);
     res.status(500).json({
       message:
         error.message || "Failed to verify OTP and process voucher payment",
@@ -522,6 +544,11 @@ export const validateVoucherForCheckout = async (
     if (userRole === "AFFILIATOR") {
       affiliatorId = userId;
       restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
     }
 
     if (!voucherCode || !orderAmount) {

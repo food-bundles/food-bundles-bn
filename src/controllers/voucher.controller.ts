@@ -136,6 +136,11 @@ export const getMyVouchers = async (req: Request, res: Response) => {
       restaurantId = undefined;
     }
 
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
+
     const { status, activeOnly } = req.query;
 
     const filters: any = {};
@@ -689,11 +694,23 @@ export const processVoucherPayment = async (req: Request, res: Response) => {
 export const makeRepayment = async (req: Request, res: Response) => {
   try {
     const { id: voucherId } = req.params;
-    const user = (req as any).user;
-    const restaurantId =
-      user.role === "RESTAURANT"
-        ? user.id
-        : user.restaurantId || req.body.restaurantId;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
+
     const { paymentMethod, paymentReference } = req.body;
 
     if (!paymentMethod) {
