@@ -109,6 +109,7 @@ export const getUserStats = async (req: Request, res: Response) => {
       prevDateFrom: prevStartDate,
       prevDateTo: prevEndDate,
       isMonthly,
+      filters: { period: period as any, year: year ? parseInt(year as string) : undefined, month: month ? parseInt(month as string) : undefined }
     });
 
     res.status(200).json({
@@ -174,6 +175,7 @@ export const getOrderStats = async (req: Request, res: Response) => {
       prevDateFrom: prevStartDate,
       prevDateTo: prevEndDate,
       isMonthly,
+      filters: { period: period as any, year: year ? parseInt(year as string) : undefined, month: month ? parseInt(month as string) : undefined }
     });
 
     res.status(200).json({
@@ -228,6 +230,7 @@ export const getFinanceStats = async (req: Request, res: Response) => {
       dateFrom: startDate,
       dateTo: endDate,
       isMonthly,
+      filters: { period: period as any, year: year ? parseInt(year as string) : undefined, month: month ? parseInt(month as string) : undefined }
     });
 
     res.status(200).json({
@@ -317,33 +320,37 @@ export const getSubscriptionStats = async (req: Request, res: Response) => {
  */
 export const getVoucherStats = async (req: Request, res: Response) => {
   try {
-    const { year, month, dateFrom, dateTo } = req.query;
+    const { year, month, dateFrom, dateTo, period } = req.query;
 
-    // Calculate date ranges
-    const currentYear = new Date().getFullYear();
-    const parsedYear = year ? parseInt(year as string) : currentYear;
-    const parsedMonth = month ? parseInt(month as string) : undefined;
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
+    let prevStartDate: Date | undefined;
+    let prevEndDate: Date | undefined;
 
-    let startDate: Date;
-    let endDate: Date;
-
+    // Only calculate dates if filters are provided
     if (dateFrom && dateTo) {
       startDate = new Date(dateFrom as string);
       endDate = new Date(dateTo as string);
-    } else if (parsedMonth) {
-      startDate = new Date(parsedYear, parsedMonth - 1, 1);
-      endDate = new Date(parsedYear, parsedMonth, 0, 23, 59, 59);
-    } else {
-      startDate = new Date(parsedYear, 0, 1);
-      endDate = new Date(parsedYear, 11, 31, 23, 59, 59);
+    } else if (year || month) {
+      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      if (month) {
+        const targetMonth = parseInt(month as string);
+        startDate = new Date(targetYear, targetMonth - 1, 1);
+        endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
+      } else {
+        startDate = new Date(targetYear, 0, 1);
+        endDate = new Date(targetYear, 11, 31, 23, 59, 59);
+      }
     }
 
-    // Previous period for comparison
-    const periodDiff = endDate.getTime() - startDate.getTime();
-    const prevStartDate = new Date(startDate.getTime() - periodDiff);
-    const prevEndDate = new Date(endDate.getTime() - periodDiff);
+    // Calculate previous period for comparison if we have dates
+    if (startDate && endDate) {
+      const periodDiff = endDate.getTime() - startDate.getTime();
+      prevStartDate = new Date(startDate.getTime() - periodDiff);
+      prevEndDate = new Date(endDate.getTime() - periodDiff);
+    }
 
-    const isMonthly = !!parsedMonth;
+    const isMonthly = !!month;
 
     const voucherStats = await getVoucherStatsService({
       dateFrom: startDate,
@@ -351,14 +358,16 @@ export const getVoucherStats = async (req: Request, res: Response) => {
       prevDateFrom: prevStartDate,
       prevDateTo: prevEndDate,
       isMonthly,
+      filters: { period: period as any, year: year ? parseInt(year as string) : undefined, month: month ? parseInt(month as string) : undefined }
     });
 
     res.status(200).json({
       message: "Voucher statistics retrieved successfully",
       data: voucherStats,
       filters: {
-        year: parsedYear,
-        month: parsedMonth,
+        period: period || 'lifetime',
+        year: year ? parseInt(year as string) : undefined,
+        month: month ? parseInt(month as string) : undefined,
         dateFrom: startDate,
         dateTo: endDate,
       },
@@ -377,31 +386,35 @@ export const getVoucherStats = async (req: Request, res: Response) => {
  */
 export const getQuickStats = async (req: Request, res: Response) => {
   try {
-    const { year, month, dateFrom, dateTo } = req.query;
+    const { year, month, dateFrom, dateTo, period } = req.query;
 
-    // Calculate date ranges
-    const currentYear = new Date().getFullYear();
-    const parsedYear = year ? parseInt(year as string) : currentYear;
-    const parsedMonth = month ? parseInt(month as string) : undefined;
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
+    let prevStartDate: Date | undefined;
+    let prevEndDate: Date | undefined;
 
-    let startDate: Date;
-    let endDate: Date;
-
+    // Only calculate dates if filters are provided
     if (dateFrom && dateTo) {
       startDate = new Date(dateFrom as string);
       endDate = new Date(dateTo as string);
-    } else if (parsedMonth) {
-      startDate = new Date(parsedYear, parsedMonth - 1, 1);
-      endDate = new Date(parsedYear, parsedMonth, 0, 23, 59, 59);
-    } else {
-      startDate = new Date(parsedYear, 0, 1);
-      endDate = new Date(parsedYear, 11, 31, 23, 59, 59);
+    } else if (year || month) {
+      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      if (month) {
+        const targetMonth = parseInt(month as string);
+        startDate = new Date(targetYear, targetMonth - 1, 1);
+        endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
+      } else {
+        startDate = new Date(targetYear, 0, 1);
+        endDate = new Date(targetYear, 11, 31, 23, 59, 59);
+      }
     }
 
-    // Previous period for comparison
-    const periodDiff = endDate.getTime() - startDate.getTime();
-    const prevStartDate = new Date(startDate.getTime() - periodDiff);
-    const prevEndDate = new Date(endDate.getTime() - periodDiff);
+    // Calculate previous period for comparison if we have dates
+    if (startDate && endDate) {
+      const periodDiff = endDate.getTime() - startDate.getTime();
+      prevStartDate = new Date(startDate.getTime() - periodDiff);
+      prevEndDate = new Date(endDate.getTime() - periodDiff);
+    }
 
     const quickStats = await getQuickStatsService({
       dateFrom: startDate,
@@ -414,8 +427,9 @@ export const getQuickStats = async (req: Request, res: Response) => {
       message: "Quick statistics retrieved successfully",
       data: quickStats,
       filters: {
-        year: parsedYear,
-        month: parsedMonth,
+        period: period || 'lifetime',
+        year: year ? parseInt(year as string) : undefined,
+        month: month ? parseInt(month as string) : undefined,
         dateFrom: startDate,
         dateTo: endDate,
       },

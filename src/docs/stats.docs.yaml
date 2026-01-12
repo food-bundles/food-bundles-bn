@@ -637,6 +637,14 @@ paths:
       security:
         - BearerAuth: []
       parameters:
+        - name: period
+          in: query
+          description: Time period filter
+          required: false
+          schema:
+            type: string
+            enum: [lifetime, year, month, week, today]
+            example: "lifetime"
         - name: year
           in: query
           schema:
@@ -692,6 +700,14 @@ paths:
       security:
         - BearerAuth: []
       parameters:
+        - name: period
+          in: query
+          description: Time period filter
+          required: false
+          schema:
+            type: string
+            enum: [lifetime, year, month, week, today]
+            example: "lifetime"
         - name: year
           in: query
           schema:
@@ -747,6 +763,14 @@ paths:
       security:
         - BearerAuth: []
       parameters:
+        - name: period
+          in: query
+          description: Time period filter
+          required: false
+          schema:
+            type: string
+            enum: [lifetime, year, month, week, today]
+            example: "lifetime"
         - name: year
           in: query
           schema:
@@ -802,6 +826,14 @@ paths:
       security:
         - BearerAuth: []
       parameters:
+        - name: period
+          in: query
+          description: Time period filter
+          required: false
+          schema:
+            type: string
+            enum: [lifetime, year, month, week, today]
+            example: "lifetime"
         - name: year
           in: query
           schema:
@@ -857,6 +889,14 @@ paths:
       security:
         - BearerAuth: []
       parameters:
+        - name: period
+          in: query
+          description: Time period filter
+          required: false
+          schema:
+            type: string
+            enum: [lifetime, year, month, week, today]
+            example: "lifetime"
         - name: year
           in: query
           schema:
