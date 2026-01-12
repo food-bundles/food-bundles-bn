@@ -405,7 +405,8 @@ export const deleteSubscriptionPlanService = async (planId: string) => {
 };
 
 /**
- * Service to create restaurant subscription with payment processing
+ * Service to create or update restaurant subscription with payment processing
+ * Similar to cart pattern - one subscription per restaurant that gets updated
  */
 export const createRestaurantSubscriptionService = async (
   data: CreateRestaurantSubscriptionData
@@ -434,8 +435,6 @@ export const createRestaurantSubscriptionService = async (
     where: { id: planId },
   });
 
-  console.log("Subscription plan found", plan);
-
   if (!plan) {
     throw new Error("Subscription plan not found");
   }
@@ -444,18 +443,22 @@ export const createRestaurantSubscriptionService = async (
     throw new Error("Subscription plan is not active");
   }
 
-  // Check for existing active subscription
-  const existingSubscription = await prisma.restaurantSubscription.findFirst({
+  // Find existing subscription for this restaurant (any status)
+  let existingSubscription = await prisma.restaurantSubscription.findFirst({
     where: {
       restaurantId,
-      status: "ACTIVE",
+    },
+    orderBy: {
+      createdAt: "desc",
     },
   });
 
-  console.log("Subscription existingSubscription found", existingSubscription);
-
-  if (existingSubscription) {
-    throw new Error("You already has an active subscription");
+  // Check if restaurant has an active subscription with different plan
+  if (existingSubscription?.status === "ACTIVE" && existingSubscription.planId !== planId) {
+    // This is an upgrade/downgrade - we'll update the existing subscription
+    console.log("Upgrading/downgrading existing subscription");
+  } else if (existingSubscription?.status === "ACTIVE" && existingSubscription.planId === planId) {
+    throw new Error("You already have an active subscription with this plan");
   }
 
   // Calculate end date
@@ -466,51 +469,106 @@ export const createRestaurantSubscriptionService = async (
   // Generate transaction reference
   const txRef = `SUB_${restaurantId}_${planId}_${Date.now()}`;
 
-  // Create subscription
-  const subscription = await prisma.$transaction(async (tx) => {
-    const newSubscription = await tx.restaurantSubscription.create({
-      data: {
-        restaurantId,
-        planId,
-        status: SubscriptionStatus.PENDING,
-        startDate,
-        endDate,
-        autoRenew,
-        paymentMethod: paymentMethod || "MOBILE_MONEY",
-        paymentStatus: PaymentStatus.PENDING,
-        txRef,
-        flwRef: txRef,
-      },
-      include: {
-        restaurant: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
+  let subscription;
+  let isUpgrade = false;
+  let isDowngrade = false;
+  let oldPlanId: string | undefined;
+
+  if (existingSubscription) {
+    // Update existing subscription
+    const oldPlan = await prisma.subscriptionPlan.findUnique({
+      where: { id: existingSubscription.planId },
+    });
+    
+    isUpgrade = oldPlan ? plan.price > oldPlan.price : false;
+    isDowngrade = oldPlan ? plan.price < oldPlan.price : false;
+    oldPlanId = existingSubscription.planId;
+
+    subscription = await prisma.$transaction(async (tx) => {
+      const updatedSubscription = await tx.restaurantSubscription.update({
+        where: { id: existingSubscription.id },
+        data: {
+          planId,
+          status: SubscriptionStatus.PENDING,
+          startDate,
+          endDate,
+          autoRenew,
+          paymentMethod: paymentMethod || "MOBILE_MONEY",
+          paymentStatus: PaymentStatus.PENDING,
+          txRef,
+          flwRef: txRef,
         },
-        plan: true,
-      },
+        include: {
+          restaurant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+          plan: true,
+        },
+      });
+
+      // Create subscription history
+      await tx.subscriptionHistory.create({
+        data: {
+          subscriptionId: updatedSubscription.id,
+          action: isUpgrade ? "UPGRADED" : isDowngrade ? "DOWNGRADED" : "RENEWED",
+          oldStatus: existingSubscription.status,
+          newStatus: "PENDING",
+          oldPlanId,
+          newPlanId: planId,
+          performedBy: restaurantId,
+        },
+      });
+
+      return updatedSubscription;
     });
+  } else {
+    // Create new subscription
+    subscription = await prisma.$transaction(async (tx) => {
+      const newSubscription = await tx.restaurantSubscription.create({
+        data: {
+          restaurantId,
+          planId,
+          status: SubscriptionStatus.PENDING,
+          startDate,
+          endDate,
+          autoRenew,
+          paymentMethod: paymentMethod || "MOBILE_MONEY",
+          paymentStatus: PaymentStatus.PENDING,
+          txRef,
+          flwRef: txRef,
+        },
+        include: {
+          restaurant: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+          plan: true,
+        },
+      });
 
-    console.log("Subscription newSubscription found", newSubscription);
+      // Create subscription history
+      await tx.subscriptionHistory.create({
+        data: {
+          subscriptionId: newSubscription.id,
+          action: "CREATED",
+          newStatus: "PENDING",
+          newPlanId: planId,
+          performedBy: restaurantId,
+        },
+      });
 
-    // Create subscription history
-    await tx.subscriptionHistory.create({
-      data: {
-        subscriptionId: newSubscription.id,
-        action: "CREATED",
-        newStatus: "PENDING",
-        newPlanId: planId,
-        performedBy: restaurantId,
-      },
+      return newSubscription;
     });
-
-    return newSubscription;
-  });
-
-  console.log("Subscription subscription found", subscription);
+  }
 
   // Process payment if payment method is provided
   if (paymentMethod && paymentMethod !== "CASH") {
@@ -524,15 +582,19 @@ export const createRestaurantSubscriptionService = async (
       }
     );
 
-    console.log("Subscription paymentResult found", paymentResult);
-
     return {
       subscription,
       payment: paymentResult,
+      isUpgrade,
+      isDowngrade,
     };
   }
 
-  return { subscription };
+  return { 
+    subscription, 
+    isUpgrade, 
+    isDowngrade 
+  };
 };
 
 /**
@@ -1224,22 +1286,30 @@ export const updateRestaurantSubscriptionService = async (
 };
 
 export const cancelSubscriptionService = async (
-  subscriptionId: string,
-  reason?: string,
-  restaurantId?: string
+  restaurantId: string,
+  reason?: string
 ) => {
-  const subscription = await getSubscriptionByIdService(
-    subscriptionId,
-    restaurantId
-  );
+  // Get current subscription
+  const currentSubscription = await prisma.restaurantSubscription.findFirst({
+    where: {
+      restaurantId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
 
-  if (subscription.status === "CANCELLED") {
+  if (!currentSubscription) {
+    throw new Error("No subscription found for this restaurant");
+  }
+
+  if (currentSubscription.status === "CANCELLED") {
     throw new Error("Subscription is already cancelled");
   }
 
   const updatedSubscription = await prisma.$transaction(async (tx) => {
     const updated = await tx.restaurantSubscription.update({
-      where: { id: subscriptionId },
+      where: { id: currentSubscription.id },
       data: {
         status: "CANCELLED",
         autoRenew: false,
@@ -1248,9 +1318,9 @@ export const cancelSubscriptionService = async (
 
     await tx.subscriptionHistory.create({
       data: {
-        subscriptionId,
+        subscriptionId: currentSubscription.id,
         action: "CANCELLED",
-        oldStatus: subscription.status,
+        oldStatus: currentSubscription.status,
         newStatus: "CANCELLED",
         reason,
       },
@@ -1263,19 +1333,30 @@ export const cancelSubscriptionService = async (
 };
 
 export const renewSubscriptionService = async (
-  subscriptionId: string,
-  restaurantId?: string
+  restaurantId: string
 ) => {
-  const subscription = await getSubscriptionByIdService(
-    subscriptionId,
-    restaurantId
-  );
+  // Get current subscription
+  const currentSubscription = await prisma.restaurantSubscription.findFirst({
+    where: {
+      restaurantId,
+    },
+    include: {
+      plan: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
 
-  if (subscription.status === "ACTIVE") {
+  if (!currentSubscription) {
+    throw new Error("No subscription found for this restaurant");
+  }
+
+  if (currentSubscription.status === "ACTIVE") {
     throw new Error("Subscription is already active");
   }
 
-  const plan = subscription.plan;
+  const plan = currentSubscription.plan;
 
   const startDate = new Date();
   const endDate = new Date(startDate);
@@ -1283,12 +1364,13 @@ export const renewSubscriptionService = async (
 
   const renewedSubscription = await prisma.$transaction(async (tx) => {
     const renewed = await tx.restaurantSubscription.update({
-      where: { id: subscriptionId },
+      where: { id: currentSubscription.id },
       data: {
         status: SubscriptionStatus.PENDING,
         startDate,
         endDate,
         paymentStatus: PaymentStatus.PENDING,
+        txRef: `SUB_RENEW_${restaurantId}_${Date.now()}`,
       },
       include: {
         plan: true,
@@ -1304,9 +1386,9 @@ export const renewSubscriptionService = async (
 
     await tx.subscriptionHistory.create({
       data: {
-        subscriptionId,
+        subscriptionId: currentSubscription.id,
         action: "RENEWED",
-        oldStatus: subscription.status,
+        oldStatus: currentSubscription.status,
         newStatus: "PENDING",
       },
     });
@@ -1443,3 +1525,190 @@ function calculateDaysRemaining(endDate: Date): number {
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays > 0 ? diffDays : 0;
 }
+/**
+ * Service to get restaurant's current subscription (similar to cart pattern)
+ */
+export const getRestaurantCurrentSubscriptionService = async (
+  restaurantId: string
+) => {
+  const subscription = await prisma.restaurantSubscription.findFirst({
+    where: {
+      restaurantId,
+    },
+    include: {
+      plan: true,
+      restaurant: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  if (!subscription) {
+    return null;
+  }
+
+  // Check and update subscription expiry
+  const updatedSubscription = await checkAndUpdateSubscriptionExpiry(
+    subscription
+  );
+
+  // Add daysRemaining to subscription
+  return {
+    ...updatedSubscription,
+    daysRemaining: calculateDaysRemaining(updatedSubscription.endDate),
+  };
+};
+
+/**
+ * Service to upgrade/downgrade current subscription
+ */
+export const changeSubscriptionPlanService = async (
+  restaurantId: string,
+  newPlanId: string
+) => {
+  // Get current subscription
+  const currentSubscription = await prisma.restaurantSubscription.findFirst({
+    where: {
+      restaurantId,
+    },
+    include: {
+      plan: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  if (!currentSubscription) {
+    throw new Error("No subscription found for this restaurant");
+  }
+
+  // Validate new plan exists
+  const newPlan = await prisma.subscriptionPlan.findUnique({
+    where: { id: newPlanId },
+  });
+
+  if (!newPlan) {
+    throw new Error("New subscription plan not found");
+  }
+
+  if (!newPlan.isActive) {
+    throw new Error("New subscription plan is not active");
+  }
+
+  if (currentSubscription.planId === newPlanId) {
+    throw new Error("You are already subscribed to this plan");
+  }
+
+  const isUpgrade = newPlan.price > currentSubscription.plan.price;
+  const isDowngrade = newPlan.price < currentSubscription.plan.price;
+
+  // Calculate new end date based on new plan duration
+  const startDate = new Date();
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + newPlan.duration);
+
+  const updatedSubscription = await prisma.$transaction(async (tx) => {
+    const updated = await tx.restaurantSubscription.update({
+      where: { id: currentSubscription.id },
+      data: {
+        planId: newPlanId,
+        status: SubscriptionStatus.PENDING,
+        paymentStatus: PaymentStatus.PENDING,
+        startDate,
+        endDate,
+        txRef: `SUB_${isUpgrade ? 'UPGRADE' : 'DOWNGRADE'}_${restaurantId}_${Date.now()}`,
+      },
+      include: {
+        plan: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    await tx.subscriptionHistory.create({
+      data: {
+        subscriptionId: currentSubscription.id,
+        action: isUpgrade ? "UPGRADED" : "DOWNGRADED",
+        oldStatus: currentSubscription.status,
+        newStatus: "PENDING",
+        oldPlanId: currentSubscription.planId,
+        newPlanId: newPlanId,
+      },
+    });
+
+    return updated;
+  });
+
+  return {
+    subscription: updatedSubscription,
+    isUpgrade,
+    isDowngrade,
+  };
+};
+
+/**
+ * Service to get subscription history for a restaurant
+ */
+export const getRestaurantSubscriptionHistoryService = async (
+  restaurantId: string,
+  filters?: {
+    page?: number;
+    limit?: number;
+  }
+) => {
+  const { page = 1, limit = 10 } = filters || {};
+  const skip = (page - 1) * limit;
+
+  // Get current subscription
+  const currentSubscription = await prisma.restaurantSubscription.findFirst({
+    where: {
+      restaurantId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  if (!currentSubscription) {
+    return {
+      history: [],
+      total: 0,
+      page,
+      limit,
+      totalPages: 0,
+    };
+  }
+
+  const [history, total] = await Promise.all([
+    prisma.subscriptionHistory.findMany({
+      where: { subscriptionId: currentSubscription.id },
+      skip,
+      take: limit,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.subscriptionHistory.count({ 
+      where: { subscriptionId: currentSubscription.id } 
+    }),
+  ]);
+
+  return {
+    history,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+};

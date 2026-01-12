@@ -24,6 +24,7 @@ import {
 import { sendMessage } from "../utils/sms.utility";
 import { getUserById } from "./userGets";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
+import { getRestaurantFromAffiliatorService } from "./affiliator.service";
 
 // Payment processing functions
 const flw = require("flutterwave-node-v3");
@@ -393,12 +394,17 @@ export const getAllVouchersService = async (filters?: {
  * Get current restaurant's vouchers (using authenticated restaurant ID)
  */
 export const getMyVouchersService = async (
-  restaurantId: string,
+  restaurantId: string | undefined,
+  affiliatorId?: string,
   filters?: {
     status?: VoucherStatus;
     activeOnly?: boolean;
   }
 ) => {
+  if (affiliatorId) {
+    const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+    restaurantId = restaurant.id;
+  }
   const where: any = { restaurantId };
 
   if (filters?.status) {
@@ -1850,12 +1856,18 @@ export const getRestaurantTransactionHistoryService = async (
  */
 export const validateVoucherForCheckoutService = async (
   voucherCode: string,
-  restaurantId: string,
-  orderAmount: number
+  orderAmount: number,
+  restaurantId?: string,
+  affiliatorId?: string
 ) => {
   try {
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
+
     // Check subscription
-    await checkRestaurantSubscription(restaurantId);
+    await checkRestaurantSubscription(restaurantId!);
 
     const voucher = await getVoucherByCodeService(voucherCode);
 

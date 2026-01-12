@@ -16,6 +16,7 @@ import {
 } from "../services/voucher.service";
 import prisma from "../prisma";
 import { OTPService } from "../services/otp.service";
+import { getPaymentMethodByIdService } from "../services/payment-method.service";
 
 /**
  * Enhanced controller to create a new order from cart
@@ -69,9 +70,6 @@ export const createCheckout = async (req: Request, res: Response) => {
     if (paymentMethodId) {
       // Get payment method to check if it's voucher
       try {
-        const { getPaymentMethodByIdService } = await import(
-          "../services/payment-method.service"
-        );
         const paymentMethodConfig = await getPaymentMethodByIdService(
           paymentMethodId
         );
@@ -103,8 +101,9 @@ export const createCheckout = async (req: Request, res: Response) => {
           // Validate voucher for checkout
           const voucherValidation = await validateVoucherForCheckoutService(
             voucherCode,
+            cartTotal,
             restaurantId,
-            cartTotal
+            affiliatorId
           );
 
           if (!voucherValidation.valid) {
@@ -513,7 +512,17 @@ export const validateVoucherForCheckout = async (
 ) => {
   try {
     const { voucherCode, orderAmount } = req.body;
-    const restaurantId = (req as any).user.id;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
 
     if (!voucherCode || !orderAmount) {
       return res.status(400).json({
@@ -523,8 +532,9 @@ export const validateVoucherForCheckout = async (
 
     const validation = await validateVoucherForCheckoutService(
       voucherCode,
+      parseFloat(orderAmount),
       restaurantId,
-      parseFloat(orderAmount)
+      affiliatorId
     );
 
     if (!validation.valid) {
