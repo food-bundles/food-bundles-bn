@@ -959,6 +959,19 @@ async function processSubscriptionPayment(
         console.error("Failed to send subscription notification:", error);
       }
 
+      try {
+        await sendMessage(
+          `A new subscription payment has been received from ${
+            subscription.restaurant?.name || ""
+          } for the ${subscription.plan.name} plan. Amount: Rwf${
+            subscription.plan.price
+          }. Thank you!`,
+          process.env.PRIVATE_RECEIVER || ""
+        );
+      } catch (error) {
+        console.error("Failed to send subscription notification:", error);
+      }
+
       await sendAdminSubscriptionPaidEmail({
         userType: "RESTAURANT",
         userName: subscription.restaurant?.name || "",

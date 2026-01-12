@@ -16,7 +16,7 @@ import https from "https";
 // ============================================
 
 interface StatsFilters {
-  period?: 'lifetime' | 'year' | 'month' | 'week' | 'today';
+  period?: "lifetime" | "year" | "month" | "week" | "today";
   year?: number;
   month?: number;
   dateFrom?: Date;
@@ -30,15 +30,63 @@ interface UserStats {
   admins: number;
   affiliators: number;
   logistics: number;
-  timeSeriesData: Array<{
-    period: string;
-    date: string;
-    restaurants: number;
-    farmers: number;
-    admins: number;
-    affiliators: number;
-    total: number;
-  }>;
+  timeBreakdown: Record<
+    string,
+    {
+      year: number;
+      restaurants: number;
+      farmers: number;
+      admins: number;
+      affiliators: number;
+      total: number;
+      months?: Record<
+        string,
+        {
+          month: number;
+          monthName: string;
+          restaurants: number;
+          farmers: number;
+          admins: number;
+          affiliators: number;
+          total: number;
+          weeks?: Record<
+            string,
+            {
+              week: number;
+              restaurants: number;
+              farmers: number;
+              admins: number;
+              affiliators: number;
+              total: number;
+              days?: Record<
+                string,
+                {
+                  date: string;
+                  dayName: string;
+                  restaurants: number;
+                  farmers: number;
+                  admins: number;
+                  affiliators: number;
+                  total: number;
+                  hours?: Record<
+                    string,
+                    {
+                      hour: number;
+                      restaurants: number;
+                      farmers: number;
+                      admins: number;
+                      affiliators: number;
+                      total: number;
+                    }
+                  >;
+                }
+              >;
+            }
+          >;
+        }
+      >;
+    }
+  >;
   growth: {
     totalChange: number;
     restaurantChange: number;
@@ -52,14 +100,58 @@ interface OrderStats {
   completedOrders: number;
   cancelledOrders: number;
   ongoingOrders: number;
-  timeSeriesData: Array<{
-    period: string;
-    date: string;
-    completed: number;
-    cancelled: number;
-    ongoing: number;
-    total: number;
-  }>;
+  timeBreakdown: Record<
+    string,
+    {
+      year: number;
+      completed: number;
+      cancelled: number;
+      ongoing: number;
+      total: number;
+      months?: Record<
+        string,
+        {
+          month: number;
+          monthName: string;
+          completed: number;
+          cancelled: number;
+          ongoing: number;
+          total: number;
+          weeks?: Record<
+            string,
+            {
+              week: number;
+              completed: number;
+              cancelled: number;
+              ongoing: number;
+              total: number;
+              days?: Record<
+                string,
+                {
+                  date: string;
+                  dayName: string;
+                  completed: number;
+                  cancelled: number;
+                  ongoing: number;
+                  total: number;
+                  hours?: Record<
+                    string,
+                    {
+                      hour: number;
+                      completed: number;
+                      cancelled: number;
+                      ongoing: number;
+                      total: number;
+                    }
+                  >;
+                }
+              >;
+            }
+          >;
+        }
+      >;
+    }
+  >;
   growth: {
     totalChange: number;
     completedChange: number;
@@ -71,13 +163,53 @@ interface FinanceStats {
   totalExpenses: number;
   netProfit: number;
   profitMargin: number;
-  timeSeriesData: Array<{
-    period: string;
-    date?: string;
-    month?: number;
-    revenue: number;
-    expenses: number;
-  }>;
+  timeBreakdown: Record<
+    string,
+    {
+      year: number;
+      revenue: number;
+      expenses: number;
+      profit: number;
+      months?: Record<
+        string,
+        {
+          month: number;
+          monthName: string;
+          revenue: number;
+          expenses: number;
+          profit: number;
+          weeks?: Record<
+            string,
+            {
+              week: number;
+              revenue: number;
+              expenses: number;
+              profit: number;
+              days?: Record<
+                string,
+                {
+                  date: string;
+                  dayName: string;
+                  revenue: number;
+                  expenses: number;
+                  profit: number;
+                  hours?: Record<
+                    string,
+                    {
+                      hour: number;
+                      revenue: number;
+                      expenses: number;
+                      profit: number;
+                    }
+                  >;
+                }
+              >;
+            }
+          >;
+        }
+      >;
+    }
+  >;
   revenueBreakdown: {
     orders: number;
     subscriptions: number;
@@ -113,15 +245,63 @@ interface VoucherStats {
   nearMaturityVouchers: number;
   totalValue: number;
   usedValue: number;
-  timeSeriesData: Array<{
-    period: string;
-    date: string;
-    total: number;
-    used: number;
-    matured: number;
-    totalValue: number;
-    usedValue: number;
-  }>;
+  timeBreakdown: Record<
+    string,
+    {
+      year: number;
+      total: number;
+      used: number;
+      matured: number;
+      totalValue: number;
+      usedValue: number;
+      months?: Record<
+        string,
+        {
+          month: number;
+          monthName: string;
+          total: number;
+          used: number;
+          matured: number;
+          totalValue: number;
+          usedValue: number;
+          weeks?: Record<
+            string,
+            {
+              week: number;
+              total: number;
+              used: number;
+              matured: number;
+              totalValue: number;
+              usedValue: number;
+              days?: Record<
+                string,
+                {
+                  date: string;
+                  dayName: string;
+                  total: number;
+                  used: number;
+                  matured: number;
+                  totalValue: number;
+                  usedValue: number;
+                  hours?: Record<
+                    string,
+                    {
+                      hour: number;
+                      total: number;
+                      used: number;
+                      matured: number;
+                      totalValue: number;
+                      usedValue: number;
+                    }
+                  >;
+                }
+              >;
+            }
+          >;
+        }
+      >;
+    }
+  >;
   growth: {
     totalChange: number;
     usedChange: number;
@@ -339,47 +519,362 @@ const calculatePercentageChange = (
   return Math.round(((newValue - oldValue) / oldValue) * 100 * 100) / 100;
 };
 
+// Helper functions for time period names
+const getMonthName = (month: number): string => {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  return months[month - 1] || `Month ${month}`;
+};
+
+const getDayName = (date: Date): string => {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return days[date.getDay()];
+};
+
+// Helper function to ensure complete time periods
+const ensureCompleteTimePeriods = <T extends Record<string, any>>(
+  breakdown: Record<string, any>,
+  emptyProcessor: () => T,
+  filters: StatsFilters = {}
+) => {
+  const currentYear = new Date().getFullYear();
+  const targetYear = filters.year || currentYear;
+  
+  // Ensure year exists
+  if (!breakdown[targetYear]) {
+    breakdown[targetYear] = { year: targetYear, ...emptyProcessor(), months: {} };
+  }
+  
+  // Ensure all months exist (1-12)
+  for (let month = 1; month <= 12; month++) {
+    if (!breakdown[targetYear].months[month]) {
+      breakdown[targetYear].months[month] = {
+        month,
+        monthName: getMonthName(month),
+        ...emptyProcessor(),
+        weeks: {}
+      };
+    } else {
+      breakdown[targetYear].months[month].monthName = getMonthName(month);
+    }
+    
+    // If filtering by specific month, ensure all weeks exist (1-52)
+    if (!filters.month || filters.month === month) {
+      const daysInMonth = new Date(targetYear, month, 0).getDate();
+      const weeksInMonth = Math.ceil(daysInMonth / 7);
+      
+      for (let week = 1; week <= weeksInMonth; week++) {
+        if (!breakdown[targetYear].months[month].weeks[week]) {
+          breakdown[targetYear].months[month].weeks[week] = {
+            week,
+            ...emptyProcessor(),
+            days: {}
+          };
+        }
+        
+        // Ensure all days in week exist
+        const startDate = new Date(targetYear, month - 1, (week - 1) * 7 + 1);
+        const endDate = new Date(targetYear, month - 1, week * 7);
+        
+        for (let d = new Date(startDate); d <= endDate && d.getMonth() === month - 1; d.setDate(d.getDate() + 1)) {
+          const dayKey = d.toISOString().split('T')[0];
+          if (!breakdown[targetYear].months[month].weeks[week].days[dayKey]) {
+            breakdown[targetYear].months[month].weeks[week].days[dayKey] = {
+              date: dayKey,
+              dayName: getDayName(d),
+              ...emptyProcessor(),
+              hours: {}
+            };
+          } else {
+            breakdown[targetYear].months[month].weeks[week].days[dayKey].dayName = getDayName(d);
+          }
+          
+          // Ensure all hours exist (0-23)
+          for (let hour = 0; hour < 24; hour++) {
+            if (!breakdown[targetYear].months[month].weeks[week].days[dayKey].hours[hour]) {
+              breakdown[targetYear].months[month].weeks[week].days[dayKey].hours[hour] = {
+                hour,
+                ...emptyProcessor()
+              };
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return breakdown;
+};
+
+// Helper function to create hierarchical time breakdown
+const createHierarchicalBreakdown = <T extends Record<string, any>>(
+  data: Array<{ createdAt: Date }>,
+  processor: (item: any) => T,
+  filters: StatsFilters = {}
+) => {
+  const breakdown: Record<string, any> = {};
+
+  data.forEach((item) => {
+    const date = item.createdAt;
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const week = Math.ceil(date.getDate() / 7);
+    const day = date.toISOString().split("T")[0];
+    const hour = date.getHours();
+
+    // Filter by year if provided
+    if (filters.year && year !== filters.year) return;
+    if (filters.month && month !== filters.month) return;
+
+    // Initialize year
+    if (!breakdown[year]) {
+      breakdown[year] = { year, ...processor(null), months: {} };
+    }
+
+    // Initialize month
+    if (!breakdown[year].months[month]) {
+      breakdown[year].months[month] = { 
+        month, 
+        monthName: getMonthName(month),
+        ...processor(null), 
+        weeks: {} 
+      };
+    }
+
+    // Initialize week
+    if (!breakdown[year].months[month].weeks[week]) {
+      breakdown[year].months[month].weeks[week] = {
+        week,
+        ...processor(null),
+        days: {},
+      };
+    }
+
+    // Initialize day
+    if (!breakdown[year].months[month].weeks[week].days[day]) {
+      breakdown[year].months[month].weeks[week].days[day] = {
+        date: day,
+        dayName: getDayName(date),
+        ...processor(null),
+        hours: {},
+      };
+    }
+
+    // Initialize hour
+    if (!breakdown[year].months[month].weeks[week].days[day].hours[hour]) {
+      breakdown[year].months[month].weeks[week].days[day].hours[hour] = {
+        hour,
+        ...processor(null),
+      };
+    }
+
+    // Process item at all levels
+    const processed = processor(item);
+    Object.keys(processed as object).forEach((key) => {
+      breakdown[year][key] =
+        (breakdown[year][key] || 0) + (processed as any)[key];
+      breakdown[year].months[month][key] =
+        (breakdown[year].months[month][key] || 0) + (processed as any)[key];
+      breakdown[year].months[month].weeks[week][key] =
+        (breakdown[year].months[month].weeks[week][key] || 0) +
+        (processed as any)[key];
+      breakdown[year].months[month].weeks[week].days[day][key] =
+        (breakdown[year].months[month].weeks[week].days[day][key] || 0) +
+        (processed as any)[key];
+      breakdown[year].months[month].weeks[week].days[day].hours[hour][key] =
+        (breakdown[year].months[month].weeks[week].days[day].hours[hour][key] ||
+          0) + (processed as any)[key];
+    });
+  });
+
+  // Ensure complete time periods with zeros for missing data
+  return ensureCompleteTimePeriods(breakdown, () => processor(null), filters);
+};
+
+const getComprehensiveUserStats = async (filters: StatsFilters = {}) => {
+  const users = await Promise.all([
+    prisma.restaurant.findMany({ select: { createdAt: true } }),
+    prisma.farmer.findMany({ select: { createdAt: true } }),
+    prisma.admin.findMany({ select: { createdAt: true } }),
+    prisma.affiliator.findMany({ select: { createdAt: true } }),
+  ]);
+
+  const allUsers = [
+    ...users[0].map((u) => ({ ...u, type: "restaurants" })),
+    ...users[1].map((u) => ({ ...u, type: "farmers" })),
+    ...users[2].map((u) => ({ ...u, type: "admins" })),
+    ...users[3].map((u) => ({ ...u, type: "affiliators" })),
+  ];
+
+  return createHierarchicalBreakdown(
+    allUsers,
+    (item) => {
+      if (!item)
+        return {
+          restaurants: 0,
+          farmers: 0,
+          admins: 0,
+          affiliators: 0,
+          total: 0,
+        };
+      const result = {
+        restaurants: 0,
+        farmers: 0,
+        admins: 0,
+        affiliators: 0,
+        total: 1,
+      };
+      result[item.type as keyof typeof result] = 1;
+      return result;
+    },
+    filters
+  );
+};
+
+const getComprehensiveOrderStats = async (filters: StatsFilters = {}) => {
+  const orders = await prisma.order.findMany({
+    select: { createdAt: true, status: true },
+  });
+  const ongoingStatuses = [
+    OrderStatus.CONFIRMED,
+    OrderStatus.PREPARING,
+    OrderStatus.READY,
+    OrderStatus.IN_TRANSIT,
+  ];
+
+  return createHierarchicalBreakdown(
+    orders,
+    (item) => {
+      if (!item) return { completed: 0, cancelled: 0, ongoing: 0, total: 0 };
+      const result = { completed: 0, cancelled: 0, ongoing: 0, total: 1 };
+      if (item.status === OrderStatus.DELIVERED) result.completed = 1;
+      else if (item.status === OrderStatus.CANCELLED) result.cancelled = 1;
+      else if (ongoingStatuses.includes(item.status)) result.ongoing = 1;
+      return result;
+    },
+    filters
+  );
+};
+
+const getComprehensiveFinanceStats = async (filters: StatsFilters = {}) => {
+  const [orders, subscriptions, vouchers] = await Promise.all([
+    prisma.order.findMany({
+      where: { paymentStatus: PaymentStatus.COMPLETED },
+      select: { createdAt: true, totalAmount: true },
+    }),
+    prisma.subscriptionPayment.findMany({
+      where: { paymentStatus: PaymentStatus.COMPLETED },
+      select: { createdAt: true, amount: true },
+    }),
+    prisma.voucherRepayment.findMany({
+      select: { createdAt: true, amount: true },
+    }),
+  ]);
+
+  const allData = [
+    ...orders.map((o) => ({ ...o, amount: o.totalAmount })),
+    ...subscriptions,
+    ...vouchers,
+  ];
+
+  return createHierarchicalBreakdown(
+    allData,
+    (item) => {
+      if (!item) return { revenue: 0, expenses: 0, profit: 0 };
+      const revenue = item.amount;
+      return { revenue, expenses: 0, profit: revenue };
+    },
+    filters
+  );
+};
+
+const getComprehensiveVoucherStats = async (filters: StatsFilters = {}) => {
+  const vouchers = await prisma.voucher.findMany({
+    select: {
+      createdAt: true,
+      status: true,
+      totalCredit: true,
+      usedCredit: true,
+    },
+  });
+
+  return createHierarchicalBreakdown(
+    vouchers,
+    (item) => {
+      if (!item)
+        return { total: 0, used: 0, matured: 0, totalValue: 0, usedValue: 0 };
+      const result = {
+        total: 1,
+        used: 0,
+        matured: 0,
+        totalValue: item.totalCredit,
+        usedValue: item.usedCredit,
+      };
+      if (item.status === VoucherStatus.USED) result.used = 1;
+      if (item.status === VoucherStatus.MATURED) result.matured = 1;
+      return result;
+    },
+    filters
+  );
+};
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
 
-const getDateRange = (filters: StatsFilters): { dateFrom?: Date; dateTo?: Date } => {
+const getDateRange = (
+  filters: StatsFilters
+): { dateFrom?: Date; dateTo?: Date } => {
   const now = new Date();
-  
-  if (filters.period === 'lifetime' || !filters.period) {
+
+  if (filters.period === "lifetime" || !filters.period) {
     return {}; // No date filter for lifetime
   }
-  
-  if (filters.period === 'today') {
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+  if (filters.period === "today") {
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+    const endOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59
+    );
     return { dateFrom: startOfDay, dateTo: endOfDay };
   }
-  
-  if (filters.period === 'week') {
+
+  if (filters.period === "week") {
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
     return { dateFrom: startOfWeek, dateTo: now };
   }
-  
-  if (filters.period === 'month') {
+
+  if (filters.period === "month") {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     return { dateFrom: startOfMonth, dateTo: now };
   }
-  
-  if (filters.period === 'year') {
+
+  if (filters.period === "year") {
     const startOfYear = new Date(now.getFullYear(), 0, 1);
     return { dateFrom: startOfYear, dateTo: now };
   }
-  
+
   // Custom date range
   return { dateFrom: filters.dateFrom, dateTo: filters.dateTo };
 };
 
 const getUserStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
-  const whereClause = dateFrom && dateTo ? { createdAt: { gte: dateFrom, lte: dateTo } } : {};
-  
+  const whereClause =
+    dateFrom && dateTo ? { createdAt: { gte: dateFrom, lte: dateTo } } : {};
+
   const [restaurants, farmers, admins, affiliators, logistics] =
     await Promise.all([
       prisma.restaurant.count({ where: whereClause }),
@@ -404,7 +899,8 @@ const getUserStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
 };
 
 const getOrderStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
-  const whereClause = dateFrom && dateTo ? { createdAt: { gte: dateFrom, lte: dateTo } } : {};
+  const whereClause =
+    dateFrom && dateTo ? { createdAt: { gte: dateFrom, lte: dateTo } } : {};
   const ongoingStatuses = [
     OrderStatus.CONFIRMED,
     OrderStatus.PREPARING,
@@ -925,31 +1421,37 @@ const getTimeSeriesVoucherStats = async (
 
 export const getSystemStatsService = async (filters: StatsFilters = {}) => {
   const { dateFrom, dateTo } = getDateRange(filters);
-  const { year = new Date().getFullYear(), month } = filters;
+  const { year, month, period } = filters;
 
-  const currentDate = new Date();
   let startDate = dateFrom;
   let endDate = dateTo;
 
-  // If no specific date range from period filter, use year/month logic
-  if (!startDate || !endDate) {
-    const startOfYear = new Date(year, 0, 1);
-    const endOfYear = new Date(year, 11, 31, 23, 59, 59);
-    
+  // Only apply date filters if period is specified or year/month provided
+  if (!startDate && !endDate && (year || month)) {
+    const targetYear = year || new Date().getFullYear();
+    const startOfYear = new Date(targetYear, 0, 1);
+    const endOfYear = new Date(targetYear, 11, 31, 23, 59, 59);
+
     startDate = startOfYear;
     endDate = endOfYear;
 
     if (month) {
-      startDate = new Date(year, month - 1, 1);
-      endDate = new Date(year, month, 0, 23, 59, 59);
+      startDate = new Date(targetYear, month - 1, 1);
+      endDate = new Date(targetYear, month, 0, 23, 59, 59);
     }
   }
 
-  const prevDateFrom = new Date(startDate);
-  const prevDateTo = new Date(endDate);
-  const periodDiff = endDate.getTime() - startDate.getTime();
-  prevDateFrom.setTime(startDate.getTime() - periodDiff);
-  prevDateTo.setTime(endDate.getTime() - periodDiff);
+  // Calculate previous period only if we have date filters
+  let prevDateFrom: Date | undefined;
+  let prevDateTo: Date | undefined;
+
+  if (startDate && endDate) {
+    prevDateFrom = new Date(startDate);
+    prevDateTo = new Date(endDate);
+    const periodDiff = endDate.getTime() - startDate.getTime();
+    prevDateFrom.setTime(startDate.getTime() - periodDiff);
+    prevDateTo.setTime(endDate.getTime() - periodDiff);
+  }
 
   const isMonthly = !!month;
 
@@ -969,6 +1471,7 @@ export const getSystemStatsService = async (filters: StatsFilters = {}) => {
       prevDateFrom,
       prevDateTo,
       isMonthly,
+      filters,
     }),
     getOrderStatsService({
       dateFrom: startDate,
@@ -976,17 +1479,34 @@ export const getSystemStatsService = async (filters: StatsFilters = {}) => {
       prevDateFrom,
       prevDateTo,
       isMonthly,
+      filters,
     }),
-    getFinanceStatsService({ dateFrom: startDate, dateTo: endDate, isMonthly }),
-    getSubscriptionStatsService({ dateFrom: startDate, dateTo: endDate, prevDateFrom, prevDateTo }),
+    getFinanceStatsService({
+      dateFrom: startDate,
+      dateTo: endDate,
+      isMonthly,
+      filters,
+    }),
+    getSubscriptionStatsService({
+      dateFrom: startDate,
+      dateTo: endDate,
+      prevDateFrom,
+      prevDateTo,
+    }),
     getVoucherStatsService({
       dateFrom: startDate,
       dateTo: endDate,
       prevDateFrom,
       prevDateTo,
       isMonthly,
+      filters,
     }),
-    getQuickStatsService({ dateFrom: startDate, dateTo: endDate, prevDateFrom, prevDateTo }),
+    getQuickStatsService({
+      dateFrom: startDate,
+      dateTo: endDate,
+      prevDateFrom,
+      prevDateTo,
+    }),
     getRecentActivitiesService(),
     getSystemStatusService(),
   ]);
@@ -1001,7 +1521,7 @@ export const getSystemStatsService = async (filters: StatsFilters = {}) => {
     recentActivities,
     systemStatus,
     filters: {
-      period: filters.period || 'lifetime',
+      period: period || "lifetime",
       year,
       month,
       dateFrom: startDate,
@@ -1010,186 +1530,22 @@ export const getSystemStatsService = async (filters: StatsFilters = {}) => {
   };
 };
 
-// ============================================
-// USER STATS SERVICE
-// ============================================
-
-export const getUserStatsService = async ({
-  dateFrom,
-  dateTo,
-  prevDateFrom,
-  prevDateTo,
-  isMonthly,
-}: {
-  dateFrom: Date;
-  dateTo: Date;
-  prevDateFrom: Date;
-  prevDateTo: Date;
-  isMonthly: boolean;
-}): Promise<UserStats> => {
-  const [currentStats, prevStats, timeSeriesData] = await Promise.all([
-    getUserStatsByPeriod(dateFrom, dateTo),
-    getUserStatsByPeriod(prevDateFrom, prevDateTo),
-    getTimeSeriesUserStats(dateFrom, dateTo, isMonthly),
-  ]);
-
-  return {
-    totalUsers: currentStats.totalUsers,
-    restaurants: currentStats.restaurants,
-    farmers: currentStats.farmers,
-    admins: currentStats.admins,
-    affiliators: currentStats.affiliators,
-    logistics: currentStats.logistics,
-    timeSeriesData,
-    growth: {
-      totalChange: calculatePercentageChange(
-        prevStats.totalUsers,
-        currentStats.totalUsers
-      ),
-      restaurantChange: calculatePercentageChange(
-        prevStats.restaurants,
-        currentStats.restaurants
-      ),
-      farmerChange: calculatePercentageChange(
-        prevStats.farmers,
-        currentStats.farmers
-      ),
-      adminChange: calculatePercentageChange(
-        prevStats.admins,
-        currentStats.admins
-      ),
-    },
-  };
-};
-
-// ============================================
-// ORDER STATS SERVICE
-// ============================================
-
-export const getOrderStatsService = async ({
-  dateFrom,
-  dateTo,
-  prevDateFrom,
-  prevDateTo,
-  isMonthly,
-}: {
-  dateFrom: Date;
-  dateTo: Date;
-  prevDateFrom: Date;
-  prevDateTo: Date;
-  isMonthly: boolean;
-}): Promise<OrderStats> => {
-  const [currentOrders, prevOrders, timeSeriesData] = await Promise.all([
-    getOrderStatsByPeriod(dateFrom, dateTo),
-    getOrderStatsByPeriod(prevDateFrom, prevDateTo),
-    getTimeSeriesOrderStats(dateFrom, dateTo, isMonthly),
-  ]);
-
-  return {
-    totalOrders: currentOrders.totalOrders,
-    completedOrders: currentOrders.completedOrders,
-    cancelledOrders: currentOrders.cancelledOrders,
-    ongoingOrders: currentOrders.ongoingOrders,
-    timeSeriesData,
-    growth: {
-      totalChange: calculatePercentageChange(
-        prevOrders.totalOrders,
-        currentOrders.totalOrders
-      ),
-      completedChange: calculatePercentageChange(
-        prevOrders.completedOrders,
-        currentOrders.completedOrders
-      ),
-    },
-  };
-};
-
-// ============================================
-// FINANCE STATS SERVICE
-// ============================================
-
-export const getFinanceStatsService = async ({
-  dateFrom,
-  dateTo,
-  isMonthly,
-}: {
-  dateFrom: Date;
-  dateTo: Date;
-  isMonthly: boolean;
-}): Promise<FinanceStats> => {
-  const [orderRevenue, subscriptionRevenue, voucherRevenue] = await Promise.all(
-    [
-      getOrderRevenue(dateFrom, dateTo),
-      getSubscriptionRevenue(dateFrom, dateTo),
-      getVoucherRevenue(dateFrom, dateTo),
-    ]
-  );
-
-  const [
-    usedVoucherExpenses,
-    maturedVoucherExpenses,
-    nearMaturityExpenses,
-    farmerPayments,
-  ] = await Promise.all([
-    getUsedVoucherExpenses(dateFrom, dateTo),
-    getMaturedVoucherExpenses(dateFrom, dateTo),
-    getNearMaturityVoucherExpenses(),
-    getFarmerPayments(dateFrom, dateTo),
-  ]);
-
-  const totalRevenue = orderRevenue + subscriptionRevenue + voucherRevenue;
-  const totalExpenses =
-    usedVoucherExpenses +
-    maturedVoucherExpenses +
-    nearMaturityExpenses +
-    farmerPayments;
-  const netProfit = totalRevenue - totalExpenses;
-  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
-
-  const timeSeriesData = await getTimeSeriesFinanceData(
-    dateFrom,
-    dateTo,
-    isMonthly
-  );
-
-  return {
-    totalRevenue,
-    totalExpenses,
-    netProfit,
-    profitMargin,
-    timeSeriesData,
-    revenueBreakdown: {
-      orders: orderRevenue,
-      subscriptions: subscriptionRevenue,
-      vouchers: voucherRevenue,
-    },
-    expenseBreakdown: {
-      usedVouchers: usedVoucherExpenses,
-      maturedVouchers: maturedVoucherExpenses,
-      nearMaturityVouchers: nearMaturityExpenses,
-      farmerPayments,
-    },
-  };
-};
-
-// ============================================
-// SUBSCRIPTION STATS SERVICE
-// ============================================
-
 export const getSubscriptionStatsService = async ({
   dateFrom,
   dateTo,
   prevDateFrom,
   prevDateTo,
 }: {
-  dateFrom: Date;
-  dateTo: Date;
-  prevDateFrom: Date;
-  prevDateTo: Date;
+  dateFrom?: Date;
+  dateTo?: Date;
+  prevDateFrom?: Date;
+  prevDateTo?: Date;
 }): Promise<SubscriptionStats> => {
   const [currentStats, prevStats, planBreakdown] = await Promise.all([
     getSubscriptionStatsByPeriod(dateFrom, dateTo),
-    getSubscriptionStatsByPeriod(prevDateFrom, prevDateTo),
+    prevDateFrom && prevDateTo
+      ? getSubscriptionStatsByPeriod(prevDateFrom, prevDateTo)
+      : getSubscriptionStatsByPeriod(),
     getSubscriptionPlanBreakdown(dateFrom, dateTo),
   ]);
 
@@ -1211,21 +1567,24 @@ export const getSubscriptionStatsService = async ({
   };
 };
 
-const getSubscriptionStatsByPeriod = async (dateFrom: Date, dateTo: Date) => {
+const getSubscriptionStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
+  const whereClause =
+    dateFrom && dateTo ? { createdAt: { gte: dateFrom, lte: dateTo } } : {};
+
   const [totalSubscriptions, activeSubscriptions, expiredSubscriptions] =
     await Promise.all([
       prisma.restaurantSubscription.count({
-        where: { createdAt: { gte: dateFrom, lte: dateTo } },
+        where: whereClause,
       }),
       prisma.restaurantSubscription.count({
         where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
+          ...whereClause,
           status: SubscriptionStatus.ACTIVE,
         },
       }),
       prisma.restaurantSubscription.count({
         where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
+          ...whereClause,
           status: SubscriptionStatus.EXPIRED,
         },
       }),
@@ -1238,9 +1597,12 @@ const getSubscriptionStatsByPeriod = async (dateFrom: Date, dateTo: Date) => {
   };
 };
 
-const getSubscriptionPlanBreakdown = async (dateFrom: Date, dateTo: Date) => {
+const getSubscriptionPlanBreakdown = async (dateFrom?: Date, dateTo?: Date) => {
+  const whereClause =
+    dateFrom && dateTo ? { createdAt: { gte: dateFrom, lte: dateTo } } : {};
+
   const subscriptions = await prisma.restaurantSubscription.findMany({
-    where: { createdAt: { gte: dateFrom, lte: dateTo } },
+    where: whereClause,
     include: {
       plan: { select: { name: true, price: true } },
       payments: {
@@ -1273,8 +1635,171 @@ const getSubscriptionPlanBreakdown = async (dateFrom: Date, dateTo: Date) => {
 };
 
 // ============================================
-// VOUCHER STATS SERVICE
+// USER STATS SERVICE
 // ============================================
+
+export const getUserStatsService = async ({
+  dateFrom,
+  dateTo,
+  prevDateFrom,
+  prevDateTo,
+  isMonthly,
+  filters = {},
+}: {
+  dateFrom?: Date;
+  dateTo?: Date;
+  prevDateFrom?: Date;
+  prevDateTo?: Date;
+  isMonthly: boolean;
+  filters?: StatsFilters;
+}): Promise<UserStats> => {
+  const [currentStats, prevStats, timeBreakdown] = await Promise.all([
+    getUserStatsByPeriod(dateFrom, dateTo),
+    prevDateFrom && prevDateTo
+      ? getUserStatsByPeriod(prevDateFrom, prevDateTo)
+      : getUserStatsByPeriod(),
+    getComprehensiveUserStats(filters),
+  ]);
+
+  return {
+    totalUsers: currentStats.totalUsers,
+    restaurants: currentStats.restaurants,
+    farmers: currentStats.farmers,
+    admins: currentStats.admins,
+    affiliators: currentStats.affiliators,
+    logistics: currentStats.logistics,
+    timeBreakdown,
+    growth: {
+      totalChange: calculatePercentageChange(
+        prevStats.totalUsers,
+        currentStats.totalUsers
+      ),
+      restaurantChange: calculatePercentageChange(
+        prevStats.restaurants,
+        currentStats.restaurants
+      ),
+      farmerChange: calculatePercentageChange(
+        prevStats.farmers,
+        currentStats.farmers
+      ),
+      adminChange: calculatePercentageChange(
+        prevStats.admins,
+        currentStats.admins
+      ),
+    },
+  };
+};
+
+// ============================================
+// ORDER STATS SERVICE
+// ============================================
+
+export const getOrderStatsService = async ({
+  dateFrom,
+  dateTo,
+  prevDateFrom,
+  prevDateTo,
+  isMonthly,
+  filters = {},
+}: {
+  dateFrom?: Date;
+  dateTo?: Date;
+  prevDateFrom?: Date;
+  prevDateTo?: Date;
+  isMonthly: boolean;
+  filters?: StatsFilters;
+}): Promise<OrderStats> => {
+  const [currentOrders, prevOrders, timeBreakdown] = await Promise.all([
+    getOrderStatsByPeriod(dateFrom, dateTo),
+    prevDateFrom && prevDateTo
+      ? getOrderStatsByPeriod(prevDateFrom, prevDateTo)
+      : getOrderStatsByPeriod(),
+    getComprehensiveOrderStats(filters),
+  ]);
+
+  return {
+    totalOrders: currentOrders.totalOrders,
+    completedOrders: currentOrders.completedOrders,
+    cancelledOrders: currentOrders.cancelledOrders,
+    ongoingOrders: currentOrders.ongoingOrders,
+    timeBreakdown,
+    growth: {
+      totalChange: calculatePercentageChange(
+        prevOrders.totalOrders,
+        currentOrders.totalOrders
+      ),
+      completedChange: calculatePercentageChange(
+        prevOrders.completedOrders,
+        currentOrders.completedOrders
+      ),
+    },
+  };
+};
+
+export const getFinanceStatsService = async ({
+  dateFrom,
+  dateTo,
+  isMonthly,
+  filters = {},
+}: {
+  dateFrom?: Date;
+  dateTo?: Date;
+  isMonthly: boolean;
+  filters?: StatsFilters;
+}): Promise<FinanceStats> => {
+  const startDate = dateFrom || new Date("2020-01-01");
+  const endDate = dateTo || new Date();
+
+  const [orderRevenue, subscriptionRevenue, voucherRevenue] = await Promise.all(
+    [
+      getOrderRevenue(startDate, endDate),
+      getSubscriptionRevenue(startDate, endDate),
+      getVoucherRevenue(startDate, endDate),
+    ]
+  );
+
+  const [
+    usedVoucherExpenses,
+    maturedVoucherExpenses,
+    nearMaturityExpenses,
+    farmerPayments,
+    timeBreakdown,
+  ] = await Promise.all([
+    getUsedVoucherExpenses(startDate, endDate),
+    getMaturedVoucherExpenses(startDate, endDate),
+    getNearMaturityVoucherExpenses(),
+    getFarmerPayments(startDate, endDate),
+    getComprehensiveFinanceStats(filters),
+  ]);
+
+  const totalRevenue = orderRevenue + subscriptionRevenue + voucherRevenue;
+  const totalExpenses =
+    usedVoucherExpenses +
+    maturedVoucherExpenses +
+    nearMaturityExpenses +
+    farmerPayments;
+  const netProfit = totalRevenue - totalExpenses;
+  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+  return {
+    totalRevenue,
+    totalExpenses,
+    netProfit,
+    profitMargin,
+    timeBreakdown,
+    revenueBreakdown: {
+      orders: orderRevenue,
+      subscriptions: subscriptionRevenue,
+      vouchers: voucherRevenue,
+    },
+    expenseBreakdown: {
+      usedVouchers: usedVoucherExpenses,
+      maturedVouchers: maturedVoucherExpenses,
+      nearMaturityVouchers: nearMaturityExpenses,
+      farmerPayments,
+    },
+  };
+};
 
 export const getVoucherStatsService = async ({
   dateFrom,
@@ -1282,19 +1807,23 @@ export const getVoucherStatsService = async ({
   prevDateFrom,
   prevDateTo,
   isMonthly,
+  filters = {},
 }: {
-  dateFrom: Date;
-  dateTo: Date;
-  prevDateFrom: Date;
-  prevDateTo: Date;
+  dateFrom?: Date;
+  dateTo?: Date;
+  prevDateFrom?: Date;
+  prevDateTo?: Date;
   isMonthly: boolean;
+  filters?: StatsFilters;
 }): Promise<VoucherStats> => {
-  const [currentStats, prevStats, nearMaturityCount, timeSeriesData] =
+  const [currentStats, prevStats, nearMaturityCount, timeBreakdown] =
     await Promise.all([
       getVoucherStatsByPeriod(dateFrom, dateTo),
-      getVoucherStatsByPeriod(prevDateFrom, prevDateTo),
+      prevDateFrom && prevDateTo
+        ? getVoucherStatsByPeriod(prevDateFrom, prevDateTo)
+        : getVoucherStatsByPeriod(),
       getNearMaturityVoucherCount(),
-      getTimeSeriesVoucherStats(dateFrom, dateTo, isMonthly),
+      getComprehensiveVoucherStats(filters),
     ]);
 
   return {
@@ -1304,7 +1833,7 @@ export const getVoucherStatsService = async ({
     nearMaturityVouchers: nearMaturityCount,
     totalValue: currentStats.totalValue,
     usedValue: currentStats.usedValue,
-    timeSeriesData,
+    timeBreakdown,
     growth: {
       totalChange: calculatePercentageChange(
         prevStats.totalVouchers,
@@ -1318,39 +1847,40 @@ export const getVoucherStatsService = async ({
   };
 };
 
-const getVoucherStatsByPeriod = async (dateFrom: Date, dateTo: Date) => {
+const getVoucherStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
+  const whereClause =
+    dateFrom && dateTo
+      ? {
+          createdAt: { gte: dateFrom, lte: dateTo },
+          status: { in: [VoucherStatus.USED, VoucherStatus.MATURED] },
+        }
+      : {
+          status: { in: [VoucherStatus.USED, VoucherStatus.MATURED] },
+        };
+
   const [totalVouchers, usedVouchers, maturedVouchers, totalValue, usedValue] =
     await Promise.all([
       prisma.voucher.count({
-        where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
-          status: { in: [VoucherStatus.USED, VoucherStatus.MATURED] },
-        },
+        where: whereClause,
       }),
       prisma.voucher.count({
         where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
+          ...whereClause,
           status: VoucherStatus.USED,
         },
       }),
       prisma.voucher.count({
         where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
+          ...whereClause,
           status: VoucherStatus.MATURED,
         },
       }),
       prisma.voucher.aggregate({
-        where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
-          status: { in: [VoucherStatus.USED, VoucherStatus.MATURED] },
-        },
+        where: whereClause,
         _sum: { totalCredit: true },
       }),
       prisma.voucher.aggregate({
-        where: {
-          createdAt: { gte: dateFrom, lte: dateTo },
-          status: { in: [VoucherStatus.USED, VoucherStatus.MATURED] },
-        },
+        where: whereClause,
         _sum: { usedCredit: true },
       }),
     ]);
@@ -1391,14 +1921,16 @@ export const getQuickStatsService = async ({
   prevDateFrom,
   prevDateTo,
 }: {
-  dateFrom: Date;
-  dateTo: Date;
-  prevDateFrom: Date;
-  prevDateTo: Date;
+  dateFrom?: Date;
+  dateTo?: Date;
+  prevDateFrom?: Date;
+  prevDateTo?: Date;
 }): Promise<QuickStats> => {
   const [currentPeriod, prevPeriod] = await Promise.all([
     getQuickStatsByPeriod(dateFrom, dateTo),
-    getQuickStatsByPeriod(prevDateFrom, prevDateTo),
+    prevDateFrom && prevDateTo
+      ? getQuickStatsByPeriod(prevDateFrom, prevDateTo)
+      : getQuickStatsByPeriod(),
   ]);
 
   return {
@@ -1444,7 +1976,10 @@ export const getQuickStatsService = async ({
   };
 };
 
-const getQuickStatsByPeriod = async (dateFrom: Date, dateTo: Date) => {
+const getQuickStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
+  const whereClause =
+    dateFrom && dateTo ? { createdAt: { gte: dateFrom, lte: dateTo } } : {};
+
   const [
     userStats,
     totalOrders,
@@ -1455,24 +1990,24 @@ const getQuickStatsByPeriod = async (dateFrom: Date, dateTo: Date) => {
   ] = await Promise.all([
     getUserStatsByPeriod(dateFrom, dateTo),
     prisma.order.count({
-      where: { createdAt: { gte: dateFrom, lte: dateTo } },
+      where: whereClause,
     }),
     prisma.order.count({
       where: {
-        createdAt: { gte: dateFrom, lte: dateTo },
+        ...whereClause,
         status: OrderStatus.DELIVERED,
       },
     }),
-    getOrderRevenue(dateFrom, dateTo),
+    getOrderRevenue(dateFrom || new Date("2020-01-01"), dateTo || new Date()),
     prisma.restaurantSubscription.count({
       where: {
-        createdAt: { gte: dateFrom, lte: dateTo },
+        ...whereClause,
         status: SubscriptionStatus.ACTIVE,
       },
     }),
     prisma.voucher.count({
       where: {
-        createdAt: { gte: dateFrom, lte: dateTo },
+        ...whereClause,
         status: VoucherStatus.USED,
       },
     }),

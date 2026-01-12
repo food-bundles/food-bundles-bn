@@ -577,6 +577,7 @@ paths:
                   restaurantId: "rest-12345"
                   voucherType: "DISCOUNT_20"
                   creditLimit: 500000
+                  repaymentDays: 20
                   expiryDate: "2029-12-31T23:59:59Z"
               discount_50:
                 summary: 50% Discount Voucher
@@ -584,7 +585,26 @@ paths:
                   restaurantId: "rest-67890"
                   voucherType: "DISCOUNT_50"
                   creditLimit: 1000000
+                  repaymentDays: 30
                   expiryDate: "2024-06-30T23:59:59Z"
+
+              discount_80:
+                summary: 80% Discount Voucher
+                value:
+                  restaurantId: "rest-54321"
+                  voucherType: "DISCOUNT_80"
+                  creditLimit: 2000000
+                  repaymentDays: 45
+                  expiryDate: "2024-09-30T23:59:59Z"
+
+              discount_100:
+                summary: 100% Discount Voucher
+                value:
+                  restaurantId: "rest-98765"
+                  voucherType: "DISCOUNT_100"
+                  creditLimit: 3000000
+                  repaymentDays: 60
+                  expiryDate: "2024-12-31T23:59:59Z"
       responses:
         201:
           description: Voucher created successfully

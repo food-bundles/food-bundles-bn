@@ -59,7 +59,7 @@ export const inviteServices = {
     return {
       invitation,
       token,
-      inviteUrl: `${process.env.CLIENT_PRODUCTION_URL}/signup?token=${token}`,
+      inviteUrl: `${process.env.CLIENT_PRODUCTION_URL}/accept-invitation?token=${token}`,
     };
   },
 

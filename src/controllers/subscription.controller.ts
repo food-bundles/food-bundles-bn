@@ -14,9 +14,13 @@ import {
   getAllSubscriptionsService,
   checkExpiredSubscriptionsService,
   processSubscriptionPaymentService,
+  getRestaurantCurrentSubscriptionService,
+  changeSubscriptionPlanService,
+  getRestaurantSubscriptionHistoryService,
 } from "../services/subscription.service";
 import { SubscriptionStatus } from "@prisma/client";
 import prisma from "../prisma";
+import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 
 // ==================== SUBSCRIPTION PLAN CONTROLLERS ====================
 
@@ -218,14 +222,23 @@ export const createRestaurantSubscription = async (
       cardDetails,
       bankDetails,
     } = req.body;
-    const user = (req as any).user;
-    const userRole = user.role;
-    const restaurantId =
-      userRole === "RESTAURANT"
-        ? user.id
-        : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : req.body.restaurantId;
+
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     if (!planId) {
       return res.status(400).json({
@@ -294,8 +307,8 @@ export const processSubscriptionPayment = async (
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
     if (!paymentMethod) {
       return res.status(400).json({
@@ -353,10 +366,10 @@ export const processSubscriptionPayment = async (
 };
 
 /**
- * Controller to get restaurant's subscriptions
- * GET /subscriptions/my-subscriptions
+ * Controller to get restaurant's current subscription
+ * GET /subscriptions/my-subscription
  */
-export const getMySubscriptions = async (req: Request, res: Response) => {
+export const getMyCurrentSubscription = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     let restaurantId: string;
@@ -366,10 +379,12 @@ export const getMySubscriptions = async (req: Request, res: Response) => {
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
     } else if (user.role === "ADMIN") {
-      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
+      restaurantId =
+        (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
         return res.status(400).json({
-          message: "Restaurant ID is required for admin to view specific subscriptions",
+          message:
+            "Restaurant ID is required for admin to view specific subscription",
         });
       }
     } else {
@@ -377,36 +392,24 @@ export const getMySubscriptions = async (req: Request, res: Response) => {
         message: "Unauthorized: Invalid role for this operation",
       });
     }
-    const { page = 1, limit = 10, status } = req.query;
 
-    if (
-      status &&
-      !Object.values(SubscriptionStatus).includes(status as SubscriptionStatus)
-    ) {
-      return res.status(400).json({
-        message: "Invalid subscription status",
+    const subscription = await getRestaurantCurrentSubscriptionService(
+      restaurantId
+    );
+
+    if (!subscription) {
+      return res.status(404).json({
+        message: "No subscription found for this restaurant",
       });
     }
 
-    const result = await getRestaurantSubscriptionsService(restaurantId, {
-      page: parseInt(page as string),
-      limit: parseInt(limit as string),
-      status: status as SubscriptionStatus,
-    });
-
     res.status(200).json({
-      message: "Subscriptions retrieved successfully",
-      data: result.subscriptions,
-      pagination: {
-        page: result.page,
-        limit: result.limit,
-        total: result.total,
-        totalPages: result.totalPages,
-      },
+      message: "Current subscription retrieved successfully",
+      data: subscription,
     });
   } catch (error: any) {
     res.status(500).json({
-      message: error.message || "Failed to get subscriptions",
+      message: error.message || "Failed to get current subscription",
     });
   }
 };
@@ -424,8 +427,8 @@ export const getSubscriptionById = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
     const subscription = await getSubscriptionByIdService(
       subscriptionId,
@@ -462,8 +465,8 @@ export const updateRestaurantSubscription = async (
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
     if (status && !Object.values(SubscriptionStatus).includes(status)) {
       return res.status(400).json({
@@ -502,11 +505,10 @@ export const updateRestaurantSubscription = async (
 
 /**
  * Controller to cancel subscription
- * POST /subscriptions/:subscriptionId/cancel
+ * POST /subscriptions/cancel
  */
 export const cancelSubscription = async (req: Request, res: Response) => {
   try {
-    const { subscriptionId } = req.params;
     const { reason } = req.body;
     const user = (req as any).user;
     const userRole = user.role;
@@ -514,14 +516,16 @@ export const cancelSubscription = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
-    const subscription = await cancelSubscriptionService(
-      subscriptionId,
-      reason,
-      restaurantId
-    );
+    if (!restaurantId) {
+      return res.status(400).json({
+        message: "Restaurant ID is required",
+      });
+    }
+
+    const subscription = await cancelSubscriptionService(restaurantId, reason);
 
     res.status(200).json({
       message: "Subscription cancelled successfully",
@@ -536,24 +540,26 @@ export const cancelSubscription = async (req: Request, res: Response) => {
 
 /**
  * Controller to renew subscription
- * POST /subscriptions/:subscriptionId/renew
+ * POST /subscriptions/renew
  */
 export const renewSubscription = async (req: Request, res: Response) => {
   try {
-    const { subscriptionId } = req.params;
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
-    const subscription = await renewSubscriptionService(
-      subscriptionId,
-      restaurantId
-    );
+    if (!restaurantId) {
+      return res.status(400).json({
+        message: "Restaurant ID is required",
+      });
+    }
+
+    const subscription = await renewSubscriptionService(restaurantId);
 
     res.status(200).json({
       message: "Subscription renewed successfully. Please complete payment.",
@@ -628,11 +634,10 @@ export const checkExpiredSubscriptions = async (
 
 /**
  * Controller to upgrade subscription
- * POST /subscriptions/:subscriptionId/upgrade
+ * POST /subscriptions/upgrade
  */
 export const upgradeSubscription = async (req: Request, res: Response) => {
   try {
-    const { subscriptionId } = req.params;
     const { newPlanId } = req.body;
     const user = (req as any).user;
     const userRole = user.role;
@@ -640,8 +645,8 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
     if (!newPlanId) {
       return res.status(400).json({
@@ -649,66 +654,23 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
       });
     }
 
-    // Get current subscription
-    const currentSubscription = await getSubscriptionByIdService(
-      subscriptionId,
-      restaurantId
-    );
-
-    // Validate new plan exists
-    const newPlan = await getSubscriptionPlanByIdService(newPlanId);
-
-    if (!newPlan.isActive) {
+    if (!restaurantId) {
       return res.status(400).json({
-        message: "New plan is not active",
+        message: "Restaurant ID is required",
       });
     }
 
-    // Check if it's actually an upgrade (price-wise)
-    if (newPlan.price <= currentSubscription.plan.price) {
+    const result = await changeSubscriptionPlanService(restaurantId, newPlanId);
+
+    if (!result.isUpgrade) {
       return res.status(400).json({
         message: "New plan must have a higher price than current plan",
       });
     }
 
-    // Update subscription with new plan
-    const updatedSubscription = await prisma.$transaction(async (tx) => {
-      const updated = await tx.restaurantSubscription.update({
-        where: { id: subscriptionId },
-        data: {
-          planId: newPlanId,
-          status: "PENDING",
-          paymentStatus: "PENDING",
-        },
-        include: {
-          plan: true,
-          restaurant: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
-
-      await tx.subscriptionHistory.create({
-        data: {
-          subscriptionId,
-          action: "UPGRADED",
-          oldPlanId: currentSubscription.planId,
-          newPlanId: newPlanId,
-          oldStatus: currentSubscription.status,
-          newStatus: "PENDING",
-        },
-      });
-
-      return updated;
-    });
-
     res.status(200).json({
       message: "Subscription upgraded successfully. Please complete payment.",
-      data: updatedSubscription,
+      data: result.subscription,
     });
   } catch (error: any) {
     res.status(500).json({
@@ -719,11 +681,10 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
 
 /**
  * Controller to downgrade subscription
- * POST /subscriptions/:subscriptionId/downgrade
+ * POST /subscriptions/downgrade
  */
 export const downgradeSubscription = async (req: Request, res: Response) => {
   try {
-    const { subscriptionId } = req.params;
     const { newPlanId } = req.body;
     const user = (req as any).user;
     const userRole = user.role;
@@ -731,8 +692,8 @@ export const downgradeSubscription = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
     if (!newPlanId) {
       return res.status(400).json({
@@ -740,62 +701,23 @@ export const downgradeSubscription = async (req: Request, res: Response) => {
       });
     }
 
-    // Get current subscription
-    const currentSubscription = await getSubscriptionByIdService(
-      subscriptionId,
-      restaurantId
-    );
-
-    // Validate new plan exists
-    const newPlan = await getSubscriptionPlanByIdService(newPlanId);
-
-    if (!newPlan.isActive) {
+    if (!restaurantId) {
       return res.status(400).json({
-        message: "New plan is not active",
+        message: "Restaurant ID is required",
       });
     }
 
-    // Check if it's actually a downgrade (price-wise)
-    if (newPlan.price >= currentSubscription.plan.price) {
+    const result = await changeSubscriptionPlanService(restaurantId, newPlanId);
+
+    if (!result.isDowngrade) {
       return res.status(400).json({
         message: "New plan must have a lower price than current plan",
       });
     }
 
-    // Update subscription with new plan (effective at next billing cycle)
-    const updatedSubscription = await prisma.$transaction(async (tx) => {
-      const updated = await tx.restaurantSubscription.update({
-        where: { id: subscriptionId },
-        data: {
-          planId: newPlanId,
-        },
-        include: {
-          plan: true,
-          restaurant: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
-
-      await tx.subscriptionHistory.create({
-        data: {
-          subscriptionId,
-          action: "DOWNGRADED",
-          oldPlanId: currentSubscription.planId,
-          newPlanId: newPlanId,
-        },
-      });
-
-      return updated;
-    });
-
     res.status(200).json({
       message: "Subscription will be downgraded at next billing cycle",
-      data: updatedSubscription,
+      data: result.subscription,
     });
   } catch (error: any) {
     res.status(500).json({
@@ -806,31 +728,40 @@ export const downgradeSubscription = async (req: Request, res: Response) => {
 
 /**
  * Controller to get subscription history
- * GET /subscriptions/:subscriptionId/history
+ * GET /subscriptions/history
  */
 export const getSubscriptionHistory = async (req: Request, res: Response) => {
   try {
-    const { subscriptionId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-          ? user.restaurantId
-          : undefined;
+        ? user.restaurantId
+        : undefined;
 
-    // Verify subscription access
-    await getSubscriptionByIdService(subscriptionId, restaurantId);
+    if (!restaurantId) {
+      return res.status(400).json({
+        message: "Restaurant ID is required",
+      });
+    }
 
-    const history = await prisma.subscriptionHistory.findMany({
-      where: { subscriptionId },
-      orderBy: { createdAt: "desc" },
+    const result = await getRestaurantSubscriptionHistoryService(restaurantId, {
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
     });
 
     res.status(200).json({
       message: "Subscription history retrieved successfully",
-      data: history,
+      data: result.history,
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
     });
   } catch (error: any) {
     res.status(500).json({

@@ -8,7 +8,7 @@ import {
   deleteSubscriptionPlan,
   createRestaurantSubscription,
   processSubscriptionPayment,
-  getMySubscriptions,
+  getMyCurrentSubscription,
   getSubscriptionById,
   updateRestaurantSubscription,
   cancelSubscription,
@@ -102,7 +102,7 @@ subscriptionRoutes.get(
   "/my-subscriptions",
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
-  getMySubscriptions
+  getMyCurrentSubscription
 );
 
 /**

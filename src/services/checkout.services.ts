@@ -176,6 +176,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     voucherCode: data.voucherCode,
     fallbackPaymentMethod: data.fallbackPaymentMethod,
     processDirectly: true,
+    restaurantId,
   });
 
   console.log("paymentResult", paymentResult);
@@ -223,6 +224,7 @@ export const processPaymentService = async (
     voucherCode?: string;
     fallbackPaymentMethod?: string;
     processDirectly?: boolean;
+    restaurantId?: string;
   }
 ) => {
   let order: Awaited<ReturnType<typeof getOrderByIdService>>;
@@ -391,7 +393,7 @@ export const processPaymentService = async (
         paymentResult = await processVoucherPayment({
           voucherCode: paymentData.voucherCode,
           orderId: order.id!,
-          restaurantId: order.restaurantId,
+          restaurantId: paymentData.restaurantId || order.restaurantId,
           originalAmount: order.totalAmount,
         });
         break;

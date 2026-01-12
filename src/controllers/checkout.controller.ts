@@ -16,6 +16,8 @@ import {
 } from "../services/voucher.service";
 import prisma from "../prisma";
 import { OTPService } from "../services/otp.service";
+import { getPaymentMethodByIdService } from "../services/payment-method.service";
+import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 
 /**
  * Enhanced controller to create a new order from cart
@@ -55,6 +57,11 @@ export const createCheckout = async (req: Request, res: Response) => {
       restaurantId = undefined;
     }
 
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
+
     // Validate required fields
     if (!cartId || !paymentMethodId) {
       return res.status(400).json({
@@ -69,9 +76,6 @@ export const createCheckout = async (req: Request, res: Response) => {
     if (paymentMethodId) {
       // Get payment method to check if it's voucher
       try {
-        const { getPaymentMethodByIdService } = await import(
-          "../services/payment-method.service"
-        );
         const paymentMethodConfig = await getPaymentMethodByIdService(
           paymentMethodId
         );
@@ -103,8 +107,9 @@ export const createCheckout = async (req: Request, res: Response) => {
           // Validate voucher for checkout
           const voucherValidation = await validateVoucherForCheckoutService(
             voucherCode,
+            cartTotal,
             restaurantId,
-            cartTotal
+            affiliatorId
           );
 
           if (!voucherValidation.valid) {
@@ -241,7 +246,22 @@ export const verifyVoucherOTPAndCreateOrder = async (
 ) => {
   try {
     const { otp, checkoutSessionId } = req.body;
-    const restaurantId = (req as any).user.id;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     console.log("checkoutSessionId, otp ", checkoutSessionId, otp);
 
@@ -344,6 +364,7 @@ export const verifyVoucherOTPAndCreateOrder = async (
       });
     }
   } catch (error: any) {
+    console.log("Error in verifyVoucherOTPAndCreateOrder", error);
     res.status(500).json({
       message:
         error.message || "Failed to verify OTP and process voucher payment",
@@ -513,7 +534,22 @@ export const validateVoucherForCheckout = async (
 ) => {
   try {
     const { voucherCode, orderAmount } = req.body;
-    const restaurantId = (req as any).user.id;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     if (!voucherCode || !orderAmount) {
       return res.status(400).json({
@@ -523,8 +559,9 @@ export const validateVoucherForCheckout = async (
 
     const validation = await validateVoucherForCheckoutService(
       voucherCode,
+      parseFloat(orderAmount),
       restaurantId,
-      parseFloat(orderAmount)
+      affiliatorId
     );
 
     if (!validation.valid) {

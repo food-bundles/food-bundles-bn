@@ -27,6 +27,7 @@ import {
   getAllVouchersService,
 } from "../services/voucher.service";
 import { VoucherStatus, LoanStatus } from "@prisma/client";
+import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 
 // ============================================
 // VOUCHER MANAGEMENT CONTROLLERS
@@ -123,24 +124,21 @@ export const getAllVouchers = async (req: Request, res: Response) => {
  */
 export const getMyVouchers = async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
-    let restaurantId: string;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
 
-    if (user.role === "RESTAURANT") {
-      restaurantId = user.id;
-    } else if (user.role === "AFFILIATOR") {
-      restaurantId = user.restaurantId;
-    } else if (user.role === "ADMIN") {
-      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
-      if (!restaurantId) {
-        return res.status(400).json({
-          message: "Restaurant ID is required for admin to view vouchers",
-        });
-      }
-    } else {
-      return res.status(403).json({
-        message: "Unauthorized: Invalid role",
-      });
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
     }
 
     const { status, activeOnly } = req.query;
@@ -149,7 +147,11 @@ export const getMyVouchers = async (req: Request, res: Response) => {
     if (status) filters.status = status as VoucherStatus;
     if (activeOnly === "true") filters.activeOnly = true;
 
-    const vouchers = await getMyVouchersService(restaurantId, filters);
+    const vouchers = await getMyVouchersService(
+      restaurantId,
+      affiliatorId,
+      filters
+    );
 
     res.status(200).json({
       message: "Vouchers retrieved successfully",
@@ -169,21 +171,8 @@ export const getMyVouchers = async (req: Request, res: Response) => {
 export const getVoucherById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const userRole = (req as any).user.role;
-    const userId = (req as any).user.id;
 
     const voucher = await getVoucherByIdService(id);
-
-    // Check authorization
-    const isOwner = (userRole === "RESTAURANT" && voucher.restaurantId === userId) ||
-      (userRole === "AFFILIATOR" && voucher.restaurantId === (req as any).user.restaurantId) ||
-      (userRole === "ADMIN");
-
-    if (!isOwner) {
-      return res.status(403).json({
-        message: "Unauthorized: Voucher does not belong to your restaurant",
-      });
-    }
 
     res.status(200).json({
       message: "Voucher retrieved successfully",
@@ -208,9 +197,11 @@ export const getRestaurantVouchers = async (req: Request, res: Response) => {
     const userId = (req as any).user.id;
 
     // Check authorization
-    const isAuthorized = (userRole === "RESTAURANT" && restaurantId === userId) ||
-      (userRole === "AFFILIATOR" && restaurantId === (req as any).user.restaurantId) ||
-      (userRole === "ADMIN");
+    const isAuthorized =
+      (userRole === "RESTAURANT" && restaurantId === userId) ||
+      (userRole === "AFFILIATOR" &&
+        restaurantId === (req as any).user.restaurantId) ||
+      userRole === "ADMIN";
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -242,7 +233,10 @@ export const getRestaurantVouchers = async (req: Request, res: Response) => {
 export const getAvailableVouchers = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
-    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId || (req.query.restaurantId as string);
+    const restaurantId =
+      user.role === "RESTAURANT"
+        ? user.id
+        : user.restaurantId || (req.query.restaurantId as string);
     const { amount } = req.query;
 
     if (!amount) {
@@ -322,16 +316,29 @@ export const deactivateVoucher = async (req: Request, res: Response) => {
 export const getVoucherTransactions = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const userRole = (req as any).user.role;
     const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     // Get voucher to check ownership
     const voucher = await getVoucherByIdService(id);
 
     // Check authorization
-    const isOwner = (userRole === "RESTAURANT" && voucher.restaurantId === userId) ||
-      (userRole === "AFFILIATOR" && voucher.restaurantId === (req as any).user.restaurantId) ||
-      (userRole === "ADMIN");
+    const isOwner =
+      voucher.restaurantId === restaurantId || userRole === "ADMIN";
 
     if (!isOwner) {
       return res.status(403).json({
@@ -359,15 +366,29 @@ export const getVoucherTransactions = async (req: Request, res: Response) => {
 export const getVoucherByCode = async (req: Request, res: Response) => {
   try {
     const { voucherCode } = req.params;
-    const userRole = (req as any).user.role;
+
     const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     const voucher = await getVoucherByCodeService(voucherCode);
 
     // Check authorization - restaurants can only see their own vouchers
-    const isOwner = (userRole === "RESTAURANT" && voucher.restaurantId === userId) ||
-      (userRole === "AFFILIATOR" && voucher.restaurantId === (req as any).user.restaurantId) ||
-      (userRole === "ADMIN");
+    const isOwner =
+      voucher.restaurantId === restaurantId || userRole === "ADMIN";
 
     if (!isOwner) {
       return res.status(403).json({
@@ -397,7 +418,10 @@ export const getVoucherByCode = async (req: Request, res: Response) => {
 export const applyForLoan = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
-    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId || req.body.restaurantId;
+    const restaurantId =
+      user.role === "RESTAURANT"
+        ? user.id
+        : user.restaurantId || req.body.restaurantId;
     const { requestedAmount, purpose, voucherDays } = req.body;
 
     if (!requestedAmount || !voucherDays) {
@@ -438,10 +462,12 @@ export const getMyLoanApplications = async (req: Request, res: Response) => {
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
     } else if (user.role === "ADMIN") {
-      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
+      restaurantId =
+        (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
         return res.status(400).json({
-          message: "Restaurant ID is required for admin to view loan applications",
+          message:
+            "Restaurant ID is required for admin to view loan applications",
         });
       }
     } else {
@@ -501,9 +527,11 @@ export const getLoanApplicationById = async (req: Request, res: Response) => {
     const loan = await getLoanApplicationByIdService(id);
 
     // Check authorization
-    const isOwner = (userRole === "RESTAURANT" && loan.restaurantId === userId) ||
-      (userRole === "AFFILIATOR" && loan.restaurantId === (req as any).user.restaurantId) ||
-      (userRole === "ADMIN");
+    const isOwner =
+      (userRole === "RESTAURANT" && loan.restaurantId === userId) ||
+      (userRole === "AFFILIATOR" &&
+        loan.restaurantId === (req as any).user.restaurantId) ||
+      userRole === "ADMIN";
 
     if (!isOwner) {
       return res.status(403).json({
@@ -613,9 +641,23 @@ export const rejectLoan = async (req: Request, res: Response) => {
  */
 export const processVoucherPayment = async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
-    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId || req.body.restaurantId;
     const { voucherId, orderId, originalAmount } = req.body;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     if (!voucherId || !orderId || !originalAmount) {
       return res.status(400).json({
@@ -652,8 +694,23 @@ export const processVoucherPayment = async (req: Request, res: Response) => {
 export const makeRepayment = async (req: Request, res: Response) => {
   try {
     const { id: voucherId } = req.params;
-    const user = (req as any).user;
-    const restaurantId = user.role === "RESTAURANT" ? user.id : user.restaurantId || req.body.restaurantId;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
+
     const { paymentMethod, paymentReference } = req.body;
 
     if (!paymentMethod) {
@@ -724,16 +781,30 @@ export const makeRepayment = async (req: Request, res: Response) => {
 export const getOutstandingBalance = async (req: Request, res: Response) => {
   try {
     const { id: voucherId } = req.params;
-    const userRole = (req as any).user.role;
+
     const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     // Get voucher to get loan ID
     const voucher = await getVoucherByIdService(voucherId);
 
     // Check authorization
-    const isOwner = (userRole === "RESTAURANT" && voucher.restaurantId === userId) ||
-      (userRole === "AFFILIATOR" && voucher.restaurantId === (req as any).user.restaurantId) ||
-      (userRole === "ADMIN");
+    const isOwner =
+      voucher.restaurantId === restaurantId || userRole === "ADMIN";
 
     if (!isOwner) {
       return res.status(403).json({
@@ -797,16 +868,30 @@ export const calculatePenalties = async (req: Request, res: Response) => {
 export const getVoucherPenalties = async (req: Request, res: Response) => {
   try {
     const { id: voucherId } = req.params;
-    const userRole = (req as any).user.role;
+
     const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    // Determine if user is affiliator or restaurant
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
 
     // Get voucher to get loan ID
     const voucher = await getVoucherByIdService(voucherId);
 
     // Check authorization
-    const isOwner = (userRole === "RESTAURANT" && voucher.restaurantId === userId) ||
-      (userRole === "AFFILIATOR" && voucher.restaurantId === (req as any).user.restaurantId) ||
-      (userRole === "ADMIN");
+    const isOwner =
+      voucher.restaurantId === restaurantId || userRole === "ADMIN";
 
     if (!isOwner) {
       return res.status(403).json({
@@ -899,7 +984,8 @@ export const getRestaurantCreditSummary = async (
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
     } else if (user.role === "ADMIN") {
-      restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
+      restaurantId =
+        (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
         return res.status(400).json({
           message: "Restaurant ID is required for admin to view credit summary",
