@@ -1240,6 +1240,7 @@ enum SubscriptionAction {
   SUSPENDED
   REACTIVATED
   EXPIRED
+  ROLLBACK
 }
 
 enum VoucherType {

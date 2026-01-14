@@ -15,6 +15,7 @@ import {
 import axios from "axios";
 import { wsManager } from "../index";
 import { getRestaurantFromAffiliatorService } from "./affiliator.service";
+import { generateEBMInvoiceService } from "./order.services";
 
 dotenv.config();
 
@@ -86,14 +87,7 @@ export const getRestaurantWalletTransactionService = async (
   restaurantId: string,
   filters: WalletTransactionFilters = {}
 ) => {
-  const {
-    page = 1,
-    limit = 10,
-    type,
-    status,
-    startDate,
-    endDate,
-  } = filters;
+  const { page = 1, limit = 10, type, status, startDate, endDate } = filters;
 
   const skip = (page - 1) * limit;
 
@@ -791,6 +785,7 @@ export const refundToWalletService = async (data: DebitWalletData) => {
   }
 
   return {
+    success: true,
     wallet: updatedWallet,
     transaction,
     newBalance,

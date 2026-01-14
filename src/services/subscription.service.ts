@@ -1,11 +1,15 @@
 import dotenv from "dotenv";
 import prisma from "../prisma";
-import { SubscriptionStatus, PaymentStatus } from "@prisma/client";
+import {
+  SubscriptionStatus,
+  PaymentStatus,
+  SubscriptionAction,
+} from "@prisma/client";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { sendMessage } from "../utils/sms.utility";
-import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
+import { cleanPhoneNumber, isValidRwandaPhone, sendSubscriptionExpiryEmail } from "../utils/emailTemplates";
 import { createNotificationService } from "./notification.services";
-import { sendSubscriptionExpiryEmail } from "../utils/emailTemplates";
+import { getPaymentMethodByIdService } from "./payment-method.service";
 
 dotenv.config();
 
@@ -85,7 +89,7 @@ interface CreateRestaurantSubscriptionData {
   restaurantId: string;
   planId: string;
   autoRenew?: boolean;
-  paymentMethod?: string;
+  paymentMethodId?: string;
   phoneNumber?: string;
   cardDetails?: {
     cardNumber: string;
@@ -415,7 +419,7 @@ export const createRestaurantSubscriptionService = async (
     restaurantId,
     planId,
     autoRenew = true,
-    paymentMethod,
+    paymentMethodId,
     phoneNumber,
     cardDetails,
     bankDetails,
@@ -443,6 +447,15 @@ export const createRestaurantSubscriptionService = async (
     throw new Error("Subscription plan is not active");
   }
 
+  // Get payment method if provided
+  let paymentMethod = "MOBILE_MONEY";
+  if (paymentMethodId) {
+    const paymentMethodConfig = await getPaymentMethodByIdService(
+      paymentMethodId
+    );
+    paymentMethod = paymentMethodConfig.name.toUpperCase();
+  }
+
   // Find existing subscription for this restaurant (any status)
   let existingSubscription = await prisma.restaurantSubscription.findFirst({
     where: {
@@ -454,10 +467,16 @@ export const createRestaurantSubscriptionService = async (
   });
 
   // Check if restaurant has an active subscription with different plan
-  if (existingSubscription?.status === "ACTIVE" && existingSubscription.planId !== planId) {
+  if (
+    existingSubscription?.status === "ACTIVE" &&
+    existingSubscription.planId !== planId
+  ) {
     // This is an upgrade/downgrade - we'll update the existing subscription
     console.log("Upgrading/downgrading existing subscription");
-  } else if (existingSubscription?.status === "ACTIVE" && existingSubscription.planId === planId) {
+  } else if (
+    existingSubscription?.status === "ACTIVE" &&
+    existingSubscription.planId === planId
+  ) {
     throw new Error("You already have an active subscription with this plan");
   }
 
@@ -479,7 +498,7 @@ export const createRestaurantSubscriptionService = async (
     const oldPlan = await prisma.subscriptionPlan.findUnique({
       where: { id: existingSubscription.planId },
     });
-    
+
     isUpgrade = oldPlan ? plan.price > oldPlan.price : false;
     isDowngrade = oldPlan ? plan.price < oldPlan.price : false;
     oldPlanId = existingSubscription.planId;
@@ -493,7 +512,7 @@ export const createRestaurantSubscriptionService = async (
           startDate,
           endDate,
           autoRenew,
-          paymentMethod: paymentMethod || "MOBILE_MONEY",
+          paymentMethod: paymentMethod,
           paymentStatus: PaymentStatus.PENDING,
           txRef,
           flwRef: txRef,
@@ -515,7 +534,11 @@ export const createRestaurantSubscriptionService = async (
       await tx.subscriptionHistory.create({
         data: {
           subscriptionId: updatedSubscription.id,
-          action: isUpgrade ? "UPGRADED" : isDowngrade ? "DOWNGRADED" : "RENEWED",
+          action: isUpgrade
+            ? "UPGRADED"
+            : isDowngrade
+            ? "DOWNGRADED"
+            : "RENEWED",
           oldStatus: existingSubscription.status,
           newStatus: "PENDING",
           oldPlanId,
@@ -537,7 +560,7 @@ export const createRestaurantSubscriptionService = async (
           startDate,
           endDate,
           autoRenew,
-          paymentMethod: paymentMethod || "MOBILE_MONEY",
+          paymentMethod: paymentMethod,
           paymentStatus: PaymentStatus.PENDING,
           txRef,
           flwRef: txRef,
@@ -590,10 +613,10 @@ export const createRestaurantSubscriptionService = async (
     };
   }
 
-  return { 
-    subscription, 
-    isUpgrade, 
-    isDowngrade 
+  return {
+    subscription,
+    isUpgrade,
+    isDowngrade,
   };
 };
 
@@ -1334,7 +1357,13 @@ export const cancelSubscriptionService = async (
 };
 
 export const renewSubscriptionService = async (
-  restaurantId: string
+  restaurantId: string,
+  paymentData?: {
+    paymentMethodId?: string;
+    phoneNumber?: string;
+    cardDetails?: any;
+    bankDetails?: any;
+  }
 ) => {
   // Get current subscription
   const currentSubscription = await prisma.restaurantSubscription.findFirst({
@@ -1358,6 +1387,14 @@ export const renewSubscriptionService = async (
   }
 
   const plan = currentSubscription.plan;
+
+  // Store original state for potential rollback
+  const originalState = {
+    status: currentSubscription.status,
+    startDate: currentSubscription.startDate,
+    endDate: currentSubscription.endDate,
+    paymentStatus: currentSubscription.paymentStatus,
+  };
 
   const startDate = new Date();
   const endDate = new Date(startDate);
@@ -1389,7 +1426,7 @@ export const renewSubscriptionService = async (
       data: {
         subscriptionId: currentSubscription.id,
         action: "RENEWED",
-        oldStatus: currentSubscription.status,
+        oldStatus: originalState.status,
         newStatus: "PENDING",
       },
     });
@@ -1397,7 +1434,50 @@ export const renewSubscriptionService = async (
     return renewed;
   });
 
-  return renewedSubscription;
+  // Process payment if payment data is provided
+  if (paymentData && paymentData.paymentMethodId) {
+    // Get payment method from DB
+    const paymentMethodConfig = await getPaymentMethodByIdService(
+      paymentData.paymentMethodId
+    );
+    const paymentMethod = paymentMethodConfig.name.toUpperCase();
+
+    try {
+      const paymentResult = await processSubscriptionPaymentService(
+        renewedSubscription.id,
+        {
+          paymentMethod,
+          phoneNumber: paymentData.phoneNumber,
+          cardDetails: paymentData.cardDetails,
+          bankDetails: paymentData.bankDetails,
+        }
+      );
+
+      if (!paymentResult.success) {
+        // Payment failed, rollback to previous state
+        await rollbackSubscriptionPaymentService(renewedSubscription.id);
+        return {
+          success: false,
+          error: "Payment failed, subscription restored to previous state",
+        };
+      }
+
+      return {
+        success: true,
+        subscription: renewedSubscription,
+        payment: paymentResult,
+      };
+    } catch (error: any) {
+      // Payment processing error, rollback
+      await rollbackSubscriptionPaymentService(renewedSubscription.id);
+      throw new Error(`Payment failed: ${error.message}`);
+    }
+  }
+
+  return {
+    success: true,
+    subscription: renewedSubscription,
+  };
 };
 
 export const getAllSubscriptionsService = async ({
@@ -1573,7 +1653,13 @@ export const getRestaurantCurrentSubscriptionService = async (
  */
 export const changeSubscriptionPlanService = async (
   restaurantId: string,
-  newPlanId: string
+  newPlanId: string,
+  paymentData?: {
+    paymentMethodId?: string;
+    phoneNumber?: string;
+    cardDetails?: any;
+    bankDetails?: any;
+  }
 ) => {
   // Get current subscription
   const currentSubscription = await prisma.restaurantSubscription.findFirst({
@@ -1612,6 +1698,14 @@ export const changeSubscriptionPlanService = async (
   const isUpgrade = newPlan.price > currentSubscription.plan.price;
   const isDowngrade = newPlan.price < currentSubscription.plan.price;
 
+  // Store original state for potential rollback
+  const originalState = {
+    status: currentSubscription.status,
+    planId: currentSubscription.planId,
+    startDate: currentSubscription.startDate,
+    endDate: currentSubscription.endDate,
+  };
+
   // Calculate new end date based on new plan duration
   const startDate = new Date();
   const endDate = new Date(startDate);
@@ -1626,7 +1720,9 @@ export const changeSubscriptionPlanService = async (
         paymentStatus: PaymentStatus.PENDING,
         startDate,
         endDate,
-        txRef: `SUB_${isUpgrade ? 'UPGRADE' : 'DOWNGRADE'}_${restaurantId}_${Date.now()}`,
+        txRef: `SUB_${
+          isUpgrade ? "UPGRADE" : "DOWNGRADE"
+        }_${restaurantId}_${Date.now()}`,
       },
       include: {
         plan: true,
@@ -1644,9 +1740,9 @@ export const changeSubscriptionPlanService = async (
       data: {
         subscriptionId: currentSubscription.id,
         action: isUpgrade ? "UPGRADED" : "DOWNGRADED",
-        oldStatus: currentSubscription.status,
+        oldStatus: originalState.status,
         newStatus: "PENDING",
-        oldPlanId: currentSubscription.planId,
+        oldPlanId: originalState.planId,
         newPlanId: newPlanId,
       },
     });
@@ -1654,7 +1750,50 @@ export const changeSubscriptionPlanService = async (
     return updated;
   });
 
+  // Process payment if payment data is provided
+  if (paymentData && paymentData.paymentMethodId) {
+    // Get payment method from DB
+    const paymentMethodConfig = await getPaymentMethodByIdService(
+      paymentData.paymentMethodId
+    );
+    const paymentMethod = paymentMethodConfig.name.toUpperCase();
+
+    try {
+      const paymentResult = await processSubscriptionPaymentService(
+        updatedSubscription.id,
+        {
+          paymentMethod,
+          phoneNumber: paymentData.phoneNumber,
+          cardDetails: paymentData.cardDetails,
+          bankDetails: paymentData.bankDetails,
+        }
+      );
+
+      if (!paymentResult.success) {
+        // Payment failed, rollback to previous state
+        await rollbackSubscriptionPaymentService(updatedSubscription.id);
+        return {
+          success: false,
+          error: "Payment failed, subscription restored to previous state",
+        };
+      }
+
+      return {
+        success: true,
+        subscription: updatedSubscription,
+        payment: paymentResult,
+        isUpgrade,
+        isDowngrade,
+      };
+    } catch (error: any) {
+      // Payment processing error, rollback
+      await rollbackSubscriptionPaymentService(updatedSubscription.id);
+      throw new Error(`Payment failed: ${error.message}`);
+    }
+  }
+
   return {
+    success: true,
     subscription: updatedSubscription,
     isUpgrade,
     isDowngrade,
@@ -1701,8 +1840,8 @@ export const getRestaurantSubscriptionHistoryService = async (
       take: limit,
       orderBy: { createdAt: "desc" },
     }),
-    prisma.subscriptionHistory.count({ 
-      where: { subscriptionId: currentSubscription.id } 
+    prisma.subscriptionHistory.count({
+      where: { subscriptionId: currentSubscription.id },
     }),
   ]);
 
@@ -1712,5 +1851,119 @@ export const getRestaurantSubscriptionHistoryService = async (
     page,
     limit,
     totalPages: Math.ceil(total / limit),
+  };
+};
+
+/**
+ * Service to rollback subscription payment when payment fails or is cancelled
+ * Restores the previous subscription status to prevent user from losing current subscription
+ */
+export const rollbackSubscriptionPaymentService = async (
+  subscriptionId: string
+) => {
+  // Get current subscription with history
+  const subscription = await prisma.restaurantSubscription.findUnique({
+    where: { id: subscriptionId },
+    include: {
+      history: {
+        orderBy: { createdAt: "desc" },
+        take: 1, // Get most recent history entry
+      },
+      plan: true,
+      restaurant: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
+  });
+
+  if (!subscription) {
+    throw new Error("Subscription not found");
+  }
+
+  // Find the previous state from the most recent history entry
+  const previousHistory = subscription.history[0];
+
+  if (
+    !previousHistory ||
+    !previousHistory.oldStatus ||
+    !previousHistory.oldPlanId
+  ) {
+    // No previous state, set to cancelled
+    const rolledBackSubscription = await prisma.$transaction(async (tx) => {
+      const updated = await tx.restaurantSubscription.update({
+        where: { id: subscriptionId },
+        data: {
+          status: SubscriptionStatus.CANCELLED,
+          paymentStatus: PaymentStatus.FAILED,
+        },
+      });
+
+      await tx.subscriptionHistory.create({
+        data: {
+          subscriptionId,
+          action: SubscriptionAction.REACTIVATED,
+          oldStatus: subscription.status,
+          newStatus: "CANCELLED",
+          reason: "Payment failed - no previous subscription to restore",
+        },
+      });
+
+      return updated;
+    });
+
+    return {
+      success: true,
+      subscription: rolledBackSubscription,
+      message: "Subscription cancelled due to payment failure",
+    };
+  }
+
+  // Restore previous subscription state
+  const rolledBackSubscription = await prisma.$transaction(async (tx) => {
+    const updated = await tx.restaurantSubscription.update({
+      where: { id: subscriptionId },
+      data: {
+        status: previousHistory.oldStatus as SubscriptionStatus,
+        planId: previousHistory.oldPlanId!,
+        paymentStatus: PaymentStatus.FAILED,
+      },
+    });
+
+    await tx.subscriptionHistory.create({
+      data: {
+        subscriptionId,
+        action: "ROLLBACK",
+        oldStatus: subscription.status,
+        newStatus: previousHistory.oldStatus!,
+        oldPlanId: subscription.planId,
+        newPlanId: previousHistory.oldPlanId!,
+        reason: "Payment failed - restored previous subscription state",
+      },
+    });
+
+    return updated;
+  });
+
+  // Send notification about rollback
+  try {
+    await sendMessage(
+      `Dear ${
+        subscription.restaurant?.name || ""
+      }, Your subscription payment failed. We've restored your previous subscription to ensure no service interruption. Please try again or contact support.`,
+      subscription.restaurant?.phone || ""
+    );
+  } catch (error) {
+    console.error("Failed to send rollback notification:", error);
+  }
+
+  return {
+    success: true,
+    subscription: rolledBackSubscription,
+    message: "Previous subscription status restored successfully",
   };
 };
