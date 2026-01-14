@@ -15,6 +15,7 @@ import { wsManager } from "../index";
 import { OrderStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
 import { createNotificationService } from "../services/notification.services";
 import { generateEBMInvoiceService } from "../services/order.services";
+import { rollbackSubscriptionPaymentService } from "../services/subscription.service";
 
 // Process wallet transactions with WebSocket notification
 async function processWalletTransaction(
@@ -174,6 +175,9 @@ async function processVoucherRepaymentPayment(
   console.log("Found matching voucher repayment:", repaymentTransaction.id);
 
   if (status === "successful") {
+    let isFullyPaid = false;
+    let orderId: string | null = null;
+
     await retryDatabaseOperation(async () => {
       return await prisma.$transaction(async (tx) => {
         // Update voucher credit for successful payment
@@ -241,11 +245,37 @@ async function processVoucherRepaymentPayment(
               data: { status: "SETTLED" },
             });
 
+            isFullyPaid = true;
             console.log(`Loan ${repaymentTransaction.loanId} fully settled`);
+
+            // Get order ID from voucher transactions if loan is fully paid
+            const voucherTransaction = await tx.voucherTransaction.findFirst({
+              where: { voucher: { loanId: repaymentTransaction.loanId } },
+              orderBy: { createdAt: "desc" },
+            });
+
+            if (voucherTransaction?.orderId) {
+              orderId = voucherTransaction.orderId;
+            }
           }
         }
       });
     });
+
+    // Generate EBM invoice if loan is fully paid and linked to an order
+    if (isFullyPaid && orderId) {
+      try {
+        await generateEBMInvoiceService(orderId);
+        console.log(
+          `EBM invoice generated for order ${orderId} after loan settlement`
+        );
+      } catch (error) {
+        console.error(
+          `Failed to generate EBM invoice for order ${orderId}:`,
+          error
+        );
+      }
+    }
 
     // Broadcast voucher repayment success
     try {
@@ -999,37 +1029,23 @@ async function processSubscriptionPayment(
       console.log(`Subscription payment completed: ${subscription.id}`);
       return subscription;
     } else if (isFailed && subscription.paymentStatus !== "FAILED") {
-      console.log("Updating subscription to FAILED status");
+      console.log("Updating subscription to FAILED status and rolling back");
 
-      await retryDatabaseOperation(async () => {
-        return await prisma.$transaction([
-          prisma.restaurantSubscription.update({
-            where: { id: subscription.id },
-            data: {
-              paymentStatus: PaymentStatus.FAILED,
-              status: SubscriptionStatus.CANCELLED,
-              transactionId: data?.id?.toString() || flwRef,
-              flwRef: flwRef,
-              updatedAt: new Date(),
-            },
-          }),
-          prisma.subscriptionHistory.create({
-            data: {
-              subscriptionId: subscription.id,
-              action: "CANCELLED",
-              newStatus: SubscriptionStatus.CANCELLED,
-              reason: `Payment failed via ${paymentProvider} webhook`,
-            },
-          }),
-        ]);
-      });
+      // Rollback subscription to previous state
+      try {
+        await rollbackSubscriptionPaymentService(subscription.id);
+        console.log(`Subscription ${subscription.id} rolled back to previous state`);
+      } catch (rollbackError) {
+        console.error("Failed to rollback subscription:", rollbackError);
+        // Continue with failure handling even if rollback fails
+      }
 
       // Send failure notification
       try {
         await sendMessage(
           `Dear ${
             subscription.restaurant?.name || ""
-          }, Your subscription payment failed. Please try again or contact support.`,
+          }, Your subscription payment failed. We've restored your previous subscription to ensure no service interruption. Please try again or contact support.`,
           subscription.restaurant?.phone || ""
         );
       } catch (error) {
@@ -1040,7 +1056,7 @@ async function processSubscriptionPayment(
       try {
         wsManager.broadcastSubscriptionUpdate({
           subscriptionId: subscription.id,
-          status: "CANCELLED",
+          status: subscription.status,
           paymentStatus: "FAILED",
           timestamp: new Date().toISOString(),
           restaurantId: subscription.restaurantId || "",
@@ -1053,7 +1069,7 @@ async function processSubscriptionPayment(
         console.error("Failed to broadcast subscription failure:", wsError);
       }
 
-      console.log(`Subscription payment failed: ${subscription.id}`);
+      console.log(`Subscription payment failed and rolled back: ${subscription.id}`);
       return subscription;
     } else {
       console.log(`Subscription ${subscription.id} already in final state:`, {
