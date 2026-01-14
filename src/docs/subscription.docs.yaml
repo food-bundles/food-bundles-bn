@@ -373,10 +373,9 @@ components:
           type: boolean
           default: true
           description: Enable auto-renewal
-        paymentMethod:
+        paymentMethodId:
           type: string
-          enum: [MOBILE_MONEY, BANK_TRANSFER, CARD]
-          description: Payment method (CASH not supported for initial subscription)
+          description: Payment method configuration ID
         phoneNumber:
           type: string
           description: Phone number (required for MOBILE_MONEY)
@@ -502,6 +501,45 @@ components:
           description: Reason for cancellation
           example: "Not using the service"
 
+    RenewSubscriptionRequest:
+      type: object
+      properties:
+        paymentMethodId:
+          type: string
+          description: Payment method configuration ID
+        phoneNumber:
+          type: string
+          description: Phone number (required for MOBILE_MONEY)
+          example: "0780000000"
+        cardDetails:
+          type: object
+          description: Card details (optional - if not provided, will use hosted checkout)
+          properties:
+            cardNumber:
+              type: string
+              example: "5531886652142950"
+            cvv:
+              type: string
+              example: "564"
+            expiryMonth:
+              type: string
+              example: "09"
+            expiryYear:
+              type: string
+              example: "32"
+            pin:
+              type: string
+              description: Card PIN (optional)
+              example: "3310"
+        bankDetails:
+          type: object
+          description: Bank transfer details
+          properties:
+            clientIp:
+              type: string
+              description: Client IP address
+              example: "154.123.220.1"
+
     UpgradeSubscriptionRequest:
       type: object
       required:
@@ -510,6 +548,41 @@ components:
         newPlanId:
           type: string
           description: ID of the plan to upgrade to
+        paymentMethodId:
+          type: string
+          description: Payment method configuration ID
+        phoneNumber:
+          type: string
+          description: Phone number (required for MOBILE_MONEY)
+          example: "0780000000"
+        cardDetails:
+          type: object
+          description: Card details (optional - if not provided, will use hosted checkout)
+          properties:
+            cardNumber:
+              type: string
+              example: "5531886652142950"
+            cvv:
+              type: string
+              example: "564"
+            expiryMonth:
+              type: string
+              example: "09"
+            expiryYear:
+              type: string
+              example: "32"
+            pin:
+              type: string
+              description: Card PIN (optional)
+              example: "3310"
+        bankDetails:
+          type: object
+          description: Bank transfer details
+          properties:
+            clientIp:
+              type: string
+              description: Client IP address
+              example: "154.123.220.1"
 
     PaginationResponse:
       type: object
@@ -794,21 +867,21 @@ paths:
                 value:
                   planId: "plan_123"
                   autoRenew: true
-                  paymentMethod: "MOBILE_MONEY"
+                  paymentMethodId: "pm_mobile_money_123"
                   phoneNumber: "0780000000"
               card:
                 summary: Card Payment (Hosted Checkout)
                 value:
                   planId: "plan_123"
                   autoRenew: true
-                  paymentMethod: "CARD"
+                  paymentMethodId: "pm_card_123"
                   phoneNumber: "0780000000"
               bankTransfer:
                 summary: Bank Transfer
                 value:
                   planId: "plan_123"
                   autoRenew: true
-                  paymentMethod: "BANK_TRANSFER"
+                  paymentMethodId: "pm_bank_transfer_123"
                   phoneNumber: "0780000000"
                   bankDetails:
                     clientIp: "154.123.220.1"
@@ -1055,23 +1128,40 @@ paths:
         500:
           description: Internal server error
 
-  /subscriptions/{subscriptionId}/renew:
+  /subscriptions/renew:
     post:
       tags:
         - Subscription Management API
       summary: Renew subscription
-      description: Renew an expired subscription (requires payment)
+      description: Renew an expired subscription with payment processing
       security:
         - BearerAuth: []
-      parameters:
-        - name: subscriptionId
-          in: path
-          required: true
-          schema:
-            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenewSubscriptionRequest"
+            examples:
+              mobileMoney:
+                summary: Mobile Money Payment
+                value:
+                  paymentMethodId: "pm_mobile_money_123"
+                  phoneNumber: "0780000000"
+              card:
+                summary: Card Payment (Hosted Checkout)
+                value:
+                  paymentMethodId: "pm_card_123"
+                  phoneNumber: "0780000000"
+              bankTransfer:
+                summary: Bank Transfer
+                value:
+                  paymentMethodId: "pm_bank_transfer_123"
+                  phoneNumber: "0780000000"
+                  bankDetails:
+                    clientIp: "154.123.220.1"
       responses:
         200:
-          description: Subscription renewed successfully. Please complete payment.
+          description: Subscription renewed successfully
           content:
             application/json:
               schema:
@@ -1081,6 +1171,8 @@ paths:
                     type: string
                   data:
                     $ref: "#/components/schemas/RestaurantSubscription"
+                  payment:
+                    $ref: "#/components/schemas/SubscriptionPaymentResponse"
         400:
           description: Subscription already active
         401:
@@ -1092,29 +1184,44 @@ paths:
         500:
           description: Internal server error
 
-  /subscriptions/{subscriptionId}/upgrade:
+  /subscriptions/upgrade:
     post:
       tags:
         - Subscription Management API
       summary: Upgrade subscription
-      description: Upgrade to a higher-tier plan (requires payment)
+      description: Upgrade to a higher-tier plan with payment processing
       security:
         - BearerAuth: []
-      parameters:
-        - name: subscriptionId
-          in: path
-          required: true
-          schema:
-            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/UpgradeSubscriptionRequest"
+            examples:
+              mobileMoney:
+                summary: Mobile Money Payment
+                value:
+                  newPlanId: "plan_premium_123"
+                  paymentMethodId: "pm_mobile_money_123"
+                  phoneNumber: "0780000000"
+              card:
+                summary: Card Payment (Hosted Checkout)
+                value:
+                  newPlanId: "plan_premium_123"
+                  paymentMethodId: "pm_card_123"
+                  phoneNumber: "0780000000"
+              bankTransfer:
+                summary: Bank Transfer
+                value:
+                  newPlanId: "plan_premium_123"
+                  paymentMethodId: "pm_bank_transfer_123"
+                  phoneNumber: "0780000000"
+                  bankDetails:
+                    clientIp: "154.123.220.1"
       responses:
         200:
-          description: Subscription upgraded successfully. Please complete payment.
+          description: Subscription upgraded successfully
           content:
             application/json:
               schema:
@@ -1124,6 +1231,8 @@ paths:
                     type: string
                   data:
                     $ref: "#/components/schemas/RestaurantSubscription"
+                  payment:
+                    $ref: "#/components/schemas/SubscriptionPaymentResponse"
         400:
           description: Invalid upgrade - New plan must be higher priced
         401:
@@ -1135,29 +1244,44 @@ paths:
         500:
           description: Internal server error
 
-  /subscriptions/{subscriptionId}/downgrade:
+  /subscriptions/downgrade:
     post:
       tags:
         - Subscription Management API
       summary: Downgrade subscription
-      description: Downgrade to a lower-tier plan (effective at next billing cycle)
+      description: Downgrade to a lower-tier plan with payment processing
       security:
         - BearerAuth: []
-      parameters:
-        - name: subscriptionId
-          in: path
-          required: true
-          schema:
-            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/UpgradeSubscriptionRequest"
+            examples:
+              mobileMoney:
+                summary: Mobile Money Payment
+                value:
+                  newPlanId: "plan_basic_123"
+                  paymentMethodId: "pm_mobile_money_123"
+                  phoneNumber: "0780000000"
+              card:
+                summary: Card Payment (Hosted Checkout)
+                value:
+                  newPlanId: "plan_basic_123"
+                  paymentMethodId: "pm_card_123"
+                  phoneNumber: "0780000000"
+              bankTransfer:
+                summary: Bank Transfer
+                value:
+                  newPlanId: "plan_basic_123"
+                  paymentMethodId: "pm_bank_transfer_123"
+                  phoneNumber: "0780000000"
+                  bankDetails:
+                    clientIp: "154.123.220.1"
       responses:
         200:
-          description: Subscription will be downgraded at next billing cycle
+          description: Subscription downgraded successfully
           content:
             application/json:
               schema:
@@ -1167,6 +1291,8 @@ paths:
                     type: string
                   data:
                     $ref: "#/components/schemas/RestaurantSubscription"
+                  payment:
+                    $ref: "#/components/schemas/SubscriptionPaymentResponse"
         400:
           description: Invalid downgrade - New plan must be lower priced
         401:

@@ -217,7 +217,7 @@ export const createRestaurantSubscription = async (
     const {
       planId,
       autoRenew,
-      paymentMethod,
+      paymentMethodId,
       phoneNumber,
       cardDetails,
       bankDetails,
@@ -253,24 +253,26 @@ export const createRestaurantSubscription = async (
     }
 
     // Validate payment method specific requirements
-    if (paymentMethod === "MOBILE_MONEY" && !phoneNumber) {
-      return res.status(400).json({
-        message: "Phone number is required for mobile money payment",
-      });
-    }
+    if (paymentMethodId) {
+      if (paymentMethodId === "MOBILE_MONEY" && !phoneNumber) {
+        return res.status(400).json({
+          message: "Phone number is required for mobile money payment",
+        });
+      }
 
-    if (paymentMethod === "CARD" && !cardDetails) {
-      return res.status(400).json({
-        message:
-          "Card details are required for card payment (or will use hosted checkout)",
-      });
+      if (paymentMethodId === "CARD" && !cardDetails) {
+        return res.status(400).json({
+          message:
+            "Card details are required for card payment (or will use hosted checkout)",
+        });
+      }
     }
 
     const result = await createRestaurantSubscriptionService({
       restaurantId,
       planId,
       autoRenew,
-      paymentMethod,
+      paymentMethodId,
       phoneNumber,
       cardDetails,
       bankDetails,
@@ -544,6 +546,7 @@ export const cancelSubscription = async (req: Request, res: Response) => {
  */
 export const renewSubscription = async (req: Request, res: Response) => {
   try {
+    const { paymentMethodId, phoneNumber, cardDetails, bankDetails } = req.body;
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
@@ -559,11 +562,19 @@ export const renewSubscription = async (req: Request, res: Response) => {
       });
     }
 
-    const subscription = await renewSubscriptionService(restaurantId);
+    const result = await renewSubscriptionService(restaurantId, {
+      paymentMethodId,
+      phoneNumber,
+      cardDetails,
+      bankDetails,
+    });
 
     res.status(200).json({
-      message: "Subscription renewed successfully. Please complete payment.",
-      data: subscription,
+      message: result.payment
+        ? "Subscription renewed and payment initiated"
+        : "Subscription renewed successfully. Please complete payment.",
+      data: result.subscription,
+      payment: result.payment,
     });
   } catch (error: any) {
     res.status(500).json({
@@ -638,7 +649,13 @@ export const checkExpiredSubscriptions = async (
  */
 export const upgradeSubscription = async (req: Request, res: Response) => {
   try {
-    const { newPlanId } = req.body;
+    const {
+      newPlanId,
+      paymentMethodId,
+      phoneNumber,
+      cardDetails,
+      bankDetails,
+    } = req.body;
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
@@ -660,7 +677,16 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
       });
     }
 
-    const result = await changeSubscriptionPlanService(restaurantId, newPlanId);
+    const result = await changeSubscriptionPlanService(
+      restaurantId,
+      newPlanId,
+      {
+        paymentMethodId,
+        phoneNumber,
+        cardDetails,
+        bankDetails,
+      }
+    );
 
     if (!result.isUpgrade) {
       return res.status(400).json({
@@ -669,8 +695,11 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
     }
 
     res.status(200).json({
-      message: "Subscription upgraded successfully. Please complete payment.",
+      message: result.payment
+        ? "Subscription upgraded and payment initiated"
+        : "Subscription upgraded successfully. Please complete payment.",
       data: result.subscription,
+      payment: result.payment,
     });
   } catch (error: any) {
     res.status(500).json({
@@ -685,7 +714,13 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
  */
 export const downgradeSubscription = async (req: Request, res: Response) => {
   try {
-    const { newPlanId } = req.body;
+    const {
+      newPlanId,
+      paymentMethodId,
+      phoneNumber,
+      cardDetails,
+      bankDetails,
+    } = req.body;
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
@@ -707,7 +742,16 @@ export const downgradeSubscription = async (req: Request, res: Response) => {
       });
     }
 
-    const result = await changeSubscriptionPlanService(restaurantId, newPlanId);
+    const result = await changeSubscriptionPlanService(
+      restaurantId,
+      newPlanId,
+      {
+        paymentMethodId,
+        phoneNumber,
+        cardDetails,
+        bankDetails,
+      }
+    );
 
     if (!result.isDowngrade) {
       return res.status(400).json({
@@ -716,8 +760,11 @@ export const downgradeSubscription = async (req: Request, res: Response) => {
     }
 
     res.status(200).json({
-      message: "Subscription will be downgraded at next billing cycle",
+      message: result.payment
+        ? "Subscription downgraded and payment initiated"
+        : "Subscription will be downgraded at next billing cycle",
       data: result.subscription,
+      payment: result.payment,
     });
   } catch (error: any) {
     res.status(500).json({

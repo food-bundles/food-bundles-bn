@@ -83,7 +83,9 @@ export const getUserStats = async (req: Request, res: Response) => {
       startDate = new Date(dateFrom as string);
       endDate = new Date(dateTo as string);
     } else if (year || month) {
-      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      const targetYear = year
+        ? parseInt(year as string)
+        : new Date().getFullYear();
       if (month) {
         const targetMonth = parseInt(month as string);
         startDate = new Date(targetYear, targetMonth - 1, 1);
@@ -109,14 +111,18 @@ export const getUserStats = async (req: Request, res: Response) => {
       prevDateFrom: prevStartDate,
       prevDateTo: prevEndDate,
       isMonthly,
-      filters: { period: period as any, year: year ? parseInt(year as string) : undefined, month: month ? parseInt(month as string) : undefined }
+      filters: {
+        period: period as any,
+        year: year ? parseInt(year as string) : undefined,
+        month: month ? parseInt(month as string) : undefined,
+      },
     });
 
     res.status(200).json({
       message: "User statistics retrieved successfully",
       data: userStats,
       filters: {
-        period: period || 'lifetime',
+        period: period || "lifetime",
         year: year ? parseInt(year as string) : undefined,
         month: month ? parseInt(month as string) : undefined,
         dateFrom: startDate,
@@ -149,7 +155,9 @@ export const getOrderStats = async (req: Request, res: Response) => {
       startDate = new Date(dateFrom as string);
       endDate = new Date(dateTo as string);
     } else if (year || month) {
-      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      const targetYear = year
+        ? parseInt(year as string)
+        : new Date().getFullYear();
       if (month) {
         const targetMonth = parseInt(month as string);
         startDate = new Date(targetYear, targetMonth - 1, 1);
@@ -175,14 +183,18 @@ export const getOrderStats = async (req: Request, res: Response) => {
       prevDateFrom: prevStartDate,
       prevDateTo: prevEndDate,
       isMonthly,
-      filters: { period: period as any, year: year ? parseInt(year as string) : undefined, month: month ? parseInt(month as string) : undefined }
+      filters: {
+        period: period as any,
+        year: year ? parseInt(year as string) : undefined,
+        month: month ? parseInt(month as string) : undefined,
+      },
     });
 
     res.status(200).json({
       message: "Order statistics retrieved successfully",
       data: orderStats,
       filters: {
-        period: period || 'lifetime',
+        period: period || "lifetime",
         year: year ? parseInt(year as string) : undefined,
         month: month ? parseInt(month as string) : undefined,
         dateFrom: startDate,
@@ -213,7 +225,9 @@ export const getFinanceStats = async (req: Request, res: Response) => {
       startDate = new Date(dateFrom as string);
       endDate = new Date(dateTo as string);
     } else if (year || month) {
-      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      const targetYear = year
+        ? parseInt(year as string)
+        : new Date().getFullYear();
       if (month) {
         const targetMonth = parseInt(month as string);
         startDate = new Date(targetYear, targetMonth - 1, 1);
@@ -230,14 +244,18 @@ export const getFinanceStats = async (req: Request, res: Response) => {
       dateFrom: startDate,
       dateTo: endDate,
       isMonthly,
-      filters: { period: period as any, year: year ? parseInt(year as string) : undefined, month: month ? parseInt(month as string) : undefined }
+      filters: {
+        period: period as any,
+        year: year ? parseInt(year as string) : undefined,
+        month: month ? parseInt(month as string) : undefined,
+      },
     });
 
     res.status(200).json({
       message: "Finance statistics retrieved successfully",
       data: financeStats,
       filters: {
-        period: period || 'lifetime',
+        period: period || "lifetime",
         year: year ? parseInt(year as string) : undefined,
         month: month ? parseInt(month as string) : undefined,
         dateFrom: startDate,
@@ -270,7 +288,9 @@ export const getSubscriptionStats = async (req: Request, res: Response) => {
       startDate = new Date(dateFrom as string);
       endDate = new Date(dateTo as string);
     } else if (year || month) {
-      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      const targetYear = year
+        ? parseInt(year as string)
+        : new Date().getFullYear();
       if (month) {
         const targetMonth = parseInt(month as string);
         startDate = new Date(targetYear, targetMonth - 1, 1);
@@ -299,7 +319,7 @@ export const getSubscriptionStats = async (req: Request, res: Response) => {
       message: "Subscription statistics retrieved successfully",
       data: subscriptionStats,
       filters: {
-        period: period || 'lifetime',
+        period: period || "lifetime",
         year: year ? parseInt(year as string) : undefined,
         month: month ? parseInt(month as string) : undefined,
         dateFrom: startDate,
@@ -332,7 +352,9 @@ export const getVoucherStats = async (req: Request, res: Response) => {
       startDate = new Date(dateFrom as string);
       endDate = new Date(dateTo as string);
     } else if (year || month) {
-      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      const targetYear = year
+        ? parseInt(year as string)
+        : new Date().getFullYear();
       if (month) {
         const targetMonth = parseInt(month as string);
         startDate = new Date(targetYear, targetMonth - 1, 1);
@@ -358,14 +380,18 @@ export const getVoucherStats = async (req: Request, res: Response) => {
       prevDateFrom: prevStartDate,
       prevDateTo: prevEndDate,
       isMonthly,
-      filters: { period: period as any, year: year ? parseInt(year as string) : undefined, month: month ? parseInt(month as string) : undefined }
+      filters: {
+        period: period as any,
+        year: year ? parseInt(year as string) : undefined,
+        month: month ? parseInt(month as string) : undefined,
+      },
     });
 
     res.status(200).json({
       message: "Voucher statistics retrieved successfully",
       data: voucherStats,
       filters: {
-        period: period || 'lifetime',
+        period: period || "lifetime",
         year: year ? parseInt(year as string) : undefined,
         month: month ? parseInt(month as string) : undefined,
         dateFrom: startDate,
@@ -398,7 +424,9 @@ export const getQuickStats = async (req: Request, res: Response) => {
       startDate = new Date(dateFrom as string);
       endDate = new Date(dateTo as string);
     } else if (year || month) {
-      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+      const targetYear = year
+        ? parseInt(year as string)
+        : new Date().getFullYear();
       if (month) {
         const targetMonth = parseInt(month as string);
         startDate = new Date(targetYear, targetMonth - 1, 1);
@@ -427,7 +455,7 @@ export const getQuickStats = async (req: Request, res: Response) => {
       message: "Quick statistics retrieved successfully",
       data: quickStats,
       filters: {
-        period: period || 'lifetime',
+        period: period || "lifetime",
         year: year ? parseInt(year as string) : undefined,
         month: month ? parseInt(month as string) : undefined,
         dateFrom: startDate,

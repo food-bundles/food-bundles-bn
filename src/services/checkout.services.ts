@@ -30,6 +30,7 @@ import {
 import { OrderStatus, PaymentStatus, VoucherStatus } from "@prisma/client";
 import {
   createOrderFromCartService,
+  generateEBMInvoiceService,
   getOrderByIdService,
   updateOrderService,
 } from "./order.services";
@@ -358,6 +359,11 @@ export const processPaymentService = async (
             reference: orderId,
             orderId: orderId,
           });
+
+          if (walletDebitResult) {
+            // Generate an invoice or receipt here after successful payment
+            await generateEBMInvoiceService(orderId);
+          }
 
           paymentResult = {
             success: true,
