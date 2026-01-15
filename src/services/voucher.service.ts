@@ -239,19 +239,6 @@ const checkAndUpdateVoucherMaturity = async (voucher: any) => {
 
       // Check if current date is past the payment deadline
       shouldMature = now > paymentDeadline;
-
-      console.log({
-        voucherId: voucher.id,
-        voucherCode: voucher.voucherCode,
-        usedAt: voucher.usedAt,
-        repaymentDays: voucher.repaymentDays,
-        calculatedDeadline: paymentDeadline.toISOString(),
-        now: now.toISOString(),
-        shouldMature,
-        daysUntilDeadline: Math.ceil(
-          (paymentDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-        ),
-      });
     }
 
     // If no usedAt but we have createdAt, use that
@@ -268,16 +255,6 @@ const checkAndUpdateVoucherMaturity = async (voucher: any) => {
       );
 
       shouldMature = now > paymentDeadline;
-
-      console.log({
-        voucherId: voucher.id,
-        voucherCode: voucher.voucherCode,
-        fallbackToCreatedAt: true,
-        createdAt: voucher.createdAt,
-        repaymentDays: voucher.repaymentDays,
-        calculatedDeadline: paymentDeadline.toISOString(),
-        shouldMature,
-      });
     }
 
     // If no loan due date, check subscription payment deadline
