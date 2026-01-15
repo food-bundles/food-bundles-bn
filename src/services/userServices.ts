@@ -1197,8 +1197,6 @@ export const createRestaurantByAdminService = async (
         password: hashedPassword,
         tin,
         location,
-        verified: true,
-        agreed: true,
       },
     });
 

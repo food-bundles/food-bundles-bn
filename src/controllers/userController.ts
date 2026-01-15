@@ -23,10 +23,10 @@ import {
   createRestaurantByAdminService,
 } from "../services/userServices";
 import { PaginationService } from "../services/paginationService";
-import { JwtPayload } from "../types/userTypes";
 import { Role } from "@prisma/client";
 import { generateToken, verifyToken } from "../utils/jwt";
 import prisma from "../prisma";
+import { OTPService } from "../services/otp.service";
 
 export class UserController {
   static createFarmer = async (req: Request, res: Response) => {
@@ -56,7 +56,6 @@ export class UserController {
       });
 
       if (result.phone) {
-        const { OTPService } = await import("../services/otp.service");
         await OTPService.sendRestaurantSignupOTP(result.phone);
       }
 
@@ -85,7 +84,6 @@ export class UserController {
         });
       }
 
-      const { OTPService } = await import("../services/otp.service");
       const otpResult = await OTPService.verifyOTP(
         phone,
         otp,
@@ -129,7 +127,6 @@ export class UserController {
         });
       }
 
-      const { OTPService } = await import("../services/otp.service");
       const result = await OTPService.sendRestaurantSignupOTP(phone);
 
       res.status(result.success ? 200 : 400).json(result);
@@ -598,6 +595,10 @@ export class UserController {
     try {
       const restaurantData = req.body;
       const result = await createRestaurantByAdminService(restaurantData);
+
+      if (result.phone) {
+        await OTPService.sendRestaurantSignupOTP(result.phone);
+      }
 
       res.status(201).json({
         success: true,
