@@ -323,6 +323,7 @@ model Admin {
   OrderDelivery         OrderDelivery[]
   promoCodes            PromoCode[]
   walletTransactions    WalletTransaction[]
+  Voucher               Voucher[]
 }
 
 model Product {
@@ -840,6 +841,7 @@ model Voucher {
   restaurant   Restaurant?          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   farmer       Farmer?              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
   loan         LoanApplication?     @relation(fields: [loanId], references: [id])
+  approver     Admin?               @relation(fields: [approvedBy], references: [id])
   transactions VoucherTransaction[]
   repayments   VoucherRepayment[]
   penalties    VoucherPenalty[]

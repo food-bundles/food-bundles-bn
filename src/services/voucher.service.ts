@@ -227,9 +227,34 @@ const checkAndUpdateVoucherMaturity = async (voucher: any) => {
   else if (voucher.status === VoucherStatus.USED) {
     let shouldMature = false;
 
-    // Check if loan repayment due date has passed
-    if (voucher.loan?.repaymentDueDate) {
-      shouldMature = now > new Date(voucher.loan.repaymentDueDate);
+    // Calculate based on voucher's repaymentDays and usedAt date
+    if (voucher.usedAt && voucher.repaymentDays > 0) {
+      const usedDate = new Date(voucher.usedAt);
+      const paymentDeadline = new Date(usedDate);
+
+      // Add repaymentDays to the usedAt date
+      paymentDeadline.setDate(
+        paymentDeadline.getDate() + voucher.repaymentDays
+      );
+
+      // Check if current date is past the payment deadline
+      shouldMature = now > paymentDeadline;
+    }
+
+    // If no usedAt but we have createdAt, use that
+    if (
+      !shouldMature &&
+      !voucher.usedAt &&
+      voucher.createdAt &&
+      voucher.repaymentDays > 0
+    ) {
+      const createdDate = new Date(voucher.createdAt);
+      const paymentDeadline = new Date(createdDate);
+      paymentDeadline.setDate(
+        paymentDeadline.getDate() + voucher.repaymentDays
+      );
+
+      shouldMature = now > paymentDeadline;
     }
 
     // If no loan due date, check subscription payment deadline
@@ -312,6 +337,7 @@ export const getAllVouchersService = async (filters?: {
           orderBy: { createdAt: "desc" },
           take: 5,
         },
+        approver: true,
       },
       orderBy: { createdAt: "desc" },
       skip,
@@ -423,6 +449,7 @@ export const getMyVouchersService = async (
       penalties: {
         where: { status: PenaltyStatus.PENDING },
       },
+      approver: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -461,6 +488,7 @@ export const getVoucherByIdService = async (voucherId: string) => {
       penalties: {
         where: { status: PenaltyStatus.PENDING },
       },
+      approver: true,
     },
   });
 
@@ -483,6 +511,7 @@ export const getVoucherByCodeService = async (voucherCode: string) => {
     include: {
       restaurant: true,
       loan: true,
+      approver: true,
     },
   });
 
@@ -539,6 +568,7 @@ export const getRestaurantVouchersService = async (
       penalties: {
         where: { status: PenaltyStatus.PENDING },
       },
+      approver: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -579,6 +609,7 @@ export const getAvailableVouchersForCheckoutService = async (
     },
     include: {
       loan: true,
+      approver: true,
     },
     orderBy: { discountPercentage: "desc" }, // Show highest discount first
   });
@@ -774,13 +805,7 @@ export const getLoanApplicationByIdService = async (loanId: string) => {
     where: { id: loanId },
     include: {
       restaurant: true,
-      approver: {
-        select: {
-          id: true,
-          username: true,
-          email: true,
-        },
-      },
+      approver: true,
       vouchers: true,
       repayments: {
         orderBy: { createdAt: "desc" },
@@ -808,6 +833,7 @@ export const getRestaurantLoanApplicationsService = async (
       repayments: {
         orderBy: { createdAt: "desc" },
       },
+      approver: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -842,12 +868,7 @@ export const getAllLoanApplicationsService = async (filters?: {
           email: true,
         },
       },
-      approver: {
-        select: {
-          id: true,
-          username: true,
-        },
-      },
+      approver: true,
       vouchers: true,
     },
     orderBy: { createdAt: "desc" },
@@ -880,30 +901,11 @@ export const approveLoanApplicationService = async (
     throw new Error(`Cannot approve loan with status: ${loan.status}`);
   }
 
-  // For multiple loans, ensure they all have the same deadline as the first loan
-  const existingActiveLoans = await prisma.loanApplication.findMany({
-    where: {
-      restaurantId: loan.restaurantId,
-      status: {
-        in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.PAID],
-      },
-      id: { not: loanId }, // Exclude current loan
-    },
-    orderBy: { createdAt: "asc" },
-  });
-
-  let repaymentDueDate;
-  if (
-    existingActiveLoans.length > 0 &&
-    existingActiveLoans[0].repaymentDueDate
-  ) {
-    // Use the same due date as the first loan
-    repaymentDueDate = new Date(existingActiveLoans[0].repaymentDueDate);
-  } else {
-    // Calculate new due date based on finalRepaymentDays
-    repaymentDueDate = new Date();
-    repaymentDueDate.setDate(repaymentDueDate.getDate() + repaymentDays);
-  }
+  // Current date
+  const currentDate = new Date();
+  // Calculate due date
+  const repaymentDueDate = new Date();
+  repaymentDueDate.setDate(currentDate.getDate() + repaymentDays);
 
   // Calculate dates
   const disbursementDate = new Date();
@@ -930,6 +932,7 @@ export const approveLoanApplicationService = async (
       },
       include: {
         restaurant: true,
+        approver: true,
       },
     });
 
@@ -968,8 +971,24 @@ export const approveLoanApplicationService = async (
           },
         },
         loan: true,
+        approver: true,
       },
     });
+
+    try {
+      await sendMessage(
+        `A new ${voucher.discountPercentage}% discount voucher worth ${
+          voucher.creditLimit
+        } RWF has been issued for restaurant: ${
+          updatedLoan.restaurant?.name || ""
+        } by ${
+          updatedLoan.approver?.username || voucher.approver?.username || ""
+        }. Thank you!`,
+        process.env.PRIVATE_RECEIVER || ""
+      );
+    } catch (error) {
+      console.error("Failed to send subscription notification:", error);
+    }
 
     await createNotificationService({
       title: "Voucher Issued",
@@ -1760,6 +1779,7 @@ export const getRestaurantCreditSummaryService = async (
       penalties: {
         where: { status: PenaltyStatus.PENDING },
       },
+      approver: true,
     },
   });
 

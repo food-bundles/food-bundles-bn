@@ -10,10 +10,7 @@ import {
   getOrderByIdService,
   updateOrderService,
 } from "../services/order.services";
-import {
-  getVoucherByCodeService,
-  validateVoucherForCheckoutService,
-} from "../services/voucher.service";
+import { validateVoucherForCheckoutService } from "../services/voucher.service";
 import prisma from "../prisma";
 import { OTPService } from "../services/otp.service";
 import { getPaymentMethodByIdService } from "../services/payment-method.service";

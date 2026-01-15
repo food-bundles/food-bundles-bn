@@ -8,6 +8,7 @@ import { IncomingMessage } from "http";
 import routes from "./routes";
 import { ENV } from "./config";
 import WebSocketManager from "./utils/websocket_manager";
+import { DeliveryService } from "./services/delivery.service";
 
 interface CustomIncomingMessage extends IncomingMessage {
   rawBody: Buffer;
@@ -72,6 +73,12 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
 app.get("/", (_req, res) => {
   res.status(200).json({ message: "FoodBundles Backend API is running!!!" });
+});
+
+app.post("/send-sms", async (req, res) => {
+  const { orderId } = req.body;
+  const result = await DeliveryService.createDeliveryOTP(orderId);
+  res.status(200).json(result);
 });
 
 // WebSocket stats endpoint

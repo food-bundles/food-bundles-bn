@@ -15,7 +15,6 @@ import {
 import axios from "axios";
 import { wsManager } from "../index";
 import { getRestaurantFromAffiliatorService } from "./affiliator.service";
-import { generateEBMInvoiceService } from "./order.services";
 
 dotenv.config();
 

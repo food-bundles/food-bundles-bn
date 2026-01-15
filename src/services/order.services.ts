@@ -803,49 +803,50 @@ export const cancelOrderService = async (
  * Service to generate EBM invoice for an order
  */
 export const generateEBMInvoiceService = async (orderId: string) => {
-  // Get order with all required details
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: {
-      restaurant: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-          tin: true,
+  try {
+    // Get order with all required details
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            tin: true,
+          },
         },
-      },
-      orderItems: {
-        include: {
-          product: {
-            select: {
-              id: true,
-              tableTronicProductId: true,
-              productName: true,
-              unitPrice: true,
-              unit: true,
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                tableTronicProductId: true,
+                productName: true,
+                unitPrice: true,
+                unit: true,
+              },
             },
           },
         },
-      },
-      paymentMethodConfig: {
-        select: {
-          tableTronicPaymentMethodId: true,
+        paymentMethodConfig: {
+          select: {
+            tableTronicPaymentMethodId: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  console.log("Sent EBM order", order);
+    if (!order) {
+      console.log("EBM Invoice Generation: Order not found");
+      return { success: false, error: "Order not found" };
+    }
 
-  if (!order) {
-    throw new Error("Order not found");
-  }
-
-  if (!order.restaurant.tin) {
-    throw new Error("Restaurant TIN is required for EBM invoice");
-  }
+    if (!order.restaurant.tin) {
+      console.log("EBM Invoice Generation: Restaurant TIN is required");
+      return { success: false, error: "Restaurant TIN is required" };
+    }
 
   // Prepare TableTronic API payload
   const payload = {
@@ -875,9 +876,8 @@ export const generateEBMInvoiceService = async (orderId: string) => {
       "Thank you for your order. Please keep this invoice for your records.",
   };
 
-  console.log("Sent EBM payload", payload);
+    console.log("Sent EBM payload", payload);
 
-  try {
     // Make API call to TableTronic
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_TABLE_TRONIC_BASE_URL}/api/sales`,
@@ -894,9 +894,13 @@ export const generateEBMInvoiceService = async (orderId: string) => {
     console.log("Received EBM Response", response);
 
     if (!response.ok) {
-      throw new Error(
-        `TableTronic API error: ${response.status} ${response.statusText}`
+      console.log(
+        `EBM Invoice Generation: TableTronic API error: ${response.status} ${response.statusText}`
       );
+      return {
+        success: false,
+        error: `TableTronic API error: ${response.status} ${response.statusText}`,
+      };
     }
 
     const invoiceData = await response.json();
@@ -922,7 +926,10 @@ export const generateEBMInvoiceService = async (orderId: string) => {
     };
   } catch (error: any) {
     console.error("EBM invoice generation failed:", error);
-    throw new Error(`Failed to generate EBM invoice: ${error.message}`);
+    return {
+      success: false,
+      error: error.message || "Failed to generate EBM invoice",
+    };
   }
 };
 

@@ -28,6 +28,7 @@ import {
 } from "../services/voucher.service";
 import { VoucherStatus, LoanStatus } from "@prisma/client";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
+import { retryDatabaseOperation } from "../utils/db-retry.utls";
 
 // ============================================
 // VOUCHER MANAGEMENT CONTROLLERS
@@ -567,12 +568,14 @@ export const approveLoan = async (req: Request, res: Response) => {
       });
     }
 
-    const loan = await approveLoanApplicationService(id, {
-      approvedAmount: parseFloat(approvedAmount),
-      approvedBy: adminId,
-      repaymentDays: parseInt(repaymentDays),
-      voucherType,
-      notes,
+    const loan = await retryDatabaseOperation(async () => {
+      return await approveLoanApplicationService(id, {
+        approvedAmount: parseFloat(approvedAmount),
+        approvedBy: adminId,
+        repaymentDays: parseInt(repaymentDays),
+        voucherType,
+        notes,
+      });
     });
 
     res.status(200).json({

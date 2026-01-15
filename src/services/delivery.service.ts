@@ -31,11 +31,14 @@ export class DeliveryService {
       }
 
       // Check if payment is completed
-      if (order.paymentStatus !== "COMPLETED") {
+      if (
+        order.paymentStatus !== "COMPLETED" &&
+        order.paymentStatus !== PaymentStatus.VOUCHER_CREDIT
+      ) {
         return {
           success: false,
           message:
-            "Order payment must be completed before generating delivery OTP",
+            "Order payment must be completed or voucher credit before generating delivery OTP",
         };
       }
 
