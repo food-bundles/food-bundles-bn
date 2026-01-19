@@ -1144,6 +1144,7 @@ enum Role {
   AGGREGATOR
   LOGISTICS
   AFFILIATOR
+  TRADER
 }
 
 enum SubmissionStatus {

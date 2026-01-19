@@ -763,7 +763,7 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
     });
 
     await sendAdminUserCreatedEmail({
-      userType: "Admin",
+      userType: admin.role === "TRADER" ? "Trader" : "Admin",
       userName: admin.username,
       userEmail: admin.email,
     });
