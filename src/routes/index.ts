@@ -28,6 +28,7 @@ import inviteRoutes from "./invite.routes";
 import affiliatorRoutes from "./affiliator.routes";
 import statsRoutes from "./stats.routes";
 import promoRoutes from "./promo.routes";
+import traderRoutes from "./trader.routes";
 import unitRoutes from "./unit.routes";
 import paymentMethodRoutes from "./payment-method.routes";
 
@@ -58,6 +59,7 @@ routes.use("/invites", inviteRoutes);
 routes.use("/contact-submissions", contactRoutes);
 routes.use("/stats", statsRoutes);
 routes.use("/promo", promoRoutes);
+routes.use("/traders", traderRoutes);
 routes.use("/unit", unitRoutes);
 routes.use("/payment-method", paymentMethodRoutes);
 
@@ -72,7 +74,7 @@ routes.all("/{0,}", (req: Request, res: Response, next: NextFunction) => {
     new errorHandler({
       message: `Route ${req.originalUrl} not found`,
       statusCode: 404,
-    })
+    }),
   );
 });
 

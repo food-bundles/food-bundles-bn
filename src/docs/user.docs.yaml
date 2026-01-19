@@ -10,7 +10,20 @@ components:
   schemas:
     Role:
       type: string
-      enum: [FARMER, RESTAURANT, ADMIN, AGGREGATOR]
+      enum:
+        [
+          FARMER,
+          RESTAURANT,
+          ADMIN,
+          AGGREGATOR,
+          LOGISTICS,
+          TRADER,
+          LOGISTICS,
+          TRADER,
+          LOGISTICS,
+          AFFILIATOR,
+          TRADER,
+        ]
       description: User role in the system
 
     # Location Schemas
@@ -461,7 +474,7 @@ components:
           example: "Password123"
         role:
           type: string
-          enum: [ADMIN, AGGREGATOR]
+          enum: [ADMIN, AGGREGATOR, LOGISTICS, TRADER, LOGISTICS, TRADER]
           description: Admin role (required)
         location:
           type: string
@@ -511,7 +524,7 @@ components:
           example: "NewPassword123"
         role:
           type: string
-          enum: [ADMIN, AGGREGATOR]
+          enum: [ADMIN, AGGREGATOR, LOGISTICS, TRADER]
           description: Admin role
         location:
           type: string
@@ -660,6 +673,18 @@ paths:
                   email: "admin@food.rw"
                   password: "Password123"
                   userType: "admin"
+              trader_login:
+                summary: Trader login
+                value:
+                  email: "trader@food.rw"
+                  password: "Password123"
+                  userType: "trader"
+              logistic_login:
+                summary: Logistics login
+                value:
+                  email: "logistics@food.rw"
+                  password: "Password123"
+                  userType: "logistics"
               auto_detect:
                 summary: Auto-detect user type
                 value:
@@ -1335,6 +1360,37 @@ paths:
                   village: "Umucyo"
                   password: "Password123"
                   role: "AGGREGATOR"
+
+              trader_register:
+                summary: Trader registration
+                value:
+                  username: "FoodBundlesTrader"
+                  email: "trader@food.rw"
+                  phone: "+250788123456"
+                  location: "KK 12 AVE, Kigali, Rwanda"
+                  province: "Umujyi wa Kigali"
+                  district: "Nyarugenge"
+                  sector: "Gitega"
+                  cell: "Akabahizi"
+                  village: "Umucyo"
+                  password: "Password123"
+                  role: "TRADER"
+
+              logistics_register:
+                summary: Logistics registration
+                value:
+                  username: "FoodBundlesLogistics"
+                  email: "logistics@food.rw"
+                  phone: "+250788123456"
+                  location: "KK 12 AVE, Kigali, Rwanda"
+                  province: "Umujyi wa Kigali"
+                  district: "Nyarugenge"
+                  sector: "Gitega"
+                  cell: "Akabahizi"
+                  village: "Umucyo"
+                  password: "Password123"
+                  role: "LOGISTICS"
+
       responses:
         201:
           description: Admin/AGGREGATOR created successfully
@@ -1543,3 +1599,130 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    # Admin/Trader Schemas
+    Admin:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique admin/trader identifier
+        username:
+          type: string
+          description: Admin/trader username
+        email:
+          type: string
+          format: email
+          description: Admin/trader email
+        phone:
+          type: string
+          nullable: true
+          description: Admin/trader phone number
+        location:
+          type: string
+          description: Location name
+        province:
+          type: string
+          nullable: true
+          description: Province name
+        district:
+          type: string
+          nullable: true
+          description: District name
+        sector:
+          type: string
+          nullable: true
+          description: Sector name
+        cell:
+          type: string
+          nullable: true
+          description: Cell name
+        village:
+          type: string
+          nullable: true
+          description: Village name
+        role:
+          $ref: "#/components/schemas/Role"
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateAdminRequest:
+      allOf:
+        - $ref: "#/components/schemas/LocationData"
+        - type: object
+          required:
+            - username
+            - email
+            - password
+            - role
+          properties:
+            username:
+              type: string
+              description: Admin/trader username (required)
+              example: "admin_user"
+            email:
+              type: string
+              format: email
+              description: Admin/trader email (required)
+              example: "admin@food.rw"
+            phone:
+              type: string
+              description: Admin/trader phone number
+              example: "+250788123456"
+            password:
+              type: string
+              minLength: 6
+              description: Password for admin/trader account (required)
+              example: "Password123"
+            role:
+              $ref: "#/components/schemas/Role"
+              description: Role (ADMIN, AGGREGATOR, LOGISTICS, TRADER)
+
+    UpdateAdminRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Admin/trader username
+          example: "admin_user"
+        email:
+          type: string
+          format: email
+          description: Admin/trader email
+          example: "admin@food.rw"
+        phone:
+          type: string
+          description: Admin/trader phone number
+          example: "+250788123456"
+        location:
+          type: string
+          description: Location name
+          example: "KK 12 AVE, Kigali, Rwanda"
+        province:
+          type: string
+          description: Province name
+          example: "Umujyi wa Kigali"
+        district:
+          type: string
+          description: District name
+          example: "Nyarugenge"
+        sector:
+          type: string
+          description: Sector name
+          example: "Gitega"
+        cell:
+          type: string
+          description: Cell name
+          example: "Akabahizi"
+        village:
+          type: string
+          description: Village name
+          example: "Umucyo"
+        password:
+          type: string
+          minLength: 6
+          description: New password for admin/trader account
+          example: "NewPassword123"
+        role:
+          $ref: "#/components/schemas/Role"
+          description: Role (ADMIN, AGGREGATOR, LOGISTICS, TRADER, LOGISTICS, TRADER)

@@ -25,6 +25,7 @@ import { sendMessage } from "../utils/sms.utility";
 import { getUserById } from "./userGets";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { getRestaurantFromAffiliatorService } from "./affiliator.service";
+import { processAllTradersCommissionService } from "./trader.service";
 
 // Payment processing functions
 const flw = require("flutterwave-node-v3");
@@ -234,7 +235,7 @@ const checkAndUpdateVoucherMaturity = async (voucher: any) => {
 
       // Add repaymentDays to the usedAt date
       paymentDeadline.setDate(
-        paymentDeadline.getDate() + voucher.repaymentDays
+        paymentDeadline.getDate() + voucher.repaymentDays,
       );
 
       // Check if current date is past the payment deadline
@@ -251,7 +252,7 @@ const checkAndUpdateVoucherMaturity = async (voucher: any) => {
       const createdDate = new Date(voucher.createdAt);
       const paymentDeadline = new Date(createdDate);
       paymentDeadline.setDate(
-        paymentDeadline.getDate() + voucher.repaymentDays
+        paymentDeadline.getDate() + voucher.repaymentDays,
       );
 
       shouldMature = now > paymentDeadline;
@@ -271,14 +272,14 @@ const checkAndUpdateVoucherMaturity = async (voucher: any) => {
         if (subscription?.plan?.voucherPaymentDays && voucher.createdAt) {
           const paymentDeadline = new Date(voucher.createdAt);
           paymentDeadline.setDate(
-            paymentDeadline.getDate() + subscription.plan.voucherPaymentDays
+            paymentDeadline.getDate() + subscription.plan.voucherPaymentDays,
           );
           shouldMature = now > paymentDeadline;
         }
       } catch (error) {
         console.error(
           "Error checking subscription for voucher maturity:",
-          error
+          error,
         );
       }
     }
@@ -294,6 +295,8 @@ const checkAndUpdateVoucherMaturity = async (voucher: any) => {
       data: { status: newStatus },
     });
   }
+
+  await processAllTradersCommissionService();
 
   return voucher;
 };
@@ -360,7 +363,7 @@ export const getAllVouchersService = async (filters?: {
 
   // Check and update maturity status for each voucher
   const updatedVouchers = await Promise.all(
-    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher))
+    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher)),
   );
 
   const totalPages = Math.ceil(totalCount / limit);
@@ -425,7 +428,7 @@ export const getMyVouchersService = async (
   filters?: {
     status?: VoucherStatus;
     activeOnly?: boolean;
-  }
+  },
 ) => {
   if (affiliatorId) {
     const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
@@ -456,7 +459,7 @@ export const getMyVouchersService = async (
 
   // Check and update maturity status for each voucher
   const updatedVouchers = await Promise.all(
-    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher))
+    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher)),
   );
 
   return updatedVouchers;
@@ -534,7 +537,7 @@ export const getRestaurantVouchersService = async (
   filters?: {
     status?: VoucherStatus;
     activeOnly?: boolean;
-  }
+  },
 ) => {
   // Check subscription status (don't throw error, just return info)
   let subscriptionStatus;
@@ -575,7 +578,7 @@ export const getRestaurantVouchersService = async (
 
   // Check and update maturity status for each voucher
   const updatedVouchers = await Promise.all(
-    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher))
+    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher)),
   );
 
   return {
@@ -598,7 +601,7 @@ export const getRestaurantVouchersService = async (
  */
 export const getAvailableVouchersForCheckoutService = async (
   restaurantId: string,
-  orderAmount: number
+  orderAmount: number,
 ) => {
   const vouchers = await prisma.voucher.findMany({
     where: {
@@ -616,12 +619,12 @@ export const getAvailableVouchersForCheckoutService = async (
 
   // Check and update maturity status for each voucher
   const updatedVouchers = await Promise.all(
-    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher))
+    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher)),
   );
 
   // Filter out matured vouchers from available ones
   return updatedVouchers.filter(
-    (voucher) => voucher.status === VoucherStatus.ACTIVE
+    (voucher) => voucher.status === VoucherStatus.ACTIVE,
   );
 };
 
@@ -633,7 +636,7 @@ export const updateVoucherService = async (
   data: {
     status?: VoucherStatus;
     expiryDate?: Date;
-  }
+  },
 ) => {
   const voucher = await prisma.voucher.update({
     where: { id: voucherId },
@@ -653,10 +656,10 @@ export const updateVoucherService = async (
           voucher.status === VoucherStatus.ACTIVE
             ? LoanStatus.APPROVED
             : voucher.status === VoucherStatus.SUSPENDED
-            ? LoanStatus.REJECTED
-            : voucher.status === VoucherStatus.SETTLED
-            ? LoanStatus.SETTLED
-            : voucher.loan.status,
+              ? LoanStatus.REJECTED
+              : voucher.status === VoucherStatus.SETTLED
+                ? LoanStatus.SETTLED
+                : voucher.loan.status,
       },
     });
   }
@@ -669,7 +672,7 @@ export const updateVoucherService = async (
  */
 export const deactivateVoucherService = async (
   voucherId: string,
-  reason?: string
+  reason?: string,
 ) => {
   const voucher = await prisma.voucher.update({
     where: { id: voucherId },
@@ -705,14 +708,14 @@ export const deactivateVoucherService = async (
  * Submit loan application
  */
 export const submitLoanApplicationService = async (
-  data: CreateLoanApplicationData
+  data: CreateLoanApplicationData,
 ) => {
   const { restaurantId, requestedAmount, purpose, voucherDays } = data;
 
   // Check loan eligibility
   const eligibility = await checkLoanEligibilityService(
     restaurantId,
-    voucherDays
+    voucherDays,
   );
 
   if (!eligibility.isEligible) {
@@ -824,7 +827,7 @@ export const getLoanApplicationByIdService = async (loanId: string) => {
  * Get restaurant's loan applications
  */
 export const getRestaurantLoanApplicationsService = async (
-  restaurantId: string
+  restaurantId: string,
 ) => {
   const loans = await prisma.loanApplication.findMany({
     where: { restaurantId },
@@ -882,7 +885,7 @@ export const getAllLoanApplicationsService = async (filters?: {
  */
 export const approveLoanApplicationService = async (
   loanId: string,
-  approvalData: ApproveLoanData
+  approvalData: ApproveLoanData,
 ) => {
   const { approvedAmount, approvedBy, repaymentDays, voucherType, notes } =
     approvalData;
@@ -984,7 +987,7 @@ export const approveLoanApplicationService = async (
         } by ${
           updatedLoan.approver?.username || voucher.approver?.username || ""
         }. Thank you!`,
-        process.env.PRIVATE_RECEIVER || ""
+        process.env.PRIVATE_RECEIVER || "",
       );
     } catch (error) {
       console.error("Failed to send subscription notification:", error);
@@ -1016,7 +1019,7 @@ export const approveLoanApplicationService = async (
       } RWF has been issued and approved by ${
         approvedByName?.name
       } for restaurant: ${result.updatedLoan.restaurant?.name || ""}.`,
-      process.env.PRIVATE_RECEIVER || ""
+      process.env.PRIVATE_RECEIVER || "",
     );
   } catch (smsError) {
     console.error("Failed to send SMS notification:", smsError);
@@ -1154,7 +1157,7 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
 export const rejectLoanApplicationService = async (
   loanId: string,
   adminId: string,
-  reason?: string
+  reason?: string,
 ) => {
   const loan = await getLoanApplicationByIdService(loanId);
 
@@ -1203,7 +1206,7 @@ export const rejectLoanApplicationService = async (
  */
 
 export const processVoucherPaymentService = async (
-  data: VoucherPaymentData
+  data: VoucherPaymentData,
 ) => {
   const { voucherId, orderId, restaurantId, originalAmount } = data;
 
@@ -1226,7 +1229,7 @@ export const processVoucherPaymentService = async (
         voucher.currency || "RWF"
       }, Available: ${voucher.remainingCredit.toFixed(2)} ${
         voucher.currency || "RWF"
-      }. Voucher cannot be used for partial payments.`
+      }. Voucher cannot be used for partial payments.`,
     );
   }
 
@@ -1342,7 +1345,7 @@ export const processVoucherPaymentService = async (
 function validateVoucherEligibility(
   voucher: any,
   amount: number,
-  restaurantId: string
+  restaurantId: string,
 ) {
   // Check restaurant ownership
   if (voucher.restaurantId !== restaurantId) {
@@ -1511,7 +1514,7 @@ export const calculateOutstandingBalanceService = async (loanId: string) => {
  */
 export const calculatePenaltiesService = async (
   loanId?: string,
-  penaltyRatePerMonth: number = 2 // 2% per month default
+  penaltyRatePerMonth: number = 2, // 2% per month default
 ) => {
   let loans;
 
@@ -1536,7 +1539,7 @@ export const calculatePenaltiesService = async (
 
     const daysOverdue = Math.floor(
       (new Date().getTime() - new Date(loan.repaymentDueDate).getTime()) /
-        (1000 * 60 * 60 * 24)
+        (1000 * 60 * 60 * 24),
     );
 
     if (daysOverdue <= 0) continue; // Not overdue
@@ -1572,7 +1575,7 @@ export const calculatePenaltiesService = async (
           daysOverdue,
           penaltyRate: penaltyRatePerMonth,
           reason: `Penalty for ${daysOverdue} days overdue (${monthsOverdue.toFixed(
-            2
+            2,
           )} months)`,
           status: PenaltyStatus.PENDING,
         },
@@ -1669,7 +1672,7 @@ export const getLoanPenaltiesService = async (loanId: string) => {
 export const waivePenaltyService = async (
   penaltyId: string,
   adminId: string,
-  reason?: string
+  reason?: string,
 ) => {
   // First get the penalty to access restaurant info
   const existingPenalty = await prisma.voucherPenalty.findUnique({
@@ -1744,7 +1747,7 @@ async function generateVoucherCode(): Promise<string> {
  * Get voucher transaction history
  */
 export const getVoucherTransactionHistoryService = async (
-  voucherId: string
+  voucherId: string,
 ) => {
   const transactions = await prisma.voucherTransaction.findMany({
     where: { voucherId },
@@ -1768,7 +1771,7 @@ export const getVoucherTransactionHistoryService = async (
  * Get credit summary for restaurant
  */
 export const getRestaurantCreditSummaryService = async (
-  restaurantId: string
+  restaurantId: string,
 ) => {
   // Get all vouchers
   const vouchers = await prisma.voucher.findMany({
@@ -1788,21 +1791,21 @@ export const getRestaurantCreditSummaryService = async (
   const totalUsed = vouchers.reduce((sum, v) => sum + v.usedCredit, 0);
   const totalRemaining = vouchers.reduce(
     (sum, v) => sum + v.remainingCredit,
-    0
+    0,
   );
 
   // Get all transactions
   const allTransactions = vouchers.flatMap((v) => v.transactions);
   const totalServiceFees = allTransactions.reduce(
     (sum, t) => sum + t.serviceFee,
-    0
+    0,
   );
 
   // Get all penalties
   const allPenalties = vouchers.flatMap((v) => v.penalties);
   const totalPenalties = allPenalties.reduce(
     (sum, p) => sum + p.penaltyAmount,
-    0
+    0,
   );
 
   // Get all repayments
@@ -1840,7 +1843,7 @@ export const getRestaurantCreditSummaryService = async (
  * Get voucher transaction history
  */
 export const getRestaurantTransactionHistoryService = async (
-  restaurantId: string
+  restaurantId: string,
 ) => {
   const transactions = await prisma.voucherTransaction.findMany({
     where: {
@@ -1878,7 +1881,7 @@ export const validateVoucherForCheckoutService = async (
   voucherCode: string,
   orderAmount: number,
   restaurantId?: string,
-  affiliatorId?: string
+  affiliatorId?: string,
 ) => {
   try {
     if (affiliatorId) {
@@ -1953,7 +1956,7 @@ export const validateVoucherForCheckoutService = async (
       return {
         valid: false,
         error: `Insufficient voucher credit. Required: ${totalRequired.toFixed(
-          2
+          2,
         )} ${
           voucher.currency || "RWF"
         }, Available: ${voucher.remainingCredit.toFixed(2)} ${
@@ -1982,7 +1985,7 @@ export const validateVoucherForCheckoutService = async (
         remainingAfterPurchase: voucher.remainingCredit - totalRequired,
       },
       message: `Voucher will cover the full order amount of ${totalRequired.toFixed(
-        2
+        2,
       )} ${voucher.currency || "RWF"}. Remaining credit after this purchase: ${(
         voucher.remainingCredit - totalRequired
       ).toFixed(2)} ${voucher.currency || "RWF"}`,
@@ -2011,7 +2014,7 @@ export const getLoanRepaymentInfoService = async (loanId: string) => {
   const now = new Date();
   const dueDate = new Date(loan.repaymentDueDate);
   const daysRemaining = Math.ceil(
-    (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
   );
 
   const isOverdue = daysRemaining < 0;
@@ -2028,8 +2031,8 @@ export const getLoanRepaymentInfoService = async (loanId: string) => {
         ? "SEVERELY_OVERDUE"
         : "OVERDUE"
       : daysRemaining <= 7
-      ? "DUE_SOON"
-      : "ACTIVE",
+        ? "DUE_SOON"
+        : "ACTIVE",
     message: isOverdue
       ? `Payment is ${Math.abs(daysRemaining)} days overdue`
       : `Payment due in ${daysRemaining} days`,
@@ -2068,21 +2071,21 @@ export const checkRestaurantSubscription = async (restaurantId: string) => {
 
   if (!activeSubscription) {
     throw new Error(
-      "No active subscription found. Please subscribe to access voucher features."
+      "No active subscription found. Please subscribe to access voucher features.",
     );
   }
 
   // Check if plan has voucher access enabled
   if (!activeSubscription.plan.voucherAccess) {
     throw new Error(
-      `Your current subscription plan (${activeSubscription.plan.name}) does not include voucher access. Please upgrade to a plan with voucher features.`
+      `Your current subscription plan (${activeSubscription.plan.name}) does not include voucher access. Please upgrade to a plan with voucher features.`,
     );
   }
 
   // Check if voucherPaymentDays is set
   if (!activeSubscription.plan.voucherPaymentDays) {
     throw new Error(
-      `Your subscription plan does not have voucher payment days configured. Please contact support.`
+      `Your subscription plan does not have voucher payment days configured. Please contact support.`,
     );
   }
 
@@ -2095,7 +2098,7 @@ export const checkRestaurantSubscription = async (restaurantId: string) => {
  */
 export const checkLoanEligibilityService = async (
   restaurantId: string,
-  requestedRepaymentDays: number
+  requestedRepaymentDays: number,
 ): Promise<LoanEligibilityCheck> => {
   // Get subscription info to validate voucher days
   const subscriptionInfo = await checkRestaurantSubscription(restaurantId);
@@ -2174,7 +2177,7 @@ export const checkLoanEligibilityService = async (
 
   // Check for vouchers with repayment days
   const vouchersWithRepaymentDays = updatedVouchers.filter(
-    (v) => v.repaymentDays && v.repaymentDays > 0
+    (v) => v.repaymentDays && v.repaymentDays > 0,
   );
 
   // Get the first voucher with repayment days (oldest)
@@ -2196,7 +2199,7 @@ export const checkLoanEligibilityService = async (
     isEligible: true,
     reason: `You can request a new voucher with repayment days less than ${firstVoucherRepaymentDays} days (your first voucher's repayment period). Recommended: ${Math.max(
       15,
-      Math.floor(firstVoucherRepaymentDays * 0.7)
+      Math.floor(firstVoucherRepaymentDays * 0.7),
     )} days.`,
   };
 };
@@ -2207,7 +2210,7 @@ export const checkLoanEligibilityService = async (
  */
 export const markVoucherAsUsedService = async (
   voucherId: string,
-  orderId: string
+  orderId: string,
 ) => {
   // Verify the order was successful
   const order = await prisma.order.findUnique({
@@ -2228,7 +2231,7 @@ export const markVoucherAsUsedService = async (
 
   if (!successfulStatuses.includes(order.status)) {
     throw new Error(
-      `Cannot mark voucher as USED for order with status: ${order.status}`
+      `Cannot mark voucher as USED for order with status: ${order.status}`,
     );
   }
 
@@ -2266,7 +2269,7 @@ export const markVoucherAsUsedService = async (
  */
 export const rollbackVoucherPaymentService = async (
   voucherId: string,
-  orderId: string
+  orderId: string,
 ) => {
   // Get the voucher transaction
   const transaction = await prisma.voucherTransaction.findFirst({
@@ -2291,11 +2294,11 @@ export const rollbackVoucherPaymentService = async (
       data: {
         usedCredit: Math.max(
           0,
-          transaction.voucher.usedCredit - transaction.totalDeducted
+          transaction.voucher.usedCredit - transaction.totalDeducted,
         ),
         remainingCredit: Math.min(
           transaction.voucher.totalCredit,
-          transaction.voucher.remainingCredit + transaction.totalDeducted
+          transaction.voucher.remainingCredit + transaction.totalDeducted,
         ),
         status: VoucherStatus.ACTIVE, // Reset to ACTIVE
       },
@@ -2343,7 +2346,7 @@ export const rollbackVoucherPaymentService = async (
 export const deleteLoanApplicationService = async (
   loanId: string,
   userId: string,
-  userRole: string
+  userRole: string,
 ) => {
   const loan = await prisma.loanApplication.findUnique({
     where: { id: loanId },
@@ -2360,14 +2363,14 @@ export const deleteLoanApplicationService = async (
   // Check authorization
   if (userRole === "RESTAURANT" && loan.restaurantId !== userId) {
     throw new Error(
-      "Unauthorized: Cannot delete other restaurant's loan application"
+      "Unauthorized: Cannot delete other restaurant's loan application",
     );
   }
 
   // Check if loan has vouchers assigned
   if (loan.vouchers && loan.vouchers.length > 0) {
     throw new Error(
-      "Cannot delete loan application: Voucher has been assigned"
+      "Cannot delete loan application: Voucher has been assigned",
     );
   }
 
@@ -2378,7 +2381,7 @@ export const deleteLoanApplicationService = async (
   ];
   if (!deletableStatuses.includes(loan.status)) {
     throw new Error(
-      `Cannot delete loan application with status: ${loan.status}`
+      `Cannot delete loan application with status: ${loan.status}`,
     );
   }
 
@@ -2458,7 +2461,7 @@ export const processRepaymentPaymentService = async (data: {
 
         if (wallet.balance < amount) {
           throw new Error(
-            `Insufficient wallet balance. Available: ${wallet.balance} ${wallet.currency}, Required: ${amount} RWF`
+            `Insufficient wallet balance. Available: ${wallet.balance} ${wallet.currency}, Required: ${amount} RWF`,
           );
         }
 
@@ -2530,7 +2533,7 @@ async function processFlutterwaveHostedPayment({
           Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     if (response.data?.status === "success" && response.data?.data?.link) {

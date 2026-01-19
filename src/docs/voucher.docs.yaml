@@ -1056,12 +1056,14 @@ paths:
                 summary: Inventory Purchase Loan
                 value:
                   requestedAmount: 1000000
+                  voucherDays: 30
                   purpose: "Purchase bulk inventory for upcoming season"
                   terms: "Prefer 60-day repayment period"
               equipment_upgrade:
                 summary: Equipment Upgrade Loan
                 value:
                   requestedAmount: 2000000
+                  voucherDays: 20
                   purpose: "Purchase new kitchen equipment"
                   terms: "Can provide equipment as collateral"
       responses:

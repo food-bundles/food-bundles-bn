@@ -120,7 +120,13 @@ interface VoucherTransactionUpdate {
 interface WalletUpdate {
   walletId: string;
   restaurantId: string;
-  action: "TOP_UP" | "DEBIT" | "REFUND" | "BALANCE_UPDATE";
+  traderId?: string;
+  action:
+    | "TOP_UP"
+    | "DEBIT"
+    | "REFUND"
+    | "BALANCE_UPDATE"
+    | "COMMISSION_RECEIVED";
   timestamp: string;
   data?: {
     transactionId?: string;
@@ -334,7 +340,7 @@ class WebSocketManager {
     this.broadcastToSubscription("products", message);
 
     console.log(
-      `Product update broadcasted: ${productUpdate.action} - ${productUpdate.productName}`
+      `Product update broadcasted: ${productUpdate.action} - ${productUpdate.productName}`,
     );
   }
 
@@ -353,7 +359,7 @@ class WebSocketManager {
     this.broadcastToSubscription(subscription, message);
 
     console.log(
-      `Subscription update broadcasted for subscription ${subscriptionUpdate.subscriptionId}`
+      `Subscription update broadcasted for subscription ${subscriptionUpdate.subscriptionId}`,
     );
   }
 
@@ -372,7 +378,7 @@ class WebSocketManager {
     this.broadcastToSubscription(subscription, message);
 
     console.log(
-      `Voucher update broadcasted: ${voucherUpdate.action} - ${voucherUpdate.voucherCode}`
+      `Voucher update broadcasted: ${voucherUpdate.action} - ${voucherUpdate.voucherCode}`,
     );
   }
 
@@ -395,7 +401,7 @@ class WebSocketManager {
     this.broadcastToSubscription("loans:all", message);
 
     console.log(
-      `Loan update broadcasted: ${loanUpdate.action} - ${loanUpdate.loanId}`
+      `Loan update broadcasted: ${loanUpdate.action} - ${loanUpdate.loanId}`,
     );
   }
 
@@ -418,7 +424,7 @@ class WebSocketManager {
     this.broadcastToSubscription(voucherSubscription, message);
 
     console.log(
-      `Repayment update broadcasted for loan ${repaymentUpdate.loanId}`
+      `Repayment update broadcasted for loan ${repaymentUpdate.loanId}`,
     );
   }
 
@@ -441,7 +447,7 @@ class WebSocketManager {
     this.broadcastToSubscription(voucherSubscription, message);
 
     console.log(
-      `Penalty update broadcasted: ${penaltyUpdate.action} - ${penaltyUpdate.penaltyId}`
+      `Penalty update broadcasted: ${penaltyUpdate.action} - ${penaltyUpdate.penaltyId}`,
     );
   }
 
@@ -449,7 +455,7 @@ class WebSocketManager {
    * Broadcast voucher transaction updates
    */
   broadcastVoucherTransactionUpdate(
-    transactionUpdate: VoucherTransactionUpdate
+    transactionUpdate: VoucherTransactionUpdate,
   ) {
     if (!this.wss) return;
 
@@ -462,7 +468,7 @@ class WebSocketManager {
     this.broadcastToSubscription(subscription, message);
 
     console.log(
-      `Voucher transaction update broadcasted for voucher ${transactionUpdate.voucherId}`
+      `Voucher transaction update broadcasted for voucher ${transactionUpdate.voucherId}`,
     );
   }
 
@@ -472,7 +478,7 @@ class WebSocketManager {
   broadcastWalletUpdate(walletUpdate: WalletUpdate) {
     if (!this.wss) return;
 
-    const subscription = `wallet:${walletUpdate.restaurantId}`;
+    const subscription = `wallet:${walletUpdate.restaurantId || walletUpdate.traderId}`;
     const message = {
       type: "WALLET_UPDATE",
       data: walletUpdate,
@@ -481,7 +487,7 @@ class WebSocketManager {
     this.broadcastToSubscription(subscription, message);
 
     console.log(
-      `Wallet update broadcasted: ${walletUpdate.action} - ${walletUpdate.walletId}`
+      `Wallet update broadcasted: ${walletUpdate.action} - ${walletUpdate.walletId}`,
     );
   }
 
@@ -521,7 +527,7 @@ class WebSocketManager {
 
     if (subscriberCount > 0) {
       console.log(
-        `Message sent to ${subscriberCount} subscribers for ${subscription}`
+        `Message sent to ${subscriberCount} subscribers for ${subscription}`,
       );
     }
   }

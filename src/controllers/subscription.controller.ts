@@ -21,6 +21,7 @@ import {
 import { SubscriptionStatus } from "@prisma/client";
 import prisma from "../prisma";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
+import { getPaymentMethodByIdService } from "../services/payment-method.service";
 
 // ==================== SUBSCRIPTION PLAN CONTROLLERS ====================
 
@@ -211,7 +212,7 @@ export const deleteSubscriptionPlan = async (req: Request, res: Response) => {
  */
 export const createRestaurantSubscription = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const {
@@ -252,15 +253,20 @@ export const createRestaurantSubscription = async (
       });
     }
 
+    // Get payment method from DB
+    const paymentMethodConfig =
+      await getPaymentMethodByIdService(paymentMethodId);
+    const paymentMethod = paymentMethodConfig.name.toUpperCase();
+
     // Validate payment method specific requirements
-    if (paymentMethodId) {
-      if (paymentMethodId === "MOBILE_MONEY" && !phoneNumber) {
+    if (paymentMethod) {
+      if (paymentMethod === "MOBILE_MONEY" && !phoneNumber) {
         return res.status(400).json({
           message: "Phone number is required for mobile money payment",
         });
       }
 
-      if (paymentMethodId === "CARD" && !cardDetails) {
+      if (paymentMethod === "CARD" && !cardDetails) {
         return res.status(400).json({
           message:
             "Card details are required for card payment (or will use hosted checkout)",
@@ -272,7 +278,7 @@ export const createRestaurantSubscription = async (
       restaurantId,
       planId,
       autoRenew,
-      paymentMethodId,
+      paymentMethod,
       phoneNumber,
       cardDetails,
       bankDetails,
@@ -298,7 +304,7 @@ export const createRestaurantSubscription = async (
  */
 export const processSubscriptionPayment = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const { subscriptionId } = req.params;
@@ -309,8 +315,8 @@ export const processSubscriptionPayment = async (
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-        ? user.restaurantId
-        : undefined;
+          ? user.restaurantId
+          : undefined;
 
     if (!paymentMethod) {
       return res.status(400).json({
@@ -325,11 +331,16 @@ export const processSubscriptionPayment = async (
       });
     }
 
+    if (paymentMethod === "CASH") {
+      // For CASH payments, we'll use wallet balance - no additional validation needed
+      // The wallet service will handle balance validation
+    }
+
     // Verify subscription belongs to restaurant (if not admin)
     if (restaurantId) {
       const subscription = await getSubscriptionByIdService(
         subscriptionId,
-        restaurantId
+        restaurantId,
       );
       if (!subscription) {
         return res.status(403).json({
@@ -395,9 +406,8 @@ export const getMyCurrentSubscription = async (req: Request, res: Response) => {
       });
     }
 
-    const subscription = await getRestaurantCurrentSubscriptionService(
-      restaurantId
-    );
+    const subscription =
+      await getRestaurantCurrentSubscriptionService(restaurantId);
 
     if (!subscription) {
       return res.status(404).json({
@@ -429,12 +439,12 @@ export const getSubscriptionById = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-        ? user.restaurantId
-        : undefined;
+          ? user.restaurantId
+          : undefined;
 
     const subscription = await getSubscriptionByIdService(
       subscriptionId,
-      restaurantId
+      restaurantId,
     );
 
     console.log("Subscription By ID", subscription);
@@ -456,7 +466,7 @@ export const getSubscriptionById = async (req: Request, res: Response) => {
  */
 export const updateRestaurantSubscription = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const { subscriptionId } = req.params;
@@ -467,8 +477,8 @@ export const updateRestaurantSubscription = async (
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-        ? user.restaurantId
-        : undefined;
+          ? user.restaurantId
+          : undefined;
 
     if (status && !Object.values(SubscriptionStatus).includes(status)) {
       return res.status(400).json({
@@ -491,7 +501,7 @@ export const updateRestaurantSubscription = async (
     const subscription = await updateRestaurantSubscriptionService(
       subscriptionId,
       updateData,
-      restaurantId
+      restaurantId,
     );
 
     res.status(200).json({
@@ -518,8 +528,8 @@ export const cancelSubscription = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-        ? user.restaurantId
-        : undefined;
+          ? user.restaurantId
+          : undefined;
 
     if (!restaurantId) {
       return res.status(400).json({
@@ -553,8 +563,8 @@ export const renewSubscription = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-        ? user.restaurantId
-        : undefined;
+          ? user.restaurantId
+          : undefined;
 
     if (!restaurantId) {
       return res.status(400).json({
@@ -630,7 +640,7 @@ export const getAllSubscriptions = async (req: Request, res: Response) => {
  */
 export const checkExpiredSubscriptions = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const result = await checkExpiredSubscriptionsService();
@@ -662,8 +672,8 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-        ? user.restaurantId
-        : undefined;
+          ? user.restaurantId
+          : undefined;
 
     if (!newPlanId) {
       return res.status(400).json({
@@ -685,7 +695,7 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
         phoneNumber,
         cardDetails,
         bankDetails,
-      }
+      },
     );
 
     if (!result.isUpgrade) {
@@ -727,8 +737,8 @@ export const downgradeSubscription = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-        ? user.restaurantId
-        : undefined;
+          ? user.restaurantId
+          : undefined;
 
     if (!newPlanId) {
       return res.status(400).json({
@@ -750,7 +760,7 @@ export const downgradeSubscription = async (req: Request, res: Response) => {
         phoneNumber,
         cardDetails,
         bankDetails,
-      }
+      },
     );
 
     if (!result.isDowngrade) {
@@ -786,8 +796,8 @@ export const getSubscriptionHistory = async (req: Request, res: Response) => {
       userRole === "RESTAURANT"
         ? user.id
         : userRole === "AFFILIATOR"
-        ? user.restaurantId
-        : undefined;
+          ? user.restaurantId
+          : undefined;
 
     if (!restaurantId) {
       return res.status(400).json({

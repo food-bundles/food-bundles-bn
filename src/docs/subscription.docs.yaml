@@ -1,6 +1,6 @@
 tags:
   - name: Subscription Management API
-    description: Comprehensive subscription management for restaurants including plans, subscriptions, payments (Mobile Money, Card, Bank Transfer), and lifecycle management
+    description: Comprehensive subscription management for restaurants including plans, subscriptions, payments (Wallet Balance, Mobile Money, Card, Bank Transfer), and lifecycle management
 
 components:
   schemas:
@@ -416,7 +416,7 @@ components:
       properties:
         paymentMethod:
           type: string
-          enum: [MOBILE_MONEY, BANK_TRANSFER, CARD]
+          enum: [CASH, MOBILE_MONEY, BANK_TRANSFER, CARD]
           description: Payment method
         phoneNumber:
           type: string
@@ -862,6 +862,12 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateRestaurantSubscriptionRequest"
             examples:
+              cash:
+                summary: Cash Payment (Wallet Balance)
+                value:
+                  planId: "plan_123"
+                  autoRenew: true
+                  paymentMethodId: "pm_cash_123"
               mobileMoney:
                 summary: Mobile Money Payment
                 value:
@@ -911,7 +917,7 @@ paths:
       tags:
         - Subscription Management API
       summary: Process subscription payment
-      description: Process payment for a pending subscription (Mobile Money, Card, or Bank Transfer)
+      description: Process payment for a pending subscription (Wallet Balance, Mobile Money, Card, or Bank Transfer)
       security:
         - BearerAuth: []
       parameters:
@@ -927,6 +933,10 @@ paths:
             schema:
               $ref: "#/components/schemas/ProcessSubscriptionPaymentRequest"
             examples:
+              cash:
+                summary: Cash Payment (Wallet Balance)
+                value:
+                  paymentMethod: "CASH"
               mobileMoney:
                 summary: Mobile Money Payment
                 value:

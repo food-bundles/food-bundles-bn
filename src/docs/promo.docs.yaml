@@ -359,7 +359,7 @@ paths:
     post:
       tags:
         - Promo Code Management
-      summary: Create a new promo code
+      summary: Create a new promo code (Admin only)
       security:
         - BearerAuth: []
       requestBody:
@@ -383,7 +383,7 @@ paths:
     get:
       tags:
         - Promo Code Management
-      summary: Get all promo codes
+      summary: Get all promo codes (Admin only)
       security:
         - BearerAuth: []
       parameters:
@@ -416,7 +416,7 @@ paths:
   /promo/{id}:
     get:
       tags:
-        - Promo Code Management
+        - Promo Code Management (Admin only)
       summary: Get promo code by ID
       security:
         - BearerAuth: []
@@ -442,7 +442,7 @@ paths:
     put:
       tags:
         - Promo Code Management
-      summary: Update promo code
+      summary: Update promo code (Admin only)
       security:
         - BearerAuth: []
       parameters:
@@ -475,7 +475,7 @@ paths:
     delete:
       tags:
         - Promo Code Management
-      summary: Delete promo code
+      summary: Delete promo code (Admin only)
       security:
         - BearerAuth: []
       parameters:
@@ -497,7 +497,7 @@ paths:
     get:
       tags:
         - Promo Code Management
-      summary: Get promo code by code (Restaurant)
+      summary: Get promo code by code (Restaurant only)
       security:
         - BearerAuth: []
       parameters:
@@ -523,7 +523,7 @@ paths:
     post:
       tags:
         - Promo Code Management
-      summary: Validate promo code for order
+      summary: Validate promo code for order (Restaurant only)
       security:
         - BearerAuth: []
       parameters:
@@ -555,7 +555,7 @@ paths:
     post:
       tags:
         - Promo Code Management
-      summary: Apply promo code to order
+      summary: Apply promo code to order (Restaurant only)
       security:
         - BearerAuth: []
       parameters:
@@ -587,7 +587,7 @@ paths:
     post:
       tags:
         - Promo Code Management
-      summary: Exclude restaurant from promo code
+      summary: Exclude restaurant from promo code (Admin only)
       security:
         - BearerAuth: []
       parameters:
@@ -619,7 +619,7 @@ paths:
     delete:
       tags:
         - Promo Code Management
-      summary: Remove restaurant exclusion from promo code
+      summary: Remove restaurant exclusion from promo code (Admin only)
       security:
         - BearerAuth: []
       parameters:

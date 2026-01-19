@@ -172,6 +172,8 @@ export class UserController {
 
       if (isAdmin) {
         sms = "Admin created successfully";
+      } else if (result.role === Role.TRADER) {
+        sms = "TRADER created successfully";
       } else {
         sms = "AGGREGATOR created successfully";
       }
