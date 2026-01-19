@@ -6,7 +6,7 @@ import {
   getTraderLoanApplicationsService,
   getTraderVouchersService,
   traderApproveLoanService,
-  calculateTraderCommissionService,
+  getTraderCommissionDetailsService,
   processTraderCommissionService,
   getTraderOrdersService,
   getTraderTransactionHistoryService,
@@ -200,7 +200,7 @@ export const traderApproveLoan = async (req: Request, res: Response) => {
 export const getTraderCommission = async (req: Request, res: Response) => {
   try {
     const traderId = (req as any).user.id;
-    const commission = await calculateTraderCommissionService(traderId);
+    const commission = await getTraderCommissionDetailsService(traderId);
 
     res.status(200).json({
       success: true,
