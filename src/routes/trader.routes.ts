@@ -10,6 +10,8 @@ import {
   processTraderCommission,
   getTraderOrders,
   getTraderTransactionHistory,
+  getTraderTransactionById,
+  getTraderTransactionStats,
   getTraderDashboard,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
@@ -82,6 +84,18 @@ traderRoutes.get(
   isAuthenticated,
   checkPermission("TRADER"),
   getTraderTransactionHistory,
+);
+traderRoutes.get(
+  "/transactions/stats",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  getTraderTransactionStats,
+);
+traderRoutes.get(
+  "/transactions/:transactionId",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  getTraderTransactionById,
 );
 
 // Dashboard

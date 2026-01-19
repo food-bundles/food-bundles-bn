@@ -363,14 +363,14 @@ export const processTraderCommissionService = async (traderId: string) => {
 export const getTraderOrdersService = async (traderId: string, filters?: any) => {
   const orders = await prisma.order.findMany({
     where: {
-      voucher: {
+      Voucher: {
         approvedBy: traderId
       },
       paymentStatus: { in: ["VOUCHER_CREDIT", "COMPLETED"] }
     },
     include: {
       restaurant: { select: { id: true, name: true } },
-      voucher: { select: { id: true, voucherCode: true, discountPercentage: true } },
+      Voucher: { select: { id: true, voucherCode: true, discountPercentage: true } },
       orderItems: {
         include: { product: { select: { productName: true } } }
       }
@@ -384,15 +384,83 @@ export const getTraderOrdersService = async (traderId: string, filters?: any) =>
 
 // Get trader transaction history
 export const getTraderTransactionHistoryService = async (traderId: string, filters?: any) => {
-  const transactions = await prisma.traderTransaction.findMany({
-    where: {
-      traderId,
-      ...filters
-    },
-    orderBy: { createdAt: "desc" }
+  const { page = 1, limit = 10, type, status, startDate, endDate } = filters || {};
+  const skip = (page - 1) * limit;
+
+  const where: any = { traderId };
+  if (type) where.type = type;
+  if (status) where.status = status;
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) where.createdAt.gte = new Date(startDate);
+    if (endDate) where.createdAt.lte = new Date(endDate);
+  }
+
+  const [transactions, total] = await Promise.all([
+    prisma.traderTransaction.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.traderTransaction.count({ where })
+  ]);
+
+  return {
+    transactions,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit)
+  };
+};
+
+// Get trader transaction by ID
+export const getTraderTransactionByIdService = async (traderId: string, transactionId: string) => {
+  const transaction = await prisma.traderTransaction.findFirst({
+    where: { id: transactionId, traderId }
   });
 
-  return transactions;
+  if (!transaction) {
+    throw new Error("Transaction not found");
+  }
+
+  return transaction;
+};
+
+// Get trader transaction stats
+export const getTraderTransactionStatsService = async (traderId: string) => {
+  const [totalTransactions, loanApprovals, commissionsEarned, commissionsPaid] = await Promise.all([
+    prisma.traderTransaction.count({ where: { traderId } }),
+    prisma.traderTransaction.count({ where: { traderId, type: "LOAN_APPROVAL" } }),
+    prisma.traderTransaction.count({ where: { traderId, type: "COMMISSION_EARNED" } }),
+    prisma.traderTransaction.count({ where: { traderId, type: "COMMISSION_PAID" } })
+  ]);
+
+  const [totalCommissionEarned, totalCommissionPaid, totalLoansApproved] = await Promise.all([
+    prisma.traderTransaction.aggregate({
+      where: { traderId, type: "COMMISSION_EARNED" },
+      _sum: { amount: true }
+    }),
+    prisma.traderTransaction.aggregate({
+      where: { traderId, type: "COMMISSION_PAID" },
+      _sum: { amount: true }
+    }),
+    prisma.traderTransaction.aggregate({
+      where: { traderId, type: "LOAN_APPROVAL" },
+      _sum: { amount: true }
+    })
+  ]);
+
+  return {
+    totalTransactions,
+    loanApprovals,
+    commissionsEarned,
+    commissionsPaid,
+    totalCommissionEarned: totalCommissionEarned._sum.amount || 0,
+    totalCommissionPaid: totalCommissionPaid._sum.amount || 0,
+    totalLoansApproved: Math.abs(totalLoansApproved._sum.amount || 0)
+  };
 };
 
 // Get trader dashboard stats

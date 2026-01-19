@@ -102,6 +102,90 @@ components:
                 type: string
                 format: date-time
 
+    TraderTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Transaction ID
+        traderId:
+          type: string
+          description: Trader ID
+        type:
+          type: string
+          enum: [LOAN_APPROVAL, COMMISSION_EARNED, COMMISSION_PAID, WALLET_TOPUP, WALLET_DEBIT]
+          description: Transaction type
+        amount:
+          type: number
+          format: float
+          description: Transaction amount
+        orderId:
+          type: string
+          nullable: true
+          description: Related order ID
+        voucherId:
+          type: string
+          nullable: true
+          description: Related voucher ID
+        loanId:
+          type: string
+          nullable: true
+          description: Related loan ID
+        reference:
+          type: string
+          nullable: true
+          description: Generic reference
+        isCommissionPaid:
+          type: boolean
+          description: Commission payment status
+        commissionRate:
+          type: number
+          format: float
+          nullable: true
+          description: Commission rate
+        description:
+          type: string
+          nullable: true
+          description: Transaction description
+        status:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
+          description: Transaction status
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TraderTransactionStats:
+      type: object
+      properties:
+        totalTransactions:
+          type: integer
+          description: Total number of transactions
+        loanApprovals:
+          type: integer
+          description: Number of loan approvals
+        commissionsEarned:
+          type: integer
+          description: Number of commissions earned
+        commissionsPaid:
+          type: integer
+          description: Number of commissions paid
+        totalCommissionEarned:
+          type: number
+          format: float
+          description: Total commission amount earned
+        totalCommissionPaid:
+          type: number
+          format: float
+          description: Total commission amount paid
+        totalLoansApproved:
+          type: number
+          format: float
+          description: Total loan amount approved
+
     TraderDashboard:
       type: object
       properties:
@@ -340,7 +424,12 @@ paths:
           in: query
           schema:
             type: string
-            enum: [TOP_UP, TRADING, REFUND, ADJUSTMENT]
+            enum: [LOAN_APPROVAL, COMMISSION_EARNED, COMMISSION_PAID, WALLET_TOPUP, WALLET_DEBIT]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REFUNDED]
         - name: startDate
           in: query
           schema:
@@ -364,6 +453,82 @@ paths:
       responses:
         200:
           description: Transaction history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TraderTransaction"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+
+  /traders/transactions/stats:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader transaction statistics
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Transaction statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TraderTransactionStats"
+
+  /traders/transactions/{transactionId}:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader transaction by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Transaction retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TraderTransaction"
+        404:
+          description: Transaction not found
 
   /traders/dashboard:
     get:
