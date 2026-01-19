@@ -31,7 +31,7 @@ const paypack = PaypackJs.config({
 // Initialize Flutterwave
 const flw = new Flutterwave(
   process.env.FLW_PUBLIC_KEY,
-  process.env.FLW_SECRET_KEY
+  process.env.FLW_SECRET_KEY,
 );
 /**
  * Create a new wallet for restaurant
@@ -84,7 +84,7 @@ export const createWalletService = async (data: CreateWalletData) => {
  */
 export const getRestaurantWalletTransactionService = async (
   restaurantId: string,
-  filters: WalletTransactionFilters = {}
+  filters: WalletTransactionFilters = {},
 ) => {
   const { page = 1, limit = 10, type, status, startDate, endDate } = filters;
 
@@ -230,13 +230,13 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
   let restaurantId = data.restaurantId;
   if (data.affiliatorId) {
     const restaurant = await getRestaurantFromAffiliatorService(
-      data.affiliatorId
+      data.affiliatorId,
     );
     restaurantId = restaurant.id;
   }
 
-  if (!restaurantId) {
-    throw new Error("Restaurant ID or Affiliator ID is required");
+  if (!restaurantId && !data.traderId) {
+    throw new Error("Restaurant ID, Affiliator ID, or Trader ID is required");
   }
 
   // Validate amount
@@ -270,6 +270,7 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
       status: "PENDING",
       restaurantId: restaurantId || wallet.restaurantId,
       affiliatorId: affiliatorId,
+      traderId: data.traderId,
     },
   });
 
@@ -293,8 +294,8 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
           phoneNumber: cleanedPhone,
           txRef,
           orderId: pendingTransaction.id,
-          email: wallet.restaurant.email || "",
-          fullname: wallet.restaurant.name,
+          email: wallet.restaurant?.email || "",
+          fullname: wallet.restaurant?.name || "",
           currency: wallet.currency,
         });
         break;
@@ -303,9 +304,9 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
         paymentResult = await processCardTopUp({
           amount,
           txRef,
-          email: wallet.restaurant.email,
-          fullname: wallet.restaurant.name,
-          phoneNumber: wallet.restaurant.phone || "",
+          email: wallet.restaurant?.email || "",
+          fullname: wallet.restaurant?.name || "",
+          phoneNumber: wallet.restaurant?.phone || "",
           currency: wallet.currency,
         });
         break;
@@ -336,7 +337,7 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
     try {
       wsManager.broadcastWalletUpdate({
         walletId: wallet.id,
-        restaurantId: wallet.restaurantId,
+        restaurantId: wallet.restaurantId || "",
         action: "TOP_UP",
         timestamp: new Date().toISOString(),
         data: {
@@ -377,7 +378,7 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
       try {
         wsManager.broadcastWalletUpdate({
           walletId: wallet.id,
-          restaurantId: wallet.restaurantId,
+          restaurantId: wallet.restaurantId || "",
           action: "TOP_UP",
           timestamp: new Date().toISOString(),
           data: {
@@ -394,11 +395,11 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
       }
 
       // Send notification email
-      if (wallet.restaurant.email) {
+      if (wallet.restaurant?.email) {
         try {
           await sendWalletNotificationEmail({
             email: wallet.restaurant.email,
-            restaurantName: wallet.restaurant.name,
+            restaurantName: wallet.restaurant.name || "",
             type: "TOP_UP",
             amount,
             newBalance,
@@ -608,7 +609,7 @@ export const adminDepositToWalletService = async (data: {
   try {
     wsManager.broadcastWalletUpdate({
       walletId: wallet.id,
-      restaurantId: wallet.restaurantId,
+      restaurantId: wallet.restaurantId || "",
       action: "BALANCE_UPDATE",
       timestamp: new Date().toISOString(),
       data: {
@@ -625,11 +626,11 @@ export const adminDepositToWalletService = async (data: {
   }
 
   // Send notification email
-  if (wallet.restaurant.email) {
+  if (wallet.restaurant?.email) {
     try {
       await sendWalletNotificationEmail({
         email: wallet.restaurant.email,
-        restaurantName: wallet.restaurant.name,
+        restaurantName: wallet.restaurant.name || "",
         type: "TOP_UP",
         amount,
         newBalance,
@@ -669,7 +670,7 @@ export const debitWalletService = async (data: DebitWalletData) => {
   // Check sufficient balance
   if (wallet.balance < amount) {
     throw new Error(
-      `Insufficient wallet balance. Available: ${wallet.balance}, Required: ${amount}`
+      `Insufficient wallet balance. Available: ${wallet.balance}, Required: ${amount}`,
     );
   }
 
@@ -700,11 +701,11 @@ export const debitWalletService = async (data: DebitWalletData) => {
   ]);
 
   // Send notification email
-  if (wallet.restaurant.email) {
+  if (wallet.restaurant?.email) {
     try {
       await sendWalletNotificationEmail({
         email: wallet.restaurant.email,
-        restaurantName: wallet.restaurant.name,
+        restaurantName: wallet.restaurant.name || "",
         type: "PAYMENT",
         amount,
         newBalance,
@@ -767,11 +768,11 @@ export const refundToWalletService = async (data: DebitWalletData) => {
   ]);
 
   // Send notification email
-  if (wallet.restaurant.email) {
+  if (wallet.restaurant?.email) {
     try {
       await sendWalletNotificationEmail({
         email: wallet.restaurant.email,
-        restaurantName: wallet.restaurant.name,
+        restaurantName: wallet.restaurant.name || "",
         type: "REFUND",
         amount,
         newBalance,
@@ -796,7 +797,7 @@ export const refundToWalletService = async (data: DebitWalletData) => {
  */
 export const updateWalletStatusService = async (
   walletId: string,
-  isActive: boolean
+  isActive: boolean,
 ) => {
   const wallet = await prisma.wallet.update({
     where: { id: walletId },
@@ -975,17 +976,16 @@ export const verifyWalletTopUpService = async (transactionId: string) => {
         // Send notification email
         try {
           console.log("Sending wallet top up email...");
-          {
-            walletTransaction.wallet.restaurant.email &&
-              (await sendWalletNotificationEmail({
-                email: walletTransaction.wallet.restaurant.email,
-                restaurantName: walletTransaction.wallet.restaurant.name,
-                type: "TOP_UP",
-                amount: walletTransaction.amount,
-                newBalance,
-                transactionId: response.data.flw_ref || walletTransaction.id,
-                paymentMethod: walletTransaction.paymentMethod || "Unknown",
-              }));
+          if (walletTransaction.wallet.restaurant?.email) {
+            await sendWalletNotificationEmail({
+              email: walletTransaction.wallet.restaurant.email,
+              restaurantName: walletTransaction.wallet.restaurant.name || "",
+              type: "TOP_UP",
+              amount: walletTransaction.amount,
+              newBalance,
+              transactionId: response.data.flw_ref || walletTransaction.id,
+              paymentMethod: walletTransaction.paymentMethod || "Unknown",
+            });
           }
         } catch (emailError) {
           console.log("Failed to send wallet notification email:", emailError);
@@ -1038,7 +1038,7 @@ export const verifyWalletTopUpService = async (transactionId: string) => {
  * Process Mobile Money Top-Up with PayPack and Flutterwave fallback
  */
 async function processMobileMoneyTopUp(
-  params: MobileMoneyPaymentSubmissionData
+  params: MobileMoneyPaymentSubmissionData,
 ) {
   try {
     // Clean and validate phone number
@@ -1046,12 +1046,12 @@ async function processMobileMoneyTopUp(
 
     if (!isValidRwandaPhone(cleanedPhoneNumber)) {
       throw new Error(
-        "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX"
+        "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX",
       );
     }
 
     console.log(
-      `Processing mobile money top-up: ${params.amount} ${params.currency} to ${cleanedPhoneNumber}`
+      `Processing mobile money top-up: ${params.amount} ${params.currency} to ${cleanedPhoneNumber}`,
     );
 
     // Primary: Try PayPack first
@@ -1080,7 +1080,7 @@ async function processMobileMoneyTopUp(
     } catch (error: any) {
       console.log(
         "PayPack top-up failed, falling back to Flutterwave:",
-        error.message
+        error.message,
       );
 
       // Fallback: Try Flutterwave Hosted Checkout
@@ -1107,7 +1107,7 @@ async function processMobileMoneyTopUp(
             Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       if (response.data?.status === "success" && response.data?.data?.link) {
@@ -1151,7 +1151,7 @@ async function processMobileMoneyTopUp(
 async function processCardTopUp(params: any) {
   try {
     console.log(
-      `Processing card top-up: ${params.amount} ${params.currency} for ${params.email}`
+      `Processing card top-up: ${params.amount} ${params.currency} for ${params.email}`,
     );
 
     // Use Flutterwave Hosted Checkout - No card details needed
@@ -1184,7 +1184,7 @@ async function processCardTopUp(params: any) {
           Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     if (response.data?.status === "success" && response.data?.data?.link) {

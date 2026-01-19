@@ -23,7 +23,7 @@ async function processWalletTransaction(
   flwRef: string,
   status: string,
   currency?: string,
-  transactionId?: string
+  transactionId?: string,
 ) {
   console.log("Processing wallet transaction for reference:", {
     txRef,
@@ -46,7 +46,10 @@ async function processWalletTransaction(
       },
       include: {
         wallet: {
-          include: { restaurant: true },
+          include: {
+            restaurant: true,
+            trader: true,
+          },
         },
       },
     });
@@ -89,7 +92,8 @@ async function processWalletTransaction(
     try {
       wsManager.broadcastWalletUpdate({
         walletId: walletTransaction.walletId,
-        restaurantId: walletTransaction.wallet.restaurantId,
+        restaurantId: walletTransaction.wallet?.restaurantId || "",
+        traderId: walletTransaction.wallet?.traderId || "",
         action: "TOP_UP",
         timestamp: new Date().toISOString(),
         data: {
@@ -108,16 +112,31 @@ async function processWalletTransaction(
 
     // Send notification
     try {
-      await sendMessage(
-        `Dear ${walletTransaction.wallet.restaurant.name}, TIN: ${walletTransaction.wallet.restaurant.tin}, Payment completed of Rwf${walletTransaction.amount} for wallet Top-up. Thank you!`,
-        walletTransaction.wallet.restaurant.phone || ""
-      );
+      const recipient =
+        walletTransaction.wallet.restaurant || walletTransaction.wallet.trader;
+      let name = "User";
+
+      if (walletTransaction.wallet.restaurant) {
+        name = walletTransaction.wallet.restaurant.name;
+      } else if (walletTransaction.wallet.trader) {
+        name = walletTransaction.wallet.trader.username;
+      }
+
+      const phone = recipient?.phone || "";
+      const tin = walletTransaction.wallet.restaurant?.tin || "N/A";
+
+      if (phone) {
+        await sendMessage(
+          `Dear ${name}, TIN: ${tin}, Payment completed of Rwf${walletTransaction.amount} for wallet Top-up. Thank you!`,
+          phone,
+        );
+      }
     } catch (error) {
       console.error("Failed to send wallet notification:", error);
     }
 
     console.log(
-      `Wallet top-up completed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet ${walletTransaction.walletId}`
+      `Wallet top-up completed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet ${walletTransaction.walletId}`,
     );
   } else if (status === "failed") {
     await retryDatabaseOperation(async () => {
@@ -145,7 +164,7 @@ async function processVoucherRepaymentPayment(
   flwRef: string,
   status: string,
   paymentProvider: "FLUTTERWAVE" | "PAYPACK" = "FLUTTERWAVE",
-  data?: any
+  data?: any,
 ) {
   console.log("Processing voucher repayment for reference:", txRef);
 
@@ -215,19 +234,19 @@ async function processVoucherRepaymentPayment(
 
           const totalUsed = transactions.reduce(
             (sum, t) => sum + t.amountCharged,
-            0
+            0,
           );
           const totalServiceFees = transactions.reduce(
             (sum, t) => sum + t.serviceFee,
-            0
+            0,
           );
           const totalPenalties = penalties.reduce(
             (sum, p) => sum + p.penaltyAmount,
-            0
+            0,
           );
           const totalRepayments = repayments.reduce(
             (sum, r) => sum + r.amount,
-            0
+            0,
           );
 
           const outstanding =
@@ -267,12 +286,12 @@ async function processVoucherRepaymentPayment(
       try {
         await generateEBMInvoiceService(orderId);
         console.log(
-          `EBM invoice generated for order ${orderId} after loan settlement`
+          `EBM invoice generated for order ${orderId} after loan settlement`,
         );
       } catch (error) {
         console.error(
           `Failed to generate EBM invoice for order ${orderId}:`,
-          error
+          error,
         );
       }
     }
@@ -293,7 +312,7 @@ async function processVoucherRepaymentPayment(
       });
 
       console.log(
-        `Broadcasted voucher repayment success: ${repaymentTransaction.id}`
+        `Broadcasted voucher repayment success: ${repaymentTransaction.id}`,
       );
     } catch (wsError) {
       console.error("Failed to broadcast voucher repayment:", wsError);
@@ -324,7 +343,7 @@ async function processVoucherRepaymentPayment(
       });
 
       console.log(
-        `Broadcasted voucher repayment failure: ${repaymentTransaction.id}`
+        `Broadcasted voucher repayment failure: ${repaymentTransaction.id}`,
       );
     } catch (wsError) {
       console.error("Failed to broadcast voucher repayment failure:", wsError);
@@ -343,7 +362,7 @@ async function processCheckoutPayment(
   status: string,
   paymentProvider: "FLUTTERWAVE" | "PAYPACK" = "FLUTTERWAVE",
   eventType?: string,
-  data?: any
+  data?: any,
 ) {
   const whereClause =
     paymentProvider === "PAYPACK"
@@ -457,7 +476,7 @@ async function processCheckoutPayment(
           });
 
           console.log(
-            `Broadcasted voucher transaction: ${orderData.voucherId}`
+            `Broadcasted voucher transaction: ${orderData.voucherId}`,
           );
         } catch (wsError) {
           console.error("Failed to broadcast voucher transaction:", wsError);
@@ -483,7 +502,7 @@ async function processCheckoutPayment(
       await sendMessage(
         `Dear ${orderData.restaurant.name}, TIN: ${orderData.restaurant.tin}, Your order of Rwf${orderData.totalAmount} has been placed successfully. Delivery is next! To order something else, visit www.food.rw`,
 
-        orderData.billingPhone || orderData.restaurant.phone || ""
+        orderData.billingPhone || orderData.restaurant.phone || "",
       );
     } catch (smsError) {
       console.error("Failed to send SMS notification:", smsError);
@@ -494,7 +513,7 @@ async function processCheckoutPayment(
       await sendMessage(
         `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
 
-        process.env.LOGISTICS_NUMBER_ONE || ""
+        process.env.LOGISTICS_NUMBER_ONE || "",
       );
     } catch (smsError) {
       console.error("Failed to send SMS notification:", smsError);
@@ -505,7 +524,7 @@ async function processCheckoutPayment(
       await sendMessage(
         `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
 
-        process.env.LOGISTICS_NUMBER_TWO || ""
+        process.env.LOGISTICS_NUMBER_TWO || "",
       );
     } catch (smsError) {
       console.error("Failed to send SMS notification:", smsError);
@@ -516,7 +535,7 @@ async function processCheckoutPayment(
       await sendMessage(
         `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
 
-        process.env.LOGISTICS_NUMBER_THREE || ""
+        process.env.LOGISTICS_NUMBER_THREE || "",
       );
     } catch (smsError) {
       console.error("Failed to send SMS notification:", smsError);
@@ -527,7 +546,7 @@ async function processCheckoutPayment(
       await sendMessage(
         `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
 
-        process.env.PRIVATE_RECEIVER || ""
+        process.env.PRIVATE_RECEIVER || "",
       );
     } catch (smsError) {
       console.error("Failed to send SMS notification:", smsError);
@@ -750,7 +769,7 @@ async function processCheckoutPayment(
       console.log(`Generated invoice for order ${orderData.id}`);
     } catch (invoiceError) {
       console.error(
-        `Failed to generate invoice for order ${orderData.id}: ${invoiceError}`
+        `Failed to generate invoice for order ${orderData.id}: ${invoiceError}`,
       );
     }
   }
@@ -795,7 +814,7 @@ const handleChargeCompleted = async (data: any) => {
     }
 
     console.log(
-      `Processing transaction: txRef=${txRef}, flwRef=${flwRef}, status=${status}, type=${transactionType}`
+      `Processing transaction: txRef=${txRef}, flwRef=${flwRef}, status=${status}, type=${transactionType}`,
     );
 
     // Check transaction type from metadata first
@@ -805,14 +824,14 @@ const handleChargeCompleted = async (data: any) => {
       txRef.startsWith("175")
     ) {
       console.log(
-        "Processing wallet top-up via charge.completed (from metadata)"
+        "Processing wallet top-up via charge.completed (from metadata)",
       );
       await processWalletTransaction(
         txRef,
         flwRef,
         status,
         data.currency,
-        data.data?.id?.toString()
+        data.data?.id?.toString(),
       );
     } else if (txRef.includes("SUB_")) {
       console.log("Processing subscription payment via charge.completed");
@@ -821,7 +840,7 @@ const handleChargeCompleted = async (data: any) => {
         flwRef,
         status,
         "FLUTTERWAVE",
-        data
+        data,
       );
     } else if (txRef.includes("repay_")) {
       console.log("Processing voucher repayment via charge.completed");
@@ -830,21 +849,21 @@ const handleChargeCompleted = async (data: any) => {
         flwRef,
         status,
         "FLUTTERWAVE",
-        data
+        data,
       );
     } else if (
       txRef &&
       (txRef.includes("WALLET_TOPUP_") || txRef.startsWith("175"))
     ) {
       console.log(
-        "Processing wallet top-up via charge.completed (from txRef pattern)"
+        "Processing wallet top-up via charge.completed (from txRef pattern)",
       );
       await processWalletTransaction(
         txRef,
         flwRef,
         status,
         data.currency,
-        data.data?.id?.toString()
+        data.data?.id?.toString(),
       );
     } else {
       await processCheckoutPayment(
@@ -853,7 +872,7 @@ const handleChargeCompleted = async (data: any) => {
         status,
         "FLUTTERWAVE",
         eventType,
-        data
+        data,
       );
     }
   } catch (error: any) {
@@ -870,13 +889,13 @@ async function processSubscriptionPayment(
   flwRef: string,
   status: string,
   paymentProvider: "FLUTTERWAVE" | "PAYPACK" = "FLUTTERWAVE",
-  data?: any
+  data?: any,
 ) {
   console.log(
     "Processing subscription payment for reference:",
     txRef,
     "Provider:",
-    paymentProvider
+    paymentProvider,
   );
 
   try {
@@ -922,7 +941,7 @@ async function processSubscriptionPayment(
       "Status:",
       subscription.status,
       "Payment Status:",
-      subscription.paymentStatus
+      subscription.paymentStatus,
     );
 
     // Handle both "successful" and "success" statuses
@@ -975,7 +994,7 @@ async function processSubscriptionPayment(
 
       console.log(
         "Subscription updated successfully:",
-        updatedSubscription[0].id
+        updatedSubscription[0].id,
       );
 
       try {
@@ -983,7 +1002,7 @@ async function processSubscriptionPayment(
           `Dear ${subscription.restaurant?.name || ""}, Your subscription to ${
             subscription.plan.name
           } has been activated successfully. Thank you!`,
-          subscription.restaurant?.phone || ""
+          subscription.restaurant?.phone || "",
         );
       } catch (error) {
         console.error("Failed to send subscription notification:", error);
@@ -996,7 +1015,7 @@ async function processSubscriptionPayment(
           } for the ${subscription.plan.name} plan. Amount: Rwf${
             subscription.plan.price
           }. Thank you!`,
-          process.env.PRIVATE_RECEIVER || ""
+          process.env.PRIVATE_RECEIVER || "",
         );
       } catch (error) {
         console.error("Failed to send subscription notification:", error);
@@ -1034,7 +1053,9 @@ async function processSubscriptionPayment(
       // Rollback subscription to previous state
       try {
         await rollbackSubscriptionPaymentService(subscription.id);
-        console.log(`Subscription ${subscription.id} rolled back to previous state`);
+        console.log(
+          `Subscription ${subscription.id} rolled back to previous state`,
+        );
       } catch (rollbackError) {
         console.error("Failed to rollback subscription:", rollbackError);
         // Continue with failure handling even if rollback fails
@@ -1046,7 +1067,7 @@ async function processSubscriptionPayment(
           `Dear ${
             subscription.restaurant?.name || ""
           }, Your subscription payment failed. We've restored your previous subscription to ensure no service interruption. Please try again or contact support.`,
-          subscription.restaurant?.phone || ""
+          subscription.restaurant?.phone || "",
         );
       } catch (error) {
         console.error("Failed to send failure notification:", error);
@@ -1063,13 +1084,15 @@ async function processSubscriptionPayment(
         });
 
         console.log(
-          `Broadcasted subscription payment failure: ${subscription.id}`
+          `Broadcasted subscription payment failure: ${subscription.id}`,
         );
       } catch (wsError) {
         console.error("Failed to broadcast subscription failure:", wsError);
       }
 
-      console.log(`Subscription payment failed and rolled back: ${subscription.id}`);
+      console.log(
+        `Subscription payment failed and rolled back: ${subscription.id}`,
+      );
       return subscription;
     } else {
       console.log(`Subscription ${subscription.id} already in final state:`, {
@@ -1094,7 +1117,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
 
     console.log(
       `${paymentProvider} Webhook received:`,
-      JSON.stringify(payload, null, 2)
+      JSON.stringify(payload, null, 2),
     );
 
     if (paymentProvider === "FLUTTERWAVE") {
@@ -1143,7 +1166,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
           flwRef || "",
           status || "",
           "FLUTTERWAVE",
-          payload
+          payload,
         );
       } else {
         // Process regular payments through charge.completed handler
@@ -1186,7 +1209,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
         payload.data?.meta_data?.transaction_type;
 
       console.log(
-        `PayPack webhook - txRef: ${txRef}, status: ${paymentStatus}`
+        `PayPack webhook - txRef: ${txRef}, status: ${paymentStatus}`,
       );
 
       if (!txRef) {
@@ -1239,7 +1262,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
           flwRef || "",
           paymentStatus || "",
           "PAYPACK",
-          payload
+          payload,
         );
       } else if (repaymentTransaction || txRef.includes("repay_")) {
         console.log("Processing PayPack voucher repayment");
@@ -1248,7 +1271,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
           flwRef || "",
           paymentStatus || "",
           "PAYPACK",
-          payload
+          payload,
         );
       } else if (
         walletTransaction ||
@@ -1260,7 +1283,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
         await processWalletTransaction(
           txRef || "",
           flwRef || "",
-          paymentStatus || ""
+          paymentStatus || "",
         );
       } else {
         console.log("Processing PayPack checkout payment");
@@ -1268,7 +1291,7 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
           txRef || "",
           flwRef || "",
           paymentStatus || "",
-          "PAYPACK"
+          "PAYPACK",
         );
       }
     }

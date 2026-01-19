@@ -7,9 +7,17 @@ import {
 } from "@prisma/client";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { sendMessage } from "../utils/sms.utility";
-import { cleanPhoneNumber, isValidRwandaPhone, sendSubscriptionExpiryEmail } from "../utils/emailTemplates";
+import {
+  cleanPhoneNumber,
+  isValidRwandaPhone,
+  sendSubscriptionExpiryEmail,
+} from "../utils/emailTemplates";
 import { createNotificationService } from "./notification.services";
 import { getPaymentMethodByIdService } from "./payment-method.service";
+import {
+  debitWalletService,
+  getWalletByRestaurantIdService,
+} from "./wallet.service";
 
 dotenv.config();
 
@@ -26,7 +34,7 @@ const paypack = PaypackJs.config({
 // Initialize Flutterwave
 const flw = new Flutterwave(
   process.env.FLW_PUBLIC_KEY,
-  process.env.FLW_SECRET_KEY
+  process.env.FLW_SECRET_KEY,
 );
 
 // Types for payment results
@@ -89,7 +97,7 @@ interface CreateRestaurantSubscriptionData {
   restaurantId: string;
   planId: string;
   autoRenew?: boolean;
-  paymentMethodId?: string;
+  paymentMethod?: string;
   phoneNumber?: string;
   cardDetails?: {
     cardNumber: string;
@@ -113,7 +121,7 @@ interface UpdateRestaurantSubscriptionData {
  * Service to create a new subscription plan
  */
 export const createSubscriptionPlanService = async (
-  data: CreateSubscriptionPlanData
+  data: CreateSubscriptionPlanData,
 ) => {
   const {
     name,
@@ -192,7 +200,7 @@ const checkAndUpdateSubscriptionExpiry = async (subscription: any) => {
         `Dear ${subscription.restaurant?.name || ""}, Your subscription ${
           subscription.plan.name
         } has expired. Please renew your subscription to continue using our services. Thank you!`,
-        subscription.restaurant?.phone || ""
+        subscription.restaurant?.phone || "",
       );
     } catch (error) {
       console.error("Failed to send subscription notification:", error);
@@ -221,7 +229,7 @@ const checkAndUpdateSubscriptionExpiry = async (subscription: any) => {
     threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
     const daysUntilExpiry = Math.ceil(
       (new Date(subscription.endDate).getTime() - now.getTime()) /
-        (1000 * 60 * 60 * 24)
+        (1000 * 60 * 60 * 24),
     );
 
     // Send warning only when exactly 3 days remain (prevents multiple sends)
@@ -232,7 +240,7 @@ const checkAndUpdateSubscriptionExpiry = async (subscription: any) => {
           `Dear ${subscription.restaurant?.name || ""}, Your subscription ${
             subscription.plan.name
           } is about to expire in 3 days. Please renew your subscription to continue using our services. Thank you!`,
-          subscription.restaurant?.phone || ""
+          subscription.restaurant?.phone || "",
         );
       } catch (error) {
         console.error("Failed to send subscription notification:", error);
@@ -329,7 +337,7 @@ export const getSubscriptionPlanByIdService = async (planId: string) => {
  */
 export const updateSubscriptionPlanService = async (
   planId: string,
-  data: UpdateSubscriptionPlanData
+  data: UpdateSubscriptionPlanData,
 ) => {
   const existingPlan = await prisma.subscriptionPlan.findUnique({
     where: { id: planId },
@@ -413,13 +421,13 @@ export const deleteSubscriptionPlanService = async (planId: string) => {
  * Similar to cart pattern - one subscription per restaurant that gets updated
  */
 export const createRestaurantSubscriptionService = async (
-  data: CreateRestaurantSubscriptionData
+  data: CreateRestaurantSubscriptionData,
 ) => {
   const {
     restaurantId,
     planId,
     autoRenew = true,
-    paymentMethodId,
+    paymentMethod,
     phoneNumber,
     cardDetails,
     bankDetails,
@@ -447,13 +455,10 @@ export const createRestaurantSubscriptionService = async (
     throw new Error("Subscription plan is not active");
   }
 
-  // Get payment method if provided
-  let paymentMethod = "MOBILE_MONEY";
-  if (paymentMethodId) {
-    const paymentMethodConfig = await getPaymentMethodByIdService(
-      paymentMethodId
-    );
-    paymentMethod = paymentMethodConfig.name.toUpperCase();
+  // Get payment method name
+  let paymentMethodName = "MOBILE_MONEY";
+  if (paymentMethod) {
+    paymentMethodName = paymentMethod.toUpperCase();
   }
 
   // Find existing subscription for this restaurant (any status)
@@ -512,7 +517,7 @@ export const createRestaurantSubscriptionService = async (
           startDate,
           endDate,
           autoRenew,
-          paymentMethod: paymentMethod,
+          paymentMethod: paymentMethodName,
           paymentStatus: PaymentStatus.PENDING,
           txRef,
           flwRef: txRef,
@@ -537,8 +542,8 @@ export const createRestaurantSubscriptionService = async (
           action: isUpgrade
             ? "UPGRADED"
             : isDowngrade
-            ? "DOWNGRADED"
-            : "RENEWED",
+              ? "DOWNGRADED"
+              : "RENEWED",
           oldStatus: existingSubscription.status,
           newStatus: "PENDING",
           oldPlanId,
@@ -560,7 +565,7 @@ export const createRestaurantSubscriptionService = async (
           startDate,
           endDate,
           autoRenew,
-          paymentMethod: paymentMethod,
+          paymentMethod: paymentMethodName,
           paymentStatus: PaymentStatus.PENDING,
           txRef,
           flwRef: txRef,
@@ -598,11 +603,29 @@ export const createRestaurantSubscriptionService = async (
     const paymentResult = await processSubscriptionPaymentService(
       subscription.id,
       {
-        paymentMethod,
+        paymentMethod: paymentMethodName,
         phoneNumber,
         cardDetails,
         bankDetails,
-      }
+      },
+    );
+
+    return {
+      subscription,
+      payment: paymentResult,
+      isUpgrade,
+      isDowngrade,
+    };
+  } else if (paymentMethod === "CASH") {
+    // Process CASH payment immediately
+    const paymentResult = await processSubscriptionPaymentService(
+      subscription.id,
+      {
+        paymentMethod: "CASH",
+        phoneNumber,
+        cardDetails,
+        bankDetails,
+      },
     );
 
     return {
@@ -638,7 +661,7 @@ export const processSubscriptionPaymentService = async (
     bankDetails?: {
       clientIp?: string;
     };
-  }
+  },
 ) => {
   // Get subscription with retry logic
   let subscription: any;
@@ -735,6 +758,50 @@ export const processSubscriptionPaymentService = async (
         });
         break;
 
+      case "CASH":
+        try {
+          const wallet = await getWalletByRestaurantIdService(
+            subscription.restaurantId!,
+          );
+
+          if (!wallet.isActive) {
+            throw new Error("Wallet is inactive. Please contact support.");
+          }
+
+          if (wallet.balance < subscription.plan.price) {
+            throw new Error(
+              `Insufficient wallet balance. Available: ${wallet.balance} RWF, Required: ${subscription.plan.price} RWF`,
+            );
+          }
+
+          await debitWalletService({
+            walletId: wallet.id,
+            amount: subscription.plan.price,
+            description: `Subscription payment for ${subscription.plan.name}`,
+            reference: subscription.id,
+          });
+
+          paymentResult = {
+            success: true,
+            transactionId: `WALLET_SUB_${subscription.txRef}_${Date.now()}`,
+            reference: subscription.txRef ?? "",
+            flwRef: `WALLET_SUB_${subscription.txRef}`,
+            status: "successful",
+            message: "Subscription payment completed using wallet balance",
+          };
+        } catch (walletError: any) {
+          paymentResult = {
+            success: false,
+            transactionId: "",
+            reference: subscription.txRef ?? "",
+            flwRef: "",
+            status: "failed",
+            message: walletError.message || "Wallet payment failed",
+            error: walletError.message,
+          };
+        }
+        break;
+
       default:
         throw new Error("Unsupported payment method");
     }
@@ -752,6 +819,7 @@ export const processSubscriptionPaymentService = async (
           paymentResult.status === "successful"
             ? SubscriptionStatus.ACTIVE
             : SubscriptionStatus.PENDING,
+        amountPaid: paymentData.paymentMethod === "CASH" ? subscription.plan.price : null,
       };
 
       // Update subscription with payment details
@@ -770,7 +838,7 @@ export const processSubscriptionPaymentService = async (
               subscriptionId,
               action: "CREATED",
               newStatus: "ACTIVE",
-              reason: "Payment completed successfully",
+              reason: paymentData.paymentMethod === "CASH" ? "Wallet payment completed successfully" : "Payment completed successfully",
             },
           });
         });
@@ -783,7 +851,7 @@ export const processSubscriptionPaymentService = async (
             }, Your subscription to ${
               subscription.plan.name
             } has been activated successfully. Thank you!`,
-            subscription.restaurant?.phone || ""
+            subscription.restaurant?.phone || "",
           );
         } catch (error) {
           console.error("Failed to send subscription notification:", error);
@@ -817,7 +885,7 @@ export const processSubscriptionPaymentService = async (
           `Dear ${
             subscription.restaurant?.name || ""
           }, Your subscription payment failed. Please try again or contact support.`,
-          subscription.restaurant?.phone || ""
+          subscription.restaurant?.phone || "",
         );
       } catch (error) {
         console.error("Failed to send failure notification:", error);
@@ -873,12 +941,12 @@ async function processSubscriptionMobileMoneyPayment({
 
     if (!isValidRwandaPhone(cleanedPhoneNumber)) {
       throw new Error(
-        "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX"
+        "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX",
       );
     }
 
     console.log(
-      `Processing subscription mobile money payment: ${amount} ${currency}`
+      `Processing subscription mobile money payment: ${amount} ${currency}`,
     );
 
     // Try PayPack first
@@ -1017,7 +1085,7 @@ async function processSubscriptionCardPayment({
           Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     if (
@@ -1099,7 +1167,7 @@ async function processSubscriptionBankTransfer({
         transferAccount: response.meta.authorization.transfer_account,
         transferBank: response.meta.authorization.transfer_bank,
         transferAmount: parseFloat(
-          response.meta.authorization.transfer_amount || "0"
+          response.meta.authorization.transfer_amount || "0",
         ),
         transferNote: response.meta.authorization.transfer_note,
         accountExpiration: response.meta.authorization.account_expiration
@@ -1147,7 +1215,7 @@ export const getRestaurantSubscriptionsService = async (
     page?: number;
     limit?: number;
     status?: SubscriptionStatus;
-  }
+  },
 ) => {
   const { page = 1, limit = 10, status } = filters || {};
   const skip = (page - 1) * limit;
@@ -1183,8 +1251,8 @@ export const getRestaurantSubscriptionsService = async (
   // Check and update subscription expiry
   const updatedSubscriptions = await Promise.all(
     subscriptions.map((subscription) =>
-      checkAndUpdateSubscriptionExpiry(subscription)
-    )
+      checkAndUpdateSubscriptionExpiry(subscription),
+    ),
   );
 
   // Add daysRemaining to each subscription
@@ -1204,7 +1272,7 @@ export const getRestaurantSubscriptionsService = async (
 
 export const getSubscriptionByIdService = async (
   subscriptionId: string,
-  restaurantId?: string
+  restaurantId?: string,
 ) => {
   const subscription = await prisma.restaurantSubscription.findUnique({
     where: { id: subscriptionId },
@@ -1237,14 +1305,13 @@ export const getSubscriptionByIdService = async (
 
   if (restaurantId && subscription.restaurantId !== restaurantId) {
     throw new Error(
-      "Unauthorized: Subscription does not belong to this restaurant"
+      "Unauthorized: Subscription does not belong to this restaurant",
     );
   }
 
   // Check and update subscription expiry
-  const updatedSubscription = await checkAndUpdateSubscriptionExpiry(
-    subscription
-  );
+  const updatedSubscription =
+    await checkAndUpdateSubscriptionExpiry(subscription);
 
   // Add daysRemaining to subscription
   return {
@@ -1256,11 +1323,11 @@ export const getSubscriptionByIdService = async (
 export const updateRestaurantSubscriptionService = async (
   subscriptionId: string,
   data: UpdateRestaurantSubscriptionData,
-  restaurantId?: string
+  restaurantId?: string,
 ) => {
   const existingSubscription = await getSubscriptionByIdService(
     subscriptionId,
-    restaurantId
+    restaurantId,
   );
 
   const oldStatus = existingSubscription.status;
@@ -1311,7 +1378,7 @@ export const updateRestaurantSubscriptionService = async (
 
 export const cancelSubscriptionService = async (
   restaurantId: string,
-  reason?: string
+  reason?: string,
 ) => {
   // Get current subscription
   const currentSubscription = await prisma.restaurantSubscription.findFirst({
@@ -1363,7 +1430,7 @@ export const renewSubscriptionService = async (
     phoneNumber?: string;
     cardDetails?: any;
     bankDetails?: any;
-  }
+  },
 ) => {
   // Get current subscription
   const currentSubscription = await prisma.restaurantSubscription.findFirst({
@@ -1438,7 +1505,7 @@ export const renewSubscriptionService = async (
   if (paymentData && paymentData.paymentMethodId) {
     // Get payment method from DB
     const paymentMethodConfig = await getPaymentMethodByIdService(
-      paymentData.paymentMethodId
+      paymentData.paymentMethodId,
     );
     const paymentMethod = paymentMethodConfig.name.toUpperCase();
 
@@ -1450,7 +1517,7 @@ export const renewSubscriptionService = async (
           phoneNumber: paymentData.phoneNumber,
           cardDetails: paymentData.cardDetails,
           bankDetails: paymentData.bankDetails,
-        }
+        },
       );
 
       if (!paymentResult.success) {
@@ -1523,8 +1590,8 @@ export const getAllSubscriptionsService = async ({
   // Check and update subscription expiry
   const updatedSubscriptions = await Promise.all(
     subscriptions.map((subscription) =>
-      checkAndUpdateSubscriptionExpiry(subscription)
-    )
+      checkAndUpdateSubscriptionExpiry(subscription),
+    ),
   );
 
   // Add daysRemaining to each subscription
@@ -1611,7 +1678,7 @@ function calculateDaysRemaining(endDate: Date): number {
  * Service to get restaurant's current subscription (similar to cart pattern)
  */
 export const getRestaurantCurrentSubscriptionService = async (
-  restaurantId: string
+  restaurantId: string,
 ) => {
   const subscription = await prisma.restaurantSubscription.findFirst({
     where: {
@@ -1637,9 +1704,8 @@ export const getRestaurantCurrentSubscriptionService = async (
   }
 
   // Check and update subscription expiry
-  const updatedSubscription = await checkAndUpdateSubscriptionExpiry(
-    subscription
-  );
+  const updatedSubscription =
+    await checkAndUpdateSubscriptionExpiry(subscription);
 
   // Add daysRemaining to subscription
   return {
@@ -1659,7 +1725,7 @@ export const changeSubscriptionPlanService = async (
     phoneNumber?: string;
     cardDetails?: any;
     bankDetails?: any;
-  }
+  },
 ) => {
   // Get current subscription
   const currentSubscription = await prisma.restaurantSubscription.findFirst({
@@ -1754,7 +1820,7 @@ export const changeSubscriptionPlanService = async (
   if (paymentData && paymentData.paymentMethodId) {
     // Get payment method from DB
     const paymentMethodConfig = await getPaymentMethodByIdService(
-      paymentData.paymentMethodId
+      paymentData.paymentMethodId,
     );
     const paymentMethod = paymentMethodConfig.name.toUpperCase();
 
@@ -1766,7 +1832,7 @@ export const changeSubscriptionPlanService = async (
           phoneNumber: paymentData.phoneNumber,
           cardDetails: paymentData.cardDetails,
           bankDetails: paymentData.bankDetails,
-        }
+        },
       );
 
       if (!paymentResult.success) {
@@ -1808,7 +1874,7 @@ export const getRestaurantSubscriptionHistoryService = async (
   filters?: {
     page?: number;
     limit?: number;
-  }
+  },
 ) => {
   const { page = 1, limit = 10 } = filters || {};
   const skip = (page - 1) * limit;
@@ -1859,7 +1925,7 @@ export const getRestaurantSubscriptionHistoryService = async (
  * Restores the previous subscription status to prevent user from losing current subscription
  */
 export const rollbackSubscriptionPaymentService = async (
-  subscriptionId: string
+  subscriptionId: string,
 ) => {
   // Get current subscription with history
   const subscription = await prisma.restaurantSubscription.findUnique({
@@ -1955,7 +2021,7 @@ export const rollbackSubscriptionPaymentService = async (
       `Dear ${
         subscription.restaurant?.name || ""
       }, Your subscription payment failed. We've restored your previous subscription to ensure no service interruption. Please try again or contact support.`,
-      subscription.restaurant?.phone || ""
+      subscription.restaurant?.phone || "",
     );
   } catch (error) {
     console.error("Failed to send rollback notification:", error);

@@ -313,17 +313,20 @@ model Admin {
   cell     String?
   village  String?
 
-  aggregatorAssignments FarmerSubmission[]    @relation("Aggregator")
-  logisticsAssignments  Order[]               @relation("LOGISTICS")
-  products              Product[]
-  productCategories     ProductCategory[]
-  productUnits          ProductUnit[]
-  paymentMethods        PaymentMethodConfig[]
-  LoanApplication       LoanApplication[]
-  OrderDelivery         OrderDelivery[]
-  promoCodes            PromoCode[]
-  walletTransactions    WalletTransaction[]
-  Voucher               Voucher[]
+  aggregatorAssignments    FarmerSubmission[]    @relation("Aggregator")
+  logisticsAssignments     Order[]               @relation("LOGISTICS")
+  products                 Product[]
+  productCategories        ProductCategory[]
+  productUnits             ProductUnit[]
+  paymentMethods           PaymentMethodConfig[]
+  LoanApplication          LoanApplication[]
+  OrderDelivery            OrderDelivery[]
+  promoCodes               PromoCode[]
+  walletTransactions       WalletTransaction[]
+  Voucher                  Voucher[]
+  traderWallet             Wallet?               @relation("TraderWallet")
+  traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
+  traderTransactionHistory TraderTransaction[]   @relation("TraderTransactionHistory")
 }
 
 model Product {
@@ -621,7 +624,8 @@ model OrderDelivery {
 // Wallet model for managing user account balances
 model Wallet {
   id           String   @id @default(uuid())
-  restaurantId String   @unique
+  restaurantId String?  @unique
+  traderId     String?  @unique
   balance      Float    @default(0)
   currency     String   @default("RWF")
   isActive     Boolean  @default(true)
@@ -629,10 +633,12 @@ model Wallet {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  restaurant   Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant?         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  trader       Admin?              @relation("TraderWallet", fields: [traderId], references: [id], onDelete: Cascade)
   transactions WalletTransaction[]
 
   @@index([restaurantId])
+  @@index([traderId])
   @@index([isActive])
 }
 
@@ -643,6 +649,7 @@ model WalletTransaction {
   adminId         String?
   restaurantId    String?
   affiliatorId    String?
+  traderId        String?
   type            WalletTransactionType
   amount          Float // Positive for credit, negative for debit
   previousBalance Float
@@ -669,6 +676,7 @@ model WalletTransaction {
   admin      Admin?      @relation(fields: [adminId], references: [id], onDelete: Cascade)
   restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   affiliator Affiliator? @relation(fields: [affiliatorId], references: [id], onDelete: Cascade)
+  trader     Admin?      @relation("TraderTransactions", fields: [traderId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([type])
@@ -678,6 +686,7 @@ model WalletTransaction {
   @@index([adminId])
   @@index([restaurantId])
   @@index([affiliatorId])
+  @@index([traderId])
 }
 
 model POSSale {
@@ -1060,6 +1069,49 @@ model Invitation {
   @@index([email])
   @@index([token])
   @@index([expiresAt])
+}
+
+model TraderTransaction {
+  id       String                @id @default(uuid())
+  traderId String
+  type     TraderTransactionType
+  amount   Float
+
+  // Reference tracking
+  orderId   String?
+  voucherId String?
+  loanId    String?
+  reference String? // Generic reference field
+
+  // Commission tracking
+  isCommissionPaid Boolean @default(false)
+  commissionRate   Float? // e.g., 0.05 for 5%
+
+  description String?
+  metadata    Json?
+  status      TransactionStatus @default(COMPLETED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  trader Admin @relation("TraderTransactionHistory", fields: [traderId], references: [id], onDelete: Cascade)
+
+  @@index([traderId])
+  @@index([type])
+  @@index([orderId])
+  @@index([voucherId])
+  @@index([loanId])
+  @@index([isCommissionPaid])
+  @@index([createdAt])
+}
+
+enum TraderTransactionType {
+  LOAN_APPROVAL
+  COMMISSION_EARNED
+  COMMISSION_PAID
+  WALLET_TOPUP
+  WALLET_DEBIT
 }
 
 model ContactSubmission {

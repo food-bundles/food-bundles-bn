@@ -1,0 +1,386 @@
+tags:
+  - name: Trader API Management
+    description: Operations for trader functionality including wallet, loans, vouchers, and commission management
+
+components:
+  schemas:
+    TraderWallet:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Wallet ID
+        balance:
+          type: number
+          format: float
+          description: Current wallet balance
+        currency:
+          type: string
+          description: Wallet currency
+          example: "RWF"
+        isActive:
+          type: boolean
+          description: Wallet status
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TraderTopUpRequest:
+      type: object
+      required:
+        - amount
+        - paymentMethod
+      properties:
+        amount:
+          type: number
+          format: float
+          description: Amount to top up
+          example: 100000
+        paymentMethod:
+          type: string
+          enum: [MOBILE_MONEY, CARD, BANK_TRANSFER]
+          description: Payment method
+        phoneNumber:
+          type: string
+          description: Phone number for mobile money
+          example: "+250788123456"
+        description:
+          type: string
+          description: Transaction description
+
+    LoanApprovalRequest:
+      type: object
+      required:
+        - approvedAmount
+        - repaymentDays
+        - voucherType
+      properties:
+        approvedAmount:
+          type: number
+          format: float
+          description: Approved loan amount
+          example: 50000
+        repaymentDays:
+          type: number
+          description: Repayment period in days
+          example: 30
+        voucherType:
+          type: string
+          enum:
+            [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80, DISCOUNT_100]
+          description: Voucher discount type
+        notes:
+          type: string
+          description: Approval notes
+
+    TraderCommission:
+      type: object
+      properties:
+        totalCommission:
+          type: number
+          format: float
+          description: Total commission earned
+        commissionDetails:
+          type: array
+          items:
+            type: object
+            properties:
+              voucherId:
+                type: string
+              orderId:
+                type: string
+              orderAmount:
+                type: number
+                format: float
+              commission:
+                type: number
+                format: float
+              orderDate:
+                type: string
+                format: date-time
+
+    TraderDashboard:
+      type: object
+      properties:
+        walletBalance:
+          type: number
+          format: float
+          description: Current wallet balance
+        totalVouchersApproved:
+          type: number
+          description: Total vouchers approved by trader
+        activeVouchers:
+          type: number
+          description: Currently active vouchers
+        totalOrdersProcessed:
+          type: number
+          description: Total orders processed with trader vouchers
+        totalCommissionEarned:
+          type: number
+          format: float
+          description: Total commission earned
+        pendingCommission:
+          type: number
+          format: float
+          description: Pending commission to be processed
+
+paths:
+  /traders/wallet:
+    post:
+      tags:
+        - Trader API Management
+      summary: Create trader wallet
+      security:
+        - BearerAuth: []
+      responses:
+        201:
+          description: Trader wallet created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TraderWallet"
+        400:
+          description: Bad request
+
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader wallet
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Trader wallet retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/TraderWallet"
+
+  /traders/wallet/topup:
+    post:
+      tags:
+        - Trader API Management
+      summary: Top up trader wallet
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TraderTopUpRequest"
+      responses:
+        200:
+          description: Wallet top-up initiated successfully
+        400:
+          description: Bad request
+
+  /traders/loans:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get loan applications for trader
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, DISBURSED, PAID, SETTLED]
+        - name: restaurantId
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Loan applications retrieved successfully
+
+  /traders/loans/{loanId}/approve:
+    post:
+      tags:
+        - Trader API Management
+      summary: Approve loan application
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: loanId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanApprovalRequest"
+      responses:
+        200:
+          description: Loan approved successfully
+        400:
+          description: Insufficient wallet balance or bad request
+
+  /traders/vouchers:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get vouchers approved by trader
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED, MATURED]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Vouchers retrieved successfully
+
+  /traders/commission:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader commission details
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Commission details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/TraderCommission"
+
+  /traders/commission/process:
+    post:
+      tags:
+        - Trader API Management
+      summary: Process commission payment to trader wallet
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Commission processed successfully
+        400:
+          description: No commission available
+
+  /traders/orders:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get orders paid with trader vouchers
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Orders retrieved successfully
+
+  /traders/transactions:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader transaction history
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [TOP_UP, TRADING, REFUND, ADJUSTMENT]
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Transaction history retrieved successfully
+
+  /traders/dashboard:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader dashboard statistics
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Dashboard statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/TraderDashboard"

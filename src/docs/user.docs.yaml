@@ -10,7 +10,20 @@ components:
   schemas:
     Role:
       type: string
-      enum: [FARMER, RESTAURANT, ADMIN, AGGREGATOR, LOGISTICS, AFFILIATOR, TRADER]
+      enum:
+        [
+          FARMER,
+          RESTAURANT,
+          ADMIN,
+          AGGREGATOR,
+          LOGISTICS,
+          TRADER,
+          LOGISTICS,
+          TRADER,
+          LOGISTICS,
+          AFFILIATOR,
+          TRADER,
+        ]
       description: User role in the system
 
     # Location Schemas
@@ -461,7 +474,7 @@ components:
           example: "Password123"
         role:
           type: string
-          enum: [ADMIN, AGGREGATOR]
+          enum: [ADMIN, AGGREGATOR, LOGISTICS, TRADER, LOGISTICS, TRADER]
           description: Admin role (required)
         location:
           type: string
@@ -511,7 +524,7 @@ components:
           example: "NewPassword123"
         role:
           type: string
-          enum: [ADMIN, AGGREGATOR]
+          enum: [ADMIN, AGGREGATOR, LOGISTICS, TRADER]
           description: Admin role
         location:
           type: string
@@ -660,6 +673,18 @@ paths:
                   email: "admin@food.rw"
                   password: "Password123"
                   userType: "admin"
+              trader_login:
+                summary: Trader login
+                value:
+                  email: "trader@food.rw"
+                  password: "Password123"
+                  userType: "trader"
+              logistic_login:
+                summary: Logistics login
+                value:
+                  email: "logistics@food.rw"
+                  password: "Password123"
+                  userType: "logistics"
               auto_detect:
                 summary: Auto-detect user type
                 value:
@@ -1335,6 +1360,37 @@ paths:
                   village: "Umucyo"
                   password: "Password123"
                   role: "AGGREGATOR"
+
+              trader_register:
+                summary: Trader registration
+                value:
+                  username: "FoodBundlesTrader"
+                  email: "trader@food.rw"
+                  phone: "+250788123456"
+                  location: "KK 12 AVE, Kigali, Rwanda"
+                  province: "Umujyi wa Kigali"
+                  district: "Nyarugenge"
+                  sector: "Gitega"
+                  cell: "Akabahizi"
+                  village: "Umucyo"
+                  password: "Password123"
+                  role: "TRADER"
+
+              logistics_register:
+                summary: Logistics registration
+                value:
+                  username: "FoodBundlesLogistics"
+                  email: "logistics@food.rw"
+                  phone: "+250788123456"
+                  location: "KK 12 AVE, Kigali, Rwanda"
+                  province: "Umujyi wa Kigali"
+                  district: "Nyarugenge"
+                  sector: "Gitega"
+                  cell: "Akabahizi"
+                  village: "Umucyo"
+                  password: "Password123"
+                  role: "LOGISTICS"
+
       responses:
         201:
           description: Admin/AGGREGATOR created successfully
@@ -1669,4 +1725,4 @@ paths:
           example: "NewPassword123"
         role:
           $ref: "#/components/schemas/Role"
-          description: Role (ADMIN, AGGREGATOR, LOGISTICS, TRADER)
+          description: Role (ADMIN, AGGREGATOR, LOGISTICS, TRADER, LOGISTICS, TRADER)

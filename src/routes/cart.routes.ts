@@ -26,7 +26,7 @@ cartRoutes.post(
   "/add",
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR"),
-  addToCart
+  addToCart,
 );
 
 /**
@@ -38,7 +38,7 @@ cartRoutes.get(
   "/my-cart",
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR"),
-  getMyCart
+  getMyCart,
 );
 
 /**
@@ -50,7 +50,7 @@ cartRoutes.get(
   "/summary",
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR"),
-  getCartSummary
+  getCartSummary,
 );
 
 /**
@@ -62,7 +62,7 @@ cartRoutes.put(
   "/items/:cartItemId",
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR"),
-  updateCartItem
+  updateCartItem,
 );
 
 /**
@@ -74,7 +74,7 @@ cartRoutes.delete(
   "/items/:cartItemId",
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR"),
-  removeCartItem
+  removeCartItem,
 );
 
 /**
@@ -86,7 +86,7 @@ cartRoutes.delete(
   "/clear",
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR"),
-  clearCart
+  clearCart,
 );
 
 // ========================================
@@ -109,7 +109,7 @@ cartRoutes.get(
   "/:cartId",
   isAuthenticated,
   checkPermission("ADMIN"),
-  getCartById
+  getCartById,
 );
 
 export default cartRoutes;
