@@ -1,6 +1,5 @@
 import nodemailer from "nodemailer";
 import prisma from "../prisma";
-import { getUserByEmail } from "../services/userGets";
 
 export interface PaymentNotificationData {
   amount: number;
