@@ -461,3 +461,213 @@ export const removeRestaurantExclusionService = async (
     },
   });
 };
+
+// New services for requested endpoints
+
+export const getActivePromoCodesService = async () => {
+  const now = new Date();
+  
+  return await prisma.promoCode.findMany({
+    where: {
+      isActive: true,
+      AND: [
+        {
+          OR: [
+            { startDate: null },
+            { startDate: { lte: now } }
+          ]
+        },
+        {
+          OR: [
+            { expiryDate: null },
+            { expiryDate: { gte: now } }
+          ]
+        }
+      ]
+    },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      description: true,
+      type: true,
+      discountType: true,
+      discountValue: true,
+      minOrderAmount: true,
+      minItemQuantity: true,
+      expiryDate: true,
+      maxUsageCount: true,
+      currentUsageCount: true
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+};
+
+export const getMyPromoCodesService = async (restaurantId: string) => {
+  const now = new Date();
+  
+  const promoCodes = await prisma.promoCode.findMany({
+    where: {
+      isActive: true,
+      AND: [
+        {
+          OR: [
+            { startDate: null },
+            { startDate: { lte: now } }
+          ]
+        },
+        {
+          OR: [
+            { expiryDate: null },
+            { expiryDate: { gte: now } }
+          ]
+        }
+      ]
+    }
+  });
+
+  const availablePromoCodes = [];
+  
+  for (const promo of promoCodes) {
+    const excludedRestaurants = (promo.excludedRestaurants as any[]) || [];
+    const isExcluded = excludedRestaurants.some(
+      (exclusion: any) => exclusion.restaurantId === restaurantId
+    );
+    
+    if (promo.type === 'EXCEPTIONAL' && isExcluded) {
+      continue;
+    }
+
+    if (promo.type === 'SUBSCRIBERS') {
+      const activeSubscription = await prisma.restaurantSubscription.findFirst({
+        where: {
+          restaurantId,
+          status: 'ACTIVE',
+          endDate: { gte: now },
+        },
+      });
+
+      if (!activeSubscription) {
+        continue;
+      }
+    }
+
+    const restaurantUsageCount = (promo.restaurantUsageCount as any)?.[restaurantId] || 0;
+    if (promo.maxUsagePerUser && restaurantUsageCount >= promo.maxUsagePerUser) {
+      continue;
+    }
+
+    availablePromoCodes.push(promo);
+  }
+
+  return availablePromoCodes.map(promo => ({
+    id: promo.id,
+    code: promo.code,
+    name: promo.name,
+    description: promo.description,
+    type: promo.type,
+    discountType: promo.discountType,
+    discountValue: promo.discountValue,
+    minOrderAmount: promo.minOrderAmount,
+    minItemQuantity: promo.minItemQuantity,
+    expiryDate: promo.expiryDate,
+    maxUsageCount: promo.maxUsageCount,
+    currentUsageCount: promo.currentUsageCount,
+    myUsageCount: (promo.restaurantUsageCount as any)?.[restaurantId] || 0
+  }));
+};
+
+export const calculateCartWithPromoService = async (
+  cartId: string,
+  promoCode: string,
+  restaurantId: string
+) => {
+  const cart = await prisma.cart.findUnique({
+    where: { id: cartId },
+    include: {
+      cartItems: {
+        include: {
+          product: {
+            include: {
+              category: true
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (!cart) {
+    throw new Error('Cart not found');
+  }
+
+  if (cart.restaurantId !== restaurantId) {
+    throw new Error('Unauthorized: Cart does not belong to this restaurant');
+  }
+
+  if (cart.cartItems.length === 0) {
+    throw new Error('Cart is empty');
+  }
+
+  const items = cart.cartItems.map(item => ({
+    productId: item.productId,
+    quantity: item.quantity
+  }));
+
+  const promoResult = await applyPromoCodeService(
+    promoCode,
+    restaurantId,
+    'temp_cart_calculation',
+    items
+  );
+
+  return {
+    cartId: cart.id,
+    originalAmount: cart.totalAmount,
+    promoCode: {
+      code: promoResult.promoCode.code,
+      name: promoResult.promoCode.name,
+      discountType: promoResult.promoCode.discountType,
+      discountValue: promoResult.promoCode.discountValue
+    },
+    discountAmount: promoResult.discountAmount,
+    finalAmount: promoResult.finalAmount,
+    discountPercentage: promoResult.discountPercentage,
+    savings: promoResult.discountAmount
+  };
+};
+
+// Enhanced create service with excluded restaurants
+export const createPromoCodeWithExclusionsService = async (
+  data: CreatePromoCodeData & { excludedRestaurants?: Array<{ restaurantId: string; reason?: string }> }
+) => {
+  const existingPromo = await prisma.promoCode.findUnique({
+    where: { code: data.code },
+  });
+
+  if (existingPromo) {
+    throw new Error("Promo code already exists");
+  }
+
+  const excludedRestaurants = data.excludedRestaurants?.map(exclusion => ({
+    ...exclusion,
+    excludedBy: data.createdBy,
+    excludedAt: new Date()
+  })) || [];
+
+  const { excludedRestaurants: _, ...promoData } = data;
+
+  return await prisma.promoCode.create({
+    data: {
+      ...promoData,
+      usageHistory: [],
+      excludedRestaurants,
+      restaurantUsageCount: {},
+    },
+    include: {
+      admin: {
+        select: { id: true, username: true, email: true },
+      },
+    },
+  });
+};

@@ -29,7 +29,7 @@ export const getUserByEmail = async (email: string) => {
   if (affiliator) return { ...affiliator, userType: "AFFILIATOR" };
 
   const admin = await prisma.admin.findUnique({ where: { email } });
-  if (admin) return { ...admin, userType: "ADMIN" };
+  if (admin) return { ...admin, userType: admin.role };
 
   return null;
 };

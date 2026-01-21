@@ -31,7 +31,7 @@ export const inviteController = {
       });
 
       // Send invitation email
-      await sendInvitationEmail(email, "User", result.inviteUrl);
+      await sendInvitationEmail(email, "User", result.inviteUrl, role);
 
       res.status(201).json({
         success: true,
@@ -165,8 +165,9 @@ export const inviteController = {
       // Send invitation email
       await sendInvitationEmail(
         result.invitation.email,
-        "User",
-        result.inviteUrl
+        result.invitation.role,
+        result.inviteUrl,
+        result.invitation.role,
       );
 
       res.status(200).json({
