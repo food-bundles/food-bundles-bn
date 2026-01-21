@@ -10,10 +10,20 @@ import {
   applyPromoCode,
   excludeRestaurant,
   removeRestaurantExclusion,
+  getActivePromoCodes,
+  getMyPromoCodes,
+  calculateCartWithPromo,
 } from "../controllers/promo.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
 const router = Router();
+
+// Public routes (no authentication required)
+router.get("/active", getActivePromoCodes);
+
+// Restaurant routes (authentication required)
+router.get("/my-promos", isAuthenticated, checkPermission("RESTAURANT"), getMyPromoCodes);
+router.post("/calculate-cart", isAuthenticated, checkPermission("RESTAURANT"), calculateCartWithPromo);
 
 // Admin routes - require admin authentication
 router.post("/", isAuthenticated, checkPermission("ADMIN"), createPromoCode);

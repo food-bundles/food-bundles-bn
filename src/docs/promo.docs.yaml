@@ -195,6 +195,18 @@ components:
           type: string
           format: date-time
           example: "2024-12-31T23:59:59Z"
+        excludedRestaurants:
+          type: array
+          items:
+            type: object
+            properties:
+              restaurantId:
+                type: string
+                example: "restaurant_123"
+              reason:
+                type: string
+                example: "Previous violation of terms"
+          description: List of restaurants to exclude from this promo code
 
     ValidatePromoCodeRequest:
       type: object
@@ -354,7 +366,197 @@ components:
               type: integer
               example: 2
 
+    PublicPromoCode:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "promo_123456"
+        code:
+          type: string
+          example: "SAVE20"
+        name:
+          type: string
+          example: "20% Off Everything"
+        description:
+          type: string
+          example: "Get 20% off on all products"
+        type:
+          type: string
+          enum: [GENERAL, SUBSCRIBERS, EXCEPTIONAL]
+          example: "GENERAL"
+        discountType:
+          type: string
+          enum: [PERCENTAGE, FIXED_AMOUNT]
+          example: "PERCENTAGE"
+        discountValue:
+          type: number
+          example: 20
+        minOrderAmount:
+          type: number
+          nullable: true
+          example: 50000
+        minItemQuantity:
+          type: integer
+          nullable: true
+          example: 2
+        expiryDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-12-31T23:59:59Z"
+        maxUsageCount:
+          type: integer
+          nullable: true
+          example: 1000
+        currentUsageCount:
+          type: integer
+          example: 250
+
+    RestaurantPromoCode:
+      allOf:
+        - $ref: "#/components/schemas/PublicPromoCode"
+        - type: object
+          properties:
+            myUsageCount:
+              type: integer
+              description: Number of times this restaurant has used this promo
+              example: 3
+
+    CartCalculation:
+      type: object
+      properties:
+        cartId:
+          type: string
+          example: "cart_123456"
+        originalAmount:
+          type: number
+          example: 75000
+        promoCode:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "SAVE20"
+            name:
+              type: string
+              example: "20% Off Everything"
+            discountType:
+              type: string
+              example: "PERCENTAGE"
+            discountValue:
+              type: number
+              example: 20
+        discountAmount:
+          type: number
+          example: 15000
+        finalAmount:
+          type: number
+          example: 60000
+        discountPercentage:
+          type: number
+          example: 20
+        savings:
+          type: number
+          example: 15000
+
 paths:
+  /promo/active:
+    get:
+      tags:
+        - Promo Code Management
+      summary: Get all active promo codes
+      description: Public endpoint to view all currently active promo codes without authentication
+      responses:
+        "200":
+          description: List of active promo codes retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicPromoCode"
+        "500":
+          description: Internal server error
+
+  /promo/my-promos:
+    get:
+      tags:
+        - Promo Code Management
+      summary: Get my available promo codes
+      description: Get promo codes available for the authenticated restaurant
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Restaurant's available promo codes retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RestaurantPromoCode"
+        "401":
+          description: Unauthorized - Restaurant authentication required
+        "500":
+          description: Internal server error
+
+  /promo/calculate-cart:
+    post:
+      tags:
+        - Promo Code Management
+      summary: Calculate cart total with promo code
+      description: Show updated price for a cart when applying a promo code
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - cartId
+                - promoCode
+              properties:
+                cartId:
+                  type: string
+                  description: ID of the cart to calculate
+                  example: "cart_123456"
+                promoCode:
+                  type: string
+                  description: Promo code to apply
+                  example: "SAVE20"
+      responses:
+        "200":
+          description: Cart calculation with promo code successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/CartCalculation"
+        "400":
+          description: Bad request - Invalid cart ID or promo code
+        "401":
+          description: Unauthorized - Restaurant authentication required
+
   /promo:
     post:
       tags:

@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import prisma from "../prisma";
+import { getUserByEmail } from "../services/userGets";
 
 export interface PaymentNotificationData {
   amount: number;
@@ -134,7 +135,7 @@ export const isValidRwandaPhone = (phone: string): boolean => {
  * Generate payment notification email template
  */
 export const sendPaymentNotificationTemplate = (
-  data: PaymentNotificationData
+  data: PaymentNotificationData,
 ): string => {
   const expirationTime = new Date();
   expirationTime.setHours(expirationTime.getHours() + 8);
@@ -269,7 +270,7 @@ export const sendPaymentNotificationTemplate = (
                 <small>Quantity: ${product.quantity}</small>
               </div>
               <div>Price: <strong>${product.unitPrice.toLocaleString()} RWF</strong></div>
-            </div>`
+            </div>`,
             )
             .join("")}
           <div class="product-item" style="border-top: 2px solid #22c55e; margin-top: 10px; padding-top: 10px;">
@@ -300,7 +301,7 @@ export const sendPaymentNotificationTemplate = (
               day: "numeric",
               hour: "2-digit",
               minute: "2-digit",
-            }
+            },
           )}</p>
         </div>
 
@@ -335,7 +336,7 @@ export const sendPaymentNotificationTemplate = (
  * Generate payment confirmation email template
  */
 export const sendPaymentConfirmationTemplate = (
-  data: PaymentConfirmationData
+  data: PaymentConfirmationData,
 ): string => {
   return `<!DOCTYPE html>
   <html lang="en">
@@ -433,7 +434,7 @@ export const sendPaymentConfirmationTemplate = (
                     year: "numeric",
                     month: "long",
                     day: "numeric",
-                  }
+                  },
                 )}</p>`
               : ""
           }
@@ -448,7 +449,7 @@ export const sendPaymentConfirmationTemplate = (
                 <small>Quantity: ${product.quantity}</small>
               </div>
               <div><strong>${product.price.toLocaleString()} RWF</strong></div>
-            </div>`
+            </div>`,
             )
             .join("")}
         </div>
@@ -547,7 +548,7 @@ export const sendPaymentFailedTemplate = (data: {
                   <small>Quantity: ${product.quantity}</small>
                 </div>
                 <div><strong>${product.price.toLocaleString()} RWF</strong></div>
-              </div>`
+              </div>`,
             )
             .join("")}
         </div>
@@ -693,7 +694,7 @@ export const generateOrderStatusTemplate = (data: OrderStatusData): string => {
  */
 
 export const sendWalletNotificationTemplate = (
-  data: WalletNotificationData
+  data: WalletNotificationData,
 ): string => {
   const transactionTypeMap = {
     TOP_UP: { emoji: "💰", text: "Top-up" },
@@ -921,7 +922,7 @@ export async function sendPaymentFailedEmail(paymentData: {
 
 // Send wallet notification email
 export async function sendWalletNotificationEmail(
-  data: WalletNotificationData
+  data: WalletNotificationData,
 ) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
     console.log("Email credentials not configured");
@@ -974,7 +975,7 @@ const sendAdminOrderConfirmationTemplate = (paymentData: {
 }): string => {
   const totalItems = paymentData.products.reduce(
     (sum, product) => sum + product.quantity,
-    0
+    0,
   );
 
   return `<!DOCTYPE html>
@@ -1035,7 +1036,7 @@ const sendAdminOrderConfirmationTemplate = (paymentData: {
                 product.quantity * product.price
               ).toLocaleString()} RWF</strong>
             </div>
-          `
+          `,
             )
             .join("")}
         </div>
@@ -1121,7 +1122,7 @@ const sendLogisticsOrderNotificationTemplate = (paymentData: {
 }): string => {
   const totalItems = paymentData.products.reduce(
     (sum, product) => sum + product.quantity,
-    0
+    0,
   );
 
   return `<!DOCTYPE html>
@@ -1182,7 +1183,7 @@ const sendLogisticsOrderNotificationTemplate = (paymentData: {
                 product.quantity * product.price
               ).toLocaleString()} RWF</strong>
             </div>
-          `
+          `,
             )
             .join("")}
         </div>
@@ -1260,12 +1261,12 @@ export async function sendLogisticsOrderNotificationEmail(paymentData: {
         };
 
         return transporter.sendMail(logisticsEmail);
-      }
+      },
     );
 
     await Promise.all(emailPromises);
     console.log(
-      `Logistics order notification emails sent to ${logisticsUsers.length} users`
+      `Logistics order notification emails sent to ${logisticsUsers.length} users`,
     );
   } catch (error) {
     console.error("Failed to send logistics order notification emails:", error);
@@ -1279,8 +1280,54 @@ export async function sendLogisticsOrderNotificationEmail(paymentData: {
  */
 const sendInvitationEmailTemplate = (
   firstName: string,
-  inviteUrl: string
+  inviteUrl: string,
+  userType?: string,
 ): string => {
+  const getRoleInfo = (role?: string) => {
+    switch (role) {
+      case "TRADER":
+        return {
+          greeting: "Dear Trader",
+          description:
+            "As a Trader, you will be able to work with vouchers, approve loans, receive commissions upon voucher usage, and manage loan applications. You'll play a key role in facilitating financial services for our restaurant partners.",
+        };
+      case "AGGREGATOR":
+        return {
+          greeting: "Dear Aggregator",
+          description:
+            "As an Aggregator, you will work on farmer submissions, review and approve products, and help connect farmers with our restaurant network. You'll be essential in maintaining our supply chain quality.",
+        };
+      case "LOGISTICS":
+        return {
+          greeting: "Dear Logistics Partner",
+          description:
+            "As part of our Logistics team, you will manage orders, coordinate deliveries, and ensure timely distribution of products to our restaurant partners. You'll be crucial in our delivery operations.",
+        };
+      case "RESTAURANT":
+        return {
+          greeting: "Dear Restaurant Partner",
+          description:
+            "As a Restaurant partner, you will be able to place orders, manage your wallet, access loans and vouchers, and streamline your procurement process through our platform.",
+        };
+
+      case "ADMIN":
+        return {
+          greeting: "Dear Admin",
+          description:
+            "As an Admin, you will have access to our admin dashboard where you can manage users, products, and other key aspects of our platform.",
+        };
+
+      default:
+        return {
+          greeting: `Dear ${firstName}`,
+          description:
+            "You will have access to our comprehensive platform where you can collaborate with your team, manage projects, and utilize various features tailored to your role.",
+        };
+    }
+  };
+
+  const roleInfo = getRoleInfo(userType);
+
   return `<!DOCTYPE html>
   <html lang="en">
   <head>
@@ -1302,15 +1349,16 @@ const sendInvitationEmailTemplate = (
   <body>
     <div class="container">
       <div class="content">
-        <p>Hello ${firstName},</p>
+        <p>${roleInfo.greeting},</p>
         
         <p>You've been invited to join <strong>FoodBundles Platform</strong>. We're excited to have you on board!</p>
         
-        <p>This invitation gives you access to our platform where you can collaborate with your team, manage projects, and more.</p>
+        <div class="invitation-details">
+          <h2>🎯 Your Role & Responsibilities</h2>
+          <p>${roleInfo.description}</p>
+        </div>
         
-                  <p>This invitation will expire in <span class="highlight">24 hours</span>.</p>
-
-
+        <p>This invitation will expire in <span class="highlight">24 hours</span>.</p>
         
         <div style="text-align: center;">
           <a href="${inviteUrl}" class="button">Accept Invitation</a>
@@ -1344,7 +1392,7 @@ const sendAffiliatorWelcomeTemplate = (
   restaurantName: string,
   email: string,
   password: string,
-  loginUrl: string
+  loginUrl: string,
 ): string => {
   return `<!DOCTYPE html>
   <html lang="en">
@@ -1408,7 +1456,7 @@ export async function sendAffiliatorWelcomeEmail(
   email: string,
   name: string,
   restaurantName: string,
-  password: string
+  password: string,
 ) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
     console.log("Email credentials not configured");
@@ -1438,7 +1486,7 @@ export async function sendAffiliatorWelcomeEmail(
       restaurantName,
       email,
       password,
-      loginUrl
+      loginUrl,
     ),
   };
 
@@ -1454,7 +1502,8 @@ export async function sendAffiliatorWelcomeEmail(
 export async function sendInvitationEmail(
   email: string,
   firstName: string,
-  inviteUrl: string
+  inviteUrl: string,
+  userType: string,
 ) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
     console.log("Email credentials not configured");
@@ -1478,7 +1527,7 @@ export async function sendInvitationEmail(
     from: `"FoodBundles Platform" <${process.env.GOOGLE_EMAIL}>`,
     to: email,
     subject: "You've Been Invited to Join FoodBundles Platform!",
-    html: sendInvitationEmailTemplate(firstName, inviteUrl),
+    html: sendInvitationEmailTemplate(firstName, inviteUrl, userType),
   };
 
   try {
@@ -1492,13 +1541,13 @@ export async function sendInvitationEmail(
  * Generate subscription expiry email template
  */
 const sendSubscriptionExpiryTemplate = (
-  data: SubscriptionExpiryData
+  data: SubscriptionExpiryData,
 ): string => {
   const isWarning = data.isWarning || false;
   const daysRemaining = isWarning
     ? Math.ceil(
         (new Date(data.endDate).getTime() - new Date().getTime()) /
-          (1000 * 60 * 60 * 24)
+          (1000 * 60 * 60 * 24),
       )
     : 0;
 
@@ -1522,10 +1571,10 @@ const sendSubscriptionExpiryTemplate = (
       .alert-box { background-color: ${
         isWarning ? "#fef3c7" : "#fee2e2"
       }; color: ${
-    isWarning ? "#92400e" : "#b91c1c"
-  }; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${
-    isWarning ? "#f59e0b" : "#ef4444"
-  }; }
+        isWarning ? "#92400e" : "#b91c1c"
+      }; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${
+        isWarning ? "#f59e0b" : "#ef4444"
+      }; }
       .subscription-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #22c55e; }
       .button { display: inline-block; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
       .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
@@ -1547,7 +1596,7 @@ const sendSubscriptionExpiryTemplate = (
             : `<p>Your <strong>${
                 data.planName
               }</strong> subscription has expired on <strong>${new Date(
-                data.endDate
+                data.endDate,
               ).toLocaleDateString()}</strong>.</p>`
         }
         
@@ -1556,7 +1605,7 @@ const sendSubscriptionExpiryTemplate = (
           ${
             isWarning
               ? `<p>To avoid service interruption, please renew your subscription before <strong>${new Date(
-                  data.endDate
+                  data.endDate,
                 ).toLocaleDateString()}</strong>.</p>`
               : `<p>Your access to premium features has been suspended. Renew your subscription to restore full access.</p>`
           }
@@ -1586,7 +1635,7 @@ const sendSubscriptionExpiryTemplate = (
 
 // Send subscription expiry email
 export async function sendSubscriptionExpiryEmail(
-  data: SubscriptionExpiryData
+  data: SubscriptionExpiryData,
 ) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
     console.log("Email credentials not configured");
@@ -1619,12 +1668,12 @@ export async function sendSubscriptionExpiryEmail(
   try {
     await transporter.sendMail(expiryEmail);
     console.log(
-      `Subscription ${isWarning ? "warning" : "expiry"} email sent successfully`
+      `Subscription ${isWarning ? "warning" : "expiry"} email sent successfully`,
     );
   } catch (error) {
     console.error(
       `Failed to send subscription ${isWarning ? "warning" : "expiry"} email:`,
-      error
+      error,
     );
   }
 }
@@ -1680,7 +1729,7 @@ const sendAdminUserCreatedTemplate = (data: AdminNotificationData): string => {
 };
 
 const sendAdminSubscriptionPaidTemplate = (
-  data: AdminNotificationData
+  data: AdminNotificationData,
 ): string => {
   return `<!DOCTYPE html>
   <html lang="en">
@@ -1712,8 +1761,8 @@ const sendAdminSubscriptionPaidTemplate = (
           <p><span class="highlight">Plan:</span> ${data.subscriptionPlan}</p>
           <p><span class="highlight">Amount:</span> <span class="amount">${data.amount?.toLocaleString()} RWF</span></p>
           <p><span class="highlight">Customer:</span> ${data.userName} (${
-    data.userEmail
-  })</p>
+            data.userEmail
+          })</p>
         </div>
       </div>
       <div class="footer">
@@ -1726,7 +1775,7 @@ const sendAdminSubscriptionPaidTemplate = (
 };
 
 const sendAdminVoucherAppliedTemplate = (
-  data: AdminNotificationData
+  data: AdminNotificationData,
 ): string => {
   return `<!DOCTYPE html>
   <html lang="en">
@@ -1758,8 +1807,8 @@ const sendAdminVoucherAppliedTemplate = (
           <p><span class="highlight">Voucher Amount:</span> <span class="amount">${data.voucherAmount?.toLocaleString()} RWF</span></p>
           <p><span class="highlight">Applied By:</span> ${data.appliedBy}</p>
           <p><span class="highlight">Customer:</span> ${data.userName} (${
-    data.userEmail
-  })</p>
+            data.userEmail
+          })</p>
         </div>
       </div>
       <div class="footer">
@@ -1772,7 +1821,7 @@ const sendAdminVoucherAppliedTemplate = (
 };
 
 const sendAdminVoucherApprovedTemplate = (
-  data: AdminNotificationData
+  data: AdminNotificationData,
 ): string => {
   return `<!DOCTYPE html>
   <html lang="en">
@@ -1851,7 +1900,7 @@ export async function sendAdminUserCreatedEmail(data: AdminNotificationData) {
 }
 
 export async function sendAdminSubscriptionPaidEmail(
-  data: AdminNotificationData
+  data: AdminNotificationData,
 ) {
   if (
     !process.env.GOOGLE_EMAIL ||
@@ -1886,13 +1935,13 @@ export async function sendAdminSubscriptionPaidEmail(
   } catch (error) {
     console.error(
       "Failed to send admin subscription paid notification:",
-      error
+      error,
     );
   }
 }
 
 export async function sendAdminVoucherAppliedEmail(
-  data: AdminNotificationData
+  data: AdminNotificationData,
 ) {
   if (
     !process.env.GOOGLE_EMAIL ||
@@ -1932,7 +1981,7 @@ export async function sendAdminVoucherAppliedEmail(
 }
 
 export async function sendAdminVoucherApprovedEmail(
-  data: AdminNotificationData
+  data: AdminNotificationData,
 ) {
   if (
     !process.env.GOOGLE_EMAIL ||
@@ -1995,7 +2044,7 @@ const sendPriceUpdateTemplate = (data: PriceUpdateData): string => {
   <body>
     <div class="container">
       <div class="content">
-        <p>Dear ${data.recipientName || 'Valued Customer'},</p>
+        <p>Dear ${data.recipientName || "Valued Customer"},</p>
         
         <p>We want to inform you that some product prices have been updated on the FoodBundles platform.</p>
         
@@ -2006,13 +2055,17 @@ const sendPriceUpdateTemplate = (data: PriceUpdateData): string => {
         
         <div class="products-list">
           <h3>Recently Updated Products:</h3>
-          ${data.products.map(product => `
+          ${data.products
+            .map(
+              (product) => `
             <div class="product-item">
               <strong>${product.name}</strong><br>
               <span class="highlight">New Price:</span> <span class="price">${product.newPrice.toLocaleString()} RWF</span><br>
               <small>Updated: ${new Date(product.updatedAt).toLocaleDateString()}</small>
             </div>
-          `).join('')}
+          `,
+            )
+            .join("")}
         </div>
         
         <p>These price updates reflect current market conditions and ensure we continue to provide you with quality products.</p>
@@ -2034,15 +2087,15 @@ const sendPriceUpdateTemplate = (data: PriceUpdateData): string => {
 // Send price update email
 export async function sendPriceUpdateEmail(
   email: string,
-  data: PriceUpdateData
+  data: PriceUpdateData,
 ) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log('Email credentials not configured');
+    console.log("Email credentials not configured");
     return;
   }
 
   const config = {
-    service: 'gmail',
+    service: "gmail",
     auth: {
       user: process.env.GOOGLE_EMAIL,
       pass: process.env.GOOGLE_PASSWORD,
@@ -2055,14 +2108,14 @@ export async function sendPriceUpdateEmail(
   const priceUpdateEmail = {
     from: `"FoodBundles" <${process.env.GOOGLE_EMAIL}>`,
     to: email,
-    subject: 'Product Prices Updated - FoodBundles',
+    subject: "Product Prices Updated - FoodBundles",
     html: sendPriceUpdateTemplate(data),
   };
 
   try {
     await transporter.sendMail(priceUpdateEmail);
-    console.log('Price update email sent successfully');
+    console.log("Price update email sent successfully");
   } catch (error) {
-    console.error('Failed to send price update email:', error);
+    console.error("Failed to send price update email:", error);
   }
 }

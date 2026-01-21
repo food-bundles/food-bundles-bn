@@ -9,9 +9,20 @@ import {
   validatePromoCodeService,
   applyPromoCodeService,
   excludeRestaurantService,
-  removeRestaurantExclusionService
+  removeRestaurantExclusionService,
+  getActivePromoCodesService,
+  getMyPromoCodesService,
+  calculateCartWithPromoService,
+  createPromoCodeWithExclusionsService,
 } from "../services/promo.service";
 import { PromoCodeType, DiscountType } from "@prisma/client";
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    role: string;
+  };
+}
 
 export const createPromoCode = async (req: Request, res: Response) => {
   try {
@@ -31,24 +42,34 @@ export const createPromoCode = async (req: Request, res: Response) => {
       applicableProductIds,
       applicableCategoryIds,
       startDate,
-      expiryDate
+      expiryDate,
     } = req.body;
 
-    if (!code || !name || !type || !discountType || discountValue === undefined) {
+    if (
+      !code ||
+      !name ||
+      !type ||
+      !discountType ||
+      discountValue === undefined
+    ) {
       return res.status(400).json({
-        message: "Missing required fields: code, name, type, discountType, discountValue"
+        message:
+          "Missing required fields: code, name, type, discountType, discountValue",
       });
     }
 
-    if (discountType === 'PERCENTAGE' && (discountValue < 0 || discountValue > 100)) {
+    if (
+      discountType === "PERCENTAGE" &&
+      (discountValue < 0 || discountValue > 100)
+    ) {
       return res.status(400).json({
-        message: "Percentage discount must be between 0 and 100"
+        message: "Percentage discount must be between 0 and 100",
       });
     }
 
-    if (discountType === 'FIXED_AMOUNT' && discountValue < 0) {
+    if (discountType === "FIXED_AMOUNT" && discountValue < 0) {
       return res.status(400).json({
-        message: "Fixed amount discount must be positive"
+        message: "Fixed amount discount must be positive",
       });
     }
 
@@ -69,16 +90,16 @@ export const createPromoCode = async (req: Request, res: Response) => {
       applicableCategoryIds,
       startDate: startDate ? new Date(startDate) : undefined,
       expiryDate: expiryDate ? new Date(expiryDate) : undefined,
-      createdBy: (req as any).user?.id
+      createdBy: (req as any).user?.id,
     });
 
     res.status(201).json({
       message: "Promo code created successfully",
-      data: promoCode
+      data: promoCode,
     });
   } catch (error: any) {
     res.status(400).json({
-      message: error.message || "Failed to create promo code"
+      message: error.message || "Failed to create promo code",
     });
   }
 };
@@ -89,7 +110,7 @@ export const getAllPromoCodes = async (req: Request, res: Response) => {
 
     const filters: any = {};
     if (type) filters.type = type as PromoCodeType;
-    if (isActive !== undefined) filters.isActive = isActive === 'true';
+    if (isActive !== undefined) filters.isActive = isActive === "true";
     if (search) filters.search = search as string;
 
     const promoCodes = await getAllPromoCodesService(filters);
@@ -97,11 +118,11 @@ export const getAllPromoCodes = async (req: Request, res: Response) => {
     res.status(200).json({
       message: "Promo codes retrieved successfully",
       data: promoCodes,
-      count: promoCodes.length
+      count: promoCodes.length,
     });
   } catch (error: any) {
     res.status(500).json({
-      message: error.message || "Failed to retrieve promo codes"
+      message: error.message || "Failed to retrieve promo codes",
     });
   }
 };
@@ -114,11 +135,11 @@ export const getPromoCodeById = async (req: Request, res: Response) => {
 
     res.status(200).json({
       message: "Promo code retrieved successfully",
-      data: promoCode
+      data: promoCode,
     });
   } catch (error: any) {
     res.status(404).json({
-      message: error.message || "Promo code not found"
+      message: error.message || "Promo code not found",
     });
   }
 };
@@ -131,11 +152,11 @@ export const getPromoCodeByCode = async (req: Request, res: Response) => {
 
     res.status(200).json({
       message: "Promo code retrieved successfully",
-      data: promoCode
+      data: promoCode,
     });
   } catch (error: any) {
     res.status(404).json({
-      message: error.message || "Promo code not found"
+      message: error.message || "Promo code not found",
     });
   }
 };
@@ -149,18 +170,24 @@ export const updatePromoCode = async (req: Request, res: Response) => {
       updateData.code = updateData.code.toUpperCase();
     }
 
-    if (updateData.discountType === 'PERCENTAGE' && updateData.discountValue !== undefined) {
+    if (
+      updateData.discountType === "PERCENTAGE" &&
+      updateData.discountValue !== undefined
+    ) {
       if (updateData.discountValue < 0 || updateData.discountValue > 100) {
         return res.status(400).json({
-          message: "Percentage discount must be between 0 and 100"
+          message: "Percentage discount must be between 0 and 100",
         });
       }
     }
 
-    if (updateData.discountType === 'FIXED_AMOUNT' && updateData.discountValue !== undefined) {
+    if (
+      updateData.discountType === "FIXED_AMOUNT" &&
+      updateData.discountValue !== undefined
+    ) {
       if (updateData.discountValue < 0) {
         return res.status(400).json({
-          message: "Fixed amount discount must be positive"
+          message: "Fixed amount discount must be positive",
         });
       }
     }
@@ -177,11 +204,11 @@ export const updatePromoCode = async (req: Request, res: Response) => {
 
     res.status(200).json({
       message: "Promo code updated successfully",
-      data: promoCode
+      data: promoCode,
     });
   } catch (error: any) {
     res.status(400).json({
-      message: error.message || "Failed to update promo code"
+      message: error.message || "Failed to update promo code",
     });
   }
 };
@@ -193,11 +220,11 @@ export const deletePromoCode = async (req: Request, res: Response) => {
     await deletePromoCodeService(id);
 
     res.status(200).json({
-      message: "Promo code deleted successfully"
+      message: "Promo code deleted successfully",
     });
   } catch (error: any) {
     res.status(404).json({
-      message: error.message || "Promo code not found"
+      message: error.message || "Promo code not found",
     });
   }
 };
@@ -210,21 +237,25 @@ export const validatePromoCode = async (req: Request, res: Response) => {
 
     if (!restaurantId) {
       return res.status(401).json({
-        message: "Restaurant authentication required"
+        message: "Restaurant authentication required",
       });
     }
 
     if (!orderAmount || orderAmount <= 0) {
       return res.status(400).json({
-        message: "Valid order amount is required"
+        message: "Valid order amount is required",
       });
     }
 
-    const promoCode = await validatePromoCodeService(code.toUpperCase(), restaurantId, orderAmount);
+    const promoCode = await validatePromoCodeService(
+      code.toUpperCase(),
+      restaurantId,
+      orderAmount,
+    );
 
     // Calculate potential discount
     let discountAmount = 0;
-    if (promoCode.discountType === 'PERCENTAGE') {
+    if (promoCode.discountType === "PERCENTAGE") {
       discountAmount = (orderAmount * promoCode.discountValue) / 100;
     } else {
       discountAmount = Math.min(promoCode.discountValue, orderAmount);
@@ -241,19 +272,19 @@ export const validatePromoCode = async (req: Request, res: Response) => {
           name: promoCode.name,
           description: promoCode.description,
           discountType: promoCode.discountType,
-          discountValue: promoCode.discountValue
+          discountValue: promoCode.discountValue,
         },
         discount: {
           originalAmount: orderAmount,
           discountAmount,
           finalAmount,
-          savings: discountAmount
-        }
-      }
+          savings: discountAmount,
+        },
+      },
     });
   } catch (error: any) {
     res.status(400).json({
-      message: error.message || "Invalid promo code"
+      message: error.message || "Invalid promo code",
     });
   }
 };
@@ -266,13 +297,13 @@ export const applyPromoCode = async (req: Request, res: Response) => {
 
     if (!restaurantId) {
       return res.status(401).json({
-        message: "Restaurant authentication required"
+        message: "Restaurant authentication required",
       });
     }
 
     if (!orderId || !items || !Array.isArray(items)) {
       return res.status(400).json({
-        message: "Missing required fields: orderId, items (array)"
+        message: "Missing required fields: orderId, items (array)",
       });
     }
 
@@ -280,16 +311,16 @@ export const applyPromoCode = async (req: Request, res: Response) => {
       code.toUpperCase(),
       restaurantId,
       orderId,
-      items
+      items,
     );
 
     res.status(200).json({
       message: "Promo code applied successfully",
-      data: result
+      data: result,
     });
   } catch (error: any) {
     res.status(400).json({
-      message: error.message || "Failed to apply promo code"
+      message: error.message || "Failed to apply promo code",
     });
   }
 };
@@ -302,24 +333,32 @@ export const excludeRestaurant = async (req: Request, res: Response) => {
 
     if (!restaurantId || !reason) {
       return res.status(400).json({
-        message: "Missing required fields: restaurantId, reason"
+        message: "Missing required fields: restaurantId, reason",
       });
     }
 
-    const promoCode = await excludeRestaurantService(id, restaurantId, reason, excludedBy);
+    const promoCode = await excludeRestaurantService(
+      id,
+      restaurantId,
+      reason,
+      excludedBy,
+    );
 
     res.status(200).json({
       message: "Restaurant excluded successfully",
-      data: promoCode
+      data: promoCode,
     });
   } catch (error: any) {
     res.status(400).json({
-      message: error.message || "Failed to exclude restaurant"
+      message: error.message || "Failed to exclude restaurant",
     });
   }
 };
 
-export const removeRestaurantExclusion = async (req: Request, res: Response) => {
+export const removeRestaurantExclusion = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const { id, restaurantId } = req.params;
 
@@ -327,11 +366,97 @@ export const removeRestaurantExclusion = async (req: Request, res: Response) => 
 
     res.status(200).json({
       message: "Restaurant exclusion removed successfully",
-      data: promoCode
+      data: promoCode,
     });
   } catch (error: any) {
     res.status(400).json({
-      message: error.message || "Failed to remove restaurant exclusion"
+      message: error.message || "Failed to remove restaurant exclusion",
+    });
+  }
+};
+
+// New controllers for requested endpoints
+
+export const getActivePromoCodes = async (req: Request, res: Response) => {
+  try {
+    const promoCodes = await getActivePromoCodesService();
+
+    res.status(200).json({
+      success: true,
+      data: promoCodes,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getMyPromoCodes = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  try {
+    const restaurantId = req.user?.id;
+
+    if (!restaurantId) {
+      return res.status(401).json({
+        success: false,
+        message: "Restaurant authentication required",
+      });
+    }
+
+    const promoCodes = await getMyPromoCodesService(restaurantId);
+
+    res.status(200).json({
+      success: true,
+      data: promoCodes,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const calculateCartWithPromo = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  try {
+    const { cartId, promoCode } = req.body;
+    const restaurantId = req.user?.id;
+
+    if (!restaurantId) {
+      return res.status(401).json({
+        success: false,
+        message: "Restaurant authentication required",
+      });
+    }
+
+    if (!cartId || !promoCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Cart ID and promo code are required",
+      });
+    }
+
+    const calculation = await calculateCartWithPromoService(
+      cartId,
+      promoCode,
+      restaurantId,
+    );
+
+    res.status(200).json({
+      success: true,
+      data: calculation,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
     });
   }
 };
