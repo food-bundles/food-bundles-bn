@@ -47,7 +47,7 @@ interface SubscriptionUpdate {
 interface VoucherUpdate {
   voucherId: string;
   voucherCode: string;
-  action: "CREATED" | "USED" | "SUSPENDED" | "SETTLED" | "EXPIRED";
+  action: "CREATED" | "ACCEPTED" | "USED" | "SUSPENDED" | "SETTLED" | "EXPIRED";
   timestamp: string;
   restaurantId?: string;
   data?: {

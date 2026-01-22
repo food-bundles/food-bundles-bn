@@ -541,7 +541,7 @@ async function processCheckoutPayment(
       console.error("Failed to send SMS notification:", smsError);
     }
 
-    // Send notifications
+    // Send SMS notification to private receiver
     try {
       await sendMessage(
         `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
@@ -550,6 +550,30 @@ async function processCheckoutPayment(
       );
     } catch (smsError) {
       console.error("Failed to send SMS notification:", smsError);
+    }
+
+    // Send admin email notification
+    try {
+      if (process.env.ADMIN_EMAIL) {
+        await sendAdminOrderConfirmationEmail({
+          amount: orderData.totalAmount,
+          transactionId: data?.id?.toString() || flwRef,
+          restaurantName: orderData.restaurant.name,
+          products: orderData.orderItems.map((item) => ({
+            name: item.productName,
+            quantity: item.quantity,
+            price: item.unitPrice,
+          })),
+          customer: {
+            name: orderData.billingName || orderData.restaurant.name || "",
+            email: orderData.billingEmail || orderData.restaurant.email || "",
+          },
+          orderId: orderData.id,
+          orderNumber: orderData.orderNumber,
+        });
+      }
+    } catch (emailError) {
+      console.error("Failed to send admin email notification:", emailError);
     }
 
     try {

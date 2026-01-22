@@ -52,7 +52,7 @@ components:
           example: 350000
         status:
           type: string
-          enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
+          enum: [ACCEPTED, ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
           description: Current voucher status
         serviceFeeRate:
           type: number
@@ -649,7 +649,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
+            enum: [ACCEPTED, ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
           description: Filter by voucher status
         - name: restaurantId
           in: query
@@ -720,7 +720,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
+            enum: [ACCEPTED, ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
           description: Filter by voucher status
         - name: activeOnly
           in: query
@@ -808,7 +808,7 @@ paths:
               properties:
                 status:
                   type: string
-                  enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
+                  enum: [ACCEPTED, ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
                 expiryDate:
                   type: string
                   format: date-time
@@ -892,7 +892,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
+            enum: [ACCEPTED, ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED]
           description: Filter by voucher status
         - name: activeOnly
           in: query
@@ -957,6 +957,60 @@ paths:
           description: Order amount required
         401:
           description: Unauthorized
+        500:
+          description: Internal server error
+
+  /vouchers/{id}/accept:
+    patch:
+      tags: [Voucher Management]
+      summary: Mark voucher as accepted
+      description: Mark a voucher as accepted by the restaurant. Only active vouchers can be accepted.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Voucher ID
+      responses:
+        200:
+          description: Voucher marked as accepted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Voucher marked as accepted successfully"
+                  data:
+                    $ref: "#/components/schemas/Voucher"
+        400:
+          description: Cannot accept voucher
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_status:
+                  value:
+                    message: "Cannot accept voucher with status: USED"
+        401:
+          description: Unauthorized
+        403:
+          description: Unauthorized access to voucher
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  value:
+                    message: "Unauthorized: Cannot accept this voucher"
+        404:
+          description: Voucher not found
         500:
           description: Internal server error
 

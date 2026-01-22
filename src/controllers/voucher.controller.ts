@@ -25,6 +25,7 @@ import {
   getRestaurantCreditSummaryService,
   getMyVouchersService,
   getAllVouchersService,
+  markVoucherAsAcceptedService,
 } from "../services/voucher.service";
 import { VoucherStatus, LoanStatus } from "@prisma/client";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
@@ -947,6 +948,51 @@ export const waivePenalty = async (req: Request, res: Response) => {
 // ============================================
 // CREDIT SUMMARY CONTROLLERS
 // ============================================
+
+/**
+ * Mark voucher as accepted
+ * PATCH /vouchers/:id/accept
+ */
+export const markVoucherAsAccepted = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userRole = (req as any).user.role;
+    const userId = (req as any).user.id;
+
+    // Get voucher to check ownership/authorization
+    const existingVoucher = await getVoucherByIdService(id);
+
+    // Check authorization - restaurants can accept their own vouchers, admins can accept any
+    const isAuthorized =
+      userRole === "ADMIN" ||
+      (userRole === "RESTAURANT" && existingVoucher.restaurantId === userId) ||
+      (userRole === "AFFILIATOR" && existingVoucher.restaurantId === (req as any).user.restaurantId);
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        message: "Unauthorized: Cannot accept this voucher",
+      });
+    }
+
+    // Check if voucher can be accepted (should be ACTIVE)
+    if (existingVoucher.status !== "ACTIVE") {
+      return res.status(400).json({
+        message: `Cannot accept voucher with status: ${existingVoucher.status}`,
+      });
+    }
+
+    const voucher = await markVoucherAsAcceptedService(id);
+
+    res.status(200).json({
+      message: "Voucher marked as accepted successfully",
+      data: voucher,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to mark voucher as accepted",
+    });
+  }
+};
 
 /**
  * Delete loan application

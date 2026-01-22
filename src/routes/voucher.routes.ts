@@ -25,6 +25,7 @@ import {
   getRestaurantCreditSummary,
   getVoucherByCode,
   getMyVouchers,
+  markVoucherAsAccepted,
 } from "../controllers/voucher.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -281,6 +282,17 @@ voucherRoutes.get(
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
   getRestaurantCreditSummary
+);
+
+/**
+ * Mark voucher as accepted
+ * PATCH /vouchers/:id/accept
+ */
+voucherRoutes.patch(
+  "/:id/accept",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
+  markVoucherAsAccepted
 );
 
 voucherRoutes.get("/code/:voucherCode", isAuthenticated, getVoucherByCode);
