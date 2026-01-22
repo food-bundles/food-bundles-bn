@@ -1315,7 +1315,6 @@ enum VoucherCurrency {
 }
 
 enum VoucherStatus {
-  ACCEPTED
   ACTIVE
   USED
   EXPIRED
@@ -1325,6 +1324,7 @@ enum VoucherStatus {
 }
 
 enum LoanStatus {
+  ACCEPTED
   PENDING
   APPROVED
   DISBURSED

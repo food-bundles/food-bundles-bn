@@ -960,11 +960,11 @@ paths:
         500:
           description: Internal server error
 
-  /vouchers/{id}/accept:
+  /vouchers/loans/{id}/accept:
     patch:
-      tags: [Voucher Management]
-      summary: Mark voucher as accepted
-      description: Mark a voucher as accepted by the restaurant. Only active vouchers can be accepted.
+      tags: [Loan Management]
+      summary: Mark loan application as accepted
+      description: Mark a loan application as accepted by the restaurant. Only pending loan applications can be accepted.
       security:
         - BearerAuth: []
       parameters:
@@ -973,10 +973,10 @@ paths:
           required: true
           schema:
             type: string
-          description: Voucher ID
+          description: Loan application ID
       responses:
         200:
-          description: Voucher marked as accepted successfully
+          description: Loan application marked as accepted successfully
           content:
             application/json:
               schema:
@@ -984,11 +984,11 @@ paths:
                 properties:
                   message:
                     type: string
-                    example: "Voucher marked as accepted successfully"
+                    example: "Loan application marked as accepted successfully"
                   data:
-                    $ref: "#/components/schemas/Voucher"
+                    $ref: "#/components/schemas/LoanApplication"
         400:
-          description: Cannot accept voucher
+          description: Cannot accept loan application
           content:
             application/json:
               schema:
@@ -996,11 +996,11 @@ paths:
               examples:
                 invalid_status:
                   value:
-                    message: "Cannot accept voucher with status: USED"
+                    message: "Cannot accept loan application with status: APPROVED"
         401:
           description: Unauthorized
         403:
-          description: Unauthorized access to voucher
+          description: Unauthorized access to loan application
           content:
             application/json:
               schema:
@@ -1008,9 +1008,9 @@ paths:
               examples:
                 unauthorized:
                   value:
-                    message: "Unauthorized: Cannot accept this voucher"
+                    message: "Unauthorized: Cannot accept this loan application"
         404:
-          description: Voucher not found
+          description: Loan application not found
         500:
           description: Internal server error
 
