@@ -1313,6 +1313,7 @@ enum VoucherCurrency {
 }
 
 enum VoucherStatus {
+  ACCEPTED
   ACTIVE
   USED
   EXPIRED

@@ -135,7 +135,7 @@ export const createVoucherService = async (data: CreateVoucherData) => {
 
   // Create voucher and loan application in a transaction
   const result = await prisma.$transaction(async (tx) => {
-    // Create loan application if not provided
+    // Always create loan application for each voucher
     let finalLoanId = loanId;
     if (!finalLoanId) {
       const loanApplication = await tx.loanApplication.create({
@@ -145,6 +145,9 @@ export const createVoucherService = async (data: CreateVoucherData) => {
           repaymentDays,
           status: LoanStatus.APPROVED,
           purpose: `Loan application for voucher ${voucherCode}`,
+          approvedBy,
+          approvedAt: new Date(),
+          approvedAmount: creditLimit,
         },
       });
       finalLoanId = loanApplication.id;
@@ -168,7 +171,7 @@ export const createVoucherService = async (data: CreateVoucherData) => {
         repaymentDays,
         expiryDate,
         restaurantId,
-        loanId,
+        loanId: finalLoanId,
         status: VoucherStatus.ACTIVE,
         approvedBy,
       },
@@ -2338,6 +2341,49 @@ export const rollbackVoucherPaymentService = async (
   }
 
   return result;
+};
+
+/**
+ * Mark voucher as accepted
+ */
+export const markVoucherAsAcceptedService = async (voucherId: string) => {
+  const voucher = await prisma.voucher.update({
+    where: { id: voucherId },
+    data: {
+      status: VoucherStatus.ACCEPTED,
+    },
+    include: {
+      restaurant: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      loan: true,
+    },
+  });
+
+  // Broadcast voucher status update
+  try {
+    wsManager.broadcastVoucherUpdate({
+      voucherId: voucher.id,
+      voucherCode: voucher.voucherCode,
+      action: "ACCEPTED",
+      timestamp: new Date().toISOString(),
+      restaurantId: voucher.restaurantId || "",
+      data: {
+        status: voucher.status,
+        remainingCredit: voucher.remainingCredit,
+        totalCredit: voucher.totalCredit,
+        discountPercentage: voucher.discountPercentage,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast voucher acceptance:", error);
+  }
+
+  return voucher;
 };
 
 /**
