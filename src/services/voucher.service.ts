@@ -2344,13 +2344,13 @@ export const rollbackVoucherPaymentService = async (
 };
 
 /**
- * Mark voucher as accepted
+ * Mark loan application as accepted
  */
-export const markVoucherAsAcceptedService = async (voucherId: string) => {
-  const voucher = await prisma.voucher.update({
-    where: { id: voucherId },
+export const markLoanApplicationAsAcceptedService = async (loanId: string) => {
+  const loan = await prisma.loanApplication.update({
+    where: { id: loanId },
     data: {
-      status: VoucherStatus.ACCEPTED,
+      status: LoanStatus.APPROVED,
     },
     include: {
       restaurant: {
@@ -2360,30 +2360,27 @@ export const markVoucherAsAcceptedService = async (voucherId: string) => {
           email: true,
         },
       },
-      loan: true,
     },
   });
 
-  // Broadcast voucher status update
+  // Broadcast loan status update
   try {
-    wsManager.broadcastVoucherUpdate({
-      voucherId: voucher.id,
-      voucherCode: voucher.voucherCode,
-      action: "ACCEPTED",
+    wsManager.broadcastLoanUpdate({
+      loanId: loan.id,
+      action: "APPROVED",
       timestamp: new Date().toISOString(),
-      restaurantId: voucher.restaurantId || "",
+      restaurantId: loan.restaurantId || "",
       data: {
-        status: voucher.status,
-        remainingCredit: voucher.remainingCredit,
-        totalCredit: voucher.totalCredit,
-        discountPercentage: voucher.discountPercentage,
+        status: loan.status,
+        requestedAmount: loan.requestedAmount,
+        approvedAmount: loan.approvedAmount || undefined,
       },
     });
   } catch (error) {
-    console.error("Failed to broadcast voucher acceptance:", error);
+    console.error("Failed to broadcast loan acceptance:", error);
   }
 
-  return voucher;
+  return loan;
 };
 
 /**

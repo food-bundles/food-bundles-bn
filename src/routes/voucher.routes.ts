@@ -25,7 +25,7 @@ import {
   getRestaurantCreditSummary,
   getVoucherByCode,
   getMyVouchers,
-  markVoucherAsAccepted,
+  markLoanApplicationAsAccepted,
 } from "../controllers/voucher.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -285,14 +285,14 @@ voucherRoutes.get(
 );
 
 /**
- * Mark voucher as accepted
- * PATCH /vouchers/:id/accept
+ * Mark loan application as accepted
+ * PATCH /vouchers/loans/:id/accept
  */
 voucherRoutes.patch(
-  "/:id/accept",
+  "/loans/:id/accept",
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
-  markVoucherAsAccepted
+  markLoanApplicationAsAccepted
 );
 
 voucherRoutes.get("/code/:voucherCode", isAuthenticated, getVoucherByCode);

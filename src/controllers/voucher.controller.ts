@@ -25,7 +25,7 @@ import {
   getRestaurantCreditSummaryService,
   getMyVouchersService,
   getAllVouchersService,
-  markVoucherAsAcceptedService,
+  markLoanApplicationAsAcceptedService,
 } from "../services/voucher.service";
 import { VoucherStatus, LoanStatus } from "@prisma/client";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
@@ -950,46 +950,46 @@ export const waivePenalty = async (req: Request, res: Response) => {
 // ============================================
 
 /**
- * Mark voucher as accepted
- * PATCH /vouchers/:id/accept
+ * Mark loan application as accepted
+ * PATCH /vouchers/loans/:id/accept
  */
-export const markVoucherAsAccepted = async (req: Request, res: Response) => {
+export const markLoanApplicationAsAccepted = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userRole = (req as any).user.role;
     const userId = (req as any).user.id;
 
-    // Get voucher to check ownership/authorization
-    const existingVoucher = await getVoucherByIdService(id);
+    // Get loan to check ownership/authorization
+    const existingLoan = await getLoanApplicationByIdService(id);
 
-    // Check authorization - restaurants can accept their own vouchers, admins can accept any
+    // Check authorization - restaurants can accept their own loans, admins can accept any
     const isAuthorized =
       userRole === "ADMIN" ||
-      (userRole === "RESTAURANT" && existingVoucher.restaurantId === userId) ||
-      (userRole === "AFFILIATOR" && existingVoucher.restaurantId === (req as any).user.restaurantId);
+      (userRole === "RESTAURANT" && existingLoan.restaurantId === userId) ||
+      (userRole === "AFFILIATOR" && existingLoan.restaurantId === (req as any).user.restaurantId);
 
     if (!isAuthorized) {
       return res.status(403).json({
-        message: "Unauthorized: Cannot accept this voucher",
+        message: "Unauthorized: Cannot accept this loan application",
       });
     }
 
-    // Check if voucher can be accepted (should be ACTIVE)
-    if (existingVoucher.status !== "ACTIVE") {
+    // Check if loan can be accepted (should be PENDING)
+    if (existingLoan.status !== "PENDING") {
       return res.status(400).json({
-        message: `Cannot accept voucher with status: ${existingVoucher.status}`,
+        message: `Cannot accept loan application with status: ${existingLoan.status}`,
       });
     }
 
-    const voucher = await markVoucherAsAcceptedService(id);
+    const loan = await markLoanApplicationAsAcceptedService(id);
 
     res.status(200).json({
-      message: "Voucher marked as accepted successfully",
-      data: voucher,
+      message: "Loan application marked as accepted successfully",
+      data: loan,
     });
   } catch (error: any) {
     res.status(500).json({
-      message: error.message || "Failed to mark voucher as accepted",
+      message: error.message || "Failed to mark loan application as accepted",
     });
   }
 };
