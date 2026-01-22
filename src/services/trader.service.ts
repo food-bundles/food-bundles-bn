@@ -7,6 +7,8 @@ import {
 } from "./voucher.service";
 import { createNotificationService } from "./notification.services";
 import { wsManager } from "../index";
+import { sendMessage } from "../utils/sms.utility";
+import { sendAdminVoucherApprovedEmail, sendTraderLoanApprovalEmail } from "../utils/emailTemplates";
 
 // Create trader transaction record
 const createTraderTransactionService = async (data: {
@@ -142,7 +144,7 @@ export const getTraderLoanApplicationsService = async (
   return await getAllLoanApplicationsService(filters);
 };
 
-// Get vouchers for trader
+// Get vouchers for trader - only accepted and those approved by him/her
 export const getTraderVouchersService = async (
   traderId: string,
   filters?: any,
@@ -155,16 +157,51 @@ export const getTraderVouchersService = async (
     throw new Error("Trader not found");
   }
 
-  // Get vouchers approved by this trader
-  const traderVouchers = await getAllVouchersService({
+  // Get vouchers that are either ACCEPTED or approved by this trader
+  const vouchers = await prisma.voucher.findMany({
+    where: {
+      OR: [
+        { status: "ACCEPTED" },
+        { approvedBy: traderId }
+      ]
+    },
+    include: {
+      restaurant: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      loan: true,
+      transactions: {
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      },
+      repayments: {
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      },
+      penalties: {
+        where: { status: "PENDING" },
+      },
+      approver: true,
+    },
+    orderBy: { createdAt: "desc" },
     ...filters,
-    approvedBy: traderId,
   });
 
-  return traderVouchers;
+  return {
+    vouchers,
+    statistics: {
+      totalVouchers: vouchers.length,
+      acceptedVouchers: vouchers.filter(v => v.status === "ACCEPTED").length,
+      approvedByTrader: vouchers.filter(v => v.approvedBy === traderId).length,
+    },
+  };
 };
 
-// Approve loan with wallet balance check
+// Approve loan with wallet balance check - only allow approving ACCEPTED loans
 export const traderApproveLoanService = async (
   traderId: string,
   loanId: string,
@@ -182,6 +219,22 @@ export const traderApproveLoanService = async (
 ) => {
   const { approvedAmount } = approvalData;
 
+  // Check if loan exists and is in ACCEPTED status
+  const loan = await prisma.loanApplication.findUnique({
+    where: { id: loanId },
+    include: { vouchers: true },
+  });
+
+  if (!loan) {
+    throw new Error("Loan application not found");
+  }
+
+  // Only allow approving loans that have vouchers in ACCEPTED status
+  const hasAcceptedVoucher = loan.vouchers.some(v => v.status === "ACCEPTED");
+  if (!hasAcceptedVoucher) {
+    throw new Error("Can only approve loans with accepted vouchers");
+  }
+
   // Check trader wallet balance
   const traderWallet = await getTraderWalletService(traderId);
 
@@ -191,10 +244,13 @@ export const traderApproveLoanService = async (
     );
   }
 
-  // Deduct amount from trader wallet
+  // Deduct amount from trader wallet balance and add to pending approved amount
   await prisma.wallet.update({
     where: { id: traderWallet.id },
-    data: { balance: traderWallet.balance - approvedAmount },
+    data: { 
+      balance: traderWallet.balance - approvedAmount,
+      pendingApprovedAmount: traderWallet.pendingApprovedAmount + approvedAmount
+    },
   });
 
   // Create wallet transaction
@@ -226,21 +282,90 @@ export const traderApproveLoanService = async (
     approvedBy: traderId,
   });
 
-  // Send notification
-  await createNotificationService({
-    title: "Loan Approved by Trader",
-    message: `Loan of ${approvedAmount} RWF has been approved by trader`,
-    eventType: "VOUCHER_ISSUED",
-    targetType: "SPECIFIC_USER",
-    targetId: result.loan.restaurantId || "",
-    metadata: {
-      traderId,
-      loanId,
-      approvedAmount,
-    },
-  });
+  // Send notifications
+  await sendLoanApprovalNotifications(traderId, result, approvedAmount);
 
   return result;
+}
+
+// Send loan approval notifications
+async function sendLoanApprovalNotifications(
+  traderId: string,
+  result: any,
+  approvedAmount: number,
+) {
+  try {
+    // Get trader info
+    const trader = await prisma.admin.findUnique({
+      where: { id: traderId },
+      select: { username: true, email: true, phone: true },
+    });
+
+    // Get restaurant info from the loan
+    const loan = await prisma.loanApplication.findUnique({
+      where: { id: result.loanId },
+      include: {
+        restaurant: {
+          select: { name: true, email: true, phone: true },
+        },
+      },
+    });
+
+    // Get updated wallet balance
+    const wallet = await getTraderWalletService(traderId);
+
+    if (loan?.restaurant && trader) {
+      // Send email to trader
+      try {
+        await sendTraderLoanApprovalEmail({
+          traderEmail: trader.email || "",
+          traderName: trader.username,
+          restaurantName: loan.restaurant.name,
+          approvedAmount,
+          loanId: result.loanId,
+          walletBalance: wallet.balance,
+        });
+      } catch (emailError) {
+        console.error("Failed to send trader email notification:", emailError);
+      }
+
+      // Send SMS to restaurant
+      try {
+        await sendMessage(
+          `Your loan application has been approved! Amount: ${approvedAmount} RWF. Voucher will be issued shortly.`,
+          loan.restaurant.phone || "",
+        );
+      } catch (smsError) {
+        console.error("Failed to send SMS to restaurant:", smsError);
+      }
+
+      // Send email notification to admin
+      try {
+        await sendAdminVoucherApprovedEmail({
+          userType: "RESTAURANT",
+          userName: loan.restaurant.name,
+          userEmail: loan.restaurant.email || "",
+          restaurantName: loan.restaurant.name,
+          voucherAmount: approvedAmount,
+          approvedBy: trader.username,
+        });
+      } catch (emailError) {
+        console.error("Failed to send admin email notification:", emailError);
+      }
+    }
+
+    // Send SMS notification to private receiver
+    try {
+      await sendMessage(
+        `Loan approved by ${trader?.username || "Trader"}: ${approvedAmount} RWF for ${loan?.restaurant?.name || "Restaurant"}`,
+        process.env.PRIVATE_RECEIVER || "",
+      );
+    } catch (smsError) {
+      console.error("Failed to send SMS notification:", smsError);
+    }
+  } catch (error) {
+    console.error("Error sending loan approval notifications:", error);
+  }
 };
 
 // Get trader commission from orders (for processing new commissions)
@@ -518,23 +643,76 @@ export const getTraderTransactionStatsService = async (traderId: string) => {
   };
 };
 
-// Process all traders' commissions
+// Process all traders' commissions - triggered when voucher is used
 export const processAllTradersCommissionService = async () => {
   try {
-    const traders = await prisma.admin.findMany({
-      where: { role: "TRADER" },
+    // Get all USED vouchers that haven't had commission processed
+    const usedVouchers = await prisma.voucher.findMany({
+      where: {
+        status: "USED",
+        usedCredit: { gt: 0 },
+        approvedBy: { not: null },
+      },
+      include: {
+        approver: true,
+      },
     });
 
-    console.log(`Processing commissions for ${traders.length} traders`);
-
     const results = [];
-    for (const trader of traders) {
-      const result = await processTraderCommissionService(trader.id);
-      console.log(`Trader ${trader.id} commission result:`, result);
-      results.push({ traderId: trader.id, success: true, ...result });
+    
+    for (const voucher of usedVouchers) {
+      if (!voucher.approvedBy) continue;
+
+      // Check if commission already processed for this voucher
+      const existingCommission = await prisma.traderTransaction.findFirst({
+        where: {
+          traderId: voucher.approvedBy,
+          type: "COMMISSION_EARNED",
+          voucherId: voucher.id,
+        },
+      });
+
+      if (existingCommission) continue;
+
+      // Get trader wallet to get commission rate
+      const traderWallet = await prisma.wallet.findUnique({
+        where: { traderId: voucher.approvedBy },
+      });
+
+      if (!traderWallet) continue;
+
+      const commissionRate = traderWallet.commission / 100; // Convert percentage to decimal
+      const commissionAmount = voucher.usedCredit * commissionRate;
+
+      // Create commission earned record
+      await createTraderTransactionService({
+        traderId: voucher.approvedBy,
+        type: "COMMISSION_EARNED",
+        amount: commissionAmount,
+        voucherId: voucher.id,
+        commissionRate,
+        description: `Commission earned from voucher ${voucher.voucherCode}`,
+      });
+
+      // Move amount from pending to available for commission payment
+      await prisma.wallet.update({
+        where: { id: traderWallet.id },
+        data: {
+          pendingApprovedAmount: Math.max(0, traderWallet.pendingApprovedAmount - voucher.usedCredit),
+        },
+      });
+
+      // Send commission earned notifications
+      await sendCommissionEarnedNotifications(voucher.approvedBy, voucher, commissionAmount);
+
+      results.push({
+        traderId: voucher.approvedBy,
+        voucherId: voucher.id,
+        commissionAmount,
+        success: true,
+      });
     }
 
-    console.log(`Commission processing completed for all traders:`, results);
     return results;
   } catch (error: any) {
     console.error("Error in processAllTradersCommissionService:", error.message);
@@ -576,6 +754,75 @@ export const getTraderCommissionDetailsService = async (traderId: string) => {
       createdAt: tx.createdAt
     }))
   };
+};
+
+// Send commission earned notifications
+const sendCommissionEarnedNotifications = async (traderId: string, voucher: any, commissionAmount: number) => {
+  try {
+    const trader = await prisma.admin.findUnique({ where: { id: traderId } });
+    
+    // SMS to trader
+    await sendMessage(
+      `Commission earned: ${commissionAmount} RWF from voucher ${voucher.voucherCode}`,
+      trader?.phone || ""
+    );
+
+    // SMS to admin/private receiver
+    await sendMessage(
+      `Trader ${trader?.username} earned commission of ${commissionAmount} RWF from voucher usage`,
+      process.env.PRIVATE_RECEIVER || ""
+    );
+
+    // System notification
+    await createNotificationService({
+      title: "Commission Earned",
+      message: `You earned ${commissionAmount} RWF commission from voucher ${voucher.voucherCode}`,
+      eventType: "PAYMENT_PROCESSED",
+      targetType: "SPECIFIC_USER",
+      targetId: traderId,
+      metadata: { voucherId: voucher.id, commissionAmount },
+    });
+  } catch (error) {
+    console.error("Failed to send commission earned notifications:", error);
+  }
+};
+
+// Set trader wallet commission
+export const setTraderWalletCommissionService = async (traderId: string, commission: number) => {
+  if (commission < 0 || commission > 100) {
+    throw new Error("Commission must be between 0 and 100 percent");
+  }
+
+  const wallet = await prisma.wallet.update({
+    where: { traderId },
+    data: { commission },
+    include: {
+      trader: {
+        select: { id: true, username: true, email: true, phone: true },
+      },
+    },
+  });
+
+  // Send notifications
+  try {
+    await sendMessage(
+      `Your wallet commission has been updated to ${commission}%`,
+      wallet.trader?.phone || ""
+    );
+
+    await createNotificationService({
+      title: "Commission Rate Updated",
+      message: `Your commission rate has been updated to ${commission}%`,
+      eventType: "SYSTEM_MAINTENANCE",
+      targetType: "SPECIFIC_USER",
+      targetId: traderId,
+      metadata: { newCommission: commission },
+    });
+  } catch (error) {
+    console.error("Failed to send commission update notifications:", error);
+  }
+
+  return wallet;
 };
 
 // Get trader dashboard stats

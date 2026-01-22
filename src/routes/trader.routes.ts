@@ -13,6 +13,7 @@ import {
   getTraderTransactionById,
   getTraderTransactionStats,
   getTraderDashboard,
+  setTraderWalletCommission,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -104,6 +105,14 @@ traderRoutes.get(
   isAuthenticated,
   checkPermission("TRADER"),
   getTraderDashboard,
+);
+
+// Admin routes for trader management
+traderRoutes.patch(
+  "/:traderId/commission",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  setTraderWalletCommission,
 );
 
 export default traderRoutes;

@@ -13,6 +13,7 @@ import {
   getTraderTransactionByIdService,
   getTraderTransactionStatsService,
   getTraderDashboardStatsService,
+  setTraderWalletCommissionService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -332,6 +333,34 @@ export const getTraderTransactionStats = async (
       success: true,
       message: "Transaction statistics retrieved successfully",
       data: stats,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Set trader wallet commission (Admin only)
+export const setTraderWalletCommission = async (req: Request, res: Response) => {
+  try {
+    const { traderId } = req.params;
+    const { commission } = req.body;
+
+    if (!commission || commission < 0 || commission > 100) {
+      return res.status(400).json({
+        success: false,
+        message: "Commission must be between 0 and 100 percent",
+      });
+    }
+
+    const wallet = await setTraderWalletCommissionService(traderId, parseFloat(commission));
+
+    res.status(200).json({
+      success: true,
+      message: "Trader wallet commission updated successfully",
+      data: wallet,
     });
   } catch (error: any) {
     res.status(400).json({

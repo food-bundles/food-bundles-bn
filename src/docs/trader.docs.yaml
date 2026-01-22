@@ -14,6 +14,15 @@ components:
           type: number
           format: float
           description: Current wallet balance
+        pendingApprovedAmount:
+          type: number
+          format: float
+          description: Amount approved for active vouchers
+        commission:
+          type: number
+          format: float
+          description: Commission percentage
+          example: 5.0
         currency:
           type: string
           description: Wallet currency
@@ -101,6 +110,19 @@ components:
               orderDate:
                 type: string
                 format: date-time
+
+    SetCommissionRequest:
+      type: object
+      required:
+        - commission
+      properties:
+        commission:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Commission percentage
+          example: 7.5
 
     TraderTransaction:
       type: object
@@ -326,9 +348,9 @@ paths:
               $ref: "#/components/schemas/LoanApprovalRequest"
       responses:
         200:
-          description: Loan approved successfully
+          description: Loan approved successfully (only loans with ACCEPTED vouchers can be approved)
         400:
-          description: Insufficient wallet balance or bad request
+          description: Insufficient wallet balance, loan not accepted, or bad request
 
   /traders/vouchers:
     get:
@@ -342,7 +364,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED, MATURED]
+            enum: [ACCEPTED, ACTIVE, USED, EXPIRED, SUSPENDED, SETTLED, MATURED]
         - name: page
           in: query
           schema:
@@ -355,7 +377,7 @@ paths:
             default: 10
       responses:
         200:
-          description: Vouchers retrieved successfully
+          description: Vouchers retrieved successfully (only ACCEPTED vouchers and those approved by trader)
 
   /traders/commission:
     get:
@@ -549,3 +571,42 @@ paths:
                     type: boolean
                   data:
                     $ref: "#/components/schemas/TraderDashboard"
+
+  /traders/{traderId}/commission:
+    patch:
+      tags:
+        - Trader API Management
+      summary: Set trader wallet commission (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Trader ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetCommissionRequest"
+      responses:
+        200:
+          description: Commission updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TraderWallet"
+        400:
+          description: Invalid commission value
+        403:
+          description: Admin access required
