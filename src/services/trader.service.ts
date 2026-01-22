@@ -8,7 +8,10 @@ import {
 import { createNotificationService } from "./notification.services";
 import { wsManager } from "../index";
 import { sendMessage } from "../utils/sms.utility";
-import { sendAdminVoucherApprovedEmail, sendTraderLoanApprovalEmail } from "../utils/emailTemplates";
+import {
+  sendAdminVoucherApprovedEmail,
+  sendTraderLoanApprovalEmail,
+} from "../utils/emailTemplates";
 
 // Create trader transaction record
 const createTraderTransactionService = async (data: {
@@ -144,7 +147,7 @@ export const getTraderLoanApplicationsService = async (
   return await getAllLoanApplicationsService(filters);
 };
 
-// Get vouchers for trader - only accepted and those approved by him/her
+// Get vouchers for trader - loans with ACCEPTED status and those approved by him/her
 export const getTraderVouchersService = async (
   traderId: string,
   filters?: any,
@@ -157,13 +160,10 @@ export const getTraderVouchersService = async (
     throw new Error("Trader not found");
   }
 
-  // Get vouchers that are either ACCEPTED or approved by this trader
+  // Get vouchers from loans that are ACCEPTED or approved by this trader
   const vouchers = await prisma.voucher.findMany({
     where: {
-      OR: [
-        { status: "ACCEPTED" },
-        { approvedBy: traderId }
-      ]
+      OR: [{ loan: { status: "ACCEPTED" } }, { approvedBy: traderId }],
     },
     include: {
       restaurant: {
@@ -195,8 +195,11 @@ export const getTraderVouchersService = async (
     vouchers,
     statistics: {
       totalVouchers: vouchers.length,
-      acceptedVouchers: vouchers.filter(v => v.status === "ACCEPTED").length,
-      approvedByTrader: vouchers.filter(v => v.approvedBy === traderId).length,
+      acceptedLoanVouchers: vouchers.filter(
+        (v) => (v as any).loan?.status === "ACCEPTED",
+      ).length,
+      approvedByTrader: vouchers.filter((v) => v.approvedBy === traderId)
+        .length,
     },
   };
 };
@@ -222,17 +225,15 @@ export const traderApproveLoanService = async (
   // Check if loan exists and is in ACCEPTED status
   const loan = await prisma.loanApplication.findUnique({
     where: { id: loanId },
-    include: { vouchers: true },
   });
 
   if (!loan) {
     throw new Error("Loan application not found");
   }
 
-  // Only allow approving loans that have vouchers in ACCEPTED status
-  const hasAcceptedVoucher = loan.vouchers.some(v => v.status === "ACCEPTED");
-  if (!hasAcceptedVoucher) {
-    throw new Error("Can only approve loans with accepted vouchers");
+  // Only allow approving loans that are in ACCEPTED status
+  if (loan.status !== "ACCEPTED") {
+    throw new Error("Can only approve loans with ACCEPTED status");
   }
 
   // Check trader wallet balance
@@ -247,9 +248,10 @@ export const traderApproveLoanService = async (
   // Deduct amount from trader wallet balance and add to pending approved amount
   await prisma.wallet.update({
     where: { id: traderWallet.id },
-    data: { 
+    data: {
       balance: traderWallet.balance - approvedAmount,
-      pendingApprovedAmount: traderWallet.pendingApprovedAmount + approvedAmount
+      pendingApprovedAmount:
+        traderWallet.pendingApprovedAmount + approvedAmount,
     },
   });
 
@@ -286,7 +288,7 @@ export const traderApproveLoanService = async (
   await sendLoanApprovalNotifications(traderId, result, approvedAmount);
 
   return result;
-}
+};
 
 // Send loan approval notifications
 async function sendLoanApprovalNotifications(
@@ -366,7 +368,7 @@ async function sendLoanApprovalNotifications(
   } catch (error) {
     console.error("Error sending loan approval notifications:", error);
   }
-};
+}
 
 // Get trader commission from orders (for processing new commissions)
 export const calculateTraderCommissionService = async (traderId: string) => {
@@ -508,7 +510,10 @@ export const processTraderCommissionService = async (traderId: string) => {
       commissionCount: unpaidCommissions.length,
     };
   } catch (error: any) {
-    console.error(`Error processing commission for trader ${traderId}:`, error.message);
+    console.error(
+      `Error processing commission for trader ${traderId}:`,
+      error.message,
+    );
     return { totalCommission: 0, commissionCount: 0, error: error.message };
   }
 };
@@ -659,7 +664,7 @@ export const processAllTradersCommissionService = async () => {
     });
 
     const results = [];
-    
+
     for (const voucher of usedVouchers) {
       if (!voucher.approvedBy) continue;
 
@@ -698,12 +703,19 @@ export const processAllTradersCommissionService = async () => {
       await prisma.wallet.update({
         where: { id: traderWallet.id },
         data: {
-          pendingApprovedAmount: Math.max(0, traderWallet.pendingApprovedAmount - voucher.usedCredit),
+          pendingApprovedAmount: Math.max(
+            0,
+            traderWallet.pendingApprovedAmount - voucher.usedCredit,
+          ),
         },
       });
 
       // Send commission earned notifications
-      await sendCommissionEarnedNotifications(voucher.approvedBy, voucher, commissionAmount);
+      await sendCommissionEarnedNotifications(
+        voucher.approvedBy,
+        voucher,
+        commissionAmount,
+      );
 
       results.push({
         traderId: voucher.approvedBy,
@@ -715,7 +727,10 @@ export const processAllTradersCommissionService = async () => {
 
     return results;
   } catch (error: any) {
-    console.error("Error in processAllTradersCommissionService:", error.message);
+    console.error(
+      "Error in processAllTradersCommissionService:",
+      error.message,
+    );
     return [];
   }
 };
@@ -726,51 +741,59 @@ export const getTraderCommissionDetailsService = async (traderId: string) => {
   const commissionTransactions = await prisma.traderTransaction.findMany({
     where: {
       traderId,
-      type: { in: ["COMMISSION_EARNED", "COMMISSION_PAID"] }
+      type: { in: ["COMMISSION_EARNED", "COMMISSION_PAID"] },
     },
-    orderBy: { createdAt: "desc" }
+    orderBy: { createdAt: "desc" },
   });
 
-  const earnedCommissions = commissionTransactions.filter(tx => tx.type === "COMMISSION_EARNED");
-  const paidCommissions = commissionTransactions.filter(tx => tx.type === "COMMISSION_PAID");
+  const earnedCommissions = commissionTransactions.filter(
+    (tx) => tx.type === "COMMISSION_EARNED",
+  );
+  const paidCommissions = commissionTransactions.filter(
+    (tx) => tx.type === "COMMISSION_PAID",
+  );
 
   const totalEarned = earnedCommissions.reduce((sum, tx) => sum + tx.amount, 0);
   const totalPaid = paidCommissions.reduce((sum, tx) => sum + tx.amount, 0);
   const pendingCommission = earnedCommissions
-    .filter(tx => !tx.isCommissionPaid)
+    .filter((tx) => !tx.isCommissionPaid)
     .reduce((sum, tx) => sum + tx.amount, 0);
 
   return {
     totalCommission: totalEarned,
     totalPaid,
     pendingCommission,
-    commissionDetails: earnedCommissions.map(tx => ({
+    commissionDetails: earnedCommissions.map((tx) => ({
       id: tx.id,
       voucherId: tx.voucherId,
       amount: tx.amount,
       commissionRate: tx.commissionRate,
       description: tx.description,
       isPaid: tx.isCommissionPaid,
-      createdAt: tx.createdAt
-    }))
+      createdAt: tx.createdAt,
+    })),
   };
 };
 
 // Send commission earned notifications
-const sendCommissionEarnedNotifications = async (traderId: string, voucher: any, commissionAmount: number) => {
+const sendCommissionEarnedNotifications = async (
+  traderId: string,
+  voucher: any,
+  commissionAmount: number,
+) => {
   try {
     const trader = await prisma.admin.findUnique({ where: { id: traderId } });
-    
+
     // SMS to trader
     await sendMessage(
       `Commission earned: ${commissionAmount} RWF from voucher ${voucher.voucherCode}`,
-      trader?.phone || ""
+      trader?.phone || "",
     );
 
     // SMS to admin/private receiver
     await sendMessage(
       `Trader ${trader?.username} earned commission of ${commissionAmount} RWF from voucher usage`,
-      process.env.PRIVATE_RECEIVER || ""
+      process.env.PRIVATE_RECEIVER || "",
     );
 
     // System notification
@@ -788,7 +811,10 @@ const sendCommissionEarnedNotifications = async (traderId: string, voucher: any,
 };
 
 // Set trader wallet commission
-export const setTraderWalletCommissionService = async (traderId: string, commission: number) => {
+export const setTraderWalletCommissionService = async (
+  traderId: string,
+  commission: number,
+) => {
   if (commission < 0 || commission > 100) {
     throw new Error("Commission must be between 0 and 100 percent");
   }
@@ -807,7 +833,7 @@ export const setTraderWalletCommissionService = async (traderId: string, commiss
   try {
     await sendMessage(
       `Your wallet commission has been updated to ${commission}%`,
-      wallet.trader?.phone || ""
+      wallet.trader?.phone || "",
     );
 
     await createNotificationService({
