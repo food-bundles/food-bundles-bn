@@ -2350,7 +2350,7 @@ export const markLoanApplicationAsAcceptedService = async (loanId: string) => {
   const loan = await prisma.loanApplication.update({
     where: { id: loanId },
     data: {
-      status: LoanStatus.APPROVED,
+      status: LoanStatus.ACCEPTED,
     },
     include: {
       restaurant: {
@@ -2367,7 +2367,7 @@ export const markLoanApplicationAsAcceptedService = async (loanId: string) => {
   try {
     wsManager.broadcastLoanUpdate({
       loanId: loan.id,
-      action: "APPROVED",
+      action: "ACCEPTED",
       timestamp: new Date().toISOString(),
       restaurantId: loan.restaurantId || "",
       data: {

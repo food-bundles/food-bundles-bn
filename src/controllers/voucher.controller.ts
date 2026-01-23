@@ -152,7 +152,7 @@ export const getMyVouchers = async (req: Request, res: Response) => {
     const vouchers = await getMyVouchersService(
       restaurantId,
       affiliatorId,
-      filters
+      filters,
     );
 
     res.status(200).json({
@@ -249,7 +249,7 @@ export const getAvailableVouchers = async (req: Request, res: Response) => {
 
     const vouchers = await getAvailableVouchersForCheckoutService(
       restaurantId,
-      parseFloat(amount as string)
+      parseFloat(amount as string),
     );
 
     res.status(200).json({
@@ -823,7 +823,7 @@ export const getOutstandingBalance = async (req: Request, res: Response) => {
     }
 
     const outstanding = await calculateOutstandingBalanceService(
-      voucher.loanId
+      voucher.loanId,
     );
 
     res.status(200).json({
@@ -851,7 +851,7 @@ export const calculatePenalties = async (req: Request, res: Response) => {
 
     const results = await calculatePenaltiesService(
       loanId,
-      penaltyRatePerMonth ? parseFloat(penaltyRatePerMonth) : 2
+      penaltyRatePerMonth ? parseFloat(penaltyRatePerMonth) : 2,
     );
 
     res.status(200).json({
@@ -953,7 +953,10 @@ export const waivePenalty = async (req: Request, res: Response) => {
  * Mark loan application as accepted
  * PATCH /vouchers/loans/:id/accept
  */
-export const markLoanApplicationAsAccepted = async (req: Request, res: Response) => {
+export const markLoanApplicationAsAccepted = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const { id } = req.params;
     const userRole = (req as any).user.role;
@@ -966,7 +969,8 @@ export const markLoanApplicationAsAccepted = async (req: Request, res: Response)
     const isAuthorized =
       userRole === "ADMIN" ||
       (userRole === "RESTAURANT" && existingLoan.restaurantId === userId) ||
-      (userRole === "AFFILIATOR" && existingLoan.restaurantId === (req as any).user.restaurantId);
+      (userRole === "AFFILIATOR" &&
+        existingLoan.restaurantId === (req as any).user.restaurantId);
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -1022,7 +1026,7 @@ export const deleteLoanApplication = async (req: Request, res: Response) => {
  */
 export const getRestaurantCreditSummary = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const user = (req as any).user;

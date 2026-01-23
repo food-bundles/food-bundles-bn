@@ -60,30 +60,6 @@ components:
           type: string
           description: Transaction description
 
-    LoanApprovalRequest:
-      type: object
-      required:
-        - approvedAmount
-        - repaymentDays
-        - voucherType
-      properties:
-        approvedAmount:
-          type: number
-          format: float
-          description: Approved loan amount
-          example: 50000
-        repaymentDays:
-          type: number
-          description: Repayment period in days
-          example: 30
-        voucherType:
-          type: string
-          enum:
-            [DISCOUNT_10, DISCOUNT_20, DISCOUNT_50, DISCOUNT_80, DISCOUNT_100]
-          description: Voucher discount type
-        notes:
-          type: string
-          description: Approval notes
 
     TraderCommission:
       type: object
@@ -332,6 +308,7 @@ paths:
       tags:
         - Trader API Management
       summary: Approve loan application
+      description: Approve a loan application using the loan's original parameters (amount, repayment days, voucher type). Only loans with ACCEPTED status can be approved.
       security:
         - BearerAuth: []
       parameters:
@@ -340,17 +317,43 @@ paths:
           required: true
           schema:
             type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LoanApprovalRequest"
+          description: ID of the loan application to approve
       responses:
         200:
-          description: Loan approved successfully (only loans with ACCEPTED vouchers can be approved)
+          description: Loan approved successfully using loan application parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Loan approved successfully"
+                  data:
+                    type: object
+                    description: Approved loan and voucher details
         400:
           description: Insufficient wallet balance, loan not accepted, or bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      insufficient_balance:
+                        value: "Insufficient wallet balance. Available: 10000 RWF, Required: 50000 RWF"
+                      not_accepted:
+                        value: "Can only approve loans with ACCEPTED status"
+                      not_found:
+                        value: "Loan application not found"
 
   /traders/vouchers:
     get:
