@@ -147,42 +147,8 @@ export const traderApproveLoan = async (req: Request, res: Response) => {
   try {
     const traderId = (req as any).user.id;
     const { loanId } = req.params;
-    const { approvedAmount, repaymentDays, voucherType, notes } = req.body;
 
-    if (!approvedAmount || !repaymentDays || !voucherType) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Approved amount, repayment days, and voucher type are required",
-      });
-    }
-
-    // Validate voucher type
-    const validVoucherTypes = [
-      "DISCOUNT_10",
-      "DISCOUNT_20",
-      "DISCOUNT_50",
-      "DISCOUNT_80",
-      "DISCOUNT_100",
-    ];
-    if (!validVoucherTypes.includes(voucherType)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid voucher type",
-      });
-    }
-
-    const result = await traderApproveLoanService(traderId, loanId, {
-      approvedAmount: parseFloat(approvedAmount),
-      repaymentDays: parseInt(repaymentDays),
-      voucherType: voucherType as
-        | "DISCOUNT_10"
-        | "DISCOUNT_20"
-        | "DISCOUNT_50"
-        | "DISCOUNT_80"
-        | "DISCOUNT_100",
-      notes,
-    });
+    const result = await traderApproveLoanService(traderId, loanId);
 
     res.status(200).json({
       success: true,
@@ -343,7 +309,10 @@ export const getTraderTransactionStats = async (
 };
 
 // Set trader wallet commission (Admin only)
-export const setTraderWalletCommission = async (req: Request, res: Response) => {
+export const setTraderWalletCommission = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const { traderId } = req.params;
     const { commission } = req.body;
@@ -355,7 +324,10 @@ export const setTraderWalletCommission = async (req: Request, res: Response) => 
       });
     }
 
-    const wallet = await setTraderWalletCommissionService(traderId, parseFloat(commission));
+    const wallet = await setTraderWalletCommissionService(
+      traderId,
+      parseFloat(commission),
+    );
 
     res.status(200).json({
       success: true,

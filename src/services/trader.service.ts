@@ -12,6 +12,7 @@ import {
   sendAdminVoucherApprovedEmail,
   sendTraderLoanApprovalEmail,
 } from "../utils/emailTemplates";
+import { VoucherType } from "@prisma/client";
 
 // Create trader transaction record
 const createTraderTransactionService = async (data: {
@@ -208,20 +209,7 @@ export const getTraderVouchersService = async (
 export const traderApproveLoanService = async (
   traderId: string,
   loanId: string,
-  approvalData: {
-    approvedAmount: number;
-    repaymentDays: number;
-    voucherType:
-      | "DISCOUNT_10"
-      | "DISCOUNT_20"
-      | "DISCOUNT_50"
-      | "DISCOUNT_80"
-      | "DISCOUNT_100";
-    notes?: string;
-  },
 ) => {
-  const { approvedAmount } = approvalData;
-
   // Check if loan exists and is in ACCEPTED status
   const loan = await prisma.loanApplication.findUnique({
     where: { id: loanId },
@@ -235,6 +223,32 @@ export const traderApproveLoanService = async (
   if (loan.status !== "ACCEPTED") {
     throw new Error("Can only approve loans with ACCEPTED status");
   }
+
+  // Get restaurant's active subscription for repayment days fallback
+  let defaultRepaymentDays = 30;
+  if (loan.restaurantId) {
+    const activeSubscription = await prisma.restaurantSubscription.findFirst({
+      where: {
+        restaurantId: loan.restaurantId,
+        status: "ACTIVE",
+        endDate: { gt: new Date() },
+      },
+      include: { plan: true },
+    });
+    if (activeSubscription) {
+      defaultRepaymentDays = activeSubscription.plan.voucherPaymentDays;
+    }
+  }
+
+  // Use loan application data for approval
+  const approvalData = {
+    approvedAmount: loan.requestedAmount,
+    repaymentDays: loan.repaymentDays || defaultRepaymentDays,
+    voucherType: "DISCOUNT_100" as VoucherType,
+    notes: loan.purpose || "Loan approved by trader",
+  };
+
+  const { approvedAmount } = approvalData;
 
   // Check trader wallet balance
   const traderWallet = await getTraderWalletService(traderId);
