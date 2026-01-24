@@ -102,11 +102,12 @@ export const getTraderLoanApplications = async (
     if (page) filters.page = parseInt(page as string);
     if (limit) filters.limit = parseInt(limit as string);
 
-    const loans = await getTraderLoanApplicationsService(traderId, filters);
+    const result = await getTraderLoanApplicationsService(traderId, filters);
 
     res.status(200).json({
       success: true,
-      data: loans,
+      data: result.loans,
+      pagination: result.pagination,
     });
   } catch (error: any) {
     res.status(400).json({
@@ -128,11 +129,13 @@ export const getTraderVouchers = async (req: Request, res: Response) => {
     if (page) filters.page = parseInt(page as string);
     if (limit) filters.limit = parseInt(limit as string);
 
-    const vouchers = await getTraderVouchersService(traderId, filters);
+    const result = await getTraderVouchersService(traderId, filters);
 
     res.status(200).json({
       success: true,
-      data: vouchers,
+      data: result.vouchers,
+      statistics: result.statistics,
+      pagination: result.pagination,
     });
   } catch (error: any) {
     res.status(400).json({

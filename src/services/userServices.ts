@@ -39,7 +39,7 @@ export const checkExistingUser = async (phone?: string, email?: string) => {
       prisma.farmer.findFirst({ where: { phone } }),
       prisma.restaurant.findFirst({ where: { phone } }),
       prisma.affiliator.findFirst({ where: { phone } }),
-      prisma.admin.findFirst({ where: { phone } })
+      prisma.admin.findFirst({ where: { phone } }),
     );
   }
 
@@ -48,7 +48,7 @@ export const checkExistingUser = async (phone?: string, email?: string) => {
       prisma.farmer.findFirst({ where: { email } }),
       prisma.restaurant.findFirst({ where: { email } }),
       prisma.affiliator.findFirst({ where: { email } }),
-      prisma.admin.findFirst({ where: { email } })
+      prisma.admin.findFirst({ where: { email } }),
     );
   }
 
@@ -76,7 +76,7 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
   // Check if phone/email exists in any user table
   const existingUser = await checkExistingUser(
     phone || undefined,
-    email || undefined
+    email || undefined,
   );
   if (existingUser) {
     throw new Error("User with this phone/email already exists");
@@ -95,7 +95,7 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
 
     if (!locationValidation.isValid) {
       throw new Error(
-        `Location validation failed: ${locationValidation.errors.join(", ")}`
+        `Location validation failed: ${locationValidation.errors.join(", ")}`,
       );
     }
   }
@@ -153,7 +153,7 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
 export const getAllFarmersService = async (query: IPaginationQuery) => {
   const normalizedQuery = PaginationService.validatePaginationParams(
     query.page,
-    query.limit
+    query.limit,
   );
 
   const options = {
@@ -190,7 +190,7 @@ export const getAllFarmersService = async (query: IPaginationQuery) => {
   const result = await PaginationService.paginate(
     prisma.farmer,
     normalizedQuery,
-    options
+    options,
   );
 
   return {
@@ -233,7 +233,7 @@ export const getFarmerByIdService = async (id: string) => {
 
 export const updateFarmerService = async (
   id: string,
-  updateData: IUpdateFarmerData
+  updateData: IUpdateFarmerData,
 ) => {
   const {
     password,
@@ -259,7 +259,7 @@ export const updateFarmerService = async (
   if (phone || email) {
     const existingUser = await checkExistingUser(
       phone || undefined,
-      email || undefined
+      email || undefined,
     );
 
     if (existingUser && existingUser.id !== id) {
@@ -280,7 +280,7 @@ export const updateFarmerService = async (
 
     if (!locationValidation.isValid) {
       throw new Error(
-        `Location validation failed: ${locationValidation.errors.join(", ")}`
+        `Location validation failed: ${locationValidation.errors.join(", ")}`,
       );
     }
   }
@@ -333,7 +333,7 @@ export const deleteFarmerService = async (id: string) => {
 
 // RESTAURANT SERVICES
 export const createRestaurantService = async (
-  restaurantData: ICreateRestaurantData
+  restaurantData: ICreateRestaurantData,
 ) => {
   const {
     name,
@@ -361,7 +361,7 @@ export const createRestaurantService = async (
   // Validate TIN format
   if (!validateTIN(tin)) {
     throw new Error(
-      "Invalid TIN format. TIN must be a 9-digit number (not all zeros)"
+      "Invalid TIN format. TIN must be a 9-digit number (not all zeros)",
     );
   }
 
@@ -392,7 +392,7 @@ export const createRestaurantService = async (
 
     if (!locationValidation.isValid) {
       throw new Error(
-        `Location validation failed: ${locationValidation.errors.join(", ")}`
+        `Location validation failed: ${locationValidation.errors.join(", ")}`,
       );
     }
   }
@@ -479,7 +479,7 @@ export const acceptTermsService = async (identifier: string) => {
 export const getAllRestaurantsService = async (query: IPaginationQuery) => {
   const normalizedQuery = PaginationService.validatePaginationParams(
     query.page,
-    query.limit
+    query.limit,
   );
 
   const options = {
@@ -517,7 +517,7 @@ export const getAllRestaurantsService = async (query: IPaginationQuery) => {
   const result = await PaginationService.paginate(
     prisma.restaurant,
     normalizedQuery,
-    options
+    options,
   );
 
   return {
@@ -586,7 +586,7 @@ export const getRestaurantByIdService = async (id: string) => {
 
 export const updateRestaurantService = async (
   id: string,
-  updateData: IUpdateRestaurantData
+  updateData: IUpdateRestaurantData,
 ) => {
   const {
     password,
@@ -612,7 +612,7 @@ export const updateRestaurantService = async (
   if (phone || email) {
     const existingUser = await checkExistingUser(
       phone || undefined,
-      email || undefined
+      email || undefined,
     );
 
     if (existingUser && existingUser.id !== id) {
@@ -633,7 +633,7 @@ export const updateRestaurantService = async (
 
     if (!locationValidation.isValid) {
       throw new Error(
-        `Location validation failed: ${locationValidation.errors.join(", ")}`
+        `Location validation failed: ${locationValidation.errors.join(", ")}`,
       );
     }
   }
@@ -723,7 +723,7 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
 
     if (!locationValidation.isValid) {
       throw new Error(
-        `Location validation failed: ${locationValidation.errors.join(", ")}`
+        `Location validation failed: ${locationValidation.errors.join(", ")}`,
       );
     }
   }
@@ -778,7 +778,7 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
 export const getAllAdminsService = async (query: IPaginationQuery) => {
   const normalizedQuery = PaginationService.validatePaginationParams(
     query.page,
-    query.limit
+    query.limit,
   );
 
   const options = {
@@ -804,7 +804,7 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
   const result = await PaginationService.paginate(
     prisma.admin,
     normalizedQuery,
-    options
+    options,
   );
 
   return {
@@ -837,7 +837,7 @@ export const getAdminByIdService = async (id: string) => {
 
 export const updateAdminService = async (
   id: string,
-  updateData: IUpdateAdminData
+  updateData: IUpdateAdminData,
 ) => {
   const {
     password,
@@ -880,7 +880,7 @@ export const updateAdminService = async (
 
     if (!locationValidation.isValid) {
       throw new Error(
-        `Location validation failed: ${locationValidation.errors.join(", ")}`
+        `Location validation failed: ${locationValidation.errors.join(", ")}`,
       );
     }
   }
@@ -944,6 +944,9 @@ export const loginService = async (loginData: ILoginData) => {
       OR: [{ phone: phone || undefined }, { email: email || undefined }],
     },
   });
+
+  console.log("Logged user", user);
+
   if (user) foundUserType = "farmer";
 
   // Restaurant login
@@ -957,6 +960,9 @@ export const loginService = async (loginData: ILoginData) => {
         ],
       },
     });
+
+    console.log("Logged user", user);
+
     if (user) {
       foundUserType = "restaurant";
       if (!user.verified) {
@@ -965,7 +971,7 @@ export const loginService = async (loginData: ILoginData) => {
 
       if (!user.agreed) {
         throw new Error(
-          "You must agree to the Terms and Conditions before logging in."
+          "You must agree to the Terms and Conditions before logging in.",
         );
       }
     }
@@ -976,6 +982,9 @@ export const loginService = async (loginData: ILoginData) => {
     user = await prisma.affiliator.findFirst({
       where: { email: email || undefined },
     });
+
+    console.log("Logged user", user);
+
     if (user) foundUserType = "affiliator";
   }
 
@@ -984,6 +993,9 @@ export const loginService = async (loginData: ILoginData) => {
     user = await prisma.admin.findFirst({
       where: { email: email || undefined },
     });
+
+    console.log("Logged user", user);
+
     if (user) foundUserType = "admin";
   }
 
@@ -1048,7 +1060,7 @@ export const requestPasswordResetService = async (email: string) => {
 
 export const resetPasswordService = async (
   token: string,
-  newPassword: string
+  newPassword: string,
 ) => {
   // Verify token
   const decoded = verifyResetToken(token);
@@ -1095,7 +1107,7 @@ export const resetPasswordService = async (
 
 // Admin creates farmer with auto-generated PIN
 export const createFarmerByAdminService = async (
-  farmerData: Omit<ICreateFarmerData, "password">
+  farmerData: Omit<ICreateFarmerData, "password">,
 ) => {
   const { phone, email, location, province, district, sector, cell, village } =
     farmerData;
@@ -1121,7 +1133,7 @@ export const createFarmerByAdminService = async (
 
     if (!locationValidation.isValid) {
       throw new Error(
-        `Location validation failed: ${locationValidation.errors.join(", ")}`
+        `Location validation failed: ${locationValidation.errors.join(", ")}`,
       );
     }
   }
@@ -1155,13 +1167,13 @@ export const createFarmerByAdminService = async (
 
 // Admin creates restaurant with auto-generated password
 export const createRestaurantByAdminService = async (
-  restaurantData: Omit<ICreateRestaurantData, "password">
+  restaurantData: Omit<ICreateRestaurantData, "password">,
 ) => {
   const { name, email, phone, tin, location } = restaurantData;
 
   if (!name || !email || !phone) {
     throw new Error(
-      "Name, email, and phone are required for restaurant creation"
+      "Name, email, and phone are required for restaurant creation",
     );
   }
 
