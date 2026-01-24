@@ -132,7 +132,7 @@ export const topUpTraderWalletService = async (data: {
   });
 };
 
-// Get loan applications for trader
+// Get loan applications for trader - only ACCEPTED loans and those approved by this trader
 export const getTraderLoanApplicationsService = async (
   traderId: string,
   filters?: any,
@@ -145,7 +145,57 @@ export const getTraderLoanApplicationsService = async (
     throw new Error("Trader not found");
   }
 
-  return await getAllLoanApplicationsService(filters);
+  // Build pagination
+  const page = filters?.page || 1;
+  const limit = filters?.limit || 10;
+  const skip = (page - 1) * limit;
+
+  // Build where clause for trader-specific loans
+  const where: any = {
+    OR: [
+      { status: "ACCEPTED" }, // All accepted loans
+      { approvedBy: traderId }, // Loans approved by this trader
+    ],
+  };
+
+  // Add additional filters
+  if (filters?.status) {
+    where.status = filters.status;
+  }
+  if (filters?.restaurantId) {
+    where.restaurantId = filters.restaurantId;
+  }
+
+  const [loans, total] = await Promise.all([
+    prisma.loanApplication.findMany({
+      where,
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        approver: true,
+        vouchers: true,
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.loanApplication.count({ where }),
+  ]);
+
+  return {
+    loans,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
 };
 
 // Get vouchers for trader - loans with ACCEPTED status and those approved by him/her
@@ -161,36 +211,58 @@ export const getTraderVouchersService = async (
     throw new Error("Trader not found");
   }
 
-  // Get vouchers from loans that are ACCEPTED or approved by this trader
-  const vouchers = await prisma.voucher.findMany({
-    where: {
-      OR: [{ loan: { status: "ACCEPTED" } }, { approvedBy: traderId }],
-    },
-    include: {
-      restaurant: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
+  // Build pagination
+  const page = filters?.page || 1;
+  const limit = filters?.limit || 10;
+  const skip = (page - 1) * limit;
+
+  // Build where clause for trader-specific vouchers
+  const where: any = {
+    OR: [
+      { loan: { status: "ACCEPTED" } }, // Vouchers from accepted loans
+      { approvedBy: traderId }, // Vouchers approved by this trader
+    ],
+  };
+
+  // Add additional filters
+  if (filters?.status) {
+    where.status = filters.status;
+  }
+  if (filters?.restaurantId) {
+    where.restaurantId = filters.restaurantId;
+  }
+
+  const [vouchers, total] = await Promise.all([
+    prisma.voucher.findMany({
+      where,
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
         },
+        loan: true,
+        transactions: {
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        },
+        repayments: {
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        },
+        penalties: {
+          where: { status: "PENDING" },
+        },
+        approver: true,
       },
-      loan: true,
-      transactions: {
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      },
-      repayments: {
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      },
-      penalties: {
-        where: { status: "PENDING" },
-      },
-      approver: true,
-    },
-    orderBy: { createdAt: "desc" },
-    ...filters,
-  });
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.voucher.count({ where }),
+  ]);
 
   return {
     vouchers,
@@ -201,6 +273,12 @@ export const getTraderVouchersService = async (
       ).length,
       approvedByTrader: vouchers.filter((v) => v.approvedBy === traderId)
         .length,
+    },
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
     },
   };
 };
