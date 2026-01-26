@@ -70,6 +70,10 @@ components:
           type: string
           nullable: true
           description: Farmer's email address
+        name:
+          type: string
+          nullable: true
+          description: Farmer's name
         location:
           type: string
           description: Location name
@@ -149,6 +153,11 @@ components:
               format: email
               description: Farmer's email address
               example: "farmer@food.rw"
+            name:
+              type: string
+              format: name
+              description: Farmer's name
+              example: "John Kamali"
             password:
               type: string
               minLength: 6
@@ -170,6 +179,11 @@ components:
           format: email
           description: Farmer's email address
           example: "farmer@food.rw"
+        name:
+          type: string
+          format: name
+          description: Farmer's name
+          example: "John Kamali"
         location:
           type: string
           description: Location name

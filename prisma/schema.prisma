@@ -11,6 +11,7 @@ model Farmer {
   id    String  @id @default(uuid())
   phone String? @unique
   email String? @unique
+  name  String?
 
   location String?
   province String?

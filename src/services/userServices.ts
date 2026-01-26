@@ -60,6 +60,7 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
   const {
     phone,
     email,
+    name,
     password,
     location,
     province,
@@ -111,6 +112,7 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
       data: {
         phone,
         email,
+        name,
         password: hashedPassword,
         location,
         province,
