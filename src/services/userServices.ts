@@ -53,7 +53,18 @@ export const checkExistingUser = async (phone?: string, email?: string) => {
   }
 
   const results = await Promise.all(conditions);
-  return results.find((result) => result !== null) || null;
+  const existingUser = results.find((result) => result !== null);
+
+  if (existingUser) {
+    // Add the matching field info for better error messages
+    return {
+      ...existingUser,
+      phone: existingUser.phone === phone ? phone : undefined,
+      email: existingUser.email === email ? email : undefined,
+    };
+  }
+
+  return null;
 };
 // FARMER SERVICES
 export const createFarmerService = async (farmerData: ICreateFarmerData) => {
@@ -70,6 +81,8 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
     village,
   } = farmerData;
 
+  console.log("Received farmer data:---", farmerData);
+
   if (!phone && !email) {
     throw new Error("Either phone or email is required");
   }
@@ -79,8 +92,12 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
     phone || undefined,
     email || undefined,
   );
+
+  console.log("Received existingUser data:---", existingUser);
+
   if (existingUser) {
-    throw new Error("User with this phone/email already exists");
+    const field = existingUser.phone === phone ? "phone" : "email";
+    throw new Error(`User with this ${field} already exists`);
   }
 
   // Validate location data if provided
@@ -122,6 +139,8 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
         village,
       },
     });
+
+    console.log("Received farmer data:---", farmer);
 
     await createNotificationService({
       title: "New User Registration",
@@ -170,6 +189,7 @@ export const getAllFarmersService = async (query: IPaginationQuery) => {
       role: true,
       phone: true,
       email: true,
+      name: true,
       createdAt: true,
       submissions: {
         select: {
@@ -215,6 +235,7 @@ export const getFarmerByIdService = async (id: string) => {
       role: true,
       phone: true,
       email: true,
+      name: true,
       createdAt: true,
       submissions: {
         select: {
