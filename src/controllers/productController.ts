@@ -45,7 +45,7 @@ export const createProduct = async (req: Request, res: Response) => {
       if (filesDict["images"]) {
         for (let index = 0; index < filesDict["images"].length; index++) {
           const uploadResult = await cloudinary.v2.uploader.upload(
-            filesDict["images"][index].path
+            filesDict["images"][index].path,
           );
           imageUrls.push(uploadResult.secure_url);
         }
@@ -84,7 +84,7 @@ export const createProduct = async (req: Request, res: Response) => {
 
 export const updateProductQuantityFromSubmission = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const { submissionId, productId } = req.params;
@@ -126,7 +126,7 @@ export const updateProductQuantityFromSubmission = async (
 
 export const createProductFromSubmission = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const { submissionId } = req.params;
@@ -220,7 +220,7 @@ export const updateProduct = async (req: Request, res: Response) => {
       if (filesDict["images"]) {
         for (let index = 0; index < filesDict["images"].length; index++) {
           const uploadResult = await cloudinary.v2.uploader.upload(
-            filesDict["images"][index].path
+            filesDict["images"][index].path,
           );
           finalImageUrls.push(uploadResult.secure_url);
         }
@@ -317,7 +317,7 @@ export const getAllProducts = async (req: Request, res: Response) => {
 // Get products by user role
 export const getProductsByRole = async (req: Request, res: Response) => {
   try {
-    const { category, search, page = 1, limit = 10 } = req.query;
+    const { categoryId, search, page = 1, limit = 10 } = req.query;
     const userRole = (req as any).user.role as string;
 
     // Validate role
@@ -330,7 +330,7 @@ export const getProductsByRole = async (req: Request, res: Response) => {
 
     const result = await getProductsByRoleService({
       role: userRole as "ADMIN" | "AGGREGATOR" | "LOGISTICS",
-      category: category as string,
+      categoryId: categoryId as string,
       search: search as string,
       page: parseInt(page as string),
       limit: parseInt(limit as string),
@@ -433,9 +433,8 @@ export const updateProductStatus = async (req: Request, res: Response) => {
       });
     }
 
-    const { updateProductStatusService } = await import(
-      "../services/productService"
-    );
+    const { updateProductStatusService } =
+      await import("../services/productService");
     const result = await updateProductStatusService(productId, status, reason);
 
     // Broadcast product status update via WebSocket
