@@ -4,6 +4,7 @@ import { UserLocationData } from "./locationTypes";
 export interface ICreateFarmerData extends UserLocationData {
   phone?: string;
   email?: string;
+  name?: string;
   password?: string;
 }
 
@@ -26,6 +27,7 @@ export interface ICreateAdminData extends Partial<UserLocationData> {
 export interface IUpdateFarmerData extends Partial<UserLocationData> {
   phone?: string;
   email?: string;
+  name?: string;
   password?: string;
 }
 
