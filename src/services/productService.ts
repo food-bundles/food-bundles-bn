@@ -566,13 +566,13 @@ export const getAllProductsService = async ({
 // Get products by user role with appropriate filters and data
 export const getProductsByRoleService = async ({
   role,
-  category,
+  categoryId,
   search,
   page = 1,
   limit = 10,
 }: {
   role: "ADMIN" | "AGGREGATOR" | "LOGISTICS";
-  category?: string;
+  categoryId?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -583,8 +583,8 @@ export const getProductsByRoleService = async ({
     status: "ACTIVE",
   };
 
-  if (category) {
-    baseWhere.category = category;
+  if (categoryId) {
+    baseWhere.categoryId = categoryId;
   }
 
   if (search) {

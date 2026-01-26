@@ -404,11 +404,11 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: category
+        - name: categoryId
           in: query
           schema:
             type: string
-          description: Filter by product category
+          description: Filter by product category Id
         - name: search
           in: query
           schema:
