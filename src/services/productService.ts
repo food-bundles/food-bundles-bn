@@ -181,7 +181,7 @@ export const updateProductQuantityFromSubmissionService = async ({
 export const updateProductService = async (
   productId: string,
   updateData: Partial<ProductData>,
-  adminId: string
+  adminId: string,
 ) => {
   console.log("updateData:", updateData);
 
@@ -242,6 +242,9 @@ export const updateProductService = async (
       }),
       ...(updateData.unitPrice !== undefined && {
         unitPrice: Number(updateData.unitPrice),
+      }),
+      ...(updateData.purchasePrice !== undefined && {
+        purchasePrice: Number(updateData.purchasePrice),
       }),
       ...(updateData.categoryId !== undefined && {
         categoryId: updateData.categoryId,
@@ -775,7 +778,7 @@ export const getVerifiedSubmissionsService = async () => {
 // Approve submission without creating product
 export const approveSubmissionService = async (
   submissionId: string,
-  adminId: string
+  adminId: string,
 ) => {
   const submission = await prisma.farmerSubmission.findUnique({
     where: { id: submissionId },
@@ -791,7 +794,7 @@ export const approveSubmissionService = async (
 
   if (submission.farmerFeedbackStatus !== "ACCEPTED") {
     throw new Error(
-      "Only submissions with ACCEPTED feedback from farmer can be approved"
+      "Only submissions with ACCEPTED feedback from farmer can be approved",
     );
   }
 
@@ -855,7 +858,7 @@ export const approveSubmissionService = async (
 export const updateProductStatusService = async (
   productId: string,
   status: "ACTIVE" | "INACTIVE",
-  reason?: string
+  reason?: string,
 ) => {
   // Check if product exists
   const existingProduct = await prisma.product.findUnique({
