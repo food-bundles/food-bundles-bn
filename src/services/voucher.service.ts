@@ -903,7 +903,10 @@ export const approveLoanApplicationService = async (
 
   if (!loan) throw new Error("Loan not found");
 
-  if (loan.status !== LoanStatus.PENDING) {
+  if (
+    loan.status !== LoanStatus.PENDING &&
+    loan.status !== LoanStatus.ACCEPTED
+  ) {
     throw new Error(`Cannot approve loan with status: ${loan.status}`);
   }
 
