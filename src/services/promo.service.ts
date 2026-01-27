@@ -224,8 +224,19 @@ export const validatePromoCodeService = async (
     (exclusion: any) => exclusion.restaurantId === restaurantId
   );
 
+  // Check if restaurant is included (for private promo codes)
+  const includedRestaurants = (promoCode.includedRestaurants as any[]) || [];
+  const isIncluded = includedRestaurants.some(
+    (inclusion: any) => inclusion.restaurantId === restaurantId
+  );
+
   if (promoCode.type === "EXCEPTIONAL" && isExcluded) {
     throw new Error("You are not eligible for this promo code");
+  }
+
+  // If promo has inclusions, only included restaurants can use it
+  if (includedRestaurants.length > 0 && !isIncluded) {
+    throw new Error("This promo code is not available for your restaurant");
   }
 
   // Check subscription requirement
@@ -530,11 +541,20 @@ export const getMyPromoCodesService = async (restaurantId: string) => {
   
   for (const promo of promoCodes) {
     const excludedRestaurants = (promo.excludedRestaurants as any[]) || [];
+    const includedRestaurants = (promo.includedRestaurants as any[]) || [];
     const isExcluded = excludedRestaurants.some(
       (exclusion: any) => exclusion.restaurantId === restaurantId
     );
+    const isIncluded = includedRestaurants.some(
+      (inclusion: any) => inclusion.restaurantId === restaurantId
+    );
     
     if (promo.type === 'EXCEPTIONAL' && isExcluded) {
+      continue;
+    }
+
+    // If promo has inclusions, only included restaurants can see it
+    if (includedRestaurants.length > 0 && !isIncluded) {
       continue;
     }
 
@@ -637,9 +657,75 @@ export const calculateCartWithPromoService = async (
   };
 };
 
-// Enhanced create service with excluded restaurants
-export const createPromoCodeWithExclusionsService = async (
-  data: CreatePromoCodeData & { excludedRestaurants?: Array<{ restaurantId: string; reason?: string }> }
+export const includeRestaurantService = async (
+  promoCodeId: string,
+  restaurantId: string,
+  reason: string,
+  includedBy: string
+) => {
+  const promoCode = await prisma.promoCode.findUnique({
+    where: { id: promoCodeId },
+  });
+
+  if (!promoCode) {
+    throw new Error("Promo code not found");
+  }
+
+  const currentInclusions = (promoCode.includedRestaurants as any[]) || [];
+  const isAlreadyIncluded = currentInclusions.some(
+    (inclusion: any) => inclusion.restaurantId === restaurantId
+  );
+
+  if (isAlreadyIncluded) {
+    throw new Error("Restaurant is already included");
+  }
+
+  const newInclusion = {
+    restaurantId,
+    reason,
+    includedBy,
+    includedAt: new Date(),
+  };
+
+  return await prisma.promoCode.update({
+    where: { id: promoCodeId },
+    data: {
+      includedRestaurants: [...currentInclusions, newInclusion],
+    },
+  });
+};
+
+export const removeRestaurantInclusionService = async (
+  promoCodeId: string,
+  restaurantId: string
+) => {
+  const promoCode = await prisma.promoCode.findUnique({
+    where: { id: promoCodeId },
+  });
+
+  if (!promoCode) {
+    throw new Error("Promo code not found");
+  }
+
+  const currentInclusions = (promoCode.includedRestaurants as any[]) || [];
+  const updatedInclusions = currentInclusions.filter(
+    (inclusion: any) => inclusion.restaurantId !== restaurantId
+  );
+
+  return await prisma.promoCode.update({
+    where: { id: promoCodeId },
+    data: {
+      includedRestaurants: updatedInclusions,
+    },
+  });
+};
+
+// Enhanced create service with included restaurants
+export const createPromoCodeWithInclusionsService = async (
+  data: CreatePromoCodeData & { 
+    excludedRestaurants?: Array<{ restaurantId: string; reason?: string }>;
+    includedRestaurants?: Array<{ restaurantId: string; reason?: string }>;
+  }
 ) => {
   const existingPromo = await prisma.promoCode.findUnique({
     where: { code: data.code },
@@ -655,13 +741,20 @@ export const createPromoCodeWithExclusionsService = async (
     excludedAt: new Date()
   })) || [];
 
-  const { excludedRestaurants: _, ...promoData } = data;
+  const includedRestaurants = data.includedRestaurants?.map(inclusion => ({
+    ...inclusion,
+    includedBy: data.createdBy,
+    includedAt: new Date()
+  })) || [];
+
+  const { excludedRestaurants: _, includedRestaurants: __, ...promoData } = data;
 
   return await prisma.promoCode.create({
     data: {
       ...promoData,
       usageHistory: [],
       excludedRestaurants,
+      includedRestaurants,
       restaurantUsageCount: {},
     },
     include: {

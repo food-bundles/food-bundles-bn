@@ -10,6 +10,8 @@ import {
   applyPromoCode,
   excludeRestaurant,
   removeRestaurantExclusion,
+  includeRestaurant,
+  removeRestaurantInclusion,
   getActivePromoCodes,
   getMyPromoCodes,
   calculateCartWithPromo,
@@ -49,6 +51,20 @@ router.delete(
   isAuthenticated,
   checkPermission("ADMIN"),
   removeRestaurantExclusion
+);
+
+// Restaurant inclusion management - admin only
+router.post(
+  "/:id/include",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  includeRestaurant
+);
+router.delete(
+  "/:id/include/:restaurantId",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  removeRestaurantInclusion
 );
 
 // Restaurant routes - require restaurant authentication

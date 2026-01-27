@@ -1171,6 +1171,9 @@ model PromoCode {
   // Exclusions - stores JSON array of excluded restaurants
   excludedRestaurants Json? // [{restaurantId, reason, excludedBy, excludedAt}]
 
+  // Inclusions - stores JSON array of included restaurants for private promo codes
+  includedRestaurants Json? // [{restaurantId, reason, includedBy, includedAt}]
+
   // Per-restaurant usage count tracking
   restaurantUsageCount Json? // {restaurantId: count}
 

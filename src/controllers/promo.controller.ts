@@ -10,10 +10,12 @@ import {
   applyPromoCodeService,
   excludeRestaurantService,
   removeRestaurantExclusionService,
+  includeRestaurantService,
+  removeRestaurantInclusionService,
   getActivePromoCodesService,
   getMyPromoCodesService,
   calculateCartWithPromoService,
-  createPromoCodeWithExclusionsService,
+  createPromoCodeWithInclusionsService,
 } from "../services/promo.service";
 import { PromoCodeType, DiscountType } from "@prisma/client";
 
@@ -355,22 +357,52 @@ export const excludeRestaurant = async (req: Request, res: Response) => {
   }
 };
 
-export const removeRestaurantExclusion = async (
+export const includeRestaurant = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { restaurantId, reason } = req.body;
+    const includedBy = (req as any).user?.id;
+
+    if (!restaurantId || !reason) {
+      return res.status(400).json({
+        message: "Missing required fields: restaurantId, reason",
+      });
+    }
+
+    const promoCode = await includeRestaurantService(
+      id,
+      restaurantId,
+      reason,
+      includedBy,
+    );
+
+    res.status(200).json({
+      message: "Restaurant included successfully",
+      data: promoCode,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to include restaurant",
+    });
+  }
+};
+
+export const removeRestaurantInclusion = async (
   req: Request,
   res: Response,
 ) => {
   try {
     const { id, restaurantId } = req.params;
 
-    const promoCode = await removeRestaurantExclusionService(id, restaurantId);
+    const promoCode = await removeRestaurantInclusionService(id, restaurantId);
 
     res.status(200).json({
-      message: "Restaurant exclusion removed successfully",
+      message: "Restaurant inclusion removed successfully",
       data: promoCode,
     });
   } catch (error: any) {
     res.status(400).json({
-      message: error.message || "Failed to remove restaurant exclusion",
+      message: error.message || "Failed to remove restaurant inclusion",
     });
   }
 };
