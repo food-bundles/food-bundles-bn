@@ -17,6 +17,7 @@ import {
 import { WalletTransactionType, TransactionStatus } from "@prisma/client";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 import { OTPService } from "../services/otp.service";
+import { getPaymentMethodByIdService } from "../services/payment-method.service";
 
 /**
  * Create wallet for restaurant
@@ -103,7 +104,7 @@ export const getWalletById = async (req: Request, res: Response) => {
  */
 export const topUpWallet = async (req: Request, res: Response) => {
   try {
-    const { amount, paymentMethod, phoneNumber, description } = req.body;
+    const { amount, paymentMethodId, phoneNumber, description } = req.body;
 
     const userId = (req as any).user.id;
     const userRole = (req as any).user.role;
@@ -128,6 +129,11 @@ export const topUpWallet = async (req: Request, res: Response) => {
         message: "Valid amount is required",
       });
     }
+
+    // Get payment method from DB
+    const paymentMethodConfig =
+      await getPaymentMethodByIdService(paymentMethodId);
+    const paymentMethod = paymentMethodConfig.name.toUpperCase();
 
     if (!paymentMethod) {
       return res.status(400).json({
@@ -216,7 +222,7 @@ export const getMyWalletTransactions = async (req: Request, res: Response) => {
     if (
       type &&
       !Object.values(WalletTransactionType).includes(
-        type as WalletTransactionType
+        type as WalletTransactionType,
       )
     ) {
       return res.status(400).json({
@@ -566,7 +572,7 @@ export const requestAdminDepositOTP = async (req: Request, res: Response) => {
       amount,
       restaurantId,
       restaurant.name,
-      description
+      description,
     );
 
     if (!otpResult.success) {
@@ -640,13 +646,21 @@ export const verifyAdminDepositOTP = async (req: Request, res: Response) => {
  * Request OTP for wallet adjustment
  * POST /wallets/:walletId/adjust/request-otp
  */
-export const requestWalletAdjustmentOTP = async (req: Request, res: Response) => {
+export const requestWalletAdjustmentOTP = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const { walletId } = req.params;
     const { amount, type, description } = req.body;
     const adminId = (req as any).user.id;
 
-    if (!amount || amount <= 0 || !type || !["credit", "debit"].includes(type)) {
+    if (
+      !amount ||
+      amount <= 0 ||
+      !type ||
+      !["credit", "debit"].includes(type)
+    ) {
       return res.status(400).json({
         message: "Valid amount and type (credit/debit) are required",
       });
@@ -662,7 +676,7 @@ export const requestWalletAdjustmentOTP = async (req: Request, res: Response) =>
       amount,
       wallet.restaurantId || undefined,
       restaurantName,
-      description
+      description,
     );
 
     if (!otpResult.success) {
@@ -687,7 +701,10 @@ export const requestWalletAdjustmentOTP = async (req: Request, res: Response) =>
  * Verify OTP and process wallet adjustment
  * POST /wallets/:walletId/adjust/verify-otp
  */
-export const verifyWalletAdjustmentOTP = async (req: Request, res: Response) => {
+export const verifyWalletAdjustmentOTP = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const { walletId } = req.params;
     const { otp, sessionId, type, description } = req.body;
@@ -764,7 +781,7 @@ export const verifyWalletAdjustmentOTP = async (req: Request, res: Response) => 
  */
 export const getAdminWalletTransactions = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const {
