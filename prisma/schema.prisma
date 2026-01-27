@@ -1171,6 +1171,9 @@ model PromoCode {
   // Exclusions - stores JSON array of excluded restaurants
   excludedRestaurants Json? // [{restaurantId, reason, excludedBy, excludedAt}]
 
+  // Inclusions - stores JSON array of included restaurants for private promo codes
+  includedRestaurants Json? // [{restaurantId, reason, includedBy, includedAt}]
+
   // Per-restaurant usage count tracking
   restaurantUsageCount Json? // {restaurantId: count}
 
@@ -1343,6 +1346,7 @@ enum PenaltyStatus {
 enum OTPPurpose {
   RESTAURANT_SIGNUP
   VOUCHER_CHECKOUT
+  ADMIN_WALLET_OPERATION
 }
 
 enum NotificationEvent {

@@ -16,6 +16,7 @@ import {
 } from "../services/wallet.service";
 import { WalletTransactionType, TransactionStatus } from "@prisma/client";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
+import { OTPService } from "../services/otp.service";
 
 /**
  * Create wallet for restaurant
@@ -528,6 +529,231 @@ export const verifyWalletTopUp = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to verify payment",
+    });
+  }
+};
+
+/**
+ * Request OTP for admin deposit
+ * POST /wallets/admin-deposit/request-otp
+ */
+export const requestAdminDepositOTP = async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, amount, description } = req.body;
+    const adminId = (req as any).user.id;
+
+    if (!restaurantId || !amount || amount <= 0) {
+      return res.status(400).json({
+        message: "Restaurant ID and valid amount are required",
+      });
+    }
+
+    // Get restaurant name for OTP message
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: { name: true },
+    });
+
+    if (!restaurant) {
+      return res.status(404).json({
+        message: "Restaurant not found",
+      });
+    }
+
+    const otpResult = await OTPService.sendAdminWalletOTP(
+      adminId,
+      "DEPOSIT",
+      amount,
+      restaurantId,
+      restaurant.name,
+      description
+    );
+
+    if (!otpResult.success) {
+      return res.status(400).json({
+        message: otpResult.message,
+      });
+    }
+
+    res.status(200).json({
+      message: "OTP sent to private receiver for verification",
+      requiresOTP: true,
+      sessionId: otpResult.sessionId,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to send OTP",
+    });
+  }
+};
+
+/**
+ * Verify OTP and process admin deposit
+ * POST /wallets/admin-deposit/verify-otp
+ */
+export const verifyAdminDepositOTP = async (req: Request, res: Response) => {
+  try {
+    const { otp, sessionId } = req.body;
+    const adminId = (req as any).user.id;
+
+    if (!otp || !sessionId) {
+      return res.status(400).json({
+        message: "OTP and session ID are required",
+      });
+    }
+
+    const otpResult = await OTPService.verifyAdminWalletOTP(otp, sessionId);
+
+    if (!otpResult.success) {
+      return res.status(400).json({
+        message: otpResult.message,
+      });
+    }
+
+    // Extract session data and process deposit
+    const { sessionData } = otpResult;
+    if (sessionData.adminId !== adminId) {
+      return res.status(403).json({
+        message: "Unauthorized: Admin ID mismatch",
+      });
+    }
+
+    const result = await adminDepositToWalletService({
+      restaurantId: sessionData.restaurantId,
+      amount: sessionData.amount,
+      adminId,
+      description: sessionData.description,
+    });
+
+    res.status(200).json({
+      message: "Admin deposit successful",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to process admin deposit",
+    });
+  }
+};
+
+/**
+ * Request OTP for wallet adjustment
+ * POST /wallets/:walletId/adjust/request-otp
+ */
+export const requestWalletAdjustmentOTP = async (req: Request, res: Response) => {
+  try {
+    const { walletId } = req.params;
+    const { amount, type, description } = req.body;
+    const adminId = (req as any).user.id;
+
+    if (!amount || amount <= 0 || !type || !["credit", "debit"].includes(type)) {
+      return res.status(400).json({
+        message: "Valid amount and type (credit/debit) are required",
+      });
+    }
+
+    // Get wallet and restaurant info
+    const wallet = await getWalletByIdService(walletId);
+    const restaurantName = wallet.restaurant?.name;
+
+    const otpResult = await OTPService.sendAdminWalletOTP(
+      adminId,
+      "ADJUSTMENT",
+      amount,
+      wallet.restaurantId || undefined,
+      restaurantName,
+      description
+    );
+
+    if (!otpResult.success) {
+      return res.status(400).json({
+        message: otpResult.message,
+      });
+    }
+
+    res.status(200).json({
+      message: "OTP sent to private receiver for verification",
+      requiresOTP: true,
+      sessionId: otpResult.sessionId,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to send OTP",
+    });
+  }
+};
+
+/**
+ * Verify OTP and process wallet adjustment
+ * POST /wallets/:walletId/adjust/verify-otp
+ */
+export const verifyWalletAdjustmentOTP = async (req: Request, res: Response) => {
+  try {
+    const { walletId } = req.params;
+    const { otp, sessionId, type, description } = req.body;
+    const adminId = (req as any).user.id;
+
+    if (!otp || !sessionId) {
+      return res.status(400).json({
+        message: "OTP and session ID are required",
+      });
+    }
+
+    const otpResult = await OTPService.verifyAdminWalletOTP(otp, sessionId);
+
+    if (!otpResult.success) {
+      return res.status(400).json({
+        message: otpResult.message,
+      });
+    }
+
+    // Extract session data and process adjustment
+    const { sessionData } = otpResult;
+    if (sessionData.adminId !== adminId) {
+      return res.status(403).json({
+        message: "Unauthorized: Admin ID mismatch",
+      });
+    }
+
+    // Get wallet and validate
+    const wallet = await getWalletByIdService(walletId);
+    if (!wallet.isActive) {
+      return res.status(400).json({
+        message: "Cannot adjust inactive wallet",
+      });
+    }
+
+    const amount = sessionData.amount;
+    let result;
+
+    if (type === "debit") {
+      if (wallet.balance < amount) {
+        return res.status(400).json({
+          message: `Insufficient wallet balance. Available: ${wallet.balance}, Required: ${amount}`,
+        });
+      }
+      result = await debitWalletService({
+        walletId,
+        amount,
+        description: description || `Manual debit adjustment by admin`,
+        reference: `ADMIN_ADJUSTMENT_${Date.now()}`,
+      });
+    } else {
+      result = await refundToWalletService({
+        walletId,
+        amount,
+        description: description || `Manual credit adjustment by admin`,
+        reference: `ADMIN_ADJUSTMENT_${Date.now()}`,
+      });
+    }
+
+    res.status(200).json({
+      message: `Wallet ${type} adjustment successful`,
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to process wallet adjustment",
     });
   }
 };

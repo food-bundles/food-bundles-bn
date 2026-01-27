@@ -200,7 +200,7 @@ components:
           description: Optional description for the top-up
           example: "Wallet top-up"
 
-    AdminDepositRequest:
+    AdminDepositOTPRequest:
       type: object
       required:
         - restaurantId
@@ -222,7 +222,7 @@ components:
           description: Optional description for the deposit
           example: "Admin deposit for promotional credit"
 
-    WalletAdjustmentRequest:
+    WalletAdjustmentOTPRequest:
       type: object
       required:
         - amount
@@ -243,6 +243,40 @@ components:
           type: string
           description: Reason for adjustment
           example: "Manual credit adjustment by admin"
+
+    OTPVerificationRequest:
+      type: object
+      required:
+        - otp
+        - sessionId
+      properties:
+        otp:
+          type: string
+          description: 6-digit OTP code received via SMS/email
+          example: "123456"
+          pattern: "^[0-9]{6}$"
+          minLength: 6
+          maxLength: 6
+        sessionId:
+          type: string
+          description: |
+            Session ID from OTP request containing encrypted session data.
+            This includes restaurant ID, amount, description, and other operation details.
+          example: "eyJhZG1pbklkIjoiYWRtaW4xMjMiLCJvcGVyYXRpb25UeXBlIjoiREVQT1NJVCIsImFtb3VudCI6MjUwMDB9"
+
+    OTPResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "OTP sent to private receiver for verification"
+        requiresOTP:
+          type: boolean
+          example: true
+        sessionId:
+          type: string
+          description: Session ID for OTP verification
+          example: "eyJhZG1pbklkIjoiYWRtaW4xMjMiLCJvcGVyYXRpb25UeXBlIjoiREVQT1NJVCIsImFtb3VudCI6MjUwMDB9"
 
     UpdateWalletStatusRequest:
       type: object
@@ -843,11 +877,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /wallets/admin-deposit:
+  /wallets/admin-deposit/request-otp:
     post:
       tags: [Wallet Management]
-      summary: Admin deposit to restaurant wallet
-      description: Allow admin to deposit funds directly to a restaurant's wallet
+      summary: Request OTP for admin deposit
+      description: Request OTP verification for admin deposit to restaurant wallet
       security:
         - BearerAuth: []
       requestBody:
@@ -855,7 +889,105 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AdminDepositRequest"
+              $ref: "#/components/schemas/AdminDepositOTPRequest"
+      responses:
+        200:
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OTPResponse"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/admin-deposit/verify-otp:
+    post:
+      tags: [Wallet Management]
+      summary: Verify OTP and process admin deposit
+      description: |
+        Verify OTP and complete admin deposit to restaurant wallet.
+        Restaurant ID and description are retrieved from the session data,
+        so only OTP and session ID are required in the request.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OTPVerificationRequest"
+            example:
+              otp: "123456"
+              sessionId: "eyJhZG1pbklkIjoiYWRtaW4xMjMiLCJvcGVyYXRpb25UeXBlIjoiREVQT1NJVCIsImFtb3VudCI6MjUwMDB9"
+      responses:
+        200:
+          description: Admin deposit successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Admin deposit successful"
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      wallet:
+                        $ref: "#/components/schemas/Wallet"
+                      transaction:
+                        $ref: "#/components/schemas/WalletTransaction"
+        400:
+          description: Bad request or OTP verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin ID mismatch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/admin-deposit:
+    post:
+      tags: [Wallet Management]
+      summary: Admin deposit to restaurant wallet (Legacy)
+      description: Direct admin deposit without OTP verification (for backward compatibility)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminDepositOTPRequest"
       responses:
         200:
           description: Admin deposit successful
@@ -883,46 +1015,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                invalid_amount:
-                  value:
-                    message: "Valid amount is required"
-                    error: "Amount must be greater than 0"
-                    code: "INVALID_AMOUNT"
-                inactive_wallet:
-                  value:
-                    message: "Cannot deposit to inactive wallet"
-                    error: "Wallet is inactive"
-                    code: "INACTIVE_WALLET"
-        401:
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        403:
-          description: Forbidden - Admin access required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
         404:
           description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                admin_not_found:
-                  value:
-                    message: "Admin not found"
-                    error: "Admin account not found"
-                    code: "ADMIN_NOT_FOUND"
-                restaurant_not_found:
-                  value:
-                    message: "Restaurant not found"
-                    error: "Restaurant account not found"
-                    code: "RESTAURANT_NOT_FOUND"
         500:
           description: Internal server error
           content:
@@ -1047,11 +1145,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /wallets/{walletId}/adjust:
+  /wallets/{walletId}/adjust/request-otp:
     post:
       tags: [Wallet Management]
-      summary: Adjust wallet balance (Admin only)
-      description: Manually adjust wallet balance (credit or debit)
+      summary: Request OTP for wallet adjustment
+      description: Request OTP verification for manual wallet balance adjustment
       security:
         - BearerAuth: []
       parameters:
@@ -1067,7 +1165,128 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/WalletAdjustmentRequest"
+              $ref: "#/components/schemas/WalletAdjustmentOTPRequest"
+      responses:
+        200:
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OTPResponse"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/{walletId}/adjust/verify-otp:
+    post:
+      tags: [Wallet Management]
+      summary: Verify OTP and process wallet adjustment
+      description: Verify OTP and complete manual wallet balance adjustment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: walletId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Wallet ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/OTPVerificationRequest"
+                - type: object
+                  required:
+                    - type
+                  properties:
+                    type:
+                      type: string
+                      enum: [credit, debit]
+                      description: Type of adjustment
+                      example: "credit"
+                    description:
+                      type: string
+                      description: Optional description
+      responses:
+        200:
+          description: Wallet adjustment successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Wallet credit adjustment successful"
+                  data:
+                    type: object
+                    properties:
+                      wallet:
+                        $ref: "#/components/schemas/Wallet"
+                      transaction:
+                        $ref: "#/components/schemas/WalletTransaction"
+                      newBalance:
+                        type: number
+                        example: 55000.00
+        400:
+          description: Bad request or OTP verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - Admin ID mismatch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /wallets/{walletId}/adjust:
+    post:
+      tags: [Wallet Management]
+      summary: Adjust wallet balance (Legacy)
+      description: Direct wallet balance adjustment without OTP verification (for backward compatibility)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: walletId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Wallet ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletAdjustmentOTPRequest"
       responses:
         200:
           description: Wallet adjustment successful
@@ -1091,24 +1310,6 @@ paths:
                         example: 55000.00
         400:
           description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                insufficient_balance:
-                  value:
-                    message: "Insufficient wallet balance. Available: 40000.00, Required: 50000.00"
-                    error: "Insufficient funds for debit adjustment"
-                    code: "INSUFFICIENT_BALANCE"
-        401:
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        403:
-          description: Forbidden - Admin access required
           content:
             application/json:
               schema:

@@ -968,8 +968,6 @@ export const loginService = async (loginData: ILoginData) => {
     },
   });
 
-  console.log("Logged user", user);
-
   if (user) foundUserType = "farmer";
 
   // Restaurant login
@@ -983,8 +981,6 @@ export const loginService = async (loginData: ILoginData) => {
         ],
       },
     });
-
-    console.log("Logged user", user);
 
     if (user) {
       foundUserType = "restaurant";
@@ -1006,8 +1002,6 @@ export const loginService = async (loginData: ILoginData) => {
       where: { email: email || undefined },
     });
 
-    console.log("Logged user", user);
-
     if (user) foundUserType = "affiliator";
   }
 
@@ -1016,8 +1010,6 @@ export const loginService = async (loginData: ILoginData) => {
     user = await prisma.admin.findFirst({
       where: { email: email || undefined },
     });
-
-    console.log("Logged user", user);
 
     if (user) foundUserType = "admin";
   }
@@ -1132,8 +1124,17 @@ export const resetPasswordService = async (
 export const createFarmerByAdminService = async (
   farmerData: Omit<ICreateFarmerData, "password">,
 ) => {
-  const { phone, email, location, province, district, sector, cell, village } =
-    farmerData;
+  const {
+    phone,
+    email,
+    name,
+    location,
+    province,
+    district,
+    sector,
+    cell,
+    village,
+  } = farmerData;
 
   if (!phone) {
     throw new Error("Phone number is required for farmer creation");
@@ -1169,6 +1170,7 @@ export const createFarmerByAdminService = async (
       data: {
         phone,
         email,
+        name,
         password: hashedPassword,
         location,
         province,

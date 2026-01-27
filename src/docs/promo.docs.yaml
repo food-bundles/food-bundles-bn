@@ -106,6 +106,21 @@ components:
               excludedAt:
                 type: string
                 format: date-time
+        includedRestaurants:
+          type: array
+          items:
+            type: object
+            properties:
+              restaurantId:
+                type: string
+              reason:
+                type: string
+              includedBy:
+                type: string
+              includedAt:
+                type: string
+                format: date-time
+          description: List of restaurants specifically included for private promo codes
         restaurantUsageCount:
           type: object
           example: { "rest_1": 2, "rest_2": 1 }
@@ -207,6 +222,18 @@ components:
                 type: string
                 example: "Previous violation of terms"
           description: List of restaurants to exclude from this promo code
+        includedRestaurants:
+          type: array
+          items:
+            type: object
+            properties:
+              restaurantId:
+                type: string
+                example: "restaurant_456"
+              reason:
+                type: string
+                example: "VIP customer - private promo"
+          description: List of restaurants to specifically include for private promo codes
 
     ValidatePromoCodeRequest:
       type: object
@@ -246,7 +273,7 @@ components:
             - productId: "prod_789012"
               quantity: 1
 
-    ExcludeRestaurantRequest:
+    IncludeRestaurantRequest:
       type: object
       required:
         - restaurantId
@@ -257,7 +284,7 @@ components:
           example: "rest_123456"
         reason:
           type: string
-          example: "Violation of terms and conditions"
+          example: "VIP customer - exclusive access"
 
     PromoCodeResponse:
       type: object
@@ -817,11 +844,45 @@ paths:
         401:
           description: Unauthorized - admin access required
 
-  /promo/{id}/exclude/{restaurantId}:
+  /promo/{id}/include:
+    post:
+      tags:
+        - Promo Code Management
+      summary: Include restaurant in promo code (Admin only)
+      description: Add a restaurant to the inclusion list for private promo code access
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Promo code ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncludeRestaurantRequest"
+      responses:
+        200:
+          description: Restaurant included successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCodeResponse"
+        400:
+          description: Bad request
+        401:
+          description: Unauthorized - admin access required
+
+  /promo/{id}/include/{restaurantId}:
     delete:
       tags:
         - Promo Code Management
-      summary: Remove restaurant exclusion from promo code (Admin only)
+      summary: Remove restaurant inclusion from promo code (Admin only)
+      description: Remove a restaurant from the inclusion list
       security:
         - BearerAuth: []
       parameters:
@@ -836,10 +897,10 @@ paths:
           required: true
           schema:
             type: string
-          description: Restaurant ID to remove from exclusions
+          description: Restaurant ID to remove from inclusions
       responses:
         200:
-          description: Restaurant exclusion removed successfully
+          description: Restaurant inclusion removed successfully
           content:
             application/json:
               schema:
