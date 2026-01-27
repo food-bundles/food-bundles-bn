@@ -178,7 +178,7 @@ components:
       type: object
       required:
         - amount
-        - paymentMethod
+        - paymentMethodId
       properties:
         amount:
           type: number
@@ -186,11 +186,10 @@ components:
           description: Amount to top up
           example: 10000.00
           minimum: 1
-        paymentMethod:
+        paymentMethodId:
           type: string
-          enum: [MOBILE_MONEY, CARD]
-          description: Payment method for top-up
-          example: "MOBILE_MONEY"
+          description: Payment method ID for top-up
+          example: "pm_id_123"
         phoneNumber:
           type: string
           description: Phone number (required for MOBILE_MONEY)

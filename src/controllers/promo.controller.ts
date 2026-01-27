@@ -407,6 +407,26 @@ export const removeRestaurantInclusion = async (
   }
 };
 
+export const removeRestaurantExclusion = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { id, restaurantId } = req.params;
+
+    const promoCode = await removeRestaurantExclusionService(id, restaurantId);
+
+    res.status(200).json({
+      message: "Restaurant exclusion removed successfully",
+      data: promoCode,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to remove restaurant exclusion",
+    });
+  }
+};
+
 // New controllers for requested endpoints
 
 export const getActivePromoCodes = async (req: Request, res: Response) => {
