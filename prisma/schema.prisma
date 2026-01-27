@@ -1343,6 +1343,7 @@ enum PenaltyStatus {
 enum OTPPurpose {
   RESTAURANT_SIGNUP
   VOUCHER_CHECKOUT
+  ADMIN_WALLET_OPERATION
 }
 
 enum NotificationEvent {

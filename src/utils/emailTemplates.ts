@@ -342,6 +342,32 @@ export const sendPaymentConfirmationTemplate = (
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Confirmation - FoodBundles</title>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear ${data.customer.name},</p>
+        <p>Your payment of ${data.amount.toLocaleString()} RWF has been confirmed.</p>
+        <p>Order ID: ${data.orderId}</p>
+        <p>Transaction ID: ${data.transactionId}</p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+/**
+ * Generate enhanced payment confirmation email template
+ */
+const sendEnhancedPaymentConfirmationTemplate = (
+  data: PaymentConfirmationData,
+): string => {
+  return `<!DOC
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Payment Confirmed - FoodBundles</title>
     <style>
       body {
@@ -1187,7 +1213,9 @@ const sendLogisticsOrderNotificationTemplate = (paymentData: {
             .join("")}
         </div>
 
-        <p><strong>Next Steps:</strong> Please coordinate with the restaurant for pickup and delivery scheduling.</p>
+        <p>Please coordinate with the restaurant for pickup and delivery arrangements.</p>
+        
+        <p>Thank you for your prompt attention to this delivery.</p>
       </div>
       <div class="footer">
         <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
@@ -1200,6 +1228,126 @@ const sendLogisticsOrderNotificationTemplate = (paymentData: {
   </body>
   </html>`;
 };
+
+/**
+ * Generate admin wallet OTP email template
+ */
+const sendAdminWalletOTPTemplate = (data: {
+  adminId: string;
+  operationType: "DEPOSIT" | "ADJUSTMENT";
+  amount: number;
+  restaurantName?: string;
+  otp: string;
+}): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Wallet Operation OTP</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .header { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #ffffff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .otp-box { background-color: #fef2f2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626; text-align: center; }
+      .otp-code { font-size: 32px; font-weight: bold; color: #dc2626; letter-spacing: 4px; margin: 10px 0; }
+      .operation-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #dc2626; font-weight: bold; }
+      .amount { font-size: 24px; font-weight: bold; color: #059669; }
+      .warning { background-color: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🔐 Admin Wallet Operation</h1>
+        <p>OTP Verification Required</p>
+      </div>
+      <div class="content">
+        <p>Dear Admin,</p>
+        
+        <p>An admin wallet ${data.operationType.toLowerCase()} operation requires OTP verification.</p>
+        
+        <div class="operation-details">
+          <h2>Operation Details</h2>
+          <p><span class="highlight">Operation Type:</span> ${data.operationType}</p>
+          <p><span class="highlight">Amount:</span> <span class="amount">${data.amount.toLocaleString()} RWF</span></p>
+          ${data.restaurantName ? `<p><span class="highlight">Restaurant:</span> ${data.restaurantName}</p>` : ""}
+          <p><span class="highlight">Admin ID:</span> ${data.adminId}</p>
+          <p><span class="highlight">Timestamp:</span> ${new Date().toLocaleString()}</p>
+        </div>
+
+        <div class="otp-box">
+          <h3>Your OTP Code</h3>
+          <div class="otp-code">${data.otp}</div>
+          <p><strong>Valid for 10 minutes</strong></p>
+        </div>
+
+        <div class="warning">
+          <p><strong>⚠️ Security Notice:</strong></p>
+          <p>This OTP is required to authorize the wallet operation. Do not share this code with anyone. If you did not initiate this operation, please contact the system administrator immediately.</p>
+        </div>
+
+        <p><strong>Action Required:</strong> Enter this OTP in the admin panel to complete the wallet operation.</p>
+      </div>
+      <div class="footer">
+        <p>📞 Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated security message. Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Send admin wallet OTP email
+export async function sendAdminWalletOTPEmail(data: {
+  adminId: string;
+  operationType: "DEPOSIT" | "ADJUSTMENT";
+  amount: number;
+  restaurantName?: string;
+  otp: string;
+}) {
+  if (
+    !process.env.GOOGLE_EMAIL ||
+    !process.env.GOOGLE_PASSWORD ||
+    !process.env.ADMIN_EMAIL
+  ) {
+    console.log("Email credentials or admin email not configured");
+    return;
+  }
+
+  const config = {
+    service: "gmail",
+    auth: {
+      user: process.env.GOOGLE_EMAIL,
+      pass: process.env.GOOGLE_PASSWORD,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  };
+
+  const transporter = nodemailer.createTransport(config);
+
+  const adminEmail = {
+    from: `"Food Bundles Security" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `🔐 Admin Wallet ${data.operationType} OTP - ${data.amount.toLocaleString()} RWF`,
+    html: sendAdminWalletOTPTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(adminEmail);
+    console.log("Admin wallet OTP email sent successfully");
+  } catch (error) {
+    console.error("Failed to send admin wallet OTP email:", error);
+  }
+}
 
 // Send logistics order notification email to all LOGISTICS users
 export async function sendLogisticsOrderNotificationEmail(paymentData: {

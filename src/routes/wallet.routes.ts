@@ -12,6 +12,10 @@ import {
   getWalletTransactionById,
   adminDepositToWallet,
   getAdminWalletTransactions,
+  requestAdminDepositOTP,
+  verifyAdminDepositOTP,
+  requestWalletAdjustmentOTP,
+  verifyWalletAdjustmentOTP,
 } from "../controllers/wallet.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -152,6 +156,30 @@ walletRoutes.post(
 );
 
 /**
+ * Request OTP for admin deposit
+ * POST /wallets/admin-deposit/request-otp
+ * Access: Admin only
+ */
+walletRoutes.post(
+  "/admin-deposit/request-otp",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  requestAdminDepositOTP
+);
+
+/**
+ * Verify OTP and process admin deposit
+ * POST /wallets/admin-deposit/verify-otp
+ * Access: Admin only
+ */
+walletRoutes.post(
+  "/admin-deposit/verify-otp",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  verifyAdminDepositOTP
+);
+
+/**
  * Manual wallet balance adjustment
  * POST /wallets/:walletId/adjust
  * Access: Admin only
@@ -161,6 +189,30 @@ walletRoutes.post(
   isAuthenticated,
   checkPermission("ADMIN"),
   adjustWalletBalance
+);
+
+/**
+ * Request OTP for wallet adjustment
+ * POST /wallets/:walletId/adjust/request-otp
+ * Access: Admin only
+ */
+walletRoutes.post(
+  "/:walletId/adjust/request-otp",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  requestWalletAdjustmentOTP
+);
+
+/**
+ * Verify OTP and process wallet adjustment
+ * POST /wallets/:walletId/adjust/verify-otp
+ * Access: Admin only
+ */
+walletRoutes.post(
+  "/:walletId/adjust/verify-otp",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  verifyWalletAdjustmentOTP
 );
 
 export default walletRoutes;
