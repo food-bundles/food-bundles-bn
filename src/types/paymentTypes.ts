@@ -171,6 +171,11 @@ export interface TopUpWalletData {
     pin?: string;
   };
   description?: string;
+  traderInfo?: {
+    email: string;
+    name: string;
+    phone?: string;
+  };
 }
 
 export interface DebitWalletData {

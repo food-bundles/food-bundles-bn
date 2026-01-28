@@ -132,6 +132,15 @@ export const topUpTraderWalletService = async (data: {
     throw new Error("Payment method is not active");
   }
 
+  const trader = await prisma.admin.findUnique({
+    where: { id: data.traderId },
+    select: { id: true, username: true, email: true, phone: true },
+  });
+
+  if (!trader) {
+    throw new Error("Trader not found");
+  }
+
   const traderWallet = await getTraderWalletService(data.traderId);
 
   const result = await topUpWalletService({
@@ -141,12 +150,19 @@ export const topUpTraderWalletService = async (data: {
     paymentMethod: paymentMethodConfig.name,
     phoneNumber: data.phoneNumber,
     description: data.description || "Trader wallet top-up",
+    traderInfo: {
+      email: trader.email,
+      name: trader.username,
+    },
   });
 
   return {
     ...result,
-    walletId: traderWallet.id,
-    paymentMethod: paymentMethodConfig.name,
+    paymentMethodDetails: {
+      id: paymentMethodConfig.id,
+      name: paymentMethodConfig.name,
+      description: paymentMethodConfig.description,
+    },
   };
 };
 

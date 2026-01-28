@@ -224,6 +224,7 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
     paymentMethod,
     phoneNumber,
     description,
+    traderInfo,
   } = data;
 
   // Get restaurant from affiliator if affiliatorId is provided
@@ -294,8 +295,8 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
           phoneNumber: cleanedPhone,
           txRef,
           orderId: pendingTransaction.id,
-          email: wallet.restaurant?.email || "",
-          fullname: wallet.restaurant?.name || "",
+          email: traderInfo?.email || wallet.restaurant?.email || "",
+          fullname: traderInfo?.name || wallet.restaurant?.name || "",
           currency: wallet.currency,
         });
         break;
@@ -304,9 +305,9 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
         paymentResult = await processCardTopUp({
           amount,
           txRef,
-          email: wallet.restaurant?.email || "",
-          fullname: wallet.restaurant?.name || "",
-          phoneNumber: wallet.restaurant?.phone || "",
+          email: traderInfo?.email || wallet.restaurant?.email || "",
+          fullname: traderInfo?.name || wallet.restaurant?.name || "",
+          phoneNumber: traderInfo?.phone || wallet.restaurant?.phone || "",
           currency: wallet.currency,
         });
         break;

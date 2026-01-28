@@ -74,11 +74,39 @@ export const topUpTraderWallet = async (req: Request, res: Response) => {
       description,
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Wallet top-up initiated successfully",
-      data: result,
-    });
+    if (result.success) {
+      if (result.redirectUrl) {
+        res.status(200).json({
+          success: true,
+          message: "Top-up initiated - redirect required",
+          data: {
+            wallet: result.wallet,
+            transaction: result.transaction,
+            redirectUrl: result.redirectUrl,
+            status: result.status,
+            requiresRedirect: true,
+            paymentMethodDetails: result.paymentMethodDetails,
+          },
+        });
+      } else {
+        res.status(200).json({
+          success: true,
+          message: result.message || "Wallet top-up processed successfully",
+          data: {
+            wallet: result.wallet,
+            transaction: result.transaction,
+            status: result.status,
+            paymentMethodDetails: result.paymentMethodDetails,
+          },
+        });
+      }
+    } else {
+      res.status(400).json({
+        success: false,
+        message: "Top-up failed",
+        error: result.message,
+      });
+    }
   } catch (error: any) {
     res.status(400).json({
       success: false,
