@@ -1,6 +1,4 @@
-tags:
-  - name: Farmer API Management
-    description: API endpoints for farmers to manage their submissions and feedback
+# Add to src/docs/farmer.docs.yaml
 
 components:
   schemas:
@@ -122,114 +120,6 @@ components:
         totalPages:
           type: integer
 
-    AdminCreateFarmerRequest:
-      type: object
-      required:
-        - phone
-      properties:
-        phone:
-          type: string
-          description: Farmer's phone number (required for PIN delivery)
-          example: "250788123456"
-        name:
-          type: string
-          description: Farmer's full name
-          example: "John Uwimana"
-        email:
-          type: string
-          format: email
-          description: Farmer's email address (optional)
-          example: "john.uwimana@example.com"
-        location:
-          type: string
-          description: General location description
-          example: "Umujyi wa Kigali, Gasabo, Remera"
-        province:
-          type: string
-          description: Province name
-          example: "Umujyi wa Kigali"
-        district:
-          type: string
-          description: District name
-          example: "Gasabo"
-        sector:
-          type: string
-          description: Sector name
-          example: "Remera"
-        cell:
-          type: string
-          description: Cell name
-          example: "Rukiri I"
-        village:
-          type: string
-          description: Village name
-          example: "Amajyambere"
-
-    FarmerResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique farmer identifier
-        phone:
-          type: string
-          description: Farmer's phone number
-        name:
-          type: string
-          description: Farmer's full name
-        email:
-          type: string
-          format: email
-          nullable: true
-          description: Farmer's email address
-        role:
-          type: string
-          enum: [FARMER]
-          description: User role
-        location:
-          type: string
-          nullable: true
-          description: General location description
-        province:
-          type: string
-          nullable: true
-          description: Province name
-        district:
-          type: string
-          nullable: true
-          description: District name
-        sector:
-          type: string
-          nullable: true
-          description: Sector name
-        cell:
-          type: string
-          nullable: true
-          description: Cell name
-        village:
-          type: string
-          nullable: true
-          description: Village name
-        createdAt:
-          type: string
-          format: date-time
-          description: Account creation timestamp
-        updatedAt:
-          type: string
-          format: date-time
-          description: Last update timestamp
-
-    ErrorResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: false
-        message:
-          type: string
-          description: Error message
-
 paths:
   /farmers/pending-feedback:
     get:
@@ -238,7 +128,7 @@ paths:
       summary: Get pending feedback submissions for authenticated farmer
       description: Retrieve all submissions that require farmer feedback (verified submissions awaiting farmer response)
       security:
-        - BearerAuth: []
+        - bearerAuth: []
       parameters:
         - name: page
           in: query
@@ -296,7 +186,7 @@ paths:
       summary: Get farmer's feedback history
       description: Retrieve all submissions where the authenticated farmer has provided feedback
       security:
-        - BearerAuth: []
+        - bearerAuth: []
       parameters:
         - name: page
           in: query
@@ -365,7 +255,7 @@ paths:
       summary: Submit farmer feedback on a verified submission
       description: Allow farmers to provide feedback (accept, reject, or negotiate) on their verified submissions
       security:
-        - BearerAuth: []
+        - bearerAuth: []
       parameters:
         - name: submissionId
           in: path
@@ -396,8 +286,8 @@ paths:
                 value:
                   feedbackStatus: "EXTENDED"
                   notes: "I would like to negotiate the terms"
-                  counterOffer: 15000.50
-                  counterQty: 80
+                  counterOffer: 850.00
+                  counterQty: 80.5
       responses:
         200:
           description: Farmer feedback submitted successfully
@@ -408,43 +298,36 @@ paths:
                 properties:
                   success:
                     type: boolean
-                    example: true
                   message:
                     type: string
-                    example: "Farmer feedback submitted successfully"
                   data:
                     $ref: "#/components/schemas/FarmerSubmissionWithFeedback"
         400:
-          description: Bad request - validation errors or invalid submission state
+          description: Bad request - invalid feedback status, deadline passed, or validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         403:
-          description: Access denied - only farmers can provide feedback on their own submissions
+          description: Access denied - only farmers can submit feedback or feedback already submitted
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         404:
-          description: Submission not found or not eligible for feedback
+          description: Submission not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        500:
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+
     patch:
       tags:
         - Farmer API Management
       summary: Update farmer feedback before deadline
       description: Allow farmers to update their feedback on a submission before the feedback deadline expires
       security:
-        - BearerAuth: []
+        - bearerAuth: []
       parameters:
         - name: submissionId
           in: path
@@ -499,57 +382,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         404:
           description: Submission not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /farmers/admin/create:
-    post:
-      tags:
-        - Farmer API Management
-      summary: Create farmer by admin (Admin/Aggregator only)
-      description: |
-        Allow admins and aggregators to create farmer accounts with auto-generated PIN.
-        The system will generate a secure 6-digit PIN and send it via SMS.
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminCreateFarmerRequest"
-      responses:
-        201:
-          description: Farmer created successfully with auto-generated PIN sent via SMS
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Farmer created successfully. PIN sent via SMS."
-                  data:
-                    $ref: "#/components/schemas/FarmerResponse"
-        400:
-          description: Bad request - validation errors
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        403:
-          description: Forbidden - admin or aggregator access required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        500:
-          description: Internal server error
           content:
             application/json:
               schema:
