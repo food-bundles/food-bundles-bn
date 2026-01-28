@@ -1120,7 +1120,6 @@ export const resetPasswordService = async (
 
 // ADMIN-ONLY SERVICES WITH AUTO-GENERATED PASSWORDS
 
-// Admin creates farmer with auto-generated PIN
 export const createFarmerByAdminService = async (
   farmerData: Omit<ICreateFarmerData, "password">,
 ) => {
@@ -1138,6 +1137,10 @@ export const createFarmerByAdminService = async (
 
   if (!phone) {
     throw new Error("Phone number is required for farmer creation");
+  }
+
+  if (!name) {
+    throw new Error("Farmer name is required");
   }
 
   const existingUser = await checkExistingUser(phone, email || undefined);
@@ -1166,19 +1169,22 @@ export const createFarmerByAdminService = async (
     const generatedPIN = generateFarmerPIN();
     const hashedPassword = await hashPassword(generatedPIN);
 
+    // Build data object conditionally to avoid unique constraint issues
+    const farmerData = {
+      phone,
+      name,
+      password: hashedPassword,
+      location,
+      province,
+      district,
+      sector,
+      cell,
+      village,
+      ...(email && { email }), // Only include email if it's provided
+    };
+
     const farmer = await prisma.farmer.create({
-      data: {
-        phone,
-        email,
-        name,
-        password: hashedPassword,
-        location,
-        province,
-        district,
-        sector,
-        cell,
-        village,
-      },
+      data: farmerData,
     });
 
     await sendPasswordSMS(phone, generatedPIN, "farmer");
