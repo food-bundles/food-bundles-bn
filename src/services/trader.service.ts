@@ -116,20 +116,38 @@ export const getTraderWalletService = async (traderId: string) => {
 export const topUpTraderWalletService = async (data: {
   traderId: string;
   amount: number;
-  paymentMethod: string;
+  paymentMethodId: string;
   phoneNumber?: string;
   description?: string;
 }) => {
+  const paymentMethodConfig = await prisma.paymentMethodConfig.findUnique({
+    where: { id: data.paymentMethodId },
+  });
+
+  if (!paymentMethodConfig) {
+    throw new Error("Payment method not found");
+  }
+
+  if (!paymentMethodConfig.isActive) {
+    throw new Error("Payment method is not active");
+  }
+
   const traderWallet = await getTraderWalletService(data.traderId);
 
-  return await topUpWalletService({
+  const result = await topUpWalletService({
     walletId: traderWallet.id,
     traderId: data.traderId,
     amount: data.amount,
-    paymentMethod: data.paymentMethod,
+    paymentMethod: paymentMethodConfig.name,
     phoneNumber: data.phoneNumber,
     description: data.description || "Trader wallet top-up",
   });
+
+  return {
+    ...result,
+    walletId: traderWallet.id,
+    paymentMethod: paymentMethodConfig.name,
+  };
 };
 
 // Get loan applications for trader - only ACCEPTED loans and those approved by this trader

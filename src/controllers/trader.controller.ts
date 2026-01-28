@@ -57,19 +57,19 @@ export const getTraderWallet = async (req: Request, res: Response) => {
 export const topUpTraderWallet = async (req: Request, res: Response) => {
   try {
     const traderId = (req as any).user.id;
-    const { amount, paymentMethod, phoneNumber, description } = req.body;
+    const { amount, paymentMethodId, phoneNumber, description } = req.body;
 
-    if (!amount || !paymentMethod) {
+    if (!amount || !paymentMethodId) {
       return res.status(400).json({
         success: false,
-        message: "Amount and payment method are required",
+        message: "Amount and payment method ID are required",
       });
     }
 
     const result = await topUpTraderWalletService({
       traderId,
       amount: parseFloat(amount),
-      paymentMethod,
+      paymentMethodId,
       phoneNumber,
       description,
     });
