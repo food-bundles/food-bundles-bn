@@ -1124,7 +1124,7 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
     const updatedLoan = await tx.loanApplication.update({
       where: { id: loanId },
       data: {
-        status: LoanStatus.PAID,
+        status: LoanStatus.SETTLED,
         disbursementDate: new Date(),
         repaymentDueDate,
       },
@@ -1530,7 +1530,7 @@ export const calculatePenaltiesService = async (
     // Get all disbursed loans
     loans = await prisma.loanApplication.findMany({
       where: {
-        status: LoanStatus.PAID,
+        status: LoanStatus.SETTLED,
       },
       include: {
         vouchers: true,
@@ -2351,7 +2351,7 @@ export const rollbackVoucherPaymentService = async (
  */
 export const markLoanApplicationAsAcceptedService = async (
   loanId: string,
-  acceptanceData?: { acceptedAmount?: number; paymentDays?: number }
+  acceptanceData?: { acceptedAmount?: number; paymentDays?: number },
 ) => {
   const updateData: any = {
     status: LoanStatus.ACCEPTED,
