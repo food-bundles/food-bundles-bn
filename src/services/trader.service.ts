@@ -1,12 +1,7 @@
 import prisma from "../prisma";
 import { topUpWalletService } from "./wallet.service";
-import {
-  getAllLoanApplicationsService,
-  approveLoanApplicationService,
-  getAllVouchersService,
-} from "./voucher.service";
+import { approveLoanApplicationService } from "./voucher.service";
 import { createNotificationService } from "./notification.services";
-import { wsManager } from "../index";
 import { sendMessage } from "../utils/sms.utility";
 import {
   sendAdminVoucherApprovedEmail,
@@ -77,7 +72,7 @@ export const createTraderWalletService = async (traderId: string) => {
   return wallet;
 };
 
-// Get trader wallet
+// Get trader wallet with additional data
 export const getTraderWalletService = async (traderId: string) => {
   const trader = await prisma.admin.findUnique({
     where: { id: traderId, role: "TRADER" },
@@ -86,6 +81,9 @@ export const getTraderWalletService = async (traderId: string) => {
   if (!trader) {
     throw new Error("Trader not found");
   }
+
+  // Calculate any new commissions before returning wallet data
+  await calculateTraderCommissionService(traderId);
 
   const wallet = await prisma.wallet.findUnique({
     where: { traderId },
@@ -109,7 +107,48 @@ export const getTraderWalletService = async (traderId: string) => {
     throw new Error("Trader wallet not found");
   }
 
-  return wallet;
+  // Calculate correct pending approved amount based on voucher usage
+  const activeVouchers = await prisma.voucher.findMany({
+    where: {
+      approvedBy: traderId,
+      status: { in: ["ACTIVE", "USED"] },
+    },
+  });
+
+  const correctPendingAmount = activeVouchers.reduce((total, voucher) => {
+    return total + voucher.usedCredit; // Only the used portion
+  }, 0);
+
+  // Update wallet if pending amount is incorrect
+  if (wallet.pendingApprovedAmount !== correctPendingAmount) {
+    await prisma.wallet.update({
+      where: { id: wallet.id },
+      data: { pendingApprovedAmount: correctPendingAmount },
+    });
+    wallet.pendingApprovedAmount = correctPendingAmount;
+  }
+
+  // Calculate total vouchers amount approved by trader
+  const totalVouchersApproved = await prisma.voucher.aggregate({
+    where: { approvedBy: traderId },
+    _sum: { creditLimit: true },
+    _count: true,
+  });
+
+  // For used vouchers, available balance equals current balance since used amounts are already deducted
+  // Only subtract unused amounts from ACTIVE vouchers (not yet used)
+  const activeUnusedAmount = activeVouchers
+    .filter(voucher => voucher.status === "ACTIVE")
+    .reduce((total, voucher) => {
+      return total + (voucher.creditLimit - voucher.usedCredit);
+    }, 0);
+
+  return {
+    ...wallet,
+    totalVouchersAmount: totalVouchersApproved._sum.creditLimit || 0,
+    totalVouchersCount: totalVouchersApproved._count || 0,
+    availableBalance: wallet.balance - activeUnusedAmount,
+  };
 };
 
 // Top up trader wallet
@@ -317,7 +356,7 @@ export const getTraderVouchersService = async (
   };
 };
 
-// Approve loan with wallet balance check - only allow approving ACCEPTED loans
+// Approve loan with wallet balance check - use original loan application values
 export const traderApproveLoanService = async (
   traderId: string,
   loanId: string,
@@ -336,61 +375,40 @@ export const traderApproveLoanService = async (
     throw new Error("Can only approve loans with ACCEPTED status");
   }
 
-  // Get restaurant's active subscription for repayment days fallback
-  let defaultRepaymentDays = 30;
-  if (loan.restaurantId) {
-    const activeSubscription = await prisma.restaurantSubscription.findFirst({
-      where: {
-        restaurantId: loan.restaurantId,
-        status: "ACTIVE",
-        endDate: { gt: new Date() },
-      },
-      include: { plan: true },
-    });
-    if (activeSubscription) {
-      defaultRepaymentDays = activeSubscription.plan.voucherPaymentDays;
-    }
-  }
+  // Use original loan application values
+  const acceptedAmount = loan.approvedAmount || loan.requestedAmount;
+  const paymentDays = loan.repaymentDays || 30; // Default to 30 days if not set
 
-  // Use loan application data for approval
-  const approvalData = {
-    approvedAmount: loan.requestedAmount,
-    repaymentDays: loan.repaymentDays || defaultRepaymentDays,
-    voucherType: "DISCOUNT_100" as VoucherType,
-    notes: loan.purpose || "Loan approved by trader",
-  };
-
-  const { approvedAmount } = approvalData;
-
-  // Check trader wallet balance
+  // Check trader wallet balance and calculate available balance
   const traderWallet = await getTraderWalletService(traderId);
+  const availableBalance =
+    traderWallet.balance - traderWallet.pendingApprovedAmount;
 
-  if (traderWallet.balance < approvedAmount) {
+  if (availableBalance < acceptedAmount) {
     throw new Error(
-      `Insufficient wallet balance. Available: ${traderWallet.balance} RWF, Required: ${approvedAmount} RWF`,
+      `Insufficient available balance. Available: ${availableBalance} RWF, Required: ${acceptedAmount} RWF`,
     );
   }
 
-  // Deduct amount from trader wallet balance and add to pending approved amount
+  // Add amount to pending approved amount (don't deduct from balance yet)
   await prisma.wallet.update({
     where: { id: traderWallet.id },
     data: {
-      balance: traderWallet.balance - approvedAmount,
       pendingApprovedAmount:
-        traderWallet.pendingApprovedAmount + approvedAmount,
+        traderWallet.pendingApprovedAmount + acceptedAmount,
     },
   });
 
-  // Create wallet transaction
+  // Create wallet transaction for pending approval
   await prisma.walletTransaction.create({
     data: {
       walletId: traderWallet.id,
       adminId: traderId,
       type: "TRADING",
-      amount: -approvedAmount,
+      amount: -acceptedAmount,
       previousBalance: traderWallet.balance,
-      newBalance: traderWallet.balance - approvedAmount,
-      description: `Loan approval for ${loanId}`,
+      newBalance: traderWallet.balance, // Balance unchanged, only pending amount increased
+      description: `Loan approval pending for ${loanId}`,
       status: "COMPLETED",
     },
   });
@@ -399,19 +417,22 @@ export const traderApproveLoanService = async (
   await createTraderTransactionService({
     traderId,
     type: "LOAN_APPROVAL",
-    amount: -approvedAmount,
+    amount: -acceptedAmount,
     loanId,
-    description: `Loan approval for ${approvedAmount} RWF`,
+    description: `Loan approval for ${acceptedAmount} RWF with ${paymentDays} days payment term`,
   });
 
-  // Approve the loan
+  // Approve the loan with original parameters
   const result = await approveLoanApplicationService(loanId, {
-    ...approvalData,
+    approvedAmount: acceptedAmount,
+    repaymentDays: paymentDays,
+    voucherType: "DISCOUNT_100" as VoucherType,
+    notes: `Loan approved by trader using original terms: ${acceptedAmount} RWF, ${paymentDays} days`,
     approvedBy: traderId,
   });
 
   // Send notifications
-  await sendLoanApprovalNotifications(traderId, result, approvedAmount);
+  await sendLoanApprovalNotifications(traderId, result, acceptedAmount);
 
   return result;
 };
@@ -429,9 +450,17 @@ async function sendLoanApprovalNotifications(
       select: { username: true, email: true, phone: true },
     });
 
+    // Get loan ID from result structure
+    const loanId = result.loan?.id || result.updatedLoan?.id;
+
+    if (!loanId) {
+      console.error("No loan ID found in result:", result);
+      return;
+    }
+
     // Get restaurant info from the loan
     const loan = await prisma.loanApplication.findUnique({
-      where: { id: result.loanId },
+      where: { id: loanId },
       include: {
         restaurant: {
           select: { name: true, email: true, phone: true },
@@ -450,7 +479,7 @@ async function sendLoanApprovalNotifications(
           traderName: trader.username,
           restaurantName: loan.restaurant.name,
           approvedAmount,
-          loanId: result.loanId,
+          loanId: loanId,
           walletBalance: wallet.balance,
         });
       } catch (emailError) {
@@ -498,8 +527,11 @@ async function sendLoanApprovalNotifications(
 
 // Get trader commission from orders (for processing new commissions)
 export const calculateTraderCommissionService = async (traderId: string) => {
-  // Get MATURED and SETTLED vouchers approved by this trader
-  const maturedVouchers = await prisma.voucher.findMany({
+  // First process any existing used vouchers that haven't been processed
+  await processExistingUsedVouchersForTrader(traderId);
+
+  // Then process commissions for settled/matured vouchers
+  const settledVouchers = await prisma.voucher.findMany({
     where: {
       approvedBy: traderId,
       status: { in: ["SETTLED", "MATURED"] },
@@ -507,27 +539,38 @@ export const calculateTraderCommissionService = async (traderId: string) => {
     },
   });
 
-  // Check which vouchers already have commission earned records
+  // Check which vouchers already have commission earned records to prevent duplicates
   const existingCommissions = await prisma.traderTransaction.findMany({
     where: {
       traderId,
       type: "COMMISSION_EARNED",
-      voucherId: { in: maturedVouchers.map((v) => v.id) },
+      voucherId: { in: settledVouchers.map((v) => v.id) },
     },
   });
 
   const earnedVoucherIds = new Set(
     existingCommissions.map((tx) => tx.voucherId),
   );
-  const newVouchers = maturedVouchers.filter(
+  const newVouchers = settledVouchers.filter(
     (v) => !earnedVoucherIds.has(v.id),
   );
 
   let totalCommission = 0;
   const commissionDetails = [];
 
+  // Get wallet directly without calling getTraderWalletService to avoid circular dependency
+  const traderWallet = await prisma.wallet.findUnique({
+    where: { traderId },
+  });
+
+  if (!traderWallet) {
+    return { totalCommission: 0, commissionDetails: [] };
+  }
+
+  const commissionRate = traderWallet.commission / 100;
+
   for (const voucher of newVouchers) {
-    const commission = voucher.usedCredit * 0.05; // 5% commission on used credit
+    const commission = voucher.usedCredit * commissionRate;
     totalCommission += commission;
 
     // Create commission earned record
@@ -536,9 +579,12 @@ export const calculateTraderCommissionService = async (traderId: string) => {
       type: "COMMISSION_EARNED",
       amount: commission,
       voucherId: voucher.id,
-      commissionRate: 0.05,
+      commissionRate,
       description: `Commission earned from voucher ${voucher.voucherCode}`,
     });
+
+    // Return pending approved amount for settled vouchers
+    await returnPendingApprovedAmountService(voucher.id);
 
     commissionDetails.push({
       voucherId: voucher.id,
@@ -549,98 +595,131 @@ export const calculateTraderCommissionService = async (traderId: string) => {
     });
   }
 
+  // Update wallet commissionEarned separately
+  if (totalCommission > 0) {
+    await prisma.wallet.update({
+      where: { id: traderWallet.id },
+      data: {
+        commissionEarned: traderWallet.commissionEarned + totalCommission,
+      },
+    });
+  }
+
   return { totalCommission, commissionDetails };
+};
+
+// Process existing used vouchers for a specific trader
+const processExistingUsedVouchersForTrader = async (traderId: string) => {
+  const usedVouchers = await prisma.voucher.findMany({
+    where: {
+      status: "USED",
+      usedCredit: { gt: 0 },
+      approvedBy: traderId,
+    },
+  });
+
+  // Get trader wallet directly to avoid circular dependency
+  const traderWallet = await prisma.wallet.findUnique({
+    where: { traderId },
+  });
+
+  if (!traderWallet) return;
+
+  for (const voucher of usedVouchers) {
+    // Check if this voucher usage has already been processed
+    const existingTransaction = await prisma.walletTransaction.findFirst({
+      where: {
+        walletId: traderWallet.id,
+        description: { contains: voucher.voucherCode },
+        type: "TRADING",
+        amount: -voucher.usedCredit,
+      },
+    });
+
+    if (!existingTransaction) {
+      // Only deduct used amount from balance, keep pendingApprovedAmount unchanged
+      await prisma.wallet.update({
+        where: { id: traderWallet.id },
+        data: {
+          balance: traderWallet.balance - voucher.usedCredit,
+          // pendingApprovedAmount stays the same until voucher is settled
+        },
+      });
+
+      // Create wallet transaction for the deduction
+      await prisma.walletTransaction.create({
+        data: {
+          walletId: traderWallet.id,
+          adminId: traderId,
+          type: "TRADING",
+          amount: -voucher.usedCredit,
+          previousBalance: traderWallet.balance,
+          newBalance: traderWallet.balance - voucher.usedCredit,
+          description: `Voucher usage deduction for ${voucher.voucherCode}`,
+          status: "COMPLETED",
+        },
+      });
+
+      // Update the wallet reference for next iteration
+      traderWallet.balance -= voucher.usedCredit;
+      // pendingApprovedAmount remains unchanged
+    }
+  }
 };
 
 // Process trader commission payment
 export const processTraderCommissionService = async (traderId: string) => {
   try {
-    // Get unpaid commissions
-    const unpaidCommissions = await prisma.traderTransaction.findMany({
+    // First calculate any new commissions
+    await calculateTraderCommissionService(traderId);
+
+    // Get current wallet state directly to avoid circular dependency
+    const traderWallet = await prisma.wallet.findUnique({
+      where: { traderId },
+    });
+
+    if (!traderWallet || traderWallet.commissionEarned <= 0) {
+      console.log(`No commission available for trader ${traderId}`);
+      return { totalCommission: 0, commissionCount: 0 };
+    }
+
+    const totalCommission = traderWallet.commissionEarned;
+
+    // Mark all unpaid commissions as paid (commission stays in commissionEarned)
+    await prisma.traderTransaction.updateMany({
       where: {
         traderId,
         type: "COMMISSION_EARNED",
         isCommissionPaid: false,
       },
-    });
-
-    if (unpaidCommissions.length === 0) {
-      console.log(`No unpaid commissions available for trader ${traderId}`);
-      return { totalCommission: 0, commissionCount: 0 };
-    }
-
-    const totalCommission = unpaidCommissions.reduce(
-      (sum, tx) => sum + tx.amount,
-      0,
-    );
-    const traderWallet = await getTraderWalletService(traderId);
-
-    // Add commission to trader wallet
-    await prisma.wallet.update({
-      where: { id: traderWallet.id },
-      data: { balance: traderWallet.balance + totalCommission },
-    });
-
-    // Mark commissions as paid
-    await prisma.traderTransaction.updateMany({
-      where: {
-        id: { in: unpaidCommissions.map((tx) => tx.id) },
-      },
       data: { isCommissionPaid: true },
     });
 
-    // Create commission payment record
-    const paymentTransaction = await createTraderTransactionService({
-      traderId,
-      type: "COMMISSION_PAID",
-      amount: totalCommission,
-      description: `Commission payment for ${unpaidCommissions.length} orders`,
-      reference: unpaidCommissions.map((tx) => tx.orderId).join(","),
-    });
-
-    // Create wallet transaction
-    const walletTransaction = await prisma.walletTransaction.create({
-      data: {
-        walletId: traderWallet.id,
-        adminId: traderId,
-        type: "TRADING",
-        amount: totalCommission,
-        previousBalance: traderWallet.balance,
-        newBalance: traderWallet.balance + totalCommission,
-        description: `Commission payment for ${unpaidCommissions.length} orders`,
-        status: "COMPLETED",
+    // Get count of commissions paid
+    const commissionCount = await prisma.traderTransaction.count({
+      where: {
+        traderId,
+        type: "COMMISSION_EARNED",
+        isCommissionPaid: true,
       },
     });
 
-    // Broadcast wallet update
-    try {
-      wsManager.broadcastWalletUpdate({
-        walletId: traderWallet.id,
-        restaurantId: "",
-        action: "COMMISSION_RECEIVED",
-        timestamp: new Date().toISOString(),
-        data: {
-          amount: totalCommission,
-          newBalance: traderWallet.balance + totalCommission,
-          transactionId: walletTransaction.id,
-        },
-      });
-    } catch (error) {
-      console.error("Failed to broadcast commission update:", error);
-    }
+    // Create commission payment record
+    await createTraderTransactionService({
+      traderId,
+      type: "COMMISSION_PAID",
+      amount: totalCommission,
+      description: `Commission payment for ${commissionCount} vouchers`,
+    });
 
     return {
       totalCommission,
-      transaction: paymentTransaction,
-      walletTransaction,
-      commissionCount: unpaidCommissions.length,
+      commissionCount,
+      balance: traderWallet.balance, // Balance unchanged
     };
-  } catch (error: any) {
-    console.error(
-      `Error processing commission for trader ${traderId}:`,
-      error.message,
-    );
-    return { totalCommission: 0, commissionCount: 0, error: error.message };
+  } catch (error) {
+    console.error("Error processing trader commission:", error);
+    throw error;
   }
 };
 
@@ -747,40 +826,21 @@ export const getTraderTransactionStatsService = async (traderId: string) => {
       }),
     ]);
 
-  const [totalCommissionEarned, totalCommissionPaid, totalLoansApproved] =
-    await Promise.all([
-      prisma.traderTransaction.aggregate({
-        where: { traderId, type: "COMMISSION_EARNED" },
-        _sum: { amount: true },
-      }),
-      prisma.traderTransaction.aggregate({
-        where: { traderId, type: "COMMISSION_PAID" },
-        _sum: { amount: true },
-      }),
-      prisma.traderTransaction.aggregate({
-        where: { traderId, type: "LOAN_APPROVAL" },
-        _sum: { amount: true },
-      }),
-    ]);
-
   return {
     totalTransactions,
     loanApprovals,
     commissionsEarned,
     commissionsPaid,
-    totalCommissionEarned: totalCommissionEarned._sum.amount || 0,
-    totalCommissionPaid: totalCommissionPaid._sum.amount || 0,
-    totalLoansApproved: Math.abs(totalLoansApproved._sum.amount || 0),
   };
 };
 
-// Process all traders' commissions - triggered when voucher is used
+// Process all traders' commissions - triggered when voucher is settled or repayment days reached
 export const processAllTradersCommissionService = async () => {
   try {
-    // Get all USED vouchers that haven't had commission processed
-    const usedVouchers = await prisma.voucher.findMany({
+    // Get vouchers that are SETTLED, MATURED, or EXPIRED with used credit
+    const eligibleVouchers = await prisma.voucher.findMany({
       where: {
-        status: "USED",
+        status: { in: ["SETTLED", "MATURED", "EXPIRED"] },
         usedCredit: { gt: 0 },
         approvedBy: { not: null },
       },
@@ -791,10 +851,10 @@ export const processAllTradersCommissionService = async () => {
 
     const results = [];
 
-    for (const voucher of usedVouchers) {
+    for (const voucher of eligibleVouchers) {
       if (!voucher.approvedBy) continue;
 
-      // Check if commission already processed for this voucher
+      // Check if commission already processed for this voucher to prevent duplicates
       const existingCommission = await prisma.traderTransaction.findFirst({
         where: {
           traderId: voucher.approvedBy,
@@ -803,7 +863,11 @@ export const processAllTradersCommissionService = async () => {
         },
       });
 
-      if (existingCommission) continue;
+      if (existingCommission) {
+        // Return pending approved amount if voucher is settled/expired
+        await returnPendingApprovedAmountService(voucher.id);
+        continue;
+      }
 
       // Get trader wallet to get commission rate
       const traderWallet = await prisma.wallet.findUnique({
@@ -812,7 +876,7 @@ export const processAllTradersCommissionService = async () => {
 
       if (!traderWallet) continue;
 
-      const commissionRate = traderWallet.commission / 100; // Convert percentage to decimal
+      const commissionRate = traderWallet.commission / 100;
       const commissionAmount = voucher.usedCredit * commissionRate;
 
       // Create commission earned record
@@ -825,16 +889,16 @@ export const processAllTradersCommissionService = async () => {
         description: `Commission earned from voucher ${voucher.voucherCode}`,
       });
 
-      // Move amount from pending to available for commission payment
+      // Add commission to wallet's commissionEarned field (not balance)
       await prisma.wallet.update({
         where: { id: traderWallet.id },
         data: {
-          pendingApprovedAmount: Math.max(
-            0,
-            traderWallet.pendingApprovedAmount - voucher.usedCredit,
-          ),
+          commissionEarned: traderWallet.commissionEarned + commissionAmount,
         },
       });
+
+      // Return pending approved amount for settled/expired vouchers
+      await returnPendingApprovedAmountService(voucher.id);
 
       // Send commission earned notifications
       await sendCommissionEarnedNotifications(
@@ -863,6 +927,12 @@ export const processAllTradersCommissionService = async () => {
 
 // Get trader commission details (for API endpoint)
 export const getTraderCommissionDetailsService = async (traderId: string) => {
+  // Calculate any new commissions before returning commission data
+  await calculateTraderCommissionService(traderId);
+
+  // Get trader wallet for commissionEarned field
+  const traderWallet = await getTraderWalletService(traderId);
+
   // Get all commission transactions for this trader
   const commissionTransactions = await prisma.traderTransaction.findMany({
     where: {
@@ -889,6 +959,7 @@ export const getTraderCommissionDetailsService = async (traderId: string) => {
     totalCommission: totalEarned,
     totalPaid,
     pendingCommission,
+    commissionEarned: traderWallet.commissionEarned, // From wallet field
     commissionDetails: earnedCommissions.map((tx) => ({
       id: tx.id,
       voucherId: tx.voucherId,
@@ -979,6 +1050,9 @@ export const setTraderWalletCommissionService = async (
 
 // Get trader dashboard stats
 export const getTraderDashboardStatsService = async (traderId: string) => {
+  // Calculate any new commissions before returning dashboard data
+  await calculateTraderCommissionService(traderId);
+
   const [wallet, vouchers, orders, commission] = await Promise.all([
     getTraderWalletService(traderId),
     getTraderVouchersService(traderId),
@@ -986,9 +1060,16 @@ export const getTraderDashboardStatsService = async (traderId: string) => {
     getTraderCommissionDetailsService(traderId),
   ]);
 
+  // Calculate total vouchers amount approved by trader
+  const totalVouchersApproved = await prisma.voucher.aggregate({
+    where: { approvedBy: traderId },
+    _sum: { creditLimit: true },
+  });
+
   const stats = {
     walletBalance: wallet.balance,
     totalVouchersApproved: vouchers.vouchers.length,
+    totalVouchersAmount: totalVouchersApproved._sum.creditLimit || 0,
     activeVouchers: vouchers.vouchers.filter((v) => v.status === "ACTIVE")
       .length,
     totalOrdersProcessed: orders.length,
@@ -997,4 +1078,151 @@ export const getTraderDashboardStatsService = async (traderId: string) => {
   };
 
   return stats;
+};
+
+// Process voucher usage - deduct from trader wallet when voucher is used
+export const processVoucherUsageService = async (
+  voucherId: string,
+  usedAmount: number,
+) => {
+  const voucher = await prisma.voucher.findUnique({
+    where: { id: voucherId },
+    include: { approver: true },
+  });
+
+  if (!voucher || !voucher.approvedBy) {
+    return;
+  }
+
+  const traderWallet = await getTraderWalletService(voucher.approvedBy);
+
+  // Deduct used amount from balance and reduce pending approved amount
+  await prisma.wallet.update({
+    where: { id: traderWallet.id },
+    data: {
+      balance: traderWallet.balance - usedAmount,
+      pendingApprovedAmount: Math.max(
+        0,
+        traderWallet.pendingApprovedAmount - usedAmount,
+      ),
+    },
+  });
+
+  // Create wallet transaction for the deduction
+  await prisma.walletTransaction.create({
+    data: {
+      walletId: traderWallet.id,
+      adminId: voucher.approvedBy,
+      type: "TRADING",
+      amount: -usedAmount,
+      previousBalance: traderWallet.balance,
+      newBalance: traderWallet.balance - usedAmount,
+      description: `Voucher usage deduction for ${voucher.voucherCode}`,
+      status: "COMPLETED",
+    },
+  });
+};
+
+// Process existing used vouchers to fix wallet states
+export const processExistingUsedVouchersService = async () => {
+  try {
+    // Get all USED vouchers that haven't been processed yet
+    const usedVouchers = await prisma.voucher.findMany({
+      where: {
+        status: "USED",
+        usedCredit: { gt: 0 },
+        approvedBy: { not: null },
+      },
+      include: { approver: true },
+    });
+
+    const results = [];
+
+    for (const voucher of usedVouchers) {
+      if (!voucher.approvedBy) continue;
+
+      const traderWallet = await getTraderWalletService(voucher.approvedBy);
+
+      // Check if this voucher usage has already been processed
+      const existingTransaction = await prisma.walletTransaction.findFirst({
+        where: {
+          walletId: traderWallet.id,
+          description: { contains: voucher.voucherCode },
+          type: "TRADING",
+          amount: -voucher.usedCredit,
+        },
+      });
+
+      if (existingTransaction) {
+        console.log(`Voucher ${voucher.voucherCode} already processed`);
+        continue;
+      }
+
+      // Process the voucher usage
+      await processVoucherUsageService(voucher.id, voucher.usedCredit);
+
+      results.push({
+        voucherId: voucher.id,
+        voucherCode: voucher.voucherCode,
+        traderId: voucher.approvedBy,
+        usedAmount: voucher.usedCredit,
+        processed: true,
+      });
+    }
+
+    return results;
+  } catch (error: any) {
+    console.error("Error processing existing used vouchers:", error.message);
+    return [];
+  }
+};
+
+// Return pending approved amount when voucher is settled, expired, or repayment days reached
+export const returnPendingApprovedAmountService = async (voucherId: string) => {
+  const voucher = await prisma.voucher.findUnique({
+    where: { id: voucherId },
+    include: { approver: true },
+  });
+
+  if (!voucher || !voucher.approvedBy) {
+    return;
+  }
+
+  // Get wallet directly to avoid circular dependency
+  const traderWallet = await prisma.wallet.findUnique({
+    where: { traderId: voucher.approvedBy },
+  });
+
+  if (!traderWallet) {
+    return;
+  }
+
+  // Only return the used amount back to balance (since used amount was deducted when voucher was used)
+  // and reduce pending approved amount by the used amount
+  if (voucher.usedCredit > 0) {
+    await prisma.wallet.update({
+      where: { id: traderWallet.id },
+      data: {
+        balance: traderWallet.balance + voucher.usedCredit,
+        pendingApprovedAmount: Math.max(
+          0,
+          traderWallet.pendingApprovedAmount - voucher.usedCredit,
+        ),
+      },
+    });
+
+    // Create wallet transaction for the return
+    await prisma.walletTransaction.create({
+      data: {
+        walletId: traderWallet.id,
+        adminId: voucher.approvedBy,
+        type: "TRADING",
+        amount: voucher.usedCredit,
+        previousBalance: traderWallet.balance,
+        newBalance: traderWallet.balance + voucher.usedCredit,
+        description: `Returned used amount from settled voucher ${voucher.voucherCode}`,
+        status: "COMPLETED",
+      },
+    });
+  }
 };

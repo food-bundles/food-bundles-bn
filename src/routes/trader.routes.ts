@@ -14,6 +14,8 @@ import {
   getTraderTransactionStats,
   getTraderDashboard,
   setTraderWalletCommission,
+  processAllTradersCommission,
+  processExistingUsedVouchers,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -113,6 +115,22 @@ traderRoutes.patch(
   isAuthenticated,
   checkPermission("ADMIN"),
   setTraderWalletCommission,
+);
+
+// Process all traders commission (Admin only)
+traderRoutes.post(
+  "/commission/process-all",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  processAllTradersCommission,
+);
+
+// Process existing used vouchers (Admin only)
+traderRoutes.post(
+  "/vouchers/process-existing",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  processExistingUsedVouchers,
 );
 
 export default traderRoutes;

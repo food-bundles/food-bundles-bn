@@ -14,6 +14,8 @@ import {
   getTraderTransactionStatsService,
   getTraderDashboardStatsService,
   setTraderWalletCommissionService,
+  processAllTradersCommissionService,
+  processExistingUsedVouchersService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -43,7 +45,13 @@ export const getTraderWallet = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
-      data: wallet,
+      data: {
+        ...wallet,
+        // Include calculated fields for better API response
+        availableBalance: wallet.availableBalance,
+        totalVouchersAmount: wallet.totalVouchersAmount,
+        totalVouchersCount: wallet.totalVouchersCount,
+      },
     });
   } catch (error: any) {
     res.status(400).json({
@@ -382,6 +390,48 @@ export const getTraderDashboard = async (req: Request, res: Response) => {
     res.status(200).json({
       success: true,
       data: stats,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Process all traders commission (Admin only)
+export const processAllTradersCommission = async (req: Request, res: Response) => {
+  try {
+    const results = await processAllTradersCommissionService();
+
+    res.status(200).json({
+      success: true,
+      message: "All traders commission processed successfully",
+      data: {
+        processedVouchers: results.length,
+        results,
+      },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Process existing used vouchers (Admin only)
+export const processExistingUsedVouchers = async (req: Request, res: Response) => {
+  try {
+    const results = await processExistingUsedVouchersService();
+
+    res.status(200).json({
+      success: true,
+      message: "Existing used vouchers processed successfully",
+      data: {
+        processedVouchers: results.length,
+        results,
+      },
     });
   } catch (error: any) {
     res.status(400).json({

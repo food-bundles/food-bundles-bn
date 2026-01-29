@@ -912,7 +912,7 @@ export const approveLoanApplicationService = async (
 
   // Current date
   const currentDate = new Date();
-  // Calculate due date
+  // Calculate due date using the provided repaymentDays
   const repaymentDueDate = new Date();
   repaymentDueDate.setDate(currentDate.getDate() + repaymentDays);
 
@@ -926,18 +926,18 @@ export const approveLoanApplicationService = async (
   // Approve loan + create voucher in a transaction
 
   const result = await prisma.$transaction(async (tx) => {
-    // Update loan to approved
+    // Update loan to approved with custom approved amount and repayment days
     const updatedLoan = await tx.loanApplication.update({
       where: { id: loanId },
       data: {
         status: LoanStatus.APPROVED,
-        approvedAmount,
+        approvedAmount, // Use custom approved amount
         approvedBy,
         approvedAt: new Date(),
         notes,
         disbursementDate,
         repaymentDueDate,
-        repaymentDays,
+        repaymentDays, // Use custom repayment days
       },
       include: {
         restaurant: true,
@@ -945,7 +945,7 @@ export const approveLoanApplicationService = async (
       },
     });
 
-    // Create voucher automatically
+    // Create voucher automatically with approved amount and repayment days
     const voucherCode = await generateVoucherCode();
     const discountMap = {
       DISCOUNT_10: 10,
@@ -961,10 +961,10 @@ export const approveLoanApplicationService = async (
         voucherCode,
         voucherType,
         discountPercentage,
-        creditLimit: approvedAmount,
+        creditLimit: approvedAmount, // Use approved amount as credit limit
         totalCredit: approvedAmount,
         remainingCredit: approvedAmount,
-        repaymentDays,
+        repaymentDays, // Use custom repayment days
         expiryDate,
         restaurantId: updatedLoan.restaurantId,
         loanId: updatedLoan.id,
@@ -1124,7 +1124,7 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
     const updatedLoan = await tx.loanApplication.update({
       where: { id: loanId },
       data: {
-        status: LoanStatus.PAID,
+        status: LoanStatus.SETTLED,
         disbursementDate: new Date(),
         repaymentDueDate,
       },
@@ -1530,7 +1530,7 @@ export const calculatePenaltiesService = async (
     // Get all disbursed loans
     loans = await prisma.loanApplication.findMany({
       where: {
-        status: LoanStatus.PAID,
+        status: LoanStatus.SETTLED,
       },
       include: {
         vouchers: true,
@@ -2349,12 +2349,25 @@ export const rollbackVoucherPaymentService = async (
 /**
  * Mark loan application as accepted
  */
-export const markLoanApplicationAsAcceptedService = async (loanId: string) => {
+export const markLoanApplicationAsAcceptedService = async (
+  loanId: string,
+  acceptanceData?: { acceptedAmount?: number; paymentDays?: number },
+) => {
+  const updateData: any = {
+    status: LoanStatus.ACCEPTED,
+  };
+
+  // If admin provides accepted amount and payment days, update them
+  if (acceptanceData?.acceptedAmount) {
+    updateData.approvedAmount = acceptanceData.acceptedAmount;
+  }
+  if (acceptanceData?.paymentDays) {
+    updateData.repaymentDays = acceptanceData.paymentDays;
+  }
+
   const loan = await prisma.loanApplication.update({
     where: { id: loanId },
-    data: {
-      status: LoanStatus.ACCEPTED,
-    },
+    data: updateData,
     include: {
       restaurant: {
         select: {
