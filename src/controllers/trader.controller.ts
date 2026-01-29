@@ -65,28 +65,56 @@ export const getTraderWallet = async (req: Request, res: Response) => {
 export const topUpTraderWallet = async (req: Request, res: Response) => {
   try {
     const traderId = (req as any).user.id;
-    const { amount, paymentMethod, phoneNumber, description } = req.body;
+    const { amount, paymentMethodId, phoneNumber, description } = req.body;
 
-    if (!amount || !paymentMethod) {
+    if (!amount || !paymentMethodId) {
       return res.status(400).json({
         success: false,
-        message: "Amount and payment method are required",
+        message: "Amount and payment method ID are required",
       });
     }
 
     const result = await topUpTraderWalletService({
       traderId,
       amount: parseFloat(amount),
-      paymentMethod,
+      paymentMethodId,
       phoneNumber,
       description,
     });
 
-    res.status(200).json({
-      success: true,
-      message: "Wallet top-up initiated successfully",
-      data: result,
-    });
+    if (result.success) {
+      if (result.redirectUrl) {
+        res.status(200).json({
+          success: true,
+          message: "Top-up initiated - redirect required",
+          data: {
+            wallet: result.wallet,
+            transaction: result.transaction,
+            redirectUrl: result.redirectUrl,
+            status: result.status,
+            requiresRedirect: true,
+            paymentMethodDetails: result.paymentMethodDetails,
+          },
+        });
+      } else {
+        res.status(200).json({
+          success: true,
+          message: result.message || "Wallet top-up processed successfully",
+          data: {
+            wallet: result.wallet,
+            transaction: result.transaction,
+            status: result.status,
+            paymentMethodDetails: result.paymentMethodDetails,
+          },
+        });
+      }
+    } else {
+      res.status(400).json({
+        success: false,
+        message: "Top-up failed",
+        error: result.message,
+      });
+    }
   } catch (error: any) {
     res.status(400).json({
       success: false,

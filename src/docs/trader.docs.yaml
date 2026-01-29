@@ -52,21 +52,70 @@ components:
           type: string
           format: date-time
 
+    TraderTopUpResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Wallet top-up processed successfully"
+        data:
+          type: object
+          properties:
+            wallet:
+              $ref: "#/components/schemas/TraderWallet"
+            transaction:
+              type: object
+              properties:
+                id:
+                  type: string
+                amount:
+                  type: number
+                  format: float
+                paymentMethod:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: Payment method ID
+                    name:
+                      type: string
+                      description: Payment method name
+                      example: "MOBILE_MONEY"
+                    description:
+                      type: string
+                      description: Payment method description
+                status:
+                  type: string
+                  example: "COMPLETED"
+                createdAt:
+                  type: string
+                  format: date-time
+            redirectUrl:
+              type: string
+              nullable: true
+              description: Redirect URL for payment completion (if required)
+            requiresRedirect:
+              type: boolean
+              description: Whether payment requires redirect
+
     TraderTopUpRequest:
       type: object
       required:
         - amount
-        - paymentMethod
+        - paymentMethodId
       properties:
         amount:
           type: number
           format: float
           description: Amount to top up
           example: 100000
-        paymentMethod:
+        paymentMethodId:
           type: string
-          enum: [MOBILE_MONEY, CARD, BANK_TRANSFER]
-          description: Payment method
+          description: Payment method ID from PaymentMethodConfig
+          example: "uuid-of-payment-method"
         phoneNumber:
           type: string
           description: Phone number for mobile money
@@ -288,8 +337,29 @@ paths:
       responses:
         200:
           description: Wallet top-up initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderTopUpResponse"
         400:
-          description: Bad request
+          description: Bad request - Invalid payment method ID or insufficient data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      payment_method_not_found:
+                        value: "Payment method not found"
+                      payment_method_inactive:
+                        value: "Payment method is not active"
+                      invalid_amount:
+                        value: "Valid amount is required"
 
   /traders/loans:
     get:

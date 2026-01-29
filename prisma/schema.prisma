@@ -379,6 +379,7 @@ model PaymentMethodConfig {
 
   @@index([name])
   @@index([isActive])
+  @@index([createdBy])
 }
 
 model ProductUnit {

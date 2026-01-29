@@ -40,6 +40,6 @@ export const sendPasswordSMS = async (phone: string, password: string, userType:
   try {
     await sendMessage(message, phone);
   } catch (error: any) {
-    throw new Error(`SMS sending failed: ${error.message}`);
+    throw new Error(`SMS sending failed`);
   }
 };
