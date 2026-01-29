@@ -194,6 +194,10 @@ components:
         totalVouchersApproved:
           type: number
           description: Total vouchers approved by trader
+        totalVouchersAmount:
+          type: number
+          format: float
+          description: Total amount of vouchers approved by trader
         activeVouchers:
           type: number
           description: Currently active vouchers
@@ -307,8 +311,8 @@ paths:
     post:
       tags:
         - Trader API Management
-      summary: Approve loan application
-      description: Approve a loan application using the loan's original parameters (amount, repayment days, voucher type). Only loans with ACCEPTED status can be approved.
+      summary: Approve loan application using original terms
+      description: Approve a loan application using the original requested amount and payment days. Only loans with ACCEPTED status can be approved.
       security:
         - BearerAuth: []
       parameters:
@@ -320,7 +324,7 @@ paths:
           description: ID of the loan application to approve
       responses:
         200:
-          description: Loan approved successfully using loan application parameters
+          description: Loan approved successfully using original terms
           content:
             application/json:
               schema:
@@ -336,7 +340,7 @@ paths:
                     type: object
                     description: Approved loan and voucher details
         400:
-          description: Insufficient wallet balance, loan not accepted, or bad request
+          description: Insufficient available balance, loan not accepted, or bad request
           content:
             application/json:
               schema:
@@ -349,7 +353,7 @@ paths:
                     type: string
                     examples:
                       insufficient_balance:
-                        value: "Insufficient wallet balance. Available: 10000 RWF, Required: 50000 RWF"
+                        value: "Insufficient available balance. Available: 10000 RWF, Required: 50000 RWF"
                       not_accepted:
                         value: "Can only approve loans with ACCEPTED status"
                       not_found:

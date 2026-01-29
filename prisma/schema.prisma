@@ -629,6 +629,7 @@ model Wallet {
   traderId              String?  @unique
   balance               Float    @default(0)
   pendingApprovedAmount Float    @default(0) // Amount approved for active vouchers
+  commissionEarned      Float    @default(0) // Total commission earned (separate from balance)
   commission            Float    @default(5.0) // Commission percentage (default 5%)
   currency              String   @default("RWF")
   isActive              Boolean  @default(true)

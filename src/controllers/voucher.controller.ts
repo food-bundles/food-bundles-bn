@@ -959,6 +959,7 @@ export const markLoanApplicationAsAccepted = async (
 ) => {
   try {
     const { id } = req.params;
+    const { acceptedAmount, paymentDays } = req.body;
     const userRole = (req as any).user.role;
     const userId = (req as any).user.id;
 
@@ -985,7 +986,31 @@ export const markLoanApplicationAsAccepted = async (
       });
     }
 
-    const loan = await markLoanApplicationAsAcceptedService(id);
+    // For admin users, require acceptedAmount and paymentDays
+    if (userRole === "ADMIN") {
+      if (!acceptedAmount || !paymentDays) {
+        return res.status(400).json({
+          message: "Accepted amount and payment days are required for admin acceptance",
+        });
+      }
+
+      if (acceptedAmount <= 0) {
+        return res.status(400).json({
+          message: "Accepted amount must be greater than 0",
+        });
+      }
+
+      if (paymentDays <= 0) {
+        return res.status(400).json({
+          message: "Payment days must be greater than 0",
+        });
+      }
+    }
+
+    const loan = await markLoanApplicationAsAcceptedService(id, {
+      acceptedAmount,
+      paymentDays,
+    });
 
     res.status(200).json({
       message: "Loan application marked as accepted successfully",
