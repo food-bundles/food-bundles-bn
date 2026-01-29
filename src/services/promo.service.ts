@@ -60,6 +60,8 @@ export const createPromoCodeService = async (data: CreatePromoCodeData) => {
       admin: {
         select: { id: true, username: true, email: true },
       },
+      includedRestaurants: true,
+      excludedRestaurants: true,
     },
   });
 };
@@ -86,6 +88,8 @@ export const getAllPromoCodesService = async (filters?: {
       admin: {
         select: { id: true, username: true, email: true },
       },
+      includedRestaurants: true,
+      excludedRestaurants: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -98,6 +102,8 @@ export const getPromoCodeByIdService = async (id: string) => {
       admin: {
         select: { id: true, username: true, email: true },
       },
+      includedRestaurants: true,
+      excludedRestaurants: true,
     },
   });
 
@@ -115,6 +121,8 @@ export const getPromoCodeByCodeService = async (code: string) => {
       admin: {
         select: { id: true, username: true, email: true },
       },
+      includedRestaurants: true,
+      excludedRestaurants: true,
     },
   });
 
@@ -153,6 +161,8 @@ export const updatePromoCodeService = async (
       admin: {
         select: { id: true, username: true, email: true },
       },
+      includedRestaurants: true,
+      excludedRestaurants: true,
     },
   });
 };
@@ -761,6 +771,8 @@ export const createPromoCodeWithInclusionsService = async (
       admin: {
         select: { id: true, username: true, email: true },
       },
+      includedRestaurants: true,
+      excludedRestaurants: true,
     },
   });
 };
