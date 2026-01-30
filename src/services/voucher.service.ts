@@ -26,6 +26,7 @@ import { getUserById } from "./userGets";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { getRestaurantFromAffiliatorService } from "./affiliator.service";
 import { processAllTradersCommissionService } from "./trader.service";
+import { applyPromoCodeService } from "./promo.service";
 
 // Payment processing functions
 const flw = require("flutterwave-node-v3");
@@ -1888,6 +1889,7 @@ export const validateVoucherForCheckoutService = async (
   orderAmount: number,
   restaurantId?: string,
   affiliatorId?: string,
+  promoCode?: string,
 ) => {
   try {
     if (affiliatorId) {
@@ -1897,6 +1899,54 @@ export const validateVoucherForCheckoutService = async (
 
     // Check subscription
     await checkRestaurantSubscription(restaurantId!);
+
+    let finalOrderAmount = orderAmount;
+    let promoDetails = null;
+
+    // Apply promo code if provided
+    if (promoCode) {
+      try {
+        // Get cart items for promo validation
+        const cart = await prisma.cart.findFirst({
+          where: {
+            restaurantId,
+            status: "ACTIVE",
+          },
+          include: { cartItems: true },
+        });
+
+        if (!cart || cart.cartItems.length === 0) {
+          return {
+            valid: false,
+            error: "Cart not found or empty",
+          };
+        }
+
+        const items = cart.cartItems.map((item: any) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        }));
+
+        const promoResult = await applyPromoCodeService(
+          promoCode,
+          restaurantId!,
+          "temp_voucher_validation",
+          items,
+        );
+        finalOrderAmount = promoResult.finalAmount;
+        promoDetails = {
+          code: promoResult.promoCode.code,
+          discountAmount: promoResult.discountAmount,
+          originalAmount: orderAmount,
+          finalAmount: finalOrderAmount,
+        };
+      } catch (promoError: any) {
+        return {
+          valid: false,
+          error: `Promo code error: ${promoError.message}`,
+        };
+      }
+    }
 
     const voucher = await getVoucherByCodeService(voucherCode);
 
@@ -1933,11 +1983,11 @@ export const validateVoucherForCheckoutService = async (
       };
     }
 
-    // Check credit limit
-    if (voucher.creditLimit < orderAmount) {
+    // Check credit limit against final amount (after promo discount)
+    if (voucher.creditLimit < finalOrderAmount) {
       return {
         valid: false,
-        error: `Voucher credit limit (${voucher.creditLimit}) is less than order amount (${orderAmount})`,
+        error: `Voucher credit limit (${voucher.creditLimit}) is less than order amount (${finalOrderAmount})`,
       };
     }
 
@@ -1949,9 +1999,10 @@ export const validateVoucherForCheckoutService = async (
       };
     }
 
-    // Calculate coverage
-    const discountAmount = orderAmount * (voucher.discountPercentage / 100);
-    const amountCharged = orderAmount - discountAmount;
+    // Calculate coverage based on final amount
+    const discountAmount =
+      finalOrderAmount * (voucher.discountPercentage / 100);
+    const amountCharged = finalOrderAmount - discountAmount;
     const serviceFee = amountCharged * (voucher.serviceFeeRate / 100);
     const totalRequired = amountCharged + serviceFee;
 
@@ -1980,8 +2031,10 @@ export const validateVoucherForCheckoutService = async (
         remainingCredit: voucher.remainingCredit,
         loanId: voucher.loanId,
       },
+      promoDetails,
       coverage: {
-        orderAmount,
+        originalOrderAmount: orderAmount,
+        finalOrderAmount,
         discountAmount,
         amountAfterDiscount: amountCharged,
         serviceFee,

@@ -17,6 +17,7 @@ interface CreateOrderFromCartData {
   requestedDelivery?: Date;
   paymentMethod?: string;
   promoCode?: string;
+  originalCartAmount?: number;
   billingName?: string;
   billingEmail?: string;
   billingPhone?: string;
@@ -86,7 +87,7 @@ interface validatedItemsData {
  */
 
 export const createOrderFromCartService = async (
-  data: CreateOrderFromCartData
+  data: CreateOrderFromCartData,
 ) => {
   const {
     cartId,
@@ -170,7 +171,7 @@ export const createOrderFromCartService = async (
       }
 
       throw new Error(
-        `Insufficient stock for ${product.productName}. Available: ${product.quantity}, Required: ${cartItem.quantity}`
+        `Insufficient stock for ${product.productName}. Available: ${product.quantity}, Required: ${cartItem.quantity}`,
       );
     }
   }
@@ -193,7 +194,7 @@ export const createOrderFromCartService = async (
         promoCode,
         restaurantId,
         "temp_order_id", // Will be updated after order creation
-        items
+        items,
       );
 
       finalAmount = promoResult.finalAmount;
@@ -229,6 +230,7 @@ export const createOrderFromCartService = async (
           restaurantId,
           orderedBy: affiliatorId,
           totalAmount: finalAmount, // Use discounted amount
+          originalAmount: originalAmount,
           status: data.status || "PENDING",
           paymentMethod: paymentMethod || "CASH",
           paymentStatus: PaymentStatus.PENDING,
@@ -262,7 +264,7 @@ export const createOrderFromCartService = async (
           promoCode,
           restaurantId,
           newOrder.id,
-          items
+          items,
         );
       }
 
@@ -293,7 +295,7 @@ export const createOrderFromCartService = async (
               decrement: item.quantity,
             },
           },
-        })
+        }),
       );
 
       // Execute all product updates in parallel
@@ -303,7 +305,7 @@ export const createOrderFromCartService = async (
     },
     {
       timeout: 15000,
-    }
+    },
   );
 
   setTimeout(async () => {}, 1000); // Small delay to ensure order is fully created
@@ -418,7 +420,7 @@ export const createDirectOrderService = async (data: CreateDirectOrderData) => {
 
     if (product.quantity < item.quantity) {
       throw new Error(
-        `Insufficient stock for ${product.productName}. Available: ${product.quantity}, Required: ${item.quantity}`
+        `Insufficient stock for ${product.productName}. Available: ${product.quantity}, Required: ${item.quantity}`,
       );
     }
 
@@ -504,7 +506,7 @@ export const createDirectOrderService = async (data: CreateDirectOrderData) => {
  */
 export const getOrderByIdService = async (
   orderId: string,
-  restaurantId?: string
+  restaurantId?: string,
 ) => {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -676,7 +678,7 @@ export const getRestaurantOrdersService = async (
     paymentStatus?: PaymentStatus;
     dateFrom?: Date;
     dateTo?: Date;
-  }
+  },
 ) => {
   return getAllOrdersService({
     ...filters,
@@ -690,7 +692,7 @@ export const getRestaurantOrdersService = async (
 export const updateOrderService = async (
   orderId: string,
   data: UpdateOrderData,
-  restaurantId?: string
+  restaurantId?: string,
 ) => {
   // Get existing order to validate
   const existingOrder = await getOrderByIdService(orderId, restaurantId);
@@ -743,7 +745,7 @@ export const updateOrderService = async (
 export const cancelOrderService = async (
   orderId: string,
   restaurantId?: string,
-  reason?: string
+  reason?: string,
 ) => {
   const order = await getOrderByIdService(orderId, restaurantId);
 
@@ -848,33 +850,33 @@ export const generateEBMInvoiceService = async (orderId: string) => {
       return { success: false, error: "Restaurant TIN is required" };
     }
 
-  // Prepare TableTronic API payload
-  const payload = {
-    customerId: null,
-    customerName: order.billingName || order.restaurant.name,
-    customerPhone: order.billingPhone || order.restaurant.phone,
-    customerTin: order.restaurant.tin,
-    date: new Date().toISOString(),
-    discount: 0,
-    invoiceNumber: Date.now(),
-    items: order.orderItems.map((item) => ({
-      name: item.productName,
-      id: item.product?.tableTronicProductId || 0,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-    })),
-    paidAmount: order.totalAmount,
-    payments: [
-      {
-        method: order.paymentMethodConfig?.tableTronicPaymentMethodId || 17,
-        amount: order.totalAmount,
-      },
-    ],
-    purchaseCode: "",
-    status: "completed",
-    terms:
-      "Thank you for your order. Please keep this invoice for your records.",
-  };
+    // Prepare TableTronic API payload
+    const payload = {
+      customerId: null,
+      customerName: order.billingName || order.restaurant.name,
+      customerPhone: order.billingPhone || order.restaurant.phone,
+      customerTin: order.restaurant.tin,
+      date: new Date().toISOString(),
+      discount: 0,
+      invoiceNumber: Date.now(),
+      items: order.orderItems.map((item) => ({
+        name: item.productName,
+        id: item.product?.tableTronicProductId || 0,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      paidAmount: order.totalAmount,
+      payments: [
+        {
+          method: order.paymentMethodConfig?.tableTronicPaymentMethodId || 17,
+          amount: order.totalAmount,
+        },
+      ],
+      purchaseCode: "",
+      status: "completed",
+      terms:
+        "Thank you for your order. Please keep this invoice for your records.",
+    };
 
     console.log("Sent EBM payload", payload);
 
@@ -888,14 +890,14 @@ export const generateEBMInvoiceService = async (orderId: string) => {
           "x-api-key": process.env.NEXT_PUBLIC_TABLE_TRONIC_API_KEY!,
         },
         body: JSON.stringify(payload),
-      }
+      },
     );
 
     console.log("Received EBM Response", response);
 
     if (!response.ok) {
       console.log(
-        `EBM Invoice Generation: TableTronic API error: ${response.status} ${response.statusText}`
+        `EBM Invoice Generation: TableTronic API error: ${response.status} ${response.statusText}`,
       );
       return {
         success: false,
@@ -939,13 +941,13 @@ export const generateEBMInvoiceService = async (orderId: string) => {
  */
 export const reOrderFromExistingOrderService = async (
   orderId: string,
-  restaurantId: string
+  restaurantId: string,
 ) => {
   console.log(
     "Re-ordering from order ID:",
     orderId,
     "for restaurant ID:",
-    restaurantId
+    restaurantId,
   );
 
   // Get the existing order
@@ -1078,7 +1080,7 @@ export const reOrderFromExistingOrderService = async (
   // Check if we have any valid items
   if (validatedItems.length === 0) {
     throw new Error(
-      "None of the products from this order are currently available"
+      "None of the products from this order are currently available",
     );
   }
 
@@ -1087,13 +1089,13 @@ export const reOrderFromExistingOrderService = async (
   if (unavailableProducts.length > 0) {
     warnings.push(
       `The following products are no longer available: ${unavailableProducts.join(
-        ", "
-      )}`
+        ", ",
+      )}`,
     );
   }
   if (insufficientStockProducts.length > 0) {
     const stockWarnings = insufficientStockProducts.map(
-      (p) => `${p.name} (Available: ${p.available}, Required: ${p.required})`
+      (p) => `${p.name} (Available: ${p.available}, Required: ${p.required})`,
     );
     warnings.push(`Insufficient stock for: ${stockWarnings.join(", ")}`);
   }
@@ -1197,7 +1199,7 @@ export const reOrderFromExistingOrderService = async (
     "New order created:",
     orderCreated.id,
     "Amount:",
-    orderCreated.totalAmount
+    orderCreated.totalAmount,
   );
 
   // Process payment
