@@ -106,7 +106,8 @@ export const createCheckout = async (req: Request, res: Response) => {
             voucherCode,
             cartTotal,
             restaurantId,
-            affiliatorId
+            affiliatorId,
+            promoCode
           );
 
           if (!voucherValidation.valid) {
@@ -145,6 +146,8 @@ export const createCheckout = async (req: Request, res: Response) => {
             cardDetails,
             bankDetails,
             otherServices,
+            originalCartAmount: cartTotal,
+            promoDetails: voucherValidation.promoDetails
           };
 
           return res.status(200).json({

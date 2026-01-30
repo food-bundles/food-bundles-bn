@@ -93,6 +93,13 @@ export interface CreateCheckoutData {
   narration?: string;
   currency?: string;
   otherServices?: boolean;
+  originalCartAmount?: number;
+  promoDetails?: {
+    code: string;
+    discountAmount: number;
+    originalAmount: number;
+    finalAmount: number;
+  };
 }
 
 export interface CreateAdminOrderData {
@@ -145,6 +152,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     billingPhone: data.billingPhone,
     billingAddress: data.billingAddress,
     promoCode: data.promoCode,
+    originalCartAmount: data.originalCartAmount,
     cardDetails: data.cardDetails
       ? {
           cardNumber: await encryptSecretData(data.cardDetails.cardNumber),

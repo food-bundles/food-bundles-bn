@@ -461,13 +461,14 @@ model CartItem {
 
 // ORDER model 
 model Order {
-  id           String      @id @default(uuid())
-  restaurantId String
-  orderedBy    String?
-  logisticsId  String?
-  orderNumber  String      @unique
-  status       OrderStatus @default(PENDING)
-  totalAmount  Float
+  id             String      @id @default(uuid())
+  restaurantId   String
+  orderedBy      String?
+  logisticsId    String?
+  orderNumber    String      @unique
+  status         OrderStatus @default(PENDING)
+  totalAmount    Float
+  originalAmount Float?
 
   // Cart reference 
   cartId String?
