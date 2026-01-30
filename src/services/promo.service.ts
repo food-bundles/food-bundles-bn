@@ -54,14 +54,13 @@ export const createPromoCodeService = async (data: CreatePromoCodeData) => {
       ...data,
       usageHistory: [],
       excludedRestaurants: [],
+      includedRestaurants: [],
       restaurantUsageCount: {},
     },
     include: {
       admin: {
         select: { id: true, username: true, email: true },
       },
-      includedRestaurants: true,
-      excludedRestaurants: true,
     },
   });
 };
@@ -88,8 +87,6 @@ export const getAllPromoCodesService = async (filters?: {
       admin: {
         select: { id: true, username: true, email: true },
       },
-      includedRestaurants: true,
-      excludedRestaurants: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -102,8 +99,6 @@ export const getPromoCodeByIdService = async (id: string) => {
       admin: {
         select: { id: true, username: true, email: true },
       },
-      includedRestaurants: true,
-      excludedRestaurants: true,
     },
   });
 
@@ -121,8 +116,6 @@ export const getPromoCodeByCodeService = async (code: string) => {
       admin: {
         select: { id: true, username: true, email: true },
       },
-      includedRestaurants: true,
-      excludedRestaurants: true,
     },
   });
 
@@ -161,8 +154,6 @@ export const updatePromoCodeService = async (
       admin: {
         select: { id: true, username: true, email: true },
       },
-      includedRestaurants: true,
-      excludedRestaurants: true,
     },
   });
 };
@@ -356,13 +347,8 @@ export const applyPromoCodeService = async (
     if (promoCode.discountType === "PERCENTAGE") {
       itemDiscount = (itemTotal * promoCode.discountValue) / 100;
     } else {
-      // For fixed amount, distribute proportionally across applicable items
-      const applicableAmount = applicableItems.reduce(
-        (total, appItem) => total + appItem.price * appItem.quantity,
-        0
-      );
-      const proportion = itemTotal / applicableAmount;
-      itemDiscount = Math.min(promoCode.discountValue * proportion, itemTotal);
+      // For FIXED_AMOUNT, don't distribute across items - will be applied to total
+      itemDiscount = 0;
     }
 
     totalDiscountAmount += itemDiscount;
@@ -375,6 +361,11 @@ export const applyPromoCodeService = async (
       finalItemTotal: itemTotal - itemDiscount,
     };
   });
+
+  // For FIXED_AMOUNT, apply discount to total order amount
+  if (promoCode.discountType === "FIXED_AMOUNT") {
+    totalDiscountAmount = Math.min(promoCode.discountValue, originalAmount);
+  }
 
   const finalAmount = originalAmount - totalDiscountAmount;
 
@@ -434,7 +425,12 @@ export const excludeRestaurantService = async (
     throw new Error("Promo code not found");
   }
 
+  const currentInclusions = (promoCode.includedRestaurants as any[]) || [];
   const currentExclusions = (promoCode.excludedRestaurants as any[]) || [];
+  
+  const isIncluded = currentInclusions.some(
+    (inclusion: any) => inclusion.restaurantId === restaurantId
+  );
   const isAlreadyExcluded = currentExclusions.some(
     (exclusion: any) => exclusion.restaurantId === restaurantId
   );
@@ -442,6 +438,11 @@ export const excludeRestaurantService = async (
   if (isAlreadyExcluded) {
     throw new Error("Restaurant is already excluded");
   }
+
+  // Remove from inclusions if present and add to exclusions
+  const updatedInclusions = currentInclusions.filter(
+    (inclusion: any) => inclusion.restaurantId !== restaurantId
+  );
 
   const newExclusion = {
     restaurantId,
@@ -454,6 +455,7 @@ export const excludeRestaurantService = async (
     where: { id: promoCodeId },
     data: {
       excludedRestaurants: [...currentExclusions, newExclusion],
+      includedRestaurants: updatedInclusions,
     },
   });
 };
@@ -681,7 +683,12 @@ export const includeRestaurantService = async (
     throw new Error("Promo code not found");
   }
 
+  const currentExclusions = (promoCode.excludedRestaurants as any[]) || [];
   const currentInclusions = (promoCode.includedRestaurants as any[]) || [];
+  
+  const isExcluded = currentExclusions.some(
+    (exclusion: any) => exclusion.restaurantId === restaurantId
+  );
   const isAlreadyIncluded = currentInclusions.some(
     (inclusion: any) => inclusion.restaurantId === restaurantId
   );
@@ -689,6 +696,11 @@ export const includeRestaurantService = async (
   if (isAlreadyIncluded) {
     throw new Error("Restaurant is already included");
   }
+
+  // Remove from exclusions if present and add to inclusions
+  const updatedExclusions = currentExclusions.filter(
+    (exclusion: any) => exclusion.restaurantId !== restaurantId
+  );
 
   const newInclusion = {
     restaurantId,
@@ -701,6 +713,7 @@ export const includeRestaurantService = async (
     where: { id: promoCodeId },
     data: {
       includedRestaurants: [...currentInclusions, newInclusion],
+      excludedRestaurants: updatedExclusions,
     },
   });
 };
@@ -745,6 +758,17 @@ export const createPromoCodeWithInclusionsService = async (
     throw new Error("Promo code already exists");
   }
 
+  // Validate that restaurants are not in both included and excluded lists
+  if (data.excludedRestaurants && data.includedRestaurants) {
+    const excludedIds = data.excludedRestaurants.map(r => r.restaurantId);
+    const includedIds = data.includedRestaurants.map(r => r.restaurantId);
+    const conflicts = excludedIds.filter(id => includedIds.includes(id));
+    
+    if (conflicts.length > 0) {
+      throw new Error(`Restaurant(s) cannot be both included and excluded: ${conflicts.join(', ')}`);
+    }
+  }
+
   const excludedRestaurants = data.excludedRestaurants?.map(exclusion => ({
     ...exclusion,
     excludedBy: data.createdBy,
@@ -771,8 +795,6 @@ export const createPromoCodeWithInclusionsService = async (
       admin: {
         select: { id: true, username: true, email: true },
       },
-      includedRestaurants: true,
-      excludedRestaurants: true,
     },
   });
 };

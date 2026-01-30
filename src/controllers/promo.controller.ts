@@ -45,6 +45,8 @@ export const createPromoCode = async (req: Request, res: Response) => {
       applicableCategoryIds,
       startDate,
       expiryDate,
+      excludedRestaurants,
+      includedRestaurants,
     } = req.body;
 
     if (
@@ -75,7 +77,34 @@ export const createPromoCode = async (req: Request, res: Response) => {
       });
     }
 
-    const promoCode = await createPromoCodeService({
+    // Validate that restaurants are not in both included and excluded lists
+    if (excludedRestaurants && includedRestaurants) {
+      const excludedIds = excludedRestaurants.map((r: any) => r.restaurantId);
+      const includedIds = includedRestaurants.map((r: any) => r.restaurantId);
+      const conflicts = excludedIds.filter((id: string) =>
+        includedIds.includes(id),
+      );
+
+      if (conflicts.length > 0) {
+        return res.status(400).json({
+          message: `Restaurant(s) cannot be both included and excluded: ${conflicts.join(", ")}`,
+        });
+      }
+    }
+
+    // For PUBLIC codes, we don't need inclusions as all users are allowed
+    if (
+      type === "PUBLIC" &&
+      includedRestaurants &&
+      includedRestaurants.length > 0
+    ) {
+      return res.status(400).json({
+        message:
+          "PUBLIC promo codes cannot have included restaurants. Use exclusions instead.",
+      });
+    }
+
+    const promoCode = await createPromoCodeWithInclusionsService({
       code: code.toUpperCase(),
       name,
       description,
@@ -93,6 +122,8 @@ export const createPromoCode = async (req: Request, res: Response) => {
       startDate: startDate ? new Date(startDate) : undefined,
       expiryDate: expiryDate ? new Date(expiryDate) : undefined,
       createdBy: (req as any).user?.id,
+      excludedRestaurants,
+      includedRestaurants,
     });
 
     res.status(201).json({
