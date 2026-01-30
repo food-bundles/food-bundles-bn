@@ -43,7 +43,7 @@ app.use(
     origin: "*",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Accept"],
-  })
+  }),
 );
 
 app.use(express.json({ limit: "10mb" }));
