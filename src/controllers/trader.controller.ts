@@ -20,6 +20,8 @@ import {
   approveDelegationService,
   verifyDelegationOTPService,
   revokeDelegationService,
+  getAllDelegationRequestsService,
+  getTraderDelegationStatusService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -404,7 +406,10 @@ export const getTraderDashboard = async (req: Request, res: Response) => {
 };
 
 // Process all traders commission (Admin only)
-export const processAllTradersCommission = async (req: Request, res: Response) => {
+export const processAllTradersCommission = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const results = await processAllTradersCommissionService();
 
@@ -425,7 +430,10 @@ export const processAllTradersCommission = async (req: Request, res: Response) =
 };
 
 // Process existing used vouchers (Admin only)
-export const processExistingUsedVouchers = async (req: Request, res: Response) => {
+export const processExistingUsedVouchers = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const results = await processExistingUsedVouchersService();
 
@@ -476,7 +484,11 @@ export const approveDelegation = async (req: Request, res: Response) => {
       });
     }
 
-    const result = await approveDelegationService(adminId, traderId, commission);
+    const result = await approveDelegationService(
+      adminId,
+      traderId,
+      commission,
+    );
 
     res.status(200).json({
       success: true,
@@ -494,16 +506,16 @@ export const approveDelegation = async (req: Request, res: Response) => {
 // Verify delegation OTP
 export const verifyDelegationOTP = async (req: Request, res: Response) => {
   try {
-    const { sessionId, otp, commission } = req.body;
+    const { sessionId, otp } = req.body;
 
-    if (!sessionId || !otp || !commission) {
+    if (!sessionId || !otp) {
       return res.status(400).json({
         success: false,
-        message: "Session ID, OTP, and commission are required",
+        message: "Session ID and OTP are required",
       });
     }
 
-    const result = await verifyDelegationOTPService(sessionId, otp, commission);
+    const result = await verifyDelegationOTPService(sessionId, otp);
 
     res.status(200).json({
       success: true,
@@ -528,6 +540,53 @@ export const revokeDelegation = async (req: Request, res: Response) => {
     res.status(200).json({
       success: true,
       message: result.message,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get all delegation requests (Admin)
+export const getAllDelegationRequests = async (req: Request, res: Response) => {
+  try {
+    const { status, page, limit } = req.query;
+
+    const filters = {
+      status: status as "PENDING" | "APPROVED" | "ALL",
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    };
+
+    const result = await getAllDelegationRequestsService(filters);
+
+    res.status(200).json({
+      success: true,
+      data: result.requests,
+      pagination: result.pagination,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get trader's own delegation status
+export const getTraderDelegationStatus = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const traderId = (req as any).user.id;
+    const result = await getTraderDelegationStatusService(traderId);
+
+    res.status(200).json({
+      success: true,
+      data: result,
     });
   } catch (error: any) {
     res.status(400).json({

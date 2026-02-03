@@ -141,7 +141,6 @@ components:
           type: string
           description: Transaction description
 
-
     TraderCommission:
       type: object
       properties:
@@ -192,7 +191,14 @@ components:
           description: Trader ID
         type:
           type: string
-          enum: [LOAN_APPROVAL, COMMISSION_EARNED, COMMISSION_PAID, WALLET_TOPUP, WALLET_DEBIT]
+          enum:
+            [
+              LOAN_APPROVAL,
+              COMMISSION_EARNED,
+              COMMISSION_PAID,
+              WALLET_TOPUP,
+              WALLET_DEBIT,
+            ]
           description: Transaction type
         amount:
           type: number
@@ -555,7 +561,14 @@ paths:
           in: query
           schema:
             type: string
-            enum: [LOAN_APPROVAL, COMMISSION_EARNED, COMMISSION_PAID, WALLET_TOPUP, WALLET_DEBIT]
+            enum:
+              [
+                LOAN_APPROVAL,
+                COMMISSION_EARNED,
+                COMMISSION_PAID,
+                WALLET_TOPUP,
+                WALLET_DEBIT,
+              ]
         - name: status
           in: query
           schema:
@@ -766,6 +779,7 @@ paths:
           description: Processing failed
         403:
           description: Admin access required
+
   /traders/delegation/request:
     post:
       tags:
@@ -858,7 +872,6 @@ paths:
               required:
                 - sessionId
                 - otp
-                - commission
               properties:
                 sessionId:
                   type: string
@@ -867,11 +880,6 @@ paths:
                   type: string
                   description: OTP code received by trader
                   example: "123456"
-                commission:
-                  type: number
-                  format: float
-                  description: Commission percentage
-                  example: 5.0
       responses:
         200:
           description: Delegation approved successfully
@@ -923,3 +931,137 @@ paths:
           description: Bad request - Trader not found or no delegation
         403:
           description: Admin access required
+  /traders/delegation/requests:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get all delegation requests (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, ALL]
+            default: ALL
+          description: Filter by delegation status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Items per page
+      responses:
+        200:
+          description: Delegation requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        traderId:
+                          type: string
+                        traderInfo:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            username:
+                              type: string
+                            email:
+                              type: string
+                            phone:
+                              type: string
+                        delegationRequestedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        delegationApprovedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        delegationApprovedBy:
+                          type: string
+                          nullable: true
+                        canTradeOnBehalf:
+                          type: boolean
+                        commission:
+                          type: number
+                          format: float
+                        balance:
+                          type: number
+                          format: float
+                        totalDeposited:
+                          type: number
+                          format: float
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        403:
+          description: Admin access required
+
+  /traders/delegation/status:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader's own delegation status
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Delegation status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      delegationRequestedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      delegationApprovedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      delegationApprovedBy:
+                        type: string
+                        nullable: true
+                      canTradeOnBehalf:
+                        type: boolean
+                      commission:
+                        type: number
+                        format: float
+                      status:
+                        type: string
+                        enum: [NOT_REQUESTED, PENDING, APPROVED]
+        400:
+          description: Trader wallet not found

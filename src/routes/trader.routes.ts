@@ -20,6 +20,8 @@ import {
   approveDelegation,
   verifyDelegationOTP,
   revokeDelegation,
+  getAllDelegationRequests,
+  getTraderDelegationStatus,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -137,7 +139,6 @@ traderRoutes.post(
   processExistingUsedVouchers,
 );
 
-export default traderRoutes;
 // Delegation Management
 traderRoutes.post(
   "/delegation/request",
@@ -166,3 +167,21 @@ traderRoutes.delete(
   checkPermission("ADMIN"),
   revokeDelegation,
 );
+
+// Get all delegation requests (Admin)
+traderRoutes.get(
+  "/delegation/requests",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllDelegationRequests,
+);
+
+// Get trader's own delegation status
+traderRoutes.get(
+  "/delegation/status",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  getTraderDelegationStatus,
+);
+
+export default traderRoutes;

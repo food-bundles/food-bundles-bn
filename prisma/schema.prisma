@@ -676,12 +676,6 @@ model WalletTransaction {
   paymentMethod String?
   externalTxId  String?
 
-  // Delegation fields
-  delegationRequestId String? // Reference to delegation request
-  otpCode             String? // OTP for delegation verification
-  otpExpiresAt        DateTime? // OTP expiration time
-  otpVerified         Boolean   @default(false) // OTP verification status
-
   status   TransactionStatus @default(PENDING)
   metadata Json?
 
@@ -704,7 +698,6 @@ model WalletTransaction {
   @@index([restaurantId])
   @@index([affiliatorId])
   @@index([traderId])
-  @@index([delegationRequestId])
 }
 
 model POSSale {

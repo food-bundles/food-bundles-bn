@@ -1308,22 +1308,17 @@ export const approveDelegationService = async (
   const otp = OTPService.generateOTP();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-  // Store OTP in wallet transaction for verification
-  const otpTransaction = await prisma.walletTransaction.create({
-    data: {
-      walletId: wallet.id,
-      adminId,
-      type: "ADJUSTMENT",
-      amount: 0,
-      previousBalance: wallet.balance,
-      newBalance: wallet.balance,
-      description: "Delegation approval OTP verification",
-      otpCode: otp,
-      otpExpiresAt: expiresAt,
-      delegationRequestId: `delegation_${traderId}_${Date.now()}`,
-      status: "PENDING",
-    },
-  });
+  // Store all delegation data in session (similar to voucher checkout)
+  const delegationSessionData = {
+    adminId,
+    traderId,
+    commission,
+    walletId: wallet.id,
+    otp,
+    expiresAt,
+    traderInfo: wallet.trader,
+    timestamp: Date.now(),
+  };
 
   // Send OTP to trader
   if (wallet.trader?.phone) {
@@ -1342,7 +1337,7 @@ export const approveDelegationService = async (
   return {
     success: true,
     message: "OTP sent to trader for verification",
-    sessionId: otpTransaction.id,
+    sessionId: Buffer.from(JSON.stringify(delegationSessionData)).toString("base64"),
   };
 };
 
@@ -1350,74 +1345,80 @@ export const approveDelegationService = async (
 export const verifyDelegationOTPService = async (
   sessionId: string,
   otp: string,
-  commission: number,
 ) => {
-  const otpTransaction = await prisma.walletTransaction.findUnique({
-    where: { id: sessionId },
-    include: { wallet: { include: { trader: true } } },
-  });
-
-  if (
-    !otpTransaction ||
-    !otpTransaction.otpCode ||
-    !otpTransaction.otpExpiresAt
-  ) {
-    throw new Error("Invalid session");
-  }
-
-  if (otpTransaction.otpVerified) {
-    throw new Error("OTP already verified");
-  }
-
-  if (new Date() > otpTransaction.otpExpiresAt) {
-    throw new Error("OTP expired");
-  }
-
-  if (otpTransaction.otpCode !== otp) {
-    throw new Error("Invalid OTP");
-  }
-
-  // Mark OTP as verified
-  await prisma.walletTransaction.update({
-    where: { id: sessionId },
-    data: { otpVerified: true, status: "COMPLETED" },
-  });
-
-  // Approve delegation
-  await prisma.wallet.update({
-    where: { id: otpTransaction.walletId },
-    data: {
-      canTradeOnBehalf: true,
-      delegationApprovedAt: new Date(),
-      delegationApprovedBy: otpTransaction.adminId,
-      commission,
-    },
-  });
-
-  const trader = otpTransaction.wallet.trader;
-
-  // Send notifications
-  await createNotificationService({
-    title: "Delegation Approved",
-    message: `You can now trade on behalf with ${commission}% commission`,
-    eventType: "SYSTEM_MAINTENANCE",
-    targetType: "SPECIFIC_USER",
-    targetId: otpTransaction.wallet.traderId!,
-  });
-
-  if (trader?.phone) {
-    await sendMessage(
-      `Delegation approved! You can now trade on behalf with ${commission}% commission.`,
-      trader.phone,
+  try {
+    // Decode session data
+    const delegationData = JSON.parse(
+      Buffer.from(sessionId, "base64").toString()
     );
+
+    // Validate session data
+    if (
+      !delegationData.otp ||
+      !delegationData.expiresAt ||
+      !delegationData.traderId ||
+      !delegationData.adminId ||
+      !delegationData.commission
+    ) {
+      throw new Error("Invalid session data");
+    }
+
+    // Check OTP expiration
+    if (new Date() > new Date(delegationData.expiresAt)) {
+      throw new Error("OTP expired");
+    }
+
+    // Verify OTP
+    if (delegationData.otp !== otp) {
+      throw new Error("Invalid OTP");
+    }
+
+    // Get wallet to update
+    const wallet = await prisma.wallet.findUnique({
+      where: { traderId: delegationData.traderId },
+      include: { trader: { select: { username: true, phone: true } } },
+    });
+
+    if (!wallet) {
+      throw new Error("Trader wallet not found");
+    }
+
+    // Approve delegation
+    await prisma.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        canTradeOnBehalf: true,
+        delegationApprovedAt: new Date(),
+        delegationApprovedBy: delegationData.adminId,
+        commission: delegationData.commission,
+      },
+    });
+
+    // Send notifications
+    await createNotificationService({
+      title: "Delegation Approved",
+      message: `You can now trade on behalf with ${delegationData.commission}% commission`,
+      eventType: "SYSTEM_MAINTENANCE",
+      targetType: "SPECIFIC_USER",
+      targetId: delegationData.traderId,
+    });
+
+    if (wallet.trader?.phone) {
+      await sendMessage(
+        `Delegation approved! You can now trade on behalf with ${delegationData.commission}% commission.`,
+        wallet.trader.phone,
+      );
+    }
+
+    await sendMessage(
+      `Delegation approved for trader ${wallet.trader?.username} with ${delegationData.commission}% commission.`,
+      process.env.PRIVATE_RECEIVER || "",
+    );
+
+    return { success: true, message: "Delegation approved successfully" };
+  } catch (error: any) {
+    throw new Error(error.message || "Invalid session or OTP verification failed");
   }
-
-  await sendMessage(
-    `Delegation approved for trader ${trader?.username} with ${commission}% commission.`,
-    process.env.PRIVATE_RECEIVER || "",
-  );
-
-  return { success: true, message: "Delegation approved successfully" };
 };
 
 // Revoke delegation permission
@@ -1465,4 +1466,96 @@ export const revokeDelegationService = async (
   }
 
   return { success: true, message: "Delegation revoked successfully" };
+};
+
+// Get all delegation requests (Admin)
+export const getAllDelegationRequestsService = async (filters: {
+  status?: "PENDING" | "APPROVED" | "ALL";
+  page?: number;
+  limit?: number;
+}) => {
+  const { status = "ALL", page = 1, limit = 10 } = filters;
+  const skip = (page - 1) * limit;
+
+  let whereClause: any = {
+    traderId: { not: null },
+  };
+
+  if (status === "PENDING") {
+    whereClause.delegationRequestedAt = { not: null };
+    whereClause.canTradeOnBehalf = false;
+  } else if (status === "APPROVED") {
+    whereClause.canTradeOnBehalf = true;
+  }
+
+  const [requests, total] = await Promise.all([
+    prisma.wallet.findMany({
+      where: whereClause,
+      include: {
+        trader: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+      orderBy: { delegationRequestedAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.wallet.count({ where: whereClause }),
+  ]);
+
+  return {
+    requests: requests.map((wallet) => ({
+      traderId: wallet.traderId,
+      traderInfo: wallet.trader,
+      delegationRequestedAt: wallet.delegationRequestedAt,
+      delegationApprovedAt: wallet.delegationApprovedAt,
+      delegationApprovedBy: wallet.delegationApprovedBy,
+      canTradeOnBehalf: wallet.canTradeOnBehalf,
+      commission: wallet.commission,
+      balance: wallet.balance,
+      totalDeposited: wallet.totalDeposited,
+    })),
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+// Get trader's own delegation status
+export const getTraderDelegationStatusService = async (traderId: string) => {
+  const wallet = await prisma.wallet.findUnique({
+    where: { traderId },
+    select: {
+      delegationRequestedAt: true,
+      delegationApprovedAt: true,
+      delegationApprovedBy: true,
+      canTradeOnBehalf: true,
+      commission: true,
+    },
+  });
+
+  if (!wallet) {
+    throw new Error("Trader wallet not found");
+  }
+
+  return {
+    delegationRequestedAt: wallet.delegationRequestedAt,
+    delegationApprovedAt: wallet.delegationApprovedAt,
+    delegationApprovedBy: wallet.delegationApprovedBy,
+    canTradeOnBehalf: wallet.canTradeOnBehalf,
+    commission: wallet.commission,
+    status: wallet.canTradeOnBehalf
+      ? "APPROVED"
+      : wallet.delegationRequestedAt
+        ? "PENDING"
+        : "NOT_REQUESTED",
+  };
 };
