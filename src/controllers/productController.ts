@@ -53,7 +53,7 @@ export const createProduct = async (req: Request, res: Response) => {
     }
 
     const product = await createProductService({
-      tableTronicProductId,
+      tableTronicProductId: tableTronicProductId ? parseInt(tableTronicProductId) : null,
       unitId,
       productName,
       unitPrice,
