@@ -626,17 +626,22 @@ model OrderDelivery {
 
 // Wallet model for managing user account balances
 model Wallet {
-  id                    String   @id @default(uuid())
-  restaurantId          String?  @unique
-  traderId              String?  @unique
-  balance               Float    @default(0)
-  pendingApprovedAmount Float    @default(0) // Amount approved for active vouchers
-  commissionEarned      Float    @default(0) // Total commission earned (separate from balance)
-  commission            Float    @default(5.0) // Commission percentage (default 5%)
-  currency              String   @default("RWF")
-  isActive              Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                    String    @id @default(uuid())
+  restaurantId          String?   @unique
+  traderId              String?   @unique
+  balance               Float     @default(0)
+  pendingApprovedAmount Float     @default(0) // Amount approved for active vouchers
+  commissionEarned      Float     @default(0) // Total commission earned (separate from balance)
+  commission            Float     @default(5.0) // Commission percentage (default 5%)
+  totalDeposited        Float     @default(0) // Total amount deposited (never decreases)
+  canTradeOnBehalf      Boolean   @default(false) // Permission to trade on behalf
+  delegationRequestedAt DateTime? // When delegation was requested
+  delegationApprovedAt  DateTime? // When delegation was approved
+  delegationApprovedBy  String? // Admin ID who approved delegation
+  currency              String    @default("RWF")
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   // Relations
   restaurant   Restaurant?         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -671,6 +676,12 @@ model WalletTransaction {
   paymentMethod String?
   externalTxId  String?
 
+  // Delegation fields
+  delegationRequestId String? // Reference to delegation request
+  otpCode             String? // OTP for delegation verification
+  otpExpiresAt        DateTime? // OTP expiration time
+  otpVerified         Boolean   @default(false) // OTP verification status
+
   status   TransactionStatus @default(PENDING)
   metadata Json?
 
@@ -693,6 +704,7 @@ model WalletTransaction {
   @@index([restaurantId])
   @@index([affiliatorId])
   @@index([traderId])
+  @@index([delegationRequestId])
 }
 
 model POSSale {

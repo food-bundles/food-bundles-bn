@@ -72,6 +72,9 @@ async function processWalletTransaction(
           where: { id: walletTransaction.walletId },
           data: {
             balance: newBalance,
+            totalDeposited:
+              walletTransaction.wallet.totalDeposited +
+              walletTransaction.amount,
             updatedAt: new Date(),
           },
         }),

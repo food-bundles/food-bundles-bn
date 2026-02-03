@@ -16,6 +16,10 @@ import {
   setTraderWalletCommission,
   processAllTradersCommission,
   processExistingUsedVouchers,
+  requestDelegation,
+  approveDelegation,
+  verifyDelegationOTP,
+  revokeDelegation,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -134,3 +138,31 @@ traderRoutes.post(
 );
 
 export default traderRoutes;
+// Delegation Management
+traderRoutes.post(
+  "/delegation/request",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  requestDelegation,
+);
+
+traderRoutes.post(
+  "/delegation/:traderId/approve",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  approveDelegation,
+);
+
+traderRoutes.post(
+  "/delegation/verify-otp",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  verifyDelegationOTP,
+);
+
+traderRoutes.delete(
+  "/delegation/:traderId/revoke",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  revokeDelegation,
+);

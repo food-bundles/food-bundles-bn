@@ -16,6 +16,10 @@ import {
   setTraderWalletCommissionService,
   processAllTradersCommissionService,
   processExistingUsedVouchersService,
+  requestDelegationService,
+  approveDelegationService,
+  verifyDelegationOTPService,
+  revokeDelegationService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -432,6 +436,98 @@ export const processExistingUsedVouchers = async (req: Request, res: Response) =
         processedVouchers: results.length,
         results,
       },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// Request delegation permission
+export const requestDelegation = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user.id;
+    const result = await requestDelegationService(traderId);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Admin approve delegation
+export const approveDelegation = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { traderId } = req.params;
+    const { commission } = req.body;
+
+    if (!commission || commission < 0 || commission > 100) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid commission percentage (0-100) is required",
+      });
+    }
+
+    const result = await approveDelegationService(adminId, traderId, commission);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      sessionId: result.sessionId,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Verify delegation OTP
+export const verifyDelegationOTP = async (req: Request, res: Response) => {
+  try {
+    const { sessionId, otp, commission } = req.body;
+
+    if (!sessionId || !otp || !commission) {
+      return res.status(400).json({
+        success: false,
+        message: "Session ID, OTP, and commission are required",
+      });
+    }
+
+    const result = await verifyDelegationOTPService(sessionId, otp, commission);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Revoke delegation permission
+export const revokeDelegation = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { traderId } = req.params;
+
+    const result = await revokeDelegationService(adminId, traderId);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
     });
   } catch (error: any) {
     res.status(400).json({

@@ -31,6 +31,23 @@ components:
           format: float
           description: Commission percentage
           example: 5.0
+        totalDeposited:
+          type: number
+          format: float
+          description: Total amount deposited (never decreases)
+        canTradeOnBehalf:
+          type: boolean
+          description: Whether trader can approve loans
+        delegationRequestedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When delegation was requested
+        delegationApprovedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When delegation was approved
         totalVouchersAmount:
           type: number
           format: float
@@ -747,5 +764,162 @@ paths:
                               type: boolean
         400:
           description: Processing failed
+        403:
+          description: Admin access required
+  /traders/delegation/request:
+    post:
+      tags:
+        - Trader API Management
+      summary: Request delegation permission to trade on behalf
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Delegation request submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Delegation request submitted successfully"
+        400:
+          description: Bad request - Already has permission or request pending
+
+  /traders/delegation/{traderId}/approve:
+    post:
+      tags:
+        - Trader API Management
+      summary: Admin approve delegation request with OTP verification
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Trader ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - commission
+              properties:
+                commission:
+                  type: number
+                  format: float
+                  minimum: 0
+                  maximum: 100
+                  description: Commission percentage for trader
+                  example: 5.0
+      responses:
+        200:
+          description: OTP sent to trader for verification
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "OTP sent to trader for verification"
+                  sessionId:
+                    type: string
+                    description: Session ID for OTP verification
+        400:
+          description: Bad request - Invalid trader or commission
+        403:
+          description: Admin access required
+
+  /traders/delegation/verify-otp:
+    post:
+      tags:
+        - Trader API Management
+      summary: Verify delegation OTP and complete approval
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+                - otp
+                - commission
+              properties:
+                sessionId:
+                  type: string
+                  description: Session ID from approval request
+                otp:
+                  type: string
+                  description: OTP code received by trader
+                  example: "123456"
+                commission:
+                  type: number
+                  format: float
+                  description: Commission percentage
+                  example: 5.0
+      responses:
+        200:
+          description: Delegation approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Delegation approved successfully"
+        400:
+          description: Bad request - Invalid OTP or session
+        403:
+          description: Admin access required
+
+  /traders/delegation/{traderId}/revoke:
+    delete:
+      tags:
+        - Trader API Management
+      summary: Revoke trader delegation permission
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Trader ID
+      responses:
+        200:
+          description: Delegation revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Delegation revoked successfully"
+        400:
+          description: Bad request - Trader not found or no delegation
         403:
           description: Admin access required
