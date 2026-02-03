@@ -591,7 +591,7 @@ paths:
       summary: Get submissions awaiting farmer feedback (Aggregators/Admins only)
       description: Retrieve all verified submissions that are waiting for farmer feedback
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       parameters:
         - name: page
           in: query
