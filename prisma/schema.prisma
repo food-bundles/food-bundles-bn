@@ -320,7 +320,8 @@ model Admin {
   productCategories        ProductCategory[]
   productUnits             ProductUnit[]
   paymentMethods           PaymentMethodConfig[]
-  LoanApplication          LoanApplication[]
+  approvedLoans            LoanApplication[]     @relation("LoanApprover")
+  managedLoans             LoanApplication[]     @relation("LoanManager")
   OrderDelivery            OrderDelivery[]
   promoCodes               PromoCode[]
   walletTransactions       WalletTransaction[]
@@ -888,6 +889,7 @@ model LoanApplication {
   status         LoanStatus @default(PENDING)
   approvedAmount Float?
   approvedBy     String? // Admin ID
+  managedBy      String? // Admin ID who manage trader's account
 
   // Dates
   disbursementDate DateTime?
@@ -904,7 +906,8 @@ model LoanApplication {
   // Relations
   restaurant Restaurant?        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   farmer     Farmer?            @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  approver   Admin?             @relation(fields: [approvedBy], references: [id])
+  approver   Admin?             @relation("LoanApprover", fields: [approvedBy], references: [id])
+  manager    Admin?             @relation("LoanManager", fields: [managedBy], references: [id])
   vouchers   Voucher[]
   repayments VoucherRepayment[]
 

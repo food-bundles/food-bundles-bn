@@ -804,58 +804,6 @@ paths:
         400:
           description: Bad request - Already has permission or request pending
 
-  /traders/delegation/{traderId}/approve:
-    post:
-      tags:
-        - Trader API Management
-      summary: Admin approve delegation request with OTP verification
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: traderId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Trader ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - commission
-              properties:
-                commission:
-                  type: number
-                  format: float
-                  minimum: 0
-                  maximum: 100
-                  description: Commission percentage for trader
-                  example: 5.0
-      responses:
-        200:
-          description: OTP sent to trader for verification
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "OTP sent to trader for verification"
-                  sessionId:
-                    type: string
-                    description: Session ID for OTP verification
-        400:
-          description: Bad request - Invalid trader or commission
-        403:
-          description: Admin access required
-
   /traders/delegation/verify-otp:
     post:
       tags:
@@ -872,6 +820,7 @@ paths:
               required:
                 - sessionId
                 - otp
+                - commission
               properties:
                 sessionId:
                   type: string
@@ -880,6 +829,11 @@ paths:
                   type: string
                   description: OTP code received by trader
                   example: "123456"
+                commission:
+                  type: number
+                  format: float
+                  description: Commission percentage
+                  example: 5.0
       responses:
         200:
           description: Delegation approved successfully
@@ -1065,3 +1019,140 @@ paths:
                         enum: [NOT_REQUESTED, PENDING, APPROVED]
         400:
           description: Trader wallet not found
+
+  /traders/admin/{traderId}/approve-loan:
+    post:
+      tags:
+        - Trader API Management
+      summary: Admin approve loan on behalf of trader (Admin only)
+      description: Allows admin to approve loans on behalf of traders who have delegation permission
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Trader ID who will approve the loan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - loanId
+                - approvedAmount
+                - repaymentDays
+              properties:
+                loanId:
+                  type: string
+                  description: Loan application ID to approve
+                  example: "uuid-loan-id"
+                approvedAmount:
+                  type: number
+                  format: float
+                  description: Approved loan amount
+                  example: 50000
+                repaymentDays:
+                  type: number
+                  description: Repayment period in days
+                  example: 45
+      responses:
+        200:
+          description: Loan approved successfully on behalf of trader
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Loan approved successfully on behalf of trader"
+                  data:
+                    type: object
+                    description: Approved loan and voucher details
+        400:
+          description: Bad request - Missing required fields, trader has no delegation, insufficient balance, or invalid loan status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      missing_fields:
+                        value: "loanId, approvedAmount, and repaymentDays are required"
+                      no_delegation:
+                        value: "Trader does not have delegation permission"
+                      insufficient_balance:
+                        value: "Insufficient available balance. Available: 10000 RWF, Required: 50000 RWF"
+                      invalid_status:
+                        value: "Can only approve loans with ACCEPTED or PENDING status"
+        403:
+          description: Admin access required
+
+  /traders/delegation/reverse:
+    post:
+      tags:
+        - Trader API Management
+      summary: Reverse delegation status with OTP verification (Trader only)
+      description: Allows trader to reverse their delegation status so they can continue approving vouchers/loans directly. Requires OTP verification for security.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - otp
+              properties:
+                otp:
+                  type: string
+                  description: OTP code for verification
+                  example: "123456"
+      responses:
+        200:
+          description: Delegation reversed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Delegation reversed successfully"
+        400:
+          description: Bad request - Invalid OTP, trader has no delegation, or phone number not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      invalid_otp:
+                        value: "Invalid or expired OTP"
+                      no_delegation:
+                        value: "Trader does not have delegation permission to reverse"
+                      phone_not_found:
+                        value: "Trader phone number not found"
+        403:
+          description: Trader access required

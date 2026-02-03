@@ -16,14 +16,11 @@ import {
   debitWalletService,
 } from "./wallet.service";
 import {
-  cleanPhoneNumber,
-  isValidRwandaPhone,
   sendAdminVoucherAppliedEmail,
   sendAdminVoucherApprovedEmail,
 } from "../utils/emailTemplates";
 import { sendMessage } from "../utils/sms.utility";
 import { getUserById } from "./userGets";
-import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { getRestaurantFromAffiliatorService } from "./affiliator.service";
 import { processAllTradersCommissionService } from "./trader.service";
 import { applyPromoCodeService } from "./promo.service";
@@ -69,6 +66,7 @@ interface ApproveLoanData {
     | "DISCOUNT_80"
     | "DISCOUNT_100";
   notes?: string;
+  managedBy?: string;
 }
 
 interface VoucherPaymentData {
@@ -149,6 +147,10 @@ export const createVoucherService = async (data: CreateVoucherData) => {
           approvedBy,
           approvedAt: new Date(),
           approvedAmount: creditLimit,
+        },
+        include: {
+          approver: true,
+          manager: true,
         },
       });
       finalLoanId = loanApplication.id;
@@ -813,6 +815,7 @@ export const getLoanApplicationByIdService = async (loanId: string) => {
     include: {
       restaurant: true,
       approver: true,
+      manager: true,
       vouchers: true,
       repayments: {
         orderBy: { createdAt: "desc" },
@@ -841,6 +844,7 @@ export const getRestaurantLoanApplicationsService = async (
         orderBy: { createdAt: "desc" },
       },
       approver: true,
+      manager: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -876,6 +880,7 @@ export const getAllLoanApplicationsService = async (filters?: {
         },
       },
       approver: true,
+      manager: true,
       vouchers: true,
     },
     orderBy: { createdAt: "desc" },
@@ -891,8 +896,14 @@ export const approveLoanApplicationService = async (
   loanId: string,
   approvalData: ApproveLoanData,
 ) => {
-  const { approvedAmount, approvedBy, repaymentDays, voucherType, notes } =
-    approvalData;
+  const {
+    approvedAmount,
+    approvedBy,
+    repaymentDays,
+    voucherType,
+    notes,
+    managedBy,
+  } = approvalData;
 
   // Get loan details
   const loan = await prisma.loanApplication.findUnique({
@@ -934,6 +945,7 @@ export const approveLoanApplicationService = async (
         status: LoanStatus.APPROVED,
         approvedAmount, // Use custom approved amount
         approvedBy,
+        managedBy,
         approvedAt: new Date(),
         notes,
         disbursementDate,
@@ -941,8 +953,27 @@ export const approveLoanApplicationService = async (
         repaymentDays, // Use custom repayment days
       },
       include: {
-        restaurant: true,
-        approver: true,
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        approver: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+        manager: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
       },
     });
 
@@ -1131,6 +1162,8 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
       },
       include: {
         restaurant: true,
+        approver: true,
+        manager: true,
         vouchers: true,
       },
     });
@@ -1182,6 +1215,8 @@ export const rejectLoanApplicationService = async (
     },
     include: {
       restaurant: true,
+      approver: true,
+      manager: true,
     },
   });
 
@@ -1445,13 +1480,62 @@ export const processRepaymentService = async (data: RepaymentData) => {
       },
     });
 
-    // Update voucher status to SETTLED when repayment is made
+    // Update voucher and loan status to SETTLED when repayment is made
     await tx.voucher.update({
       where: { id: voucherId },
       data: {
         status: VoucherStatus.SETTLED,
       },
     });
+
+    // If there's an associated loan, check if fully repaid
+    if (voucher.loanId) {
+      // Calculate outstanding balance
+      const transactions = await tx.voucherTransaction.findMany({
+        where: { voucher: { loanId: voucher.loanId } },
+      });
+
+      const repayments = await tx.voucherRepayment.findMany({
+        where: { loanId: voucher.loanId },
+      });
+
+      const penalties = await tx.voucherPenalty.findMany({
+        where: {
+          voucher: { loanId: voucher.loanId },
+          status: "PENDING",
+        },
+      });
+
+      const totalUsed = transactions.reduce(
+        (sum, t) => sum + t.amountCharged,
+        0,
+      );
+      const totalServiceFees = transactions.reduce(
+        (sum, t) => sum + t.serviceFee,
+        0,
+      );
+      const totalPenalties = penalties.reduce(
+        (sum, p) => sum + p.penaltyAmount,
+        0,
+      );
+      const totalRepayments = repayments.reduce((sum, r) => sum + r.amount, 0);
+
+      const outstanding =
+        totalUsed + totalServiceFees + totalPenalties - totalRepayments;
+
+      // If fully paid, update loan and voucher status
+      if (outstanding <= 0) {
+        await tx.loanApplication.update({
+          where: { id: voucher.loanId },
+          data: { status: "SETTLED" },
+        });
+
+        await tx.voucher.updateMany({
+          where: { loanId: voucher.loanId },
+          data: { status: "SETTLED" },
+        });
+      }
+    }
 
     // Update all orders with this voucher to COMPLETED payment status
     await tx.order.updateMany({

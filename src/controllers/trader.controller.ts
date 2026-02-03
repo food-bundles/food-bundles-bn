@@ -22,6 +22,8 @@ import {
   revokeDelegationService,
   getAllDelegationRequestsService,
   getTraderDelegationStatusService,
+  adminApproveLoanOnBehalfService,
+  reverseDelegationService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -587,6 +589,68 @@ export const getTraderDelegationStatus = async (
     res.status(200).json({
       success: true,
       data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// Admin approve loan on behalf of trader
+export const adminApproveLoanOnBehalf = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { traderId } = req.params;
+
+    const { loanId, approvedAmount, repaymentDays } = req.body;
+
+    if (!loanId || !approvedAmount || !repaymentDays) {
+      return res.status(400).json({
+        success: false,
+        message: "loanId, approvedAmount, and repaymentDays are required",
+      });
+    }
+
+    const result = await adminApproveLoanOnBehalfService(
+      adminId,
+      traderId,
+      loanId,
+      approvedAmount,
+      repaymentDays,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Loan approved successfully on behalf of trader",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Reverse delegation status
+export const reverseDelegation = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user.id;
+    const { otp } = req.body;
+
+    if (!otp) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP is required",
+      });
+    }
+
+    const result = await reverseDelegationService(traderId, otp);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
     });
   } catch (error: any) {
     res.status(400).json({

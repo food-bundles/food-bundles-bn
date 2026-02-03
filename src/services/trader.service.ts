@@ -2,13 +2,13 @@ import prisma from "../prisma";
 import { topUpWalletService } from "./wallet.service";
 import { approveLoanApplicationService } from "./voucher.service";
 import { createNotificationService } from "./notification.services";
+import { OTPService } from "./otp.service";
 import { sendMessage } from "../utils/sms.utility";
 import {
   sendAdminVoucherApprovedEmail,
   sendTraderLoanApprovalEmail,
 } from "../utils/emailTemplates";
 import { VoucherType } from "@prisma/client";
-import { OTPService } from "./otp.service";
 
 // Create trader transaction record
 const createTraderTransactionService = async (data: {
@@ -252,6 +252,7 @@ export const getTraderLoanApplicationsService = async (
           },
         },
         approver: true,
+        manager: true,
         vouchers: true,
       },
       orderBy: { createdAt: "desc" },
@@ -362,6 +363,18 @@ export const traderApproveLoanService = async (
   traderId: string,
   loanId: string,
 ) => {
+  // Check trader wallet balance and calculate available balance
+  const traderWallet = await getTraderWalletService(traderId);
+
+  if (!traderWallet) {
+    throw new Error("Trader wallet not found");
+  }
+
+  if (traderWallet.canTradeOnBehalf) {
+    throw new Error(
+      "Trader has delegation permission. Only admin can approve loans on behalf of this trader.",
+    );
+  }
   // Check if loan exists and is in ACCEPTED status
   const loan = await prisma.loanApplication.findUnique({
     where: { id: loanId },
@@ -380,8 +393,6 @@ export const traderApproveLoanService = async (
   const acceptedAmount = loan.approvedAmount || loan.requestedAmount;
   const paymentDays = loan.repaymentDays || 30; // Default to 30 days if not set
 
-  // Check trader wallet balance and calculate available balance
-  const traderWallet = await getTraderWalletService(traderId);
   const availableBalance =
     traderWallet.balance - traderWallet.pendingApprovedAmount;
 
@@ -1337,7 +1348,9 @@ export const approveDelegationService = async (
   return {
     success: true,
     message: "OTP sent to trader for verification",
-    sessionId: Buffer.from(JSON.stringify(delegationSessionData)).toString("base64"),
+    sessionId: Buffer.from(JSON.stringify(delegationSessionData)).toString(
+      "base64",
+    ),
   };
 };
 
@@ -1349,7 +1362,7 @@ export const verifyDelegationOTPService = async (
   try {
     // Decode session data
     const delegationData = JSON.parse(
-      Buffer.from(sessionId, "base64").toString()
+      Buffer.from(sessionId, "base64").toString(),
     );
 
     // Validate session data
@@ -1417,7 +1430,9 @@ export const verifyDelegationOTPService = async (
 
     return { success: true, message: "Delegation approved successfully" };
   } catch (error: any) {
-    throw new Error(error.message || "Invalid session or OTP verification failed");
+    throw new Error(
+      error.message || "Invalid session or OTP verification failed",
+    );
   }
 };
 
@@ -1558,4 +1573,153 @@ export const getTraderDelegationStatusService = async (traderId: string) => {
         ? "PENDING"
         : "NOT_REQUESTED",
   };
+};
+// Admin approve loan on behalf of trader
+export const adminApproveLoanOnBehalfService = async (
+  adminId: string,
+  traderId: string,
+  loanId: string,
+  approvedAmount: number,
+  repaymentDays: number,
+) => {
+  // Check if trader exists and has delegation
+  const traderWallet = await prisma.wallet.findUnique({
+    where: { traderId },
+    include: { trader: { select: { username: true } } },
+  });
+
+  if (!traderWallet) {
+    throw new Error("Trader wallet not found");
+  }
+
+  if (!traderWallet.canTradeOnBehalf) {
+    throw new Error("Trader does not have delegation permission");
+  }
+
+  // Check if loan exists and is in ACCEPTED or PENDING status
+  const loan = await prisma.loanApplication.findUnique({
+    where: { id: loanId },
+  });
+
+  if (!loan) {
+    throw new Error("Loan application not found");
+  }
+
+  if (!["ACCEPTED", "PENDING"].includes(loan.status)) {
+    throw new Error("Can only approve loans with ACCEPTED or PENDING status");
+  }
+
+  // Check trader wallet balance
+  const availableBalance =
+    traderWallet.balance - traderWallet.pendingApprovedAmount;
+
+  if (availableBalance < approvedAmount) {
+    throw new Error(
+      `Insufficient available balance. Available: ${availableBalance} RWF, Required: ${approvedAmount} RWF`,
+    );
+  }
+
+  // Add amount to pending approved amount
+  await prisma.wallet.update({
+    where: { id: traderWallet.id },
+    data: {
+      pendingApprovedAmount:
+        traderWallet.pendingApprovedAmount + approvedAmount,
+    },
+  });
+
+  // Create wallet transaction
+  await prisma.walletTransaction.create({
+    data: {
+      walletId: traderWallet.id,
+      adminId,
+      type: "TRADING",
+      amount: -approvedAmount,
+      previousBalance: traderWallet.balance,
+      newBalance: traderWallet.balance,
+      description: `Admin loan approval on behalf of trader ${traderWallet.trader?.username}`,
+      status: "COMPLETED",
+    },
+  });
+
+  // Approve the loan
+  const result = await approveLoanApplicationService(loanId, {
+    approvedAmount,
+    repaymentDays,
+    voucherType: "DISCOUNT_100" as VoucherType,
+    notes: `Loan approved by admin on behalf of trader ${traderWallet.trader?.username}: ${approvedAmount} RWF, ${repaymentDays} days`,
+    approvedBy: traderId,
+    managedBy: adminId,
+  });
+
+  return result;
+};
+
+// Reverse delegation status (trader can continue to trade)
+export const reverseDelegationService = async (
+  traderId: string,
+  otp: string,
+) => {
+  // Verify OTP first
+  const trader = await prisma.admin.findUnique({
+    where: { id: traderId },
+    select: { phone: true, username: true },
+  });
+
+  if (!trader?.phone) {
+    throw new Error("Trader phone number not found");
+  }
+
+  // Verify OTP
+  const otpVerification = await OTPService.verifyOTP(
+    trader.phone,
+    otp,
+    "ADMIN_WALLET_OPERATION",
+  );
+
+  if (!otpVerification.success) {
+    throw new Error(otpVerification.message);
+  }
+
+  // Get trader wallet
+  const wallet = await prisma.wallet.findUnique({
+    where: { traderId },
+  });
+
+  if (!wallet) {
+    throw new Error("Trader wallet not found");
+  }
+
+  if (!wallet.canTradeOnBehalf) {
+    throw new Error("Trader does not have delegation permission to reverse");
+  }
+
+  // Reverse delegation - trader can now trade directly
+  await prisma.wallet.update({
+    where: { id: wallet.id },
+    data: {
+      canTradeOnBehalf: false,
+      delegationRequestedAt: null,
+      delegationApprovedAt: null,
+      delegationApprovedBy: null,
+    },
+  });
+
+  // Send notifications
+  await createNotificationService({
+    title: "Delegation Reversed",
+    message: "You can now trade and approve vouchers/loans directly",
+    eventType: "SYSTEM_MAINTENANCE",
+    targetType: "SPECIFIC_USER",
+    targetId: traderId,
+  });
+
+  if (trader.phone) {
+    await sendMessage(
+      "Delegation reversed! You can now trade and approve vouchers/loans directly.",
+      trader.phone,
+    );
+  }
+
+  return { success: true, message: "Delegation reversed successfully" };
 };

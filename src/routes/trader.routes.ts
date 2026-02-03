@@ -22,6 +22,8 @@ import {
   revokeDelegation,
   getAllDelegationRequests,
   getTraderDelegationStatus,
+  adminApproveLoanOnBehalf,
+  reverseDelegation,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -182,6 +184,22 @@ traderRoutes.get(
   isAuthenticated,
   checkPermission("TRADER"),
   getTraderDelegationStatus,
+);
+
+// Admin approve loan on behalf of trader
+traderRoutes.post(
+  "/admin/:traderId/approve-loan",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  adminApproveLoanOnBehalf,
+);
+
+// Reverse delegation status
+traderRoutes.post(
+  "/delegation/reverse",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  reverseDelegation,
 );
 
 export default traderRoutes;
