@@ -62,7 +62,7 @@ export class UserController {
       res.status(201).json({
         success: true,
         message:
-          "Restaurant created successfully. OTP sent to your phone for verification.",
+          "Account created successfully. OTP sent to your phone for verification.",
         data: result,
       });
     } catch (error: any) {

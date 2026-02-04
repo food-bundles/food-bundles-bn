@@ -101,7 +101,7 @@ subscriptionRoutes.post(
 subscriptionRoutes.get(
   "/my-subscriptions",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
+  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
   getMyCurrentSubscription
 );
 

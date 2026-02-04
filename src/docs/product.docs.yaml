@@ -22,7 +22,17 @@ components:
         unitPrice:
           type: number
           format: float
-          description: Price per unit
+          description: Default price per unit
+        restaurantPrice:
+          type: number
+          format: float
+          nullable: true
+          description: Special price for restaurant users
+        hotelPrice:
+          type: number
+          format: float
+          nullable: true
+          description: Special price for hotel users
         purchasePrice:
           type: number
           format: float
@@ -176,7 +186,15 @@ components:
           description: Name of the product
         unitPrice:
           type: number
-          description: Price per unit
+          description: Default price per unit
+        restaurantPrice:
+          type: number
+          nullable: true
+          description: Special price for restaurant users (optional)
+        hotelPrice:
+          type: number
+          nullable: true
+          description: Special price for hotel users (optional)
         purchasePrice:
           type: number
           description: Purchase price per unit
@@ -217,7 +235,15 @@ components:
           description: Name of the product
         unitPrice:
           type: number
-          description: Price per unit
+          description: Default price per unit
+        restaurantPrice:
+          type: number
+          nullable: true
+          description: Special price for restaurant users (optional)
+        hotelPrice:
+          type: number
+          nullable: true
+          description: Special price for hotel users (optional)
         purchasePrice:
           type: number
           description: Purchase price per unit

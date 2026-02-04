@@ -14,15 +14,12 @@ components:
         [
           FARMER,
           RESTAURANT,
+          HOTEL,
           ADMIN,
           AGGREGATOR,
           LOGISTICS,
           TRADER,
-          LOGISTICS,
-          TRADER,
-          LOGISTICS,
           AFFILIATOR,
-          TRADER,
         ]
       description: User role in the system
 
@@ -342,26 +339,31 @@ components:
           properties:
             name:
               type: string
-              description: Restaurant name (required)
-              example: "FoodBundles"
+              description: Restaurant/Hotel name (required)
+              example: "FoodBundles Restaurant"
             email:
               type: string
               format: email
-              description: Restaurant email (required)
+              description: Restaurant/Hotel email (required)
               example: "restaurant@food.rw"
             tin:
               type: string
-              description: Restaurant tin number
+              description: Restaurant/Hotel tin number
               example: "123456789"
             phone:
               type: string
-              description: Restaurant phone number
+              description: Restaurant/Hotel phone number
               example: "+250788123456"
             password:
               type: string
               minLength: 6
-              description: Password for restaurant account (required)
+              description: Password for restaurant/hotel account (required)
               example: "Password123"
+            role:
+              type: string
+              enum: [RESTAURANT, HOTEL]
+              description: Business type - RESTAURANT or HOTEL
+              example: "RESTAURANT"
 
     UpdateRestaurantRequest:
       type: object
@@ -1075,8 +1077,8 @@ paths:
     post:
       tags:
         - Restaurants API Management
-      summary: Create new restaurant
-      description: Register a new restaurant in the system
+      summary: Create new restaurant or hotel
+      description: Register a new restaurant or hotel in the system. Users can select their business type during registration.
       requestBody:
         required: true
         content:

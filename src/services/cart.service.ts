@@ -83,8 +83,27 @@ export const addToCartService = async (data: AddToCartData) => {
     },
   });
 
+  // Get user role to determine pricing
+  let userRoleForPricing = userRole;
+  if (userRole === "AFFILIATOR") {
+    // For affiliators, get the restaurant role
+    const restaurantData = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: { role: true },
+    });
+    userRoleForPricing = restaurantData?.role || "RESTAURANT";
+  }
+
+  // Determine the correct price based on user role
+  let effectivePrice = product.unitPrice; // Default price
+  if (userRoleForPricing === "RESTAURANT" && product.restaurantPrice) {
+    effectivePrice = product.restaurantPrice;
+  } else if (userRoleForPricing === "HOTEL" && product.hotelPrice) {
+    effectivePrice = product.hotelPrice;
+  }
+
   const subtotal =
-    quantity * (product.unitPrice * (1 - Number(product.bonus) / 100));
+    quantity * (effectivePrice * (1 - Number(product.bonus) / 100));
 
   let cartItem;
   if (existingCartItem) {
@@ -103,7 +122,7 @@ export const addToCartService = async (data: AddToCartData) => {
       data: {
         quantity: newQuantity,
         subtotal:
-          newQuantity * (product.unitPrice * (1 - Number(product.bonus) / 100)),
+          newQuantity * (effectivePrice * (1 - Number(product.bonus) / 100)),
       },
       include: {
         product: {
@@ -112,6 +131,8 @@ export const addToCartService = async (data: AddToCartData) => {
             tableTronicProductId: true,
             productName: true,
             unitPrice: true,
+            restaurantPrice: true,
+            hotelPrice: true,
             images: true,
             unit: true,
           },
@@ -125,7 +146,7 @@ export const addToCartService = async (data: AddToCartData) => {
         cartId: cart.id,
         productId,
         quantity,
-        unitPrice: product.unitPrice * (1 - Number(product.bonus) / 100),
+        unitPrice: effectivePrice * (1 - Number(product.bonus) / 100),
         subtotal,
       },
       include: {
@@ -135,6 +156,8 @@ export const addToCartService = async (data: AddToCartData) => {
             tableTronicProductId: true,
             productName: true,
             unitPrice: true,
+            restaurantPrice: true,
+            hotelPrice: true,
             images: true,
             unit: true,
           },
@@ -196,6 +219,8 @@ export const getCartByRestaurantIdService = async (
               tableTronicProductId: true,
               productName: true,
               unitPrice: true,
+              restaurantPrice: true,
+              hotelPrice: true,
               images: true,
               unit: true,
               category: true,
