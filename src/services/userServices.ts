@@ -370,15 +370,21 @@ export const createRestaurantService = async (
     sector,
     cell,
     village,
+    role = "RESTAURANT", // Default to RESTAURANT if not specified
   } = restaurantData;
 
   // Require fields
   if (!name || !password) {
-    throw new Error("Name, and password are required for restaurants");
+    throw new Error("Name, and password are required");
   }
 
   if (!tin) {
     throw new Error("TIN (Tax Identification Number) is required");
+  }
+
+  // Validate role
+  if (role && !["RESTAURANT", "HOTEL"].includes(role)) {
+    throw new Error("Role must be either RESTAURANT or HOTEL");
   }
 
   // Validate TIN format
@@ -436,6 +442,7 @@ export const createRestaurantService = async (
         sector,
         cell,
         village,
+        role: role as any, // Set the role (RESTAURANT or HOTEL)
       },
     });
 
@@ -459,14 +466,14 @@ export const createRestaurantService = async (
     await sendAdminUserCreatedEmail({
       userName: name,
       userEmail: email,
-      userType: "RESTAURANT",
+      userType: role === "HOTEL" ? "HOTEL" : "RESTAURANT",
       restaurantName: name,
     });
 
     const { password: _, ...restaurantWithoutPassword } = restaurant;
     return restaurantWithoutPassword;
   } catch (error: any) {
-    throw new Error(`Failed to create restaurant: ${error.message}`);
+    throw new Error(`Failed to create ${role?.toLowerCase() || 'restaurant'}: ${error.message}`);
   }
 };
 

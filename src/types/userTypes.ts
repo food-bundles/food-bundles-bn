@@ -14,6 +14,7 @@ export interface ICreateRestaurantData extends UserLocationData {
   phone?: string;
   tin: string;
   password: string;
+  role: Role;
 }
 
 export interface ICreateAdminData extends Partial<UserLocationData> {

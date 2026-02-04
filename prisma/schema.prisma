@@ -335,6 +335,8 @@ model Product {
   id                   String              @id @default(uuid())
   tableTronicProductId Int?                @unique @map("tableTronicProductId")
   unitPrice            Float
+  restaurantPrice      Float?              // Price for restaurant users
+  hotelPrice           Float?              // Price for hotel users
   purchasePrice        Float
   unit                 String
   unitId               String?
@@ -1209,6 +1211,7 @@ model PromoCode {
 enum Role {
   FARMER
   RESTAURANT
+  HOTEL
   ADMIN
   AGGREGATOR
   LOGISTICS
