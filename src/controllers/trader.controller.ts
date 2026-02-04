@@ -16,6 +16,14 @@ import {
   setTraderWalletCommissionService,
   processAllTradersCommissionService,
   processExistingUsedVouchersService,
+  requestDelegationService,
+  approveDelegationService,
+  verifyDelegationOTPService,
+  revokeDelegationService,
+  getAllDelegationRequestsService,
+  getTraderDelegationStatusService,
+  adminApproveLoanOnBehalfService,
+  reverseDelegationService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -400,7 +408,10 @@ export const getTraderDashboard = async (req: Request, res: Response) => {
 };
 
 // Process all traders commission (Admin only)
-export const processAllTradersCommission = async (req: Request, res: Response) => {
+export const processAllTradersCommission = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const results = await processAllTradersCommissionService();
 
@@ -421,7 +432,10 @@ export const processAllTradersCommission = async (req: Request, res: Response) =
 };
 
 // Process existing used vouchers (Admin only)
-export const processExistingUsedVouchers = async (req: Request, res: Response) => {
+export const processExistingUsedVouchers = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const results = await processExistingUsedVouchersService();
 
@@ -432,6 +446,211 @@ export const processExistingUsedVouchers = async (req: Request, res: Response) =
         processedVouchers: results.length,
         results,
       },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// Request delegation permission
+export const requestDelegation = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user.id;
+    const result = await requestDelegationService(traderId);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Admin approve delegation
+export const approveDelegation = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { traderId } = req.params;
+    const { commission } = req.body;
+
+    if (!commission || commission < 0 || commission > 100) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid commission percentage (0-100) is required",
+      });
+    }
+
+    const result = await approveDelegationService(
+      adminId,
+      traderId,
+      commission,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      sessionId: result.sessionId,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Verify delegation OTP
+export const verifyDelegationOTP = async (req: Request, res: Response) => {
+  try {
+    const { sessionId, otp } = req.body;
+
+    if (!sessionId || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Session ID and OTP are required",
+      });
+    }
+
+    const result = await verifyDelegationOTPService(sessionId, otp);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Revoke delegation permission
+export const revokeDelegation = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { traderId } = req.params;
+
+    const result = await revokeDelegationService(adminId, traderId);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get all delegation requests (Admin)
+export const getAllDelegationRequests = async (req: Request, res: Response) => {
+  try {
+    const { status, page, limit } = req.query;
+
+    const filters = {
+      status: status as "PENDING" | "APPROVED" | "ALL",
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    };
+
+    const result = await getAllDelegationRequestsService(filters);
+
+    res.status(200).json({
+      success: true,
+      data: result.requests,
+      pagination: result.pagination,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get trader's own delegation status
+export const getTraderDelegationStatus = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const traderId = (req as any).user.id;
+    const result = await getTraderDelegationStatusService(traderId);
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// Admin approve loan on behalf of trader
+export const adminApproveLoanOnBehalf = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { traderId } = req.params;
+
+    const { loanId, approvedAmount, repaymentDays } = req.body;
+
+    if (!loanId || !approvedAmount || !repaymentDays) {
+      return res.status(400).json({
+        success: false,
+        message: "loanId, approvedAmount, and repaymentDays are required",
+      });
+    }
+
+    const result = await adminApproveLoanOnBehalfService(
+      adminId,
+      traderId,
+      loanId,
+      approvedAmount,
+      repaymentDays,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Loan approved successfully on behalf of trader",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Reverse delegation status
+export const reverseDelegation = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user.id;
+    const { otp } = req.body;
+
+    if (!otp) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP is required",
+      });
+    }
+
+    const result = await reverseDelegationService(traderId, otp);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
     });
   } catch (error: any) {
     res.status(400).json({

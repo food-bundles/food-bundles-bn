@@ -31,6 +31,23 @@ components:
           format: float
           description: Commission percentage
           example: 5.0
+        totalDeposited:
+          type: number
+          format: float
+          description: Total amount deposited (never decreases)
+        canTradeOnBehalf:
+          type: boolean
+          description: Whether trader can approve loans
+        delegationRequestedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When delegation was requested
+        delegationApprovedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When delegation was approved
         totalVouchersAmount:
           type: number
           format: float
@@ -124,7 +141,6 @@ components:
           type: string
           description: Transaction description
 
-
     TraderCommission:
       type: object
       properties:
@@ -175,7 +191,14 @@ components:
           description: Trader ID
         type:
           type: string
-          enum: [LOAN_APPROVAL, COMMISSION_EARNED, COMMISSION_PAID, WALLET_TOPUP, WALLET_DEBIT]
+          enum:
+            [
+              LOAN_APPROVAL,
+              COMMISSION_EARNED,
+              COMMISSION_PAID,
+              WALLET_TOPUP,
+              WALLET_DEBIT,
+            ]
           description: Transaction type
         amount:
           type: number
@@ -538,7 +561,14 @@ paths:
           in: query
           schema:
             type: string
-            enum: [LOAN_APPROVAL, COMMISSION_EARNED, COMMISSION_PAID, WALLET_TOPUP, WALLET_DEBIT]
+            enum:
+              [
+                LOAN_APPROVAL,
+                COMMISSION_EARNED,
+                COMMISSION_PAID,
+                WALLET_TOPUP,
+                WALLET_DEBIT,
+              ]
         - name: status
           in: query
           schema:
@@ -749,3 +779,380 @@ paths:
           description: Processing failed
         403:
           description: Admin access required
+
+  /traders/delegation/request:
+    post:
+      tags:
+        - Trader API Management
+      summary: Request delegation permission to trade on behalf
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Delegation request submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Delegation request submitted successfully"
+        400:
+          description: Bad request - Already has permission or request pending
+
+  /traders/delegation/verify-otp:
+    post:
+      tags:
+        - Trader API Management
+      summary: Verify delegation OTP and complete approval
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+                - otp
+                - commission
+              properties:
+                sessionId:
+                  type: string
+                  description: Session ID from approval request
+                otp:
+                  type: string
+                  description: OTP code received by trader
+                  example: "123456"
+                commission:
+                  type: number
+                  format: float
+                  description: Commission percentage
+                  example: 5.0
+      responses:
+        200:
+          description: Delegation approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Delegation approved successfully"
+        400:
+          description: Bad request - Invalid OTP or session
+        403:
+          description: Admin access required
+
+  /traders/delegation/{traderId}/revoke:
+    delete:
+      tags:
+        - Trader API Management
+      summary: Revoke trader delegation permission
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Trader ID
+      responses:
+        200:
+          description: Delegation revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Delegation revoked successfully"
+        400:
+          description: Bad request - Trader not found or no delegation
+        403:
+          description: Admin access required
+  /traders/delegation/requests:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get all delegation requests (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, ALL]
+            default: ALL
+          description: Filter by delegation status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Items per page
+      responses:
+        200:
+          description: Delegation requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        traderId:
+                          type: string
+                        traderInfo:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            username:
+                              type: string
+                            email:
+                              type: string
+                            phone:
+                              type: string
+                        delegationRequestedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        delegationApprovedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        delegationApprovedBy:
+                          type: string
+                          nullable: true
+                        canTradeOnBehalf:
+                          type: boolean
+                        commission:
+                          type: number
+                          format: float
+                        balance:
+                          type: number
+                          format: float
+                        totalDeposited:
+                          type: number
+                          format: float
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        403:
+          description: Admin access required
+
+  /traders/delegation/status:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader's own delegation status
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Delegation status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      delegationRequestedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      delegationApprovedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      delegationApprovedBy:
+                        type: string
+                        nullable: true
+                      canTradeOnBehalf:
+                        type: boolean
+                      commission:
+                        type: number
+                        format: float
+                      status:
+                        type: string
+                        enum: [NOT_REQUESTED, PENDING, APPROVED]
+        400:
+          description: Trader wallet not found
+
+  /traders/admin/{traderId}/approve-loan:
+    post:
+      tags:
+        - Trader API Management
+      summary: Admin approve loan on behalf of trader (Admin only)
+      description: Allows admin to approve loans on behalf of traders who have delegation permission
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Trader ID who will approve the loan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - loanId
+                - approvedAmount
+                - repaymentDays
+              properties:
+                loanId:
+                  type: string
+                  description: Loan application ID to approve
+                  example: "uuid-loan-id"
+                approvedAmount:
+                  type: number
+                  format: float
+                  description: Approved loan amount
+                  example: 50000
+                repaymentDays:
+                  type: number
+                  description: Repayment period in days
+                  example: 45
+      responses:
+        200:
+          description: Loan approved successfully on behalf of trader
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Loan approved successfully on behalf of trader"
+                  data:
+                    type: object
+                    description: Approved loan and voucher details
+        400:
+          description: Bad request - Missing required fields, trader has no delegation, insufficient balance, or invalid loan status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      missing_fields:
+                        value: "loanId, approvedAmount, and repaymentDays are required"
+                      no_delegation:
+                        value: "Trader does not have delegation permission"
+                      insufficient_balance:
+                        value: "Insufficient available balance. Available: 10000 RWF, Required: 50000 RWF"
+                      invalid_status:
+                        value: "Can only approve loans with ACCEPTED or PENDING status"
+        403:
+          description: Admin access required
+
+  /traders/delegation/reverse:
+    post:
+      tags:
+        - Trader API Management
+      summary: Reverse delegation status with OTP verification (Trader only)
+      description: Allows trader to reverse their delegation status so they can continue approving vouchers/loans directly. Requires OTP verification for security.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - otp
+              properties:
+                otp:
+                  type: string
+                  description: OTP code for verification
+                  example: "123456"
+      responses:
+        200:
+          description: Delegation reversed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Delegation reversed successfully"
+        400:
+          description: Bad request - Invalid OTP, trader has no delegation, or phone number not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      invalid_otp:
+                        value: "Invalid or expired OTP"
+                      no_delegation:
+                        value: "Trader does not have delegation permission to reverse"
+                      phone_not_found:
+                        value: "Trader phone number not found"
+        403:
+          description: Trader access required

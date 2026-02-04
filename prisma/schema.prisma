@@ -320,7 +320,8 @@ model Admin {
   productCategories        ProductCategory[]
   productUnits             ProductUnit[]
   paymentMethods           PaymentMethodConfig[]
-  LoanApplication          LoanApplication[]
+  approvedLoans            LoanApplication[]     @relation("LoanApprover")
+  managedLoans             LoanApplication[]     @relation("LoanManager")
   OrderDelivery            OrderDelivery[]
   promoCodes               PromoCode[]
   walletTransactions       WalletTransaction[]
@@ -626,17 +627,22 @@ model OrderDelivery {
 
 // Wallet model for managing user account balances
 model Wallet {
-  id                    String   @id @default(uuid())
-  restaurantId          String?  @unique
-  traderId              String?  @unique
-  balance               Float    @default(0)
-  pendingApprovedAmount Float    @default(0) // Amount approved for active vouchers
-  commissionEarned      Float    @default(0) // Total commission earned (separate from balance)
-  commission            Float    @default(5.0) // Commission percentage (default 5%)
-  currency              String   @default("RWF")
-  isActive              Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                    String    @id @default(uuid())
+  restaurantId          String?   @unique
+  traderId              String?   @unique
+  balance               Float     @default(0)
+  pendingApprovedAmount Float     @default(0) // Amount approved for active vouchers
+  commissionEarned      Float     @default(0) // Total commission earned (separate from balance)
+  commission            Float     @default(5.0) // Commission percentage (default 5%)
+  totalDeposited        Float     @default(0) // Total amount deposited (never decreases)
+  canTradeOnBehalf      Boolean   @default(false) // Permission to trade on behalf
+  delegationRequestedAt DateTime? // When delegation was requested
+  delegationApprovedAt  DateTime? // When delegation was approved
+  delegationApprovedBy  String? // Admin ID who approved delegation
+  currency              String    @default("RWF")
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   // Relations
   restaurant   Restaurant?         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -883,6 +889,7 @@ model LoanApplication {
   status         LoanStatus @default(PENDING)
   approvedAmount Float?
   approvedBy     String? // Admin ID
+  managedBy      String? // Admin ID who manage trader's account
 
   // Dates
   disbursementDate DateTime?
@@ -899,7 +906,8 @@ model LoanApplication {
   // Relations
   restaurant Restaurant?        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   farmer     Farmer?            @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  approver   Admin?             @relation(fields: [approvedBy], references: [id])
+  approver   Admin?             @relation("LoanApprover", fields: [approvedBy], references: [id])
+  manager    Admin?             @relation("LoanManager", fields: [managedBy], references: [id])
   vouchers   Voucher[]
   repayments VoucherRepayment[]
 

@@ -16,6 +16,14 @@ import {
   setTraderWalletCommission,
   processAllTradersCommission,
   processExistingUsedVouchers,
+  requestDelegation,
+  approveDelegation,
+  verifyDelegationOTP,
+  revokeDelegation,
+  getAllDelegationRequests,
+  getTraderDelegationStatus,
+  adminApproveLoanOnBehalf,
+  reverseDelegation,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -131,6 +139,67 @@ traderRoutes.post(
   isAuthenticated,
   checkPermission("ADMIN"),
   processExistingUsedVouchers,
+);
+
+// Delegation Management
+traderRoutes.post(
+  "/delegation/request",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  requestDelegation,
+);
+
+traderRoutes.post(
+  "/delegation/:traderId/approve",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  approveDelegation,
+);
+
+traderRoutes.post(
+  "/delegation/verify-otp",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  verifyDelegationOTP,
+);
+
+traderRoutes.delete(
+  "/delegation/:traderId/revoke",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  revokeDelegation,
+);
+
+// Get all delegation requests (Admin)
+traderRoutes.get(
+  "/delegation/requests",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllDelegationRequests,
+);
+
+// Get trader's own delegation status
+traderRoutes.get(
+  "/delegation/status",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  getTraderDelegationStatus,
+);
+
+// Admin approve loan on behalf of trader
+traderRoutes.post(
+  "/admin/:traderId/approve-loan",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  adminApproveLoanOnBehalf,
+);
+
+// Reverse delegation status
+traderRoutes.post(
+  "/delegation/reverse",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  reverseDelegation,
 );
 
 export default traderRoutes;
