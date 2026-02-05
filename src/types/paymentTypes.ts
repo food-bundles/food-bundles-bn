@@ -185,6 +185,8 @@ export interface DebitWalletData {
   reference?: string;
   orderId?: string;
   voucherId?: string;
+  restaurantId?: string;
+  affiliatorId?: string;
 }
 
 export interface WalletTransactionFilters {

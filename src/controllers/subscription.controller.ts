@@ -215,14 +215,8 @@ export const createRestaurantSubscription = async (
   res: Response,
 ) => {
   try {
-    const {
-      planId,
-      autoRenew,
-      paymentMethodId,
-      phoneNumber,
-      cardDetails,
-      bankDetails,
-    } = req.body;
+    const { planId, autoRenew, paymentMethodId, phoneNumber, bankDetails } =
+      req.body;
 
     const userId = (req as any).user.id;
     const userRole = (req as any).user.role;
@@ -265,13 +259,6 @@ export const createRestaurantSubscription = async (
           message: "Phone number is required for mobile money payment",
         });
       }
-
-      if (paymentMethod === "CARD" && !cardDetails) {
-        return res.status(400).json({
-          message:
-            "Card details are required for card payment (or will use hosted checkout)",
-        });
-      }
     }
 
     const result = await createRestaurantSubscriptionService({
@@ -280,7 +267,6 @@ export const createRestaurantSubscription = async (
       autoRenew,
       paymentMethod,
       phoneNumber,
-      cardDetails,
       bankDetails,
     });
 
@@ -308,7 +294,7 @@ export const processSubscriptionPayment = async (
 ) => {
   try {
     const { subscriptionId } = req.params;
-    const { paymentMethod, phoneNumber, cardDetails, bankDetails } = req.body;
+    const { paymentMethod, phoneNumber, bankDetails } = req.body;
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
@@ -352,7 +338,6 @@ export const processSubscriptionPayment = async (
     const result = await processSubscriptionPaymentService(subscriptionId, {
       paymentMethod,
       phoneNumber,
-      cardDetails,
       bankDetails,
     });
 
@@ -556,7 +541,7 @@ export const cancelSubscription = async (req: Request, res: Response) => {
  */
 export const renewSubscription = async (req: Request, res: Response) => {
   try {
-    const { paymentMethodId, phoneNumber, cardDetails, bankDetails } = req.body;
+    const { paymentMethodId, phoneNumber, bankDetails } = req.body;
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
@@ -575,7 +560,6 @@ export const renewSubscription = async (req: Request, res: Response) => {
     const result = await renewSubscriptionService(restaurantId, {
       paymentMethodId,
       phoneNumber,
-      cardDetails,
       bankDetails,
     });
 
@@ -659,13 +643,7 @@ export const checkExpiredSubscriptions = async (
  */
 export const upgradeSubscription = async (req: Request, res: Response) => {
   try {
-    const {
-      newPlanId,
-      paymentMethodId,
-      phoneNumber,
-      cardDetails,
-      bankDetails,
-    } = req.body;
+    const { newPlanId, paymentMethodId, phoneNumber, bankDetails } = req.body;
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
@@ -693,7 +671,6 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
       {
         paymentMethodId,
         phoneNumber,
-        cardDetails,
         bankDetails,
       },
     );
@@ -724,13 +701,7 @@ export const upgradeSubscription = async (req: Request, res: Response) => {
  */
 export const downgradeSubscription = async (req: Request, res: Response) => {
   try {
-    const {
-      newPlanId,
-      paymentMethodId,
-      phoneNumber,
-      cardDetails,
-      bankDetails,
-    } = req.body;
+    const { newPlanId, paymentMethodId, phoneNumber, bankDetails } = req.body;
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
@@ -758,7 +729,6 @@ export const downgradeSubscription = async (req: Request, res: Response) => {
       {
         paymentMethodId,
         phoneNumber,
-        cardDetails,
         bankDetails,
       },
     );

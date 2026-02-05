@@ -99,13 +99,6 @@ interface CreateRestaurantSubscriptionData {
   autoRenew?: boolean;
   paymentMethod?: string;
   phoneNumber?: string;
-  cardDetails?: {
-    cardNumber: string;
-    cvv: string;
-    expiryMonth: string;
-    expiryYear: string;
-    pin?: string;
-  };
   bankDetails?: {
     clientIp?: string;
   };
@@ -429,7 +422,6 @@ export const createRestaurantSubscriptionService = async (
     autoRenew = true,
     paymentMethod,
     phoneNumber,
-    cardDetails,
     bankDetails,
   } = data;
 
@@ -605,7 +597,6 @@ export const createRestaurantSubscriptionService = async (
       {
         paymentMethod: paymentMethodName,
         phoneNumber,
-        cardDetails,
         bankDetails,
       },
     );
@@ -623,7 +614,6 @@ export const createRestaurantSubscriptionService = async (
       {
         paymentMethod: "CASH",
         phoneNumber,
-        cardDetails,
         bankDetails,
       },
     );
@@ -651,13 +641,6 @@ export const processSubscriptionPaymentService = async (
   paymentData: {
     paymentMethod: string;
     phoneNumber?: string;
-    cardDetails?: {
-      cardNumber: string;
-      cvv: string;
-      expiryMonth: string;
-      expiryYear: string;
-      pin?: string;
-    };
     bankDetails?: {
       clientIp?: string;
     };
@@ -741,7 +724,6 @@ export const processSubscriptionPaymentService = async (
           phoneNumber:
             paymentData.phoneNumber || subscription.restaurant?.phone || "",
           currency: "RWF",
-          cardDetails: paymentData.cardDetails,
         });
         break;
 
@@ -819,7 +801,8 @@ export const processSubscriptionPaymentService = async (
           paymentResult.status === "successful"
             ? SubscriptionStatus.ACTIVE
             : SubscriptionStatus.PENDING,
-        amountPaid: paymentData.paymentMethod === "CASH" ? subscription.plan.price : null,
+        amountPaid:
+          paymentData.paymentMethod === "CASH" ? subscription.plan.price : null,
       };
 
       // Update subscription with payment details
@@ -838,7 +821,10 @@ export const processSubscriptionPaymentService = async (
               subscriptionId,
               action: "CREATED",
               newStatus: "ACTIVE",
-              reason: paymentData.paymentMethod === "CASH" ? "Wallet payment completed successfully" : "Payment completed successfully",
+              reason:
+                paymentData.paymentMethod === "CASH"
+                  ? "Wallet payment completed successfully"
+                  : "Payment completed successfully",
             },
           });
         });
@@ -1041,7 +1027,6 @@ async function processSubscriptionCardPayment({
   fullname,
   phoneNumber,
   currency = "RWF",
-  cardDetails,
 }: {
   amount: number;
   txRef: string;
@@ -1049,7 +1034,6 @@ async function processSubscriptionCardPayment({
   fullname: string;
   phoneNumber: string;
   currency?: string;
-  cardDetails?: any;
 }): Promise<SubscriptionPaymentResult> {
   try {
     console.log(`Processing subscription card payment: ${amount} ${currency}`);
@@ -1428,7 +1412,6 @@ export const renewSubscriptionService = async (
   paymentData?: {
     paymentMethodId?: string;
     phoneNumber?: string;
-    cardDetails?: any;
     bankDetails?: any;
   },
 ) => {
@@ -1515,7 +1498,6 @@ export const renewSubscriptionService = async (
         {
           paymentMethod,
           phoneNumber: paymentData.phoneNumber,
-          cardDetails: paymentData.cardDetails,
           bankDetails: paymentData.bankDetails,
         },
       );
@@ -1723,7 +1705,6 @@ export const changeSubscriptionPlanService = async (
   paymentData?: {
     paymentMethodId?: string;
     phoneNumber?: string;
-    cardDetails?: any;
     bankDetails?: any;
   },
 ) => {
@@ -1830,7 +1811,6 @@ export const changeSubscriptionPlanService = async (
         {
           paymentMethod,
           phoneNumber: paymentData.phoneNumber,
-          cardDetails: paymentData.cardDetails,
           bankDetails: paymentData.bankDetails,
         },
       );
