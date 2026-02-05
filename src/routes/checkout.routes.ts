@@ -22,7 +22,7 @@ const checkoutRoutes = Router();
 checkoutRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR"),
+  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL"),
   createCheckout
 );
 
@@ -48,7 +48,7 @@ checkoutRoutes.get("/:orderId/verify-payment", isAuthenticated, verifyPayment);
 checkoutRoutes.post(
   "/verify-voucher-otp",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR"),
+  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL"),
   verifyVoucherOTPAndCreateOrder
 );
 

@@ -29,7 +29,7 @@ affiliatorRoutes.post(
 affiliatorRoutes.get(
   "/my-affiliators",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
+  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
   getMyAffiliators
 );
 
@@ -51,7 +51,7 @@ affiliatorRoutes.get(
 affiliatorRoutes.get(
   "/:id",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
+  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
   getAffiliatorById
 );
 
@@ -62,7 +62,7 @@ affiliatorRoutes.get(
 affiliatorRoutes.patch(
   "/:id",
   isAuthenticated,
-  checkPermission("RESTAURANT", "ADMIN"),
+  checkPermission("RESTAURANT", "HOTEL", "ADMIN"),
   updateAffiliator
 );
 
@@ -73,7 +73,7 @@ affiliatorRoutes.patch(
 affiliatorRoutes.delete(
   "/:id",
   isAuthenticated,
-  checkPermission("RESTAURANT", "ADMIN"),
+  checkPermission("RESTAURANT", "HOTEL", "ADMIN"),
   deleteAffiliator
 );
 

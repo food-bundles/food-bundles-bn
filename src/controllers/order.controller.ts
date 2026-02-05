@@ -225,7 +225,7 @@ export const getMyOrders = async (req: Request, res: Response) => {
     const user = (req as any).user;
     let restaurantId: string;
 
-    if (user.role === "RESTAURANT") {
+    if (user.role === "RESTAURANT"|| user.role === "HOTEL") {
       restaurantId = user.id;
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
@@ -580,7 +580,7 @@ export const getOrderStatistics = async (req: Request, res: Response) => {
     // Determine the target restaurant ID based on role
     let targetRestaurantId: string | undefined;
 
-    if (userRole === "RESTAURANT") {
+    if (userRole === "RESTAURANT" || userRole === "HOTEL") {
       targetRestaurantId = user.id;
     } else if (userRole === "AFFILIATOR") {
       targetRestaurantId = user.restaurantId;

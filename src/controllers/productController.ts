@@ -22,6 +22,8 @@ export const createProduct = async (req: Request, res: Response) => {
       tableTronicProductId,
       productName,
       unitPrice,
+      restaurantPrice,
+      hotelPrice,
       purchasePrice,
       categoryId,
       bonus,
@@ -53,10 +55,12 @@ export const createProduct = async (req: Request, res: Response) => {
     }
 
     const product = await createProductService({
-      tableTronicProductId,
+      tableTronicProductId: tableTronicProductId ? parseInt(tableTronicProductId) : null,
       unitId,
       productName,
       unitPrice,
+      restaurantPrice,
+      hotelPrice,
       purchasePrice,
       categoryId,
       bonus,

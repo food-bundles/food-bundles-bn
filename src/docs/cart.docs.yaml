@@ -77,6 +77,17 @@ components:
         unitPrice:
           type: number
           format: float
+          description: Default price per unit
+        restaurantPrice:
+          type: number
+          format: float
+          nullable: true
+          description: Special price for restaurant users
+        hotelPrice:
+          type: number
+          format: float
+          nullable: true
+          description: Special price for hotel users
         images:
           type: array
           items:
@@ -187,7 +198,7 @@ paths:
       tags:
         - Cart API Management
       summary: Add item to cart
-      description: Add a product to the restaurant's active cart or update quantity if already exists
+      description: Add a product to the restaurant's or hotel's active cart. The system automatically applies role-based pricing - restaurant users get restaurant prices, hotel users get hotel prices, with fallback to default unit price.
       security:
         - BearerAuth: []
       requestBody:
@@ -248,8 +259,8 @@ paths:
     get:
       tags:
         - Cart API Management
-      summary: Get current restaurant's cart
-      description: Retrieve the active cart for the authenticated restaurant
+      summary: Get current restaurant's or hotel's cart
+      description: Retrieve the active cart for the authenticated restaurant or hotel user with role-appropriate pricing
       security:
         - BearerAuth: []
       responses:

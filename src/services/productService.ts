@@ -7,6 +7,8 @@ export interface ProductData {
   unitId?: string | null;
   productName: string;
   unitPrice: number;
+  restaurantPrice?: number | null;
+  hotelPrice?: number | null;
   purchasePrice: number;
   categoryId: string;
   category?: Category;
@@ -17,6 +19,7 @@ export interface ProductData {
   expiryDate: Date | null;
   unit: string;
   createdBy: string;
+  
 }
 
 interface Category {
@@ -60,6 +63,8 @@ export const createProductService = async (productData: ProductData) => {
       unitId: productData.unitId,
       productName: productData.productName,
       unitPrice: Number(productData.unitPrice),
+      restaurantPrice: productData.restaurantPrice ? Number(productData.restaurantPrice) : null,
+      hotelPrice: productData.hotelPrice ? Number(productData.hotelPrice) : null,
       purchasePrice: Number(productData.purchasePrice),
       categoryId: productData.categoryId,
       bonus: Number(productData.bonus) || 0, // Use || instead of ?? for NaN handling
@@ -242,6 +247,12 @@ export const updateProductService = async (
       }),
       ...(updateData.unitPrice !== undefined && {
         unitPrice: Number(updateData.unitPrice),
+      }),
+      ...(updateData.restaurantPrice !== undefined && {
+        restaurantPrice: updateData.restaurantPrice ? Number(updateData.restaurantPrice) : null,
+      }),
+      ...(updateData.hotelPrice !== undefined && {
+        hotelPrice: updateData.hotelPrice ? Number(updateData.hotelPrice) : null,
       }),
       ...(updateData.purchasePrice !== undefined && {
         purchasePrice: Number(updateData.purchasePrice),
@@ -531,6 +542,8 @@ export const getAllProductsService = async ({
         tableTronicProductId: true,
         productName: true,
         unitPrice: true,
+        restaurantPrice: true,
+        hotelPrice: true,
         category: true,
         bonus: true,
         sku: true,
@@ -605,6 +618,8 @@ export const getProductsByRoleService = async ({
         tableTronicProductId: true,
         productName: true,
         unitPrice: true,
+        restaurantPrice: true,
+        hotelPrice: true,
         purchasePrice: true,
         category: true,
         bonus: true,
@@ -636,6 +651,8 @@ export const getProductsByRoleService = async ({
         tableTronicProductId: true,
         productName: true,
         unitPrice: true,
+        restaurantPrice: true,
+        hotelPrice: true,
         purchasePrice: true,
         category: true,
         bonus: true,
@@ -654,6 +671,8 @@ export const getProductsByRoleService = async ({
         tableTronicProductId: true,
         productName: true,
         unitPrice: true,
+        restaurantPrice: true,
+        hotelPrice: true,
         category: true,
         bonus: true,
         sku: true,
@@ -670,6 +689,8 @@ export const getProductsByRoleService = async ({
         tableTronicProductId: true,
         productName: true,
         unitPrice: true,
+        restaurantPrice: true,
+        hotelPrice: true,
         category: true,
         bonus: true,
         sku: true,
