@@ -1,6 +1,9 @@
 import prisma from "../prisma";
 import { topUpWalletService } from "./wallet.service";
-import { approveLoanApplicationService } from "./voucher.service";
+import {
+  approveLoanApplicationService,
+  processMaturedVouchersAutoDeductionService,
+} from "./voucher.service";
 import { createNotificationService } from "./notification.services";
 import { OTPService } from "./otp.service";
 import { sendMessage } from "../utils/sms.utility";
@@ -75,6 +78,13 @@ export const createTraderWalletService = async (traderId: string) => {
 
 // Get trader wallet with additional data
 export const getTraderWalletService = async (traderId: string) => {
+  // Process matured vouchers auto-deduction
+  try {
+    await processMaturedVouchersAutoDeductionService();
+  } catch (error) {
+    console.error("Failed to process matured vouchers auto-deduction:", error);
+  }
+
   const trader = await prisma.admin.findUnique({
     where: { id: traderId, role: "TRADER" },
   });
@@ -1220,7 +1230,9 @@ export const returnPendingApprovedAmountService = async (voucherId: string) => {
   });
 
   if (existingReturnTransaction) {
-    console.log(`Voucher ${voucher.voucherCode} used amount already returned to wallet`);
+    console.log(
+      `Voucher ${voucher.voucherCode} used amount already returned to wallet`,
+    );
     return;
   }
 

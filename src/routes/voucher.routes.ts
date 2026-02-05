@@ -134,7 +134,7 @@ voucherRoutes.get("/:id/transactions", isAuthenticated, getVoucherTransactions);
 voucherRoutes.post(
   "/loans/apply",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
+  checkPermission("RESTAURANT", "AFFILIATOR"),
   applyForLoan,
 );
 
@@ -145,7 +145,7 @@ voucherRoutes.post(
 voucherRoutes.get(
   "/loans/my-applications",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
+  checkPermission("RESTAURANT", "AFFILIATOR"),
   getMyLoanApplications,
 );
 
@@ -231,7 +231,7 @@ voucherRoutes.post(
 voucherRoutes.post(
   "/:id/repay",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN"),
+  checkPermission("RESTAURANT", "AFFILIATOR"),
   makeRepayment,
 );
 
