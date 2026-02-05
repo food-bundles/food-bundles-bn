@@ -1,6 +1,9 @@
 import prisma from "../prisma";
 import { topUpWalletService } from "./wallet.service";
-import { approveLoanApplicationService } from "./voucher.service";
+import {
+  approveLoanApplicationService,
+  processMaturedVouchersAutoDeductionService,
+} from "./voucher.service";
 import { createNotificationService } from "./notification.services";
 import { OTPService } from "./otp.service";
 import { sendMessage } from "../utils/sms.utility";
@@ -75,6 +78,13 @@ export const createTraderWalletService = async (traderId: string) => {
 
 // Get trader wallet with additional data
 export const getTraderWalletService = async (traderId: string) => {
+  // Process matured vouchers auto-deduction
+  try {
+    await processMaturedVouchersAutoDeductionService();
+  } catch (error) {
+    console.error("Failed to process matured vouchers auto-deduction:", error);
+  }
+
   const trader = await prisma.admin.findUnique({
     where: { id: traderId, role: "TRADER" },
   });
@@ -595,7 +605,7 @@ export const calculateTraderCommissionService = async (traderId: string) => {
       description: `Commission earned from voucher ${voucher.voucherCode}`,
     });
 
-    // Return pending approved amount for settled vouchers
+    // Return pending approved amount for settled vouchers (only once per voucher)
     await returnPendingApprovedAmountService(voucher.id);
 
     commissionDetails.push({
@@ -876,7 +886,7 @@ export const processAllTradersCommissionService = async () => {
       });
 
       if (existingCommission) {
-        // Return pending approved amount if voucher is settled/expired
+        // Only return pending approved amount if not already returned
         await returnPendingApprovedAmountService(voucher.id);
         continue;
       }
@@ -909,7 +919,7 @@ export const processAllTradersCommissionService = async () => {
         },
       });
 
-      // Return pending approved amount for settled/expired vouchers
+      // Return pending approved amount for settled/expired vouchers (only once)
       await returnPendingApprovedAmountService(voucher.id);
 
       // Send commission earned notifications
@@ -1206,6 +1216,23 @@ export const returnPendingApprovedAmountService = async (voucherId: string) => {
   });
 
   if (!traderWallet) {
+    return;
+  }
+
+  // Check if this voucher's used amount has already been returned to prevent duplicates
+  const existingReturnTransaction = await prisma.walletTransaction.findFirst({
+    where: {
+      walletId: traderWallet.id,
+      description: `Returned used amount from settled voucher ${voucher.voucherCode}`,
+      type: "TRADING",
+      amount: voucher.usedCredit,
+    },
+  });
+
+  if (existingReturnTransaction) {
+    console.log(
+      `Voucher ${voucher.voucherCode} used amount already returned to wallet`,
+    );
     return;
   }
 

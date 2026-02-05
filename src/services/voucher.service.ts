@@ -7,6 +7,8 @@ import {
   SubscriptionStatus,
   OrderStatus,
   PaymentStatus,
+  WalletTransactionType,
+  TransactionStatus,
 } from "@prisma/client";
 import { wsManager } from "../index";
 
@@ -18,6 +20,7 @@ import {
 import {
   sendAdminVoucherAppliedEmail,
   sendAdminVoucherApprovedEmail,
+  sendWalletNotificationEmail,
 } from "../utils/emailTemplates";
 import { sendMessage } from "../utils/sms.utility";
 import { getUserById } from "./userGets";
@@ -171,6 +174,8 @@ export const createVoucherService = async (data: CreateVoucherData) => {
         creditLimit,
         totalCredit: creditLimit,
         remainingCredit: creditLimit,
+        paidAmount: 0,
+        remainingAmount: 0,
         repaymentDays,
         expiryDate,
         restaurantId,
@@ -237,57 +242,16 @@ const checkAndUpdateVoucherMaturity = async (voucher: any) => {
     // Calculate based on voucher's repaymentDays and usedAt date
     if (voucher.usedAt && voucher.repaymentDays > 0) {
       const usedDate = new Date(voucher.usedAt);
-      const paymentDeadline = new Date(usedDate);
-
-      // Add repaymentDays to the usedAt date
-      paymentDeadline.setDate(
-        paymentDeadline.getDate() + voucher.repaymentDays,
+      const paymentDeadline = new Date(
+        usedDate.getTime() + voucher.repaymentDays * 24 * 60 * 60 * 1000,
       );
 
       // Check if current date is past the payment deadline
-      shouldMature = now > paymentDeadline;
-    }
+      shouldMature = now.getTime() > paymentDeadline.getTime();
 
-    // If no usedAt but we have createdAt, use that
-    if (
-      !shouldMature &&
-      !voucher.usedAt &&
-      voucher.createdAt &&
-      voucher.repaymentDays > 0
-    ) {
-      const createdDate = new Date(voucher.createdAt);
-      const paymentDeadline = new Date(createdDate);
-      paymentDeadline.setDate(
-        paymentDeadline.getDate() + voucher.repaymentDays,
+      console.log(
+        `Voucher ${voucher.id}: Used at ${usedDate.toISOString()}, Deadline ${paymentDeadline.toISOString()}, Now ${now.toISOString()}, Should mature: ${shouldMature}`,
       );
-
-      shouldMature = now > paymentDeadline;
-    }
-
-    // If no loan due date, check subscription payment deadline
-    if (!shouldMature && voucher.restaurantId) {
-      try {
-        const subscription = await prisma.restaurantSubscription.findFirst({
-          where: {
-            restaurantId: voucher.restaurantId,
-            status: SubscriptionStatus.ACTIVE,
-          },
-          include: { plan: true },
-        });
-
-        if (subscription?.plan?.voucherPaymentDays && voucher.createdAt) {
-          const paymentDeadline = new Date(voucher.createdAt);
-          paymentDeadline.setDate(
-            paymentDeadline.getDate() + subscription.plan.voucherPaymentDays,
-          );
-          shouldMature = now > paymentDeadline;
-        }
-      } catch (error) {
-        console.error(
-          "Error checking subscription for voucher maturity:",
-          error,
-        );
-      }
     }
 
     if (shouldMature) {
@@ -301,8 +265,6 @@ const checkAndUpdateVoucherMaturity = async (voucher: any) => {
       data: { status: newStatus },
     });
   }
-
-  await processAllTradersCommissionService();
 
   return voucher;
 };
@@ -367,10 +329,12 @@ export const getAllVouchersService = async (filters?: {
     }),
   ]);
 
-  // Check and update maturity status for each voucher
-  const updatedVouchers = await Promise.all(
-    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher)),
-  );
+  // Process matured vouchers auto-deduction
+  try {
+    await processMaturedVouchersAutoDeductionService();
+  } catch (error) {
+    console.error("Failed to process matured vouchers auto-deduction:", error);
+  }
 
   const totalPages = Math.ceil(totalCount / limit);
 
@@ -412,7 +376,7 @@ export const getAllVouchersService = async (filters?: {
   });
 
   return {
-    vouchers: updatedVouchers,
+    vouchers,
     statistics: stats,
     pagination: {
       page,
@@ -436,6 +400,7 @@ export const getMyVouchersService = async (
     activeOnly?: boolean;
   },
 ) => {
+  console.log("Getting my vouchers");
   if (affiliatorId) {
     const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
     restaurantId = restaurant.id;
@@ -463,12 +428,16 @@ export const getMyVouchersService = async (
     orderBy: { createdAt: "desc" },
   });
 
-  // Check and update maturity status for each voucher
-  const updatedVouchers = await Promise.all(
-    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher)),
-  );
+  // Process matured vouchers auto-deduction
+  try {
+    await processMaturedVouchersAutoDeductionService();
+  } catch (error) {
+    console.error("Failed to process matured vouchers auto-deduction:", error);
+  }
 
-  return updatedVouchers;
+  console.log("Received my vouchers", vouchers);
+
+  return vouchers;
 };
 
 /**
@@ -582,13 +551,15 @@ export const getRestaurantVouchersService = async (
     orderBy: { createdAt: "desc" },
   });
 
-  // Check and update maturity status for each voucher
-  const updatedVouchers = await Promise.all(
-    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher)),
-  );
+  // Process matured vouchers auto-deduction
+  try {
+    await processMaturedVouchersAutoDeductionService();
+  } catch (error) {
+    console.error("Failed to process matured vouchers auto-deduction:", error);
+  }
 
   return {
-    vouchers: updatedVouchers,
+    vouchers,
     subscription: subscriptionStatus
       ? {
           isActive: true,
@@ -623,15 +594,8 @@ export const getAvailableVouchersForCheckoutService = async (
     orderBy: { discountPercentage: "desc" }, // Show highest discount first
   });
 
-  // Check and update maturity status for each voucher
-  const updatedVouchers = await Promise.all(
-    vouchers.map((voucher) => checkAndUpdateVoucherMaturity(voucher)),
-  );
-
   // Filter out matured vouchers from available ones
-  return updatedVouchers.filter(
-    (voucher) => voucher.status === VoucherStatus.ACTIVE,
-  );
+  return vouchers.filter((voucher) => voucher.status === VoucherStatus.ACTIVE);
 };
 
 /**
@@ -996,6 +960,8 @@ export const approveLoanApplicationService = async (
         creditLimit: approvedAmount, // Use approved amount as credit limit
         totalCredit: approvedAmount,
         remainingCredit: approvedAmount,
+        paidAmount: 0,
+        remainingAmount: 0,
         repaymentDays, // Use custom repayment days
         expiryDate,
         restaurantId: updatedLoan.restaurantId,
@@ -1308,6 +1274,7 @@ export const processVoucherPaymentService = async (
         usedCredit: newUsedCredit,
         totalCredit: newTotalCredit,
         remainingCredit: newRemainingCredit,
+        remainingAmount: newUsedCredit, // Set remaining amount to be paid
         usedAt: new Date(),
         status: VoucherStatus.USED, // Always mark as USED after single use
       },
@@ -2798,3 +2765,213 @@ async function processBankTransfer({
     };
   }
 }
+
+/**
+ * Auto-deduction service for matured vouchers
+ */
+export const processMaturedVouchersAutoDeductionService = async () => {
+  try {
+    // First, check and update voucher maturity status for all vouchers
+    const allVouchers = await prisma.voucher.findMany({
+      where: {
+        status: {
+          in: [VoucherStatus.ACTIVE, VoucherStatus.USED],
+        },
+      },
+    });
+
+    for (const voucher of allVouchers) {
+      await checkAndUpdateVoucherMaturity(voucher);
+    }
+
+    // Initialize remaining amounts for existing vouchers that don't have them set
+    const vouchersToUpdate = await prisma.voucher.findMany({
+      where: {
+        remainingAmount: 0,
+        usedCredit: { gt: 0 },
+      },
+    });
+
+    for (const voucher of vouchersToUpdate) {
+      await prisma.voucher.update({
+        where: { id: voucher.id },
+        data: {
+          remainingAmount: voucher.usedCredit,
+        },
+      });
+    }
+
+    const restaurantsWithMaturedVouchers = await prisma.restaurant.findMany({
+      where: {
+        Voucher: {
+          some: {
+            status: VoucherStatus.MATURED,
+            remainingAmount: { gt: 0 },
+          },
+        },
+      },
+      include: {
+        Wallet: true,
+        Voucher: {
+          where: {
+            status: VoucherStatus.MATURED,
+            remainingAmount: { gt: 0 },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (restaurantsWithMaturedVouchers.length === 0) {
+      return { processed: 0, message: "No matured vouchers to process" };
+    }
+
+    let totalProcessed = 0;
+    for (const restaurant of restaurantsWithMaturedVouchers) {
+      if (!restaurant.Wallet) continue;
+
+      let currentBalance = restaurant.Wallet.balance;
+      let totalDeducted = 0;
+      const processedVouchers = [];
+
+      for (const voucher of restaurant.Voucher) {
+        const remainingAmount = voucher.remainingAmount;
+        if (remainingAmount <= 0) continue;
+
+        if (currentBalance >= remainingAmount) {
+          // Full payment
+          currentBalance -= remainingAmount;
+          totalDeducted += remainingAmount;
+
+          await prisma.voucher.update({
+            where: { id: voucher.id },
+            data: {
+              status: VoucherStatus.SETTLED,
+              paidAmount: voucher.usedCredit,
+              remainingAmount: 0,
+            },
+          });
+
+          processedVouchers.push({
+            voucherId: voucher.id,
+            amount: remainingAmount,
+            status: "SETTLED",
+          });
+          totalProcessed++;
+        } else if (currentBalance > 0) {
+          // Partial payment
+          const deductedAmount = currentBalance;
+          const newRemainingAmount = remainingAmount - deductedAmount;
+          totalDeducted += deductedAmount;
+          currentBalance = 0;
+
+          await prisma.voucher.update({
+            where: { id: voucher.id },
+            data: {
+              paidAmount: voucher.paidAmount + deductedAmount,
+              remainingAmount: newRemainingAmount,
+            },
+          });
+
+          processedVouchers.push({
+            voucherId: voucher.id,
+            amount: deductedAmount,
+            status: "PARTIALLY_PAID",
+          });
+          totalProcessed++;
+          break;
+        } else {
+          break;
+        }
+
+        await prisma.walletTransaction.create({
+          data: {
+            walletId: restaurant.Wallet.id,
+            restaurantId: restaurant.id,
+            type: WalletTransactionType.PAYMENT,
+            amount: -processedVouchers[processedVouchers.length - 1].amount,
+            previousBalance:
+              currentBalance +
+              processedVouchers[processedVouchers.length - 1].amount,
+            newBalance: currentBalance,
+            description: `Auto-deduction for matured voucher`,
+            reference: voucher.id,
+            status: TransactionStatus.COMPLETED,
+          },
+        });
+      }
+
+      if (totalDeducted > 0) {
+        await prisma.wallet.update({
+          where: { id: restaurant.Wallet.id },
+          data: { balance: currentBalance },
+        });
+
+        // Send notifications
+        try {
+          await createNotificationService({
+            title: "Matured Vouchers Auto-Deduction",
+            message: `${totalDeducted.toLocaleString()} RWF deducted for ${processedVouchers.length} matured voucher(s)`,
+            eventType: "VOUCHER_APPLIED",
+            targetType: "ROLE_BASED",
+            targetRole: "ADMIN",
+          });
+
+          await sendWalletNotificationEmail({
+            email: process.env.ADMIN_EMAIL || "",
+            restaurantName: "Admin",
+            type: "PAYMENT",
+            amount: totalDeducted,
+            newBalance: currentBalance,
+            transactionId: `AUTO_DEDUCTION_${Date.now()}`,
+            description: `Auto-deduction completed for ${restaurant.name}: ${processedVouchers.length} matured voucher(s) processed`,
+          });
+
+          if (restaurant.phone) {
+            await sendMessage(
+              `Dear ${restaurant.name}, ${totalDeducted.toLocaleString()} RWF deducted for matured vouchers. New balance: ${currentBalance.toLocaleString()} RWF.`,
+              restaurant.phone,
+            );
+          }
+
+          if (restaurant.email) {
+            await sendWalletNotificationEmail({
+              email: restaurant.email,
+              restaurantName: restaurant.name,
+              type: "PAYMENT",
+              amount: totalDeducted,
+              newBalance: currentBalance,
+              transactionId: `AUTO_DEDUCTION_${Date.now()}`,
+              description: `Auto-deduction for ${processedVouchers.length} matured voucher(s)`,
+            });
+          }
+
+          await sendMessage(
+            `Auto-deduction: ${restaurant.name} - ${totalDeducted.toLocaleString()} RWF deducted for ${processedVouchers.length} voucher(s)`,
+            process.env.PRIVATE_RECEIVER || "",
+          );
+        } catch (error) {
+          console.error("Failed to send notifications:", error);
+        }
+      }
+    }
+
+    // Process commission to traders for settled vouchers
+    try {
+      await processAllTradersCommissionService();
+    } catch (error) {
+      console.error(
+        "Failed to process commission to traders for settled vouchers:",
+        error,
+      );
+    }
+
+    return {
+      processed: totalProcessed,
+      message: `Processed ${totalProcessed} matured vouchers`,
+    };
+  } catch (error: any) {
+    console.error("Auto-deduction error:", error);
+    throw new Error(`Auto-deduction failed: ${error.message}`);
+  }
+};

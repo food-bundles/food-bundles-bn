@@ -380,26 +380,6 @@ components:
           type: string
           description: Phone number (required for MOBILE_MONEY)
           example: "0780000000"
-        cardDetails:
-          type: object
-          description: Card details (optional - if not provided, will use hosted checkout)
-          properties:
-            cardNumber:
-              type: string
-              example: "5531886652142950"
-            cvv:
-              type: string
-              example: "564"
-            expiryMonth:
-              type: string
-              example: "09"
-            expiryYear:
-              type: string
-              example: "32"
-            pin:
-              type: string
-              description: Card PIN (optional)
-              example: "3310"
         bankDetails:
           type: object
           description: Bank transfer details
@@ -422,21 +402,6 @@ components:
           type: string
           description: Phone number (required for MOBILE_MONEY)
           example: "0780000000"
-        cardDetails:
-          type: object
-          description: Card details (optional - if not provided, will use hosted checkout)
-          properties:
-            cardNumber:
-              type: string
-            cvv:
-              type: string
-            expiryMonth:
-              type: string
-            expiryYear:
-              type: string
-            pin:
-              type: string
-              description: Card PIN (optional)
         bankDetails:
           type: object
           properties:
@@ -511,26 +476,6 @@ components:
           type: string
           description: Phone number (required for MOBILE_MONEY)
           example: "0780000000"
-        cardDetails:
-          type: object
-          description: Card details (optional - if not provided, will use hosted checkout)
-          properties:
-            cardNumber:
-              type: string
-              example: "5531886652142950"
-            cvv:
-              type: string
-              example: "564"
-            expiryMonth:
-              type: string
-              example: "09"
-            expiryYear:
-              type: string
-              example: "32"
-            pin:
-              type: string
-              description: Card PIN (optional)
-              example: "3310"
         bankDetails:
           type: object
           description: Bank transfer details
@@ -555,26 +500,6 @@ components:
           type: string
           description: Phone number (required for MOBILE_MONEY)
           example: "0780000000"
-        cardDetails:
-          type: object
-          description: Card details (optional - if not provided, will use hosted checkout)
-          properties:
-            cardNumber:
-              type: string
-              example: "5531886652142950"
-            cvv:
-              type: string
-              example: "564"
-            expiryMonth:
-              type: string
-              example: "09"
-            expiryYear:
-              type: string
-              example: "32"
-            pin:
-              type: string
-              description: Card PIN (optional)
-              example: "3310"
         bankDetails:
           type: object
           description: Bank transfer details

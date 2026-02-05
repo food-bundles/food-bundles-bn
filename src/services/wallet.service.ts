@@ -15,6 +15,10 @@ import {
 import axios from "axios";
 import { wsManager } from "../index";
 import { getRestaurantFromAffiliatorService } from "./affiliator.service";
+import {
+  getVoucherByCodeService,
+  processMaturedVouchersAutoDeductionService,
+} from "./voucher.service";
 
 dotenv.config();
 
@@ -86,6 +90,13 @@ export const getRestaurantWalletTransactionService = async (
   restaurantId: string,
   filters: WalletTransactionFilters = {},
 ) => {
+  // Process matured vouchers auto-deduction
+  try {
+    await processMaturedVouchersAutoDeductionService();
+  } catch (error) {
+    console.error("Failed to process matured vouchers auto-deduction:", error);
+  }
+
   const { page = 1, limit = 10, type, status, startDate, endDate } = filters;
 
   const skip = (page - 1) * limit;
@@ -162,6 +173,13 @@ export const getRestaurantWalletTransactionService = async (
  * Get wallet by restaurant ID
  */
 export const getWalletByRestaurantIdService = async (restaurantId: string) => {
+  // Process matured vouchers auto-deduction
+  try {
+    await processMaturedVouchersAutoDeductionService();
+  } catch (error) {
+    console.error("Failed to process matured vouchers auto-deduction:", error);
+  }
+
   const wallet = await prisma.wallet.findUnique({
     where: { restaurantId },
     include: {
@@ -192,6 +210,13 @@ export const getWalletByRestaurantIdService = async (restaurantId: string) => {
  * Get wallet by wallet ID
  */
 export const getWalletByIdService = async (walletId: string) => {
+  // Process matured vouchers auto-deduction
+  try {
+    await processMaturedVouchersAutoDeductionService();
+  } catch (error) {
+    console.error("Failed to process matured vouchers auto-deduction:", error);
+  }
+
   const wallet = await prisma.wallet.findUnique({
     where: { id: walletId },
     include: {
@@ -654,7 +679,17 @@ export const adminDepositToWalletService = async (data: {
  * Debit wallet for payments (CASH payment method)
  */
 export const debitWalletService = async (data: DebitWalletData) => {
-  const { walletId, amount, description, reference, orderId, voucherId } = data;
+  const {
+    walletId,
+    amount,
+    description,
+    reference,
+    orderId,
+    voucherId,
+    restaurantId,
+    affiliatorId,
+    voucherCode,
+  } = data;
 
   // Validate amount
   if (amount <= 0) {
@@ -697,9 +732,25 @@ export const debitWalletService = async (data: DebitWalletData) => {
         reference,
         status: "COMPLETED",
         metadata: { orderId, voucherId },
+        restaurantId: restaurantId || wallet.restaurantId,
+        affiliatorId: affiliatorId,
       },
     }),
   ]);
+
+  if (voucherCode) {
+    const voucher = await getVoucherByCodeService(voucherCode);
+
+    // Update voucher - mark as USED after single use
+    const updatedVoucher = await prisma.voucher.update({
+      where: { id: voucher.id },
+      data: {
+        remainingCredit: amount,
+      },
+    });
+
+    console.log("updatedVoucher", updatedVoucher);
+  }
 
   // Send notification email
   if (wallet.restaurant?.email) {

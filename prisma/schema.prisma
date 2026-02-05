@@ -838,6 +838,10 @@ model Voucher {
   usedCredit      Float @default(0)
   remainingCredit Float
 
+  // Payment tracking
+  paidAmount      Float @default(0)
+  remainingAmount Float @default(0)
+
   // Status and dates
   status     VoucherStatus @default(ACTIVE)
   expiryDate DateTime?

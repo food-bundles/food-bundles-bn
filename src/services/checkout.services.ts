@@ -54,7 +54,7 @@ const paypack = PaypackJs.config({
 // Initialize Flutterwave
 const flw = new Flutterwave(
   process.env.FLW_PUBLIC_KEY,
-  process.env.FLW_SECRET_KEY
+  process.env.FLW_SECRET_KEY,
 );
 
 type PaymentResult =
@@ -124,7 +124,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
   let restaurantId = data.restaurantId;
   if (data.affiliatorId) {
     const restaurant = await getRestaurantFromAffiliatorService(
-      data.affiliatorId
+      data.affiliatorId,
     );
     restaurantId = restaurant.id;
   }
@@ -135,7 +135,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
 
   // Get payment method from DB
   const paymentMethodConfig = await getPaymentMethodByIdService(
-    data.paymentMethodId
+    data.paymentMethodId,
   );
   const paymentMethod = paymentMethodConfig.name.toUpperCase();
 
@@ -186,6 +186,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     fallbackPaymentMethod: data.fallbackPaymentMethod,
     processDirectly: true,
     restaurantId,
+    affiliatorId: data.affiliatorId,
   });
 
   console.log("paymentResult", paymentResult);
@@ -203,7 +204,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
   ) {
     await rollbackVoucherPaymentService(
       orderCreated.voucherId,
-      orderCreated.id
+      orderCreated.id,
     );
   }
 
@@ -234,7 +235,8 @@ export const processPaymentService = async (
     fallbackPaymentMethod?: string;
     processDirectly?: boolean;
     restaurantId?: string;
-  }
+    affiliatorId?: string;
+  },
 ) => {
   let order: Awaited<ReturnType<typeof getOrderByIdService>>;
 
@@ -356,7 +358,7 @@ export const processPaymentService = async (
             throw new Error(
               `Insufficient wallet balance. Available: ${wallet.balance} ${
                 wallet.currency
-              }, Required: ${order.totalAmount} ${order.currency || "RWF"}`
+              }, Required: ${order.totalAmount} ${order.currency || "RWF"}`,
             );
           }
 
@@ -366,6 +368,12 @@ export const processPaymentService = async (
             description: `Payment for Order - ${order.orderNumber}`,
             reference: orderId,
             orderId: orderId,
+            restaurantId:
+              paymentData.restaurantId ||
+              wallet.restaurantId ||
+              order.restaurantId,
+            affiliatorId: paymentData.affiliatorId,
+            voucherCode: paymentData.voucherCode,
           });
 
           if (walletDebitResult) {
@@ -478,7 +486,7 @@ export const processPaymentService = async (
       } catch (updateError: any) {
         console.log(
           "Error updating order after successful payment:",
-          updateError
+          updateError,
         );
         // Even if update fails, payment was successful, so we should return success
         // but log the issue for investigation
@@ -515,7 +523,7 @@ export const processPaymentService = async (
             } catch (otpError) {
               console.error(
                 "Failed to generate delivery OTP after successful payment:",
-                otpError
+                otpError,
               );
               // Don't fail the payment process if OTP generation fails
             }
@@ -523,7 +531,7 @@ export const processPaymentService = async (
         } catch (orderUpdateError: any) {
           console.log(
             "Error updating order after successful payment:",
-            orderUpdateError
+            orderUpdateError,
           );
         }
       }
@@ -741,7 +749,7 @@ async function processMobileMoneyPayment({
 
     if (!isValidRwandaPhone(cleanedPhoneNumber)) {
       throw new Error(
-        "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX"
+        "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX",
       );
     }
 
@@ -812,7 +820,7 @@ async function processMobileMoneyPayment({
             Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
       console.log("Mobile Money Response:", response.data);
 
@@ -925,7 +933,7 @@ async function processCardPayment({
           Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     if (response.data?.status === "success" && response.data?.data?.link) {
@@ -1020,7 +1028,7 @@ async function processBankTransfer({
         transferAccount: response.meta.authorization.transfer_account,
         transferBank: response.meta.authorization.transfer_bank,
         transferAmount: parseFloat(
-          response.meta.authorization.transfer_amount || "0"
+          response.meta.authorization.transfer_amount || "0",
         ),
         transferNote: response.meta.authorization.transfer_note,
         accountExpiration: response.meta.authorization.account_expiration
@@ -1087,7 +1095,7 @@ async function processVoucherPayment({
 }): Promise<VoucherPaymentResult> {
   try {
     console.log(
-      `Processing voucher payment: ${voucherCode} for order ${orderId}`
+      `Processing voucher payment: ${voucherCode} for order ${orderId}`,
     );
 
     // Get and validate voucher
@@ -1126,8 +1134,8 @@ async function processVoucherPayment({
     if (voucher.remainingCredit < originalAmount) {
       throw new Error(
         `Voucher credit (${voucher.remainingCredit.toFixed(
-          2
-        )}) is less than order amount (${originalAmount.toFixed(2)})`
+          2,
+        )}) is less than order amount (${originalAmount.toFixed(2)})`,
       );
     }
     // Calculate amounts
@@ -1141,10 +1149,10 @@ async function processVoucherPayment({
     if (voucher.remainingCredit < totalDeduction) {
       throw new Error(
         `Insufficient voucher credit. Required: ${totalDeduction.toFixed(
-          2
+          2,
         )}, Available: ${voucher.remainingCredit.toFixed(
-          2
-        )}. Voucher cannot be used for partial payments.`
+          2,
+        )}. Voucher cannot be used for partial payments.`,
       );
     }
 
@@ -1332,7 +1340,7 @@ export const createAdminOrderService = async (data: CreateAdminOrderData) => {
   ) {
     await rollbackVoucherPaymentService(
       orderCreated.voucherId,
-      orderCreated.id
+      orderCreated.id,
     );
   }
 
