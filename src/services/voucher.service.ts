@@ -174,6 +174,8 @@ export const createVoucherService = async (data: CreateVoucherData) => {
         creditLimit,
         totalCredit: creditLimit,
         remainingCredit: creditLimit,
+        paidAmount: 0,
+        remainingAmount: 0,
         repaymentDays,
         expiryDate,
         restaurantId,
@@ -958,6 +960,8 @@ export const approveLoanApplicationService = async (
         creditLimit: approvedAmount, // Use approved amount as credit limit
         totalCredit: approvedAmount,
         remainingCredit: approvedAmount,
+        paidAmount: 0,
+        remainingAmount: 0,
         repaymentDays, // Use custom repayment days
         expiryDate,
         restaurantId: updatedLoan.restaurantId,
@@ -1270,6 +1274,7 @@ export const processVoucherPaymentService = async (
         usedCredit: newUsedCredit,
         totalCredit: newTotalCredit,
         remainingCredit: newRemainingCredit,
+        remainingAmount: newUsedCredit, // Set remaining amount to be paid
         usedAt: new Date(),
         status: VoucherStatus.USED, // Always mark as USED after single use
       },
@@ -2779,12 +2784,29 @@ export const processMaturedVouchersAutoDeductionService = async () => {
       await checkAndUpdateVoucherMaturity(voucher);
     }
 
+    // Initialize remaining amounts for existing vouchers that don't have them set
+    const vouchersToUpdate = await prisma.voucher.findMany({
+      where: {
+        remainingAmount: 0,
+        usedCredit: { gt: 0 },
+      },
+    });
+
+    for (const voucher of vouchersToUpdate) {
+      await prisma.voucher.update({
+        where: { id: voucher.id },
+        data: {
+          remainingAmount: voucher.usedCredit,
+        },
+      });
+    }
+
     const restaurantsWithMaturedVouchers = await prisma.restaurant.findMany({
       where: {
         Voucher: {
           some: {
             status: VoucherStatus.MATURED,
-            usedCredit: { gt: 0 },
+            remainingAmount: { gt: 0 },
           },
         },
       },
@@ -2793,7 +2815,7 @@ export const processMaturedVouchersAutoDeductionService = async () => {
         Voucher: {
           where: {
             status: VoucherStatus.MATURED,
-            usedCredit: { gt: 0 },
+            remainingAmount: { gt: 0 },
           },
           orderBy: { createdAt: "asc" },
         },
@@ -2813,33 +2835,42 @@ export const processMaturedVouchersAutoDeductionService = async () => {
       const processedVouchers = [];
 
       for (const voucher of restaurant.Voucher) {
-        const usedAmount = voucher.usedCredit;
-        if (usedAmount <= 0) continue;
+        const remainingAmount = voucher.remainingAmount;
+        if (remainingAmount <= 0) continue;
 
-        if (currentBalance >= usedAmount) {
-          currentBalance -= usedAmount;
-          totalDeducted += usedAmount;
+        if (currentBalance >= remainingAmount) {
+          // Full payment
+          currentBalance -= remainingAmount;
+          totalDeducted += remainingAmount;
 
           await prisma.voucher.update({
             where: { id: voucher.id },
-            data: { status: VoucherStatus.SETTLED, usedCredit: 0 },
+            data: {
+              status: VoucherStatus.SETTLED,
+              paidAmount: voucher.usedCredit,
+              remainingAmount: 0,
+            },
           });
 
           processedVouchers.push({
             voucherId: voucher.id,
-            amount: usedAmount,
+            amount: remainingAmount,
             status: "SETTLED",
           });
           totalProcessed++;
         } else if (currentBalance > 0) {
+          // Partial payment
           const deductedAmount = currentBalance;
-          const remainingDebt = usedAmount - deductedAmount;
+          const newRemainingAmount = remainingAmount - deductedAmount;
           totalDeducted += deductedAmount;
           currentBalance = 0;
 
           await prisma.voucher.update({
             where: { id: voucher.id },
-            data: { usedCredit: remainingDebt },
+            data: {
+              paidAmount: voucher.paidAmount + deductedAmount,
+              remainingAmount: newRemainingAmount,
+            },
           });
 
           processedVouchers.push({

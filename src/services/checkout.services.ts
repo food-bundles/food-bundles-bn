@@ -373,6 +373,7 @@ export const processPaymentService = async (
               wallet.restaurantId ||
               order.restaurantId,
             affiliatorId: paymentData.affiliatorId,
+            voucherCode: paymentData.voucherCode,
           });
 
           if (walletDebitResult) {

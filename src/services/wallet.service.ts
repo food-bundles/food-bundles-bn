@@ -15,7 +15,10 @@ import {
 import axios from "axios";
 import { wsManager } from "../index";
 import { getRestaurantFromAffiliatorService } from "./affiliator.service";
-import { processMaturedVouchersAutoDeductionService } from "./voucher.service";
+import {
+  getVoucherByCodeService,
+  processMaturedVouchersAutoDeductionService,
+} from "./voucher.service";
 
 dotenv.config();
 
@@ -685,6 +688,7 @@ export const debitWalletService = async (data: DebitWalletData) => {
     voucherId,
     restaurantId,
     affiliatorId,
+    voucherCode,
   } = data;
 
   // Validate amount
@@ -733,6 +737,20 @@ export const debitWalletService = async (data: DebitWalletData) => {
       },
     }),
   ]);
+
+  if (voucherCode) {
+    const voucher = await getVoucherByCodeService(voucherCode);
+
+    // Update voucher - mark as USED after single use
+    const updatedVoucher = await prisma.voucher.update({
+      where: { id: voucher.id },
+      data: {
+        remainingCredit: amount,
+      },
+    });
+
+    console.log("updatedVoucher", updatedVoucher);
+  }
 
   // Send notification email
   if (wallet.restaurant?.email) {
