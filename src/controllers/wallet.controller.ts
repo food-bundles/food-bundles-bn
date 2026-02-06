@@ -323,13 +323,14 @@ export const getWalletTransactionById = async (req: Request, res: Response) => {
  */
 export const getAllWallets = async (req: Request, res: Response) => {
   try {
-    const { page = 1, limit = 20, isActive, restaurantName } = req.query;
+    const { page = 1, limit = 20, isActive, restaurantName, walletType } = req.query;
 
     const result = await getAllWalletsService({
       page: parseInt(page as string),
       limit: parseInt(limit as string),
       isActive: isActive ? isActive === "true" : undefined,
       restaurantName: restaurantName as string,
+      walletType: walletType as "restaurant" | "trader",
     });
 
     res.status(200).json({
@@ -345,6 +346,74 @@ export const getAllWallets = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to get wallets",
+    });
+  }
+};
+
+/**
+ * Get restaurant wallets only
+ * GET /wallets/restaurants
+ */
+export const getRestaurantWallets = async (req: Request, res: Response) => {
+  try {
+    const { page = 1, limit = 20, isActive, restaurantName, search } = req.query;
+
+    const result = await getAllWalletsService({
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+      isActive: isActive ? isActive === "true" : undefined,
+      restaurantName: restaurantName as string,
+      walletType: "restaurant",
+      search: search as string,
+    });
+
+    res.status(200).json({
+      message: "Restaurant wallets retrieved successfully",
+      data: result.wallets,
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get restaurant wallets",
+    });
+  }
+};
+
+/**
+ * Get trader wallets only
+ * GET /wallets/traders
+ */
+export const getTraderWallets = async (req: Request, res: Response) => {
+  try {
+    const { page = 1, limit = 20, isActive, restaurantName, search } = req.query;
+
+    const result = await getAllWalletsService({
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+      isActive: isActive ? isActive === "true" : undefined,
+      restaurantName: restaurantName as string,
+      walletType: "trader",
+      search: search as string,
+    });
+
+    res.status(200).json({
+      message: "Trader wallets retrieved successfully",
+      data: result.wallets,
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get trader wallets",
     });
   }
 };
@@ -792,6 +861,7 @@ export const getAdminWalletTransactions = async (
       endDate,
       page = 1,
       limit = 20,
+      walletType,
     } = req.query;
 
     const result = await getWalletTransactionsService({
@@ -802,6 +872,7 @@ export const getAdminWalletTransactions = async (
       status: status as string,
       startDate: startDate ? new Date(startDate as string) : undefined,
       endDate: endDate ? new Date(endDate as string) : undefined,
+      walletType: walletType as "restaurant" | "trader",
     });
 
     res.status(200).json({
@@ -817,6 +888,98 @@ export const getAdminWalletTransactions = async (
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to get wallet transactions",
+    });
+  }
+};
+
+/**
+ * Get restaurant transactions only
+ * GET /wallets/restaurants/transactions
+ */
+export const getRestaurantTransactions = async (req: Request, res: Response) => {
+  try {
+    const {
+      restaurantId,
+      type,
+      status,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 20,
+      search,
+    } = req.query;
+
+    const result = await getWalletTransactionsService({
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+      restaurantId: restaurantId as string,
+      type: type as string,
+      status: status as string,
+      startDate: startDate ? new Date(startDate as string) : undefined,
+      endDate: endDate ? new Date(endDate as string) : undefined,
+      walletType: "restaurant",
+      search: search as string,
+    });
+
+    res.status(200).json({
+      message: "Restaurant transactions retrieved successfully",
+      data: result.transactions,
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get restaurant transactions",
+    });
+  }
+};
+
+/**
+ * Get trader transactions only
+ * GET /wallets/traders/transactions
+ */
+export const getTraderTransactions = async (req: Request, res: Response) => {
+  try {
+    const {
+      restaurantId,
+      type,
+      status,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 20,
+      search,
+    } = req.query;
+
+    const result = await getWalletTransactionsService({
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+      restaurantId: restaurantId as string,
+      type: type as string,
+      status: status as string,
+      startDate: startDate ? new Date(startDate as string) : undefined,
+      endDate: endDate ? new Date(endDate as string) : undefined,
+      walletType: "trader",
+      search: search as string,
+    });
+
+    res.status(200).json({
+      message: "Trader transactions retrieved successfully",
+      data: result.transactions,
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get trader transactions",
     });
   }
 };
