@@ -6,12 +6,16 @@ import {
   topUpWallet,
   getMyWalletTransactions,
   getAllWallets,
+  getRestaurantWallets,
+  getTraderWallets,
   updateWalletStatus,
   verifyWalletTopUp,
   adjustWalletBalance,
   getWalletTransactionById,
   adminDepositToWallet,
   getAdminWalletTransactions,
+  getRestaurantTransactions,
+  getTraderTransactions,
   requestAdminDepositOTP,
   verifyAdminDepositOTP,
   requestWalletAdjustmentOTP,
@@ -108,6 +112,20 @@ walletRoutes.get(
 walletRoutes.get("/", isAuthenticated, checkPermission("ADMIN"), getAllWallets);
 
 /**
+ * Get restaurant wallets only
+ * GET /wallets/restaurants
+ * Access: Admin only
+ */
+walletRoutes.get("/restaurants", isAuthenticated, checkPermission("ADMIN"), getRestaurantWallets);
+
+/**
+ * Get trader wallets only
+ * GET /wallets/traders
+ * Access: Admin only
+ */
+walletRoutes.get("/traders", isAuthenticated, checkPermission("ADMIN"), getTraderWallets);
+
+/**
  * Get all wallet transactions
  * GET /wallets/transactions
  * Access: Admin only
@@ -117,6 +135,30 @@ walletRoutes.get(
   isAuthenticated,
   checkPermission("ADMIN"),
   getAdminWalletTransactions
+);
+
+/**
+ * Get restaurant transactions only
+ * GET /wallets/restaurants/transactions
+ * Access: Admin only
+ */
+walletRoutes.get(
+  "/restaurants/transactions",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getRestaurantTransactions
+);
+
+/**
+ * Get trader transactions only
+ * GET /wallets/traders/transactions
+ * Access: Admin only
+ */
+walletRoutes.get(
+  "/traders/transactions",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getTraderTransactions
 );
 
 /**
