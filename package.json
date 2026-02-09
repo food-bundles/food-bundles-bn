@@ -29,6 +29,7 @@
     "flutterwave-node-v3": "^1.3.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
     "nodemailer": "^7.0.10",
     "paypack-js": "^0.2.1",
     "pdfkit": "^0.17.2",

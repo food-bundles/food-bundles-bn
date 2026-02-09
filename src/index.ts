@@ -9,6 +9,7 @@ import routes from "./routes";
 import { ENV } from "./config";
 import WebSocketManager from "./utils/websocket_manager";
 import { DeliveryService } from "./services/delivery.service";
+import { scheduleVoucherReminders } from "./jobs/voucher-reminder.job";
 
 interface CustomIncomingMessage extends IncomingMessage {
   rawBody: Buffer;
@@ -97,6 +98,9 @@ httpServer.listen(PORT, () => {
 📚 API Documentation: http://localhost:${PORT}/api-docs
 ====================================
   `);
+  
+  // Initialize cron jobs
+  scheduleVoucherReminders();
 });
 
 // Graceful shutdown
