@@ -69,6 +69,29 @@ export const getTraderWallet = async (req: Request, res: Response) => {
   }
 };
 
+// Get trader wallet by ID (Admin only)
+export const getAdminTraderWallet = async (req: Request, res: Response) => {
+  try {
+    const { traderId } = req.params;
+    const wallet = await getTraderWalletService(traderId);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...wallet,
+        availableBalance: wallet.availableBalance,
+        totalVouchersAmount: wallet.totalVouchersAmount,
+        totalVouchersCount: wallet.totalVouchersCount,
+      },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // Top up trader wallet
 export const topUpTraderWallet = async (req: Request, res: Response) => {
   try {

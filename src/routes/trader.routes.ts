@@ -24,6 +24,7 @@ import {
   getTraderDelegationStatus,
   adminApproveLoanOnBehalf,
   reverseDelegation,
+  getAdminTraderWallet,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -118,6 +119,14 @@ traderRoutes.get(
 );
 
 // Admin routes for trader management
+// Get trader wallet by ID (Admin)
+traderRoutes.get(
+  "/:traderId/wallet",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAdminTraderWallet,
+);
+
 traderRoutes.patch(
   "/:traderId/commission",
   isAuthenticated,
