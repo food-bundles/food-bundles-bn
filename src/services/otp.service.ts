@@ -36,10 +36,7 @@ export class OTPService {
   static async verifyOTP(
     phone: string,
     otp: string,
-    purpose:
-      | "RESTAURANT_SIGNUP"
-      | "VOUCHER_CHECKOUT"
-      | "ADMIN_WALLET_OPERATION",
+    purpose: OTPPurpose,
   ): Promise<{ success: boolean; message: string }> {
     try {
       const otpRecord = await prisma.oTP.findFirst({

@@ -10,6 +10,7 @@ import { sendMessage } from "../utils/sms.utility";
 import {
   sendAdminVoucherApprovedEmail,
   sendTraderLoanApprovalEmail,
+  sendTraderDelegationOTPEmail,
 } from "../utils/emailTemplates";
 import { VoucherType } from "@prisma/client";
 
@@ -1279,20 +1280,23 @@ export const requestDelegationService = async (traderId: string) => {
     throw new Error("Trader wallet not found");
   }
 
-  if (wallet.canTradeOnBehalf) {
-    throw new Error("Trader already has delegation permission");
+  if (wallet.delegationStatus === "PENDING") {
+    throw new Error("Delegation request already pending");
   }
 
-  if (wallet.delegationRequestedAt && !wallet.delegationApprovedAt) {
-    throw new Error("Delegation request already pending");
+  if (wallet.delegationStatus === "APPROVED") {
+    throw new Error("Delegation already approved. Please accept it.");
+  }
+
+  if (wallet.delegationStatus === "ACCEPTED") {
+    throw new Error("Delegation already active");
   }
 
   await prisma.wallet.update({
     where: { id: wallet.id },
     data: {
+      delegationStatus: "PENDING",
       delegationRequestedAt: new Date(),
-      delegationApprovedAt: null,
-      delegationApprovedBy: null,
     },
   });
 
@@ -1334,50 +1338,67 @@ export const approveDelegationService = async (
     throw new Error("Trader wallet not found");
   }
 
-  if (!wallet.delegationRequestedAt) {
-    throw new Error("No delegation request found");
+  // Allow PENDING or APPROVED (for resending OTP)
+  if (wallet.delegationStatus !== "PENDING" && wallet.delegationStatus !== "APPROVED") {
+    throw new Error("No pending or approved delegation request found");
   }
 
-  if (wallet.canTradeOnBehalf) {
-    throw new Error("Delegation already approved");
+  if (!wallet.trader?.email) {
+    throw new Error("Trader email not found. Cannot send OTP.");
   }
 
-  // Generate OTP for trader verification
+  // Generate OTP valid for 24 hours
   const otp = OTPService.generateOTP();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-  // Store all delegation data in session (similar to voucher checkout)
-  const delegationSessionData = {
-    adminId,
-    traderId,
-    commission,
-    walletId: wallet.id,
+  // Store OTP in database
+  await prisma.oTP.create({
+    data: {
+      phone: wallet.trader.phone || wallet.trader.email,
+      otp,
+      purpose: "ADMIN_WALLET_OPERATION",
+      expiresAt,
+    },
+  });
+
+  // Update wallet to APPROVED status
+  await prisma.wallet.update({
+    where: { id: wallet.id },
+    data: {
+      delegationStatus: "APPROVED",
+      delegationApprovedAt: new Date(),
+      delegationApprovedBy: adminId,
+      commission,
+    },
+  });
+
+  // Send OTP via email
+  await sendTraderDelegationOTPEmail({
+    traderEmail: wallet.trader.email,
+    traderName: wallet.trader.username,
     otp,
-    expiresAt,
-    traderInfo: wallet.trader,
-    timestamp: Date.now(),
-  };
+    commission,
+  });
 
-  // Send OTP to trader
+  // Send notifications
+  await createNotificationService({
+    title: "Delegation Approved",
+    message: `Your delegation request has been approved with ${commission}% commission. Check your email for OTP to accept.`,
+    eventType: "SYSTEM_MAINTENANCE",
+    targetType: "SPECIFIC_USER",
+    targetId: traderId,
+  });
+
   if (wallet.trader?.phone) {
     await sendMessage(
-      `Your delegation approval OTP: ${otp}. Valid for 10 minutes. Commission: ${commission}%`,
+      `Delegation approved with ${commission}% commission. Check your email for OTP to accept delegation.`,
       wallet.trader.phone,
     );
   }
 
-  // Send notification to private receiver
-  await sendMessage(
-    `Delegation approval initiated for trader ${wallet.trader?.username}. OTP sent to trader.`,
-    process.env.PRIVATE_RECEIVER || "",
-  );
-
   return {
     success: true,
-    message: "OTP sent to trader for verification",
-    sessionId: Buffer.from(JSON.stringify(delegationSessionData)).toString(
-      "base64",
-    ),
+    message: "Delegation approved. OTP sent to trader email (valid for 24 hours).",
   };
 };
 
@@ -1431,6 +1452,15 @@ export const verifyDelegationOTPService = async (
         delegationApprovedAt: new Date(),
         delegationApprovedBy: delegationData.adminId,
         commission: delegationData.commission,
+      },
+    });
+
+    // Create delegation history record
+    await prisma.delegationHistory.create({
+      data: {
+        walletId: wallet.id,
+        startedAt: new Date(),
+        approvedBy: delegationData.adminId,
       },
     });
 
@@ -1579,8 +1609,10 @@ export const getTraderDelegationStatusService = async (traderId: string) => {
       delegationRequestedAt: true,
       delegationApprovedAt: true,
       delegationApprovedBy: true,
+      delegationAcceptedAt: true,
       canTradeOnBehalf: true,
       commission: true,
+      delegationStatus: true,
     },
   });
 
@@ -1592,13 +1624,10 @@ export const getTraderDelegationStatusService = async (traderId: string) => {
     delegationRequestedAt: wallet.delegationRequestedAt,
     delegationApprovedAt: wallet.delegationApprovedAt,
     delegationApprovedBy: wallet.delegationApprovedBy,
+    delegationAcceptedAt: wallet.delegationAcceptedAt,
     canTradeOnBehalf: wallet.canTradeOnBehalf,
     commission: wallet.commission,
-    status: wallet.canTradeOnBehalf
-      ? "APPROVED"
-      : wallet.delegationRequestedAt
-        ? "PENDING"
-        : "NOT_REQUESTED",
+    status: wallet.delegationStatus || "NORMAL",
   };
 };
 // Admin approve loan on behalf of trader
@@ -1682,24 +1711,80 @@ export const adminApproveLoanOnBehalfService = async (
   return result;
 };
 
-// Reverse delegation status (trader can continue to trade)
-export const reverseDelegationService = async (
-  traderId: string,
-  otp: string,
-) => {
-  // Verify OTP first
-  const trader = await prisma.admin.findUnique({
-    where: { id: traderId },
-    select: { phone: true, username: true },
+// Reverse delegation status (trader takes back control)
+export const reverseDelegationService = async (traderId: string) => {
+  const wallet = await prisma.wallet.findUnique({
+    where: { traderId },
+    include: { trader: { select: { username: true, phone: true } } },
   });
 
-  if (!trader?.phone) {
-    throw new Error("Trader phone number not found");
+  if (!wallet) {
+    throw new Error("Trader wallet not found");
+  }
+
+  // Check if delegation is APPROVED or ACCEPTED
+  if (wallet.delegationStatus === "NORMAL" || wallet.delegationStatus === "PENDING") {
+    throw new Error("No active delegation to reverse");
+  }
+
+  // Find active delegation history (no endedAt) - only if ACCEPTED
+  if (wallet.delegationStatus === "ACCEPTED") {
+    const activeDelegation = await prisma.delegationHistory.findFirst({
+      where: { walletId: wallet.id, endedAt: null },
+      orderBy: { startedAt: "desc" },
+    });
+
+    if (activeDelegation) {
+      // Close current delegation period
+      await prisma.delegationHistory.update({
+        where: { id: activeDelegation.id },
+        data: { endedAt: new Date() },
+      });
+    }
+  }
+
+  // Reverse delegation
+  await prisma.wallet.update({
+    where: { id: wallet.id },
+    data: {
+      canTradeOnBehalf: false,
+      delegationStatus: "NORMAL",
+    },
+  });
+
+  // Send notifications
+  await createNotificationService({
+    title: "Delegation Reversed",
+    message: "You have taken back control and can now trade directly",
+    eventType: "SYSTEM_MAINTENANCE",
+    targetType: "SPECIFIC_USER",
+    targetId: traderId,
+  });
+
+  if (wallet.trader?.phone) {
+    await sendMessage(
+      "Delegation reversed! You now have full control of your wallet.",
+      wallet.trader.phone,
+    );
+  }
+
+  return { success: true, message: "Delegation reversed successfully" };
+};
+
+// Accept delegation with OTP (Trader accepts delegation)
+export const acceptDelegationService = async (traderId: string, otp: string) => {
+  const trader = await prisma.admin.findUnique({
+    where: { id: traderId },
+    select: { phone: true, email: true, username: true },
+  });
+
+  if (!trader) {
+    throw new Error("Trader not found");
   }
 
   // Verify OTP
   const otpVerification = await OTPService.verifyOTP(
-    trader.phone,
+    trader.phone || trader.email || "",
     otp,
     "ADMIN_WALLET_OPERATION",
   );
@@ -1708,7 +1793,6 @@ export const reverseDelegationService = async (
     throw new Error(otpVerification.message);
   }
 
-  // Get trader wallet
   const wallet = await prisma.wallet.findUnique({
     where: { traderId },
   });
@@ -1717,25 +1801,33 @@ export const reverseDelegationService = async (
     throw new Error("Trader wallet not found");
   }
 
-  if (!wallet.canTradeOnBehalf) {
-    throw new Error("Trader does not have delegation permission to reverse");
+  if (wallet.delegationStatus !== "APPROVED") {
+    throw new Error("No approved delegation to accept");
   }
 
-  // Reverse delegation - trader can now trade directly
+  // Accept delegation
   await prisma.wallet.update({
     where: { id: wallet.id },
     data: {
-      canTradeOnBehalf: false,
-      delegationRequestedAt: null,
-      delegationApprovedAt: null,
-      delegationApprovedBy: null,
+      delegationStatus: "ACCEPTED",
+      delegationAcceptedAt: new Date(),
+      canTradeOnBehalf: true,
+    },
+  });
+
+  // Create delegation history record
+  await prisma.delegationHistory.create({
+    data: {
+      walletId: wallet.id,
+      startedAt: new Date(),
+      approvedBy: wallet.delegationApprovedBy,
     },
   });
 
   // Send notifications
   await createNotificationService({
-    title: "Delegation Reversed",
-    message: "You can now trade and approve vouchers/loans directly",
+    title: "Delegation Accepted",
+    message: "You have accepted delegation. Food Bundles now controls your wallet.",
     eventType: "SYSTEM_MAINTENANCE",
     targetType: "SPECIFIC_USER",
     targetId: traderId,
@@ -1743,10 +1835,10 @@ export const reverseDelegationService = async (
 
   if (trader.phone) {
     await sendMessage(
-      "Delegation reversed! You can now trade and approve vouchers/loans directly.",
+      "Delegation accepted! Food Bundles now controls your wallet.",
       trader.phone,
     );
   }
 
-  return { success: true, message: "Delegation reversed successfully" };
+  return { success: true, message: "Delegation accepted successfully" };
 };

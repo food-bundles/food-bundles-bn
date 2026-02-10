@@ -995,6 +995,10 @@ export const getAllWalletsService = async ({
             transactions: true,
           },
         },
+        delegationHistories: {
+          orderBy: { startedAt: "desc" },
+          take: 10,
+        },
       },
       orderBy: { createdAt: "desc" },
     }),
