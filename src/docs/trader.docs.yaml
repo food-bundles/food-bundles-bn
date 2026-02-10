@@ -1100,12 +1100,16 @@ paths:
         403:
           description: Admin access required
 
-  /traders/delegation/reverse:
+  /traders/delegation/accept:
     post:
       tags:
         - Trader API Management
-      summary: Reverse delegation status with OTP verification (Trader only)
-      description: Allows trader to reverse their delegation status so they can continue approving vouchers/loans directly. Requires OTP verification for security.
+      summary: Accept delegation with OTP (Trader only)
+      description: |
+        Trader accepts delegation by providing the OTP sent to their email.
+        Status changes from APPROVED to ACCEPTED.
+        Delegation history starts recording (Food Bundles takes control).
+        OTP is valid for 24 hours.
       security:
         - BearerAuth: []
       requestBody:
@@ -1119,8 +1123,55 @@ paths:
               properties:
                 otp:
                   type: string
-                  description: OTP code for verification
-                  example: "123456"
+                  description: OTP code sent to trader's email
+                  example: "820878"
+      responses:
+        200:
+          description: Delegation accepted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Delegation accepted successfully"
+        400:
+          description: Bad request - Invalid OTP, no approved delegation, or OTP expired
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      invalid_otp:
+                        value: "Invalid or expired OTP"
+                      no_approved:
+                        value: "No approved delegation to accept"
+                      trader_not_found:
+                        value: "Trader not found"
+        403:
+          description: Trader access required
+
+  /traders/delegation/reverse:
+    post:
+      tags:
+        - Trader API Management
+      summary: Reverse delegation status (Trader only)
+      description: |
+        Allows trader to reverse their delegation status so they can continue approving vouchers/loans directly.
+        Status changes from APPROVED or ACCEPTED to NORMAL.
+        If delegation was ACCEPTED, closes the delegation history period.
+      security:
+        - BearerAuth: []
       responses:
         200:
           description: Delegation reversed successfully
@@ -1136,7 +1187,7 @@ paths:
                     type: string
                     example: "Delegation reversed successfully"
         400:
-          description: Bad request - Invalid OTP, trader has no delegation, or phone number not found
+          description: Bad request - No active delegation to reverse
           content:
             application/json:
               schema:
@@ -1148,11 +1199,97 @@ paths:
                   message:
                     type: string
                     examples:
-                      invalid_otp:
-                        value: "Invalid or expired OTP"
                       no_delegation:
-                        value: "Trader does not have delegation permission to reverse"
-                      phone_not_found:
-                        value: "Trader phone number not found"
+                        value: "No active delegation to reverse"
+                      trader_not_found:
+                        value: "Trader not found"
         403:
           description: Trader access required
+
+  /traders/delegation/{traderId}/approve:
+    post:
+      tags:
+        - Trader API Management
+      summary: Admin initiate delegation approval with OTP
+      description: |
+        Admin initiates delegation approval by setting commission percentage.
+        System sends OTP to trader's phone and email.
+        Also sends notification to PRIVATE_RECEIVER.
+        Returns sessionId for OTP verification step.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Trader ID to approve delegation for
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - commission
+              properties:
+                commission:
+                  type: number
+                  format: float
+                  minimum: 0
+                  maximum: 100
+                  description: Commission percentage for trader
+                  example: 5.0
+            examples:
+              set_commission:
+                summary: Set 5% Commission
+                value:
+                  commission: 5.0
+      responses:
+        200:
+          description: OTP sent to trader for verification
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "OTP sent to trader for verification"
+                  sessionId:
+                    type: string
+                    description: Session ID for OTP verification
+                    example: "eyJhZG1pbklkIjoiYWRtaW4xMjMiLCJ0cmFkZXJJZCI6InRyYWRlcjQ1NiJ9"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+              examples:
+                invalid_commission:
+                  value:
+                    success: false
+                    message: "Valid commission percentage (0-100) is required"
+                no_request:
+                  value:
+                    success: false
+                    message: "Trader has not requested delegation"
+                already_approved:
+                  value:
+                    success: false
+                    message: "Trader already has delegation permission"
+        403:
+          description: Admin access required
+        404:
+          description: Trader wallet not found

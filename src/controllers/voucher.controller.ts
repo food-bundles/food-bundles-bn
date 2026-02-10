@@ -27,6 +27,7 @@ import {
   getAllVouchersService,
   markLoanApplicationAsAcceptedService,
 } from "../services/voucher.service";
+import { sendVoucherMaturityRemindersService } from "../services/voucher-reminder.service";
 import { VoucherStatus, LoanStatus } from "@prisma/client";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
@@ -1084,6 +1085,25 @@ export const getRestaurantCreditSummary = async (
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to get credit summary",
+    });
+  }
+};
+
+/**
+ * Send voucher maturity reminders (Admin/System)
+ * POST /vouchers/reminders/send
+ */
+export const sendVoucherReminders = async (req: Request, res: Response) => {
+  try {
+    const result = await sendVoucherMaturityRemindersService();
+    
+    res.status(200).json({
+      message: result.success  ? "Reminders sent successfully" : "Failed to send reminders",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to send voucher reminders",
     });
   }
 };

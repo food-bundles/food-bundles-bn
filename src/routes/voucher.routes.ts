@@ -26,6 +26,7 @@ import {
   getVoucherByCode,
   getMyVouchers,
   markLoanApplicationAsAccepted,
+  sendVoucherReminders,
 } from "../controllers/voucher.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -296,5 +297,17 @@ voucherRoutes.patch(
 );
 
 voucherRoutes.get("/code/:voucherCode", isAuthenticated, getVoucherByCode);
+
+/**
+ * Send voucher maturity reminders (Admin/System)
+ * POST /vouchers/reminders/send
+ */
+voucherRoutes.post(
+  "/reminders/send",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  sendVoucherReminders,
+);
+
 
 export default voucherRoutes;

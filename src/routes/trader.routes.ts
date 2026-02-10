@@ -18,6 +18,7 @@ import {
   processExistingUsedVouchers,
   requestDelegation,
   approveDelegation,
+  acceptDelegation,
   verifyDelegationOTP,
   revokeDelegation,
   getAllDelegationRequests,
@@ -163,6 +164,13 @@ traderRoutes.post(
   isAuthenticated,
   checkPermission("ADMIN"),
   approveDelegation,
+);
+
+traderRoutes.post(
+  "/delegation/accept",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  acceptDelegation,
 );
 
 traderRoutes.post(

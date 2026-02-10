@@ -1850,3 +1850,121 @@ paths:
           description: Restaurant access required
         500:
           description: Internal server error
+
+  /vouchers/reminders/send:
+    post:
+      tags: [Voucher Management]
+      summary: Send voucher maturity reminders (Admin/System)
+      description: |
+        Manually trigger voucher maturity reminder SMS notifications. This endpoint is also called automatically by a cron job daily at 9:00 AM.
+        
+        **Reminder Logic:**
+        - Sends reminder 1 day before voucher maturity with amount to be paid
+        - Sends daily reminders for matured vouchers with outstanding balance
+        - Messages are sent to restaurant phone numbers
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Reminders sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Sent 5 voucher reminders"
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      usedVouchersFound:
+                        type: integer
+                        description: Number of USED vouchers found
+                        example: 3
+                      maturedVouchersFound:
+                        type: integer
+                        description: Number of MATURED vouchers found
+                        example: 2
+                      remindersSent:
+                        type: integer
+                        description: Total reminders sent
+                        example: 5
+                      skipped:
+                        type: array
+                        description: Vouchers skipped with reasons
+                        items:
+                          type: string
+                        example: ["VCH-123: No phone number", "VCH-456: 5 days until maturity"]
+                      sent:
+                        type: array
+                        description: Vouchers that received reminders
+                        items:
+                          type: string
+                        example: ["VCH-789 (pre-maturity)", "VCH-012 (matured)"]
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        500:
+          description: Internal server error
+
+  /vouchers/reminders/test:
+    post:
+      tags: [Voucher Management]
+      summary: Test SMS sending (Admin)
+      description: Send a test SMS to verify SMS configuration is working correctly
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phoneNumber
+              properties:
+                phoneNumber:
+                  type: string
+                  description: Phone number to send test SMS to
+                  example: "+250788123456"
+      responses:
+        200:
+          description: Test SMS sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Test SMS sent"
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      message:
+                        type: string
+                        example: "Test SMS sent successfully"
+        400:
+          description: Phone number required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing_phone:
+                  value:
+                    message: "Phone number is required"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        500:
+          description: Internal server error
