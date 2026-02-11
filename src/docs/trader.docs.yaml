@@ -1373,3 +1373,52 @@ paths:
                     type: object
         403:
           description: Admin access required
+
+
+  /traders/withdraw/{withdrawId}/cancel:
+    delete:
+      tags:
+        - Trader API Management
+      summary: Cancel pending withdraw request
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: withdrawId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Withdraw request ID to cancel
+      responses:
+        200:
+          description: Withdraw request cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Withdraw request cancelled successfully"
+        400:
+          description: Bad request - Request not found, unauthorized, or not pending
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      not_found:
+                        value: "Withdraw request not found"
+                      unauthorized:
+                        value: "Unauthorized access"
+                      not_pending:
+                        value: "Can only cancel pending withdraw requests"

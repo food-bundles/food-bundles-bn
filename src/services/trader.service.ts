@@ -2029,3 +2029,63 @@ export const getAllWithdrawRequestsService = async (filters?: {
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };
 };
+
+
+// Cancel withdraw request
+export const cancelWithdrawRequestService = async (
+  traderId: string,
+  withdrawId: string,
+) => {
+  const withdrawRequest = await prisma.walletTransaction.findUnique({
+    where: { id: withdrawId },
+    include: { wallet: { include: { trader: true } } },
+  });
+
+  if (!withdrawRequest) throw new Error("Withdraw request not found");
+  if (withdrawRequest.traderId !== traderId)
+    throw new Error("Unauthorized access");
+  if (withdrawRequest.status !== "PENDING")
+    throw new Error("Can only cancel pending withdraw requests");
+
+  const wallet = withdrawRequest.wallet;
+  const amount = Math.abs(withdrawRequest.amount);
+
+  // Return pending amount to available balance
+  await prisma.$transaction([
+    prisma.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        pendingWithdrawBalance:
+          withdrawRequest.withdrawType === "BALANCE"
+            ? Math.max(0, wallet.pendingWithdrawBalance - amount)
+            : wallet.pendingWithdrawBalance,
+        pendingWithdrawCommission:
+          withdrawRequest.withdrawType === "COMMISSION"
+            ? Math.max(0, wallet.pendingWithdrawCommission - amount)
+            : wallet.pendingWithdrawCommission,
+      },
+    }),
+    prisma.walletTransaction.update({
+      where: { id: withdrawId },
+      data: { status: "CANCELLED" },
+    }),
+  ]);
+
+  // Notifications
+  await createNotificationService({
+    title: "Withdraw Cancelled",
+    message: `Your withdraw request of ${amount} RWF has been cancelled`,
+    eventType: "SYSTEM_MAINTENANCE",
+    targetType: "SPECIFIC_USER",
+    targetId: traderId,
+  });
+
+  if (wallet.trader?.phone) {
+    await sendMessage(
+      `Withdraw request cancelled: ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()}`,
+      wallet.trader.phone,
+    );
+  }
+
+  return { success: true, message: "Withdraw request cancelled successfully" };
+};

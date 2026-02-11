@@ -29,6 +29,7 @@ import {
   verifyWithdrawOTP,
   getTraderWithdrawRequests,
   getAllWithdrawRequests,
+  cancelWithdrawRequest,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -241,6 +242,17 @@ traderRoutes.get(
   isAuthenticated,
   checkPermission("ADMIN"),
   getAllWithdrawRequests,
+);
+
+export default traderRoutes;
+
+
+// Cancel withdraw request
+traderRoutes.delete(
+  "/withdraw/:withdrawId/cancel",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  cancelWithdrawRequest,
 );
 
 export default traderRoutes;
