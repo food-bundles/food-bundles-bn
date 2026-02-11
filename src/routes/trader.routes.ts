@@ -24,6 +24,11 @@ import {
   getTraderDelegationStatus,
   adminApproveLoanOnBehalf,
   reverseDelegation,
+  requestWithdraw,
+  adminApproveWithdraw,
+  verifyWithdrawOTP,
+  getTraderWithdrawRequests,
+  getAllWithdrawRequests,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -200,6 +205,42 @@ traderRoutes.post(
   isAuthenticated,
   checkPermission("TRADER"),
   reverseDelegation,
+);
+
+// Withdraw Management
+traderRoutes.post(
+  "/withdraw/request",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  requestWithdraw,
+);
+
+traderRoutes.post(
+  "/withdraw/:withdrawId/approve",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  adminApproveWithdraw,
+);
+
+traderRoutes.post(
+  "/withdraw/verify-otp",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  verifyWithdrawOTP,
+);
+
+traderRoutes.get(
+  "/withdraw/requests",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  getTraderWithdrawRequests,
+);
+
+traderRoutes.get(
+  "/withdraw/all-requests",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllWithdrawRequests,
 );
 
 export default traderRoutes;

@@ -335,8 +335,8 @@ model Product {
   id                   String              @id @default(uuid())
   tableTronicProductId Int?                @unique @map("tableTronicProductId")
   unitPrice            Float
-  restaurantPrice      Float?              // Price for restaurant users
-  hotelPrice           Float?              // Price for hotel users
+  restaurantPrice      Float? // Price for restaurant users
+  hotelPrice           Float? // Price for hotel users
   purchasePrice        Float
   unit                 String
   unitId               String?
@@ -629,22 +629,25 @@ model OrderDelivery {
 
 // Wallet model for managing user account balances
 model Wallet {
-  id                    String    @id @default(uuid())
-  restaurantId          String?   @unique
-  traderId              String?   @unique
-  balance               Float     @default(0)
-  pendingApprovedAmount Float     @default(0) // Amount approved for active vouchers
-  commissionEarned      Float     @default(0) // Total commission earned (separate from balance)
-  commission            Float     @default(5.0) // Commission percentage (default 5%)
-  totalDeposited        Float     @default(0) // Total amount deposited (never decreases)
-  canTradeOnBehalf      Boolean   @default(false) // Permission to trade on behalf
-  delegationRequestedAt DateTime? // When delegation was requested
-  delegationApprovedAt  DateTime? // When delegation was approved
-  delegationApprovedBy  String? // Admin ID who approved delegation
-  currency              String    @default("RWF")
-  isActive              Boolean   @default(true)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                        String    @id @default(uuid())
+  restaurantId              String?   @unique
+  traderId                  String?   @unique
+  balance                   Float     @default(0)
+  pendingApprovedAmount     Float     @default(0) // Amount approved for active vouchers
+  commissionEarned          Float     @default(0) // Total commission earned (separate from balance)
+  commission                Float     @default(5.0) // Commission percentage (default 5%)
+  totalDeposited            Float     @default(0) // Total amount deposited (never decreases)
+  pendingWithdrawBalance    Float     @default(0) // Pending withdraw from balance
+  pendingWithdrawCommission Float     @default(0) // Pending withdraw from commission
+  totalWithdrawn            Float     @default(0) // Total amount withdrawn
+  canTradeOnBehalf          Boolean   @default(false) // Permission to trade on behalf
+  delegationRequestedAt     DateTime? // When delegation was requested
+  delegationApprovedAt      DateTime? // When delegation was approved
+  delegationApprovedBy      String? // Admin ID who approved delegation
+  currency                  String    @default("RWF")
+  isActive                  Boolean   @default(true)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   // Relations
   restaurant   Restaurant?         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -678,6 +681,14 @@ model WalletTransaction {
   flwMessage    String?
   paymentMethod String?
   externalTxId  String?
+
+  // Withdraw fields
+  withdrawType  WithdrawType?
+  accountNumber String?
+  accountName   String?
+  otp           String?
+  otpExpiresAt  DateTime?
+  otpVerified   Boolean?      @default(false)
 
   status   TransactionStatus @default(PENDING)
   metadata Json?
@@ -1290,6 +1301,11 @@ enum WalletTransactionType {
   ADJUSTMENT // Manual adjustment by admin
   WITHDRAWAL
   TRADING
+}
+
+enum WithdrawType {
+  BALANCE
+  COMMISSION
 }
 
 // Enum for transaction status
