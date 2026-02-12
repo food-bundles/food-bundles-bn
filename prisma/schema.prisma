@@ -324,11 +324,12 @@ model Admin {
   managedLoans             LoanApplication[]     @relation("LoanManager")
   OrderDelivery            OrderDelivery[]
   promoCodes               PromoCode[]
-  walletTransactions       WalletTransaction[]
+  walletTransactions       WalletTransaction[]   @relation("WalletTransactionAdmin")
   Voucher                  Voucher[]
   traderWallet             Wallet?               @relation("TraderWallet")
   traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
   traderTransactionHistory TraderTransaction[]   @relation("TraderTransactionHistory")
+  approvedWithdrawals      WalletTransaction[]   @relation("WithdrawApprover")
 }
 
 model Product {
@@ -699,11 +700,11 @@ model WalletTransaction {
 
   // Relations
   wallet     Wallet      @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  admin      Admin?      @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  admin      Admin?      @relation("WalletTransactionAdmin", fields: [adminId], references: [id], onDelete: Cascade)
   restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   affiliator Affiliator? @relation(fields: [affiliatorId], references: [id], onDelete: Cascade)
   trader     Admin?      @relation("TraderTransactions", fields: [traderId], references: [id], onDelete: Cascade)
-  approver     Admin?               @relation(fields: [approvedBy], references: [id])
+  approver   Admin?      @relation("WithdrawApprover", fields: [approvedBy], references: [id])
 
   @@index([walletId])
   @@index([type])

@@ -1850,7 +1850,7 @@ export const adminApproveWithdrawService = async (
   });
 
   if (!withdrawRequest) throw new Error("Withdraw request not found");
-  if (withdrawRequest.status !== "PENDING")
+  if (withdrawRequest.status === "COMPLETED" || withdrawRequest.status === "CANCELLED")
     throw new Error("Withdraw request already processed");
 
   // Generate OTP
