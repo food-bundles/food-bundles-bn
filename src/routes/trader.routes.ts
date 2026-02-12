@@ -18,6 +18,7 @@ import {
   processExistingUsedVouchers,
   requestDelegation,
   approveDelegation,
+  acceptDelegation,
   verifyDelegationOTP,
   revokeDelegation,
   getAllDelegationRequests,
@@ -30,6 +31,7 @@ import {
   getTraderWithdrawRequests,
   getAllWithdrawRequests,
   cancelWithdrawRequest,
+  getAdminTraderWallet,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -124,6 +126,14 @@ traderRoutes.get(
 );
 
 // Admin routes for trader management
+// Get trader wallet by ID (Admin)
+traderRoutes.get(
+  "/:traderId/wallet",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAdminTraderWallet,
+);
+
 traderRoutes.patch(
   "/:traderId/commission",
   isAuthenticated,
@@ -160,6 +170,13 @@ traderRoutes.post(
   isAuthenticated,
   checkPermission("ADMIN"),
   approveDelegation,
+);
+
+traderRoutes.post(
+  "/delegation/accept",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  acceptDelegation,
 );
 
 traderRoutes.post(

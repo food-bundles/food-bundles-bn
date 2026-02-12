@@ -471,6 +471,8 @@ export const getWalletTransactionsService = async ({
   status,
   startDate,
   endDate,
+  walletType,
+  search,
 }: {
   page?: number;
   limit?: number;
@@ -479,6 +481,8 @@ export const getWalletTransactionsService = async ({
   status?: string;
   startDate?: Date;
   endDate?: Date;
+  walletType?: "restaurant" | "trader";
+  search?: string;
 }) => {
   const skip = (page - 1) * limit;
 
@@ -486,6 +490,37 @@ export const getWalletTransactionsService = async ({
 
   if (restaurantId) {
     where.restaurantId = restaurantId;
+  }
+
+  // Filter by wallet type with search
+  if (walletType === "restaurant") {
+    where.wallet = {
+      restaurantId: { not: null },
+      traderId: null,
+      ...(search && {
+        restaurant: {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+            { phone: { contains: search, mode: "insensitive" } },
+          ],
+        },
+      }),
+    };
+  } else if (walletType === "trader") {
+    where.wallet = {
+      traderId: { not: null },
+      restaurantId: null,
+      ...(search && {
+        trader: {
+          OR: [
+            { email: { contains: search, mode: "insensitive" } },
+            { phone: { contains: search, mode: "insensitive" } },
+            { username: { contains: search, mode: "insensitive" } },
+          ],
+        },
+      }),
+    };
   }
 
   if (type) {
@@ -521,6 +556,15 @@ export const getWalletTransactionsService = async ({
                 id: true,
                 name: true,
                 email: true,
+                phone: true,
+              },
+            },
+            trader: {
+              select: {
+                id: true,
+                email: true,
+                username: true,
+                phone: true,
               },
             },
           },
@@ -880,23 +924,48 @@ export const getAllWalletsService = async ({
   limit = 20,
   isActive,
   restaurantName,
+  walletType,
+  search,
 }: {
   page?: number;
   limit?: number;
   isActive?: boolean;
   restaurantName?: string;
+  walletType?: "restaurant" | "trader";
+  search?: string;
 } = {}) => {
   const skip = (page - 1) * limit;
 
   const where: any = {};
   if (isActive !== undefined) where.isActive = isActive;
-  if (restaurantName) {
-    where.restaurant = {
-      name: {
-        contains: restaurantName,
-        mode: "insensitive",
-      },
-    };
+  
+  // Filter by wallet type with search
+  if (walletType === "restaurant") {
+    where.restaurantId = { not: null };
+    where.traderId = null;
+    
+    if (search || restaurantName) {
+      where.restaurant = {
+        OR: [
+          { name: { contains: search || restaurantName, mode: "insensitive" } },
+          { email: { contains: search || restaurantName, mode: "insensitive" } },
+          { phone: { contains: search || restaurantName, mode: "insensitive" } },
+        ],
+      };
+    }
+  } else if (walletType === "trader") {
+    where.traderId = { not: null };
+    where.restaurantId = null;
+    
+    if (search) {
+      where.trader = {
+        OR: [
+          { email: { contains: search, mode: "insensitive" } },
+          { phone: { contains: search, mode: "insensitive" } },
+          { username: { contains: search, mode: "insensitive" } },
+        ],
+      };
+    }
   }
 
   const [wallets, total] = await Promise.all([
@@ -913,10 +982,22 @@ export const getAllWalletsService = async ({
             phone: true,
           },
         },
+        trader: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            phone: true,
+          },
+        },
         _count: {
           select: {
             transactions: true,
           },
+        },
+        delegationHistories: {
+          orderBy: { startedAt: "desc" },
+          take: 10,
         },
       },
       orderBy: { createdAt: "desc" },

@@ -18,6 +18,7 @@ import {
   processExistingUsedVouchersService,
   requestDelegationService,
   approveDelegationService,
+  acceptDelegationService,
   verifyDelegationOTPService,
   revokeDelegationService,
   getAllDelegationRequestsService,
@@ -62,6 +63,29 @@ export const getTraderWallet = async (req: Request, res: Response) => {
       data: {
         ...wallet,
         // Include calculated fields for better API response
+        availableBalance: wallet.availableBalance,
+        totalVouchersAmount: wallet.totalVouchersAmount,
+        totalVouchersCount: wallet.totalVouchersCount,
+      },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get trader wallet by ID (Admin only)
+export const getAdminTraderWallet = async (req: Request, res: Response) => {
+  try {
+    const { traderId } = req.params;
+    const wallet = await getTraderWalletService(traderId);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...wallet,
         availableBalance: wallet.availableBalance,
         totalVouchersAmount: wallet.totalVouchersAmount,
         totalVouchersCount: wallet.totalVouchersCount,
@@ -501,7 +525,6 @@ export const approveDelegation = async (req: Request, res: Response) => {
     res.status(200).json({
       success: true,
       message: result.message,
-      sessionId: result.sessionId,
     });
   } catch (error: any) {
     res.status(400).json({
@@ -639,8 +662,27 @@ export const adminApproveLoanOnBehalf = async (req: Request, res: Response) => {
   }
 };
 
-// Reverse delegation status
+// Reverse delegation status (trader can continue to trade)
 export const reverseDelegation = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user.id;
+
+    const result = await reverseDelegationService(traderId);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Accept delegation with OTP (Trader)
+export const acceptDelegation = async (req: Request, res: Response) => {
   try {
     const traderId = (req as any).user.id;
     const { otp } = req.body;
@@ -652,7 +694,7 @@ export const reverseDelegation = async (req: Request, res: Response) => {
       });
     }
 
-    const result = await reverseDelegationService(traderId, otp);
+    const result = await acceptDelegationService(traderId, otp);
 
     res.status(200).json({
       success: true,

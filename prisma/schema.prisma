@@ -642,6 +642,7 @@ model Wallet {
   pendingWithdrawCommission Float     @default(0) // Pending withdraw from commission
   totalWithdrawn            Float     @default(0) // Total amount withdrawn
   canTradeOnBehalf          Boolean   @default(false) // Permission to trade on behalf
+  delegationStatus         DelegationStatus   @default(NORMAL) // Current delegation status
   delegationRequestedAt     DateTime? // When delegation was requested
   delegationApprovedAt      DateTime? // When delegation was approved
   delegationApprovedBy      String? // Admin ID who approved delegation
@@ -654,6 +655,7 @@ model Wallet {
   restaurant   Restaurant?         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   trader       Admin?              @relation("TraderWallet", fields: [traderId], references: [id], onDelete: Cascade)
   transactions WalletTransaction[]
+  delegationHistories DelegationHistory[]
 
   @@index([restaurantId])
   @@index([traderId])
@@ -1421,4 +1423,27 @@ enum PromoCodeType {
 enum DiscountType {
   PERCENTAGE // Discount as percentage (e.g., 10% off)
   FIXED_AMOUNT // Fixed amount discount (e.g., 5000 RWF off)
+}
+
+enum DelegationStatus {
+  NORMAL // No delegation active or requested
+  PENDING // Trader requested delegation
+  APPROVED // Admin approved, waiting for trader acceptance
+  ACCEPTED // Trader accepted, delegation is active
+}
+
+// Delegation History - tracks all delegation control changes
+model DelegationHistory {
+  id          String   @id @default(uuid())
+  walletId    String
+  startedAt   DateTime @default(now()) // When Food Bundles took control
+  endedAt     DateTime? // When owner took back control (null = still active)
+  approvedBy  String? // Admin who approved this delegation period
+  createdAt   DateTime @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([startedAt])
+  @@index([endedAt])
 }
