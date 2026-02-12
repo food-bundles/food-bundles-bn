@@ -3,14 +3,14 @@ require("dotenv").config();
 
 const twilio = require("twilio")(
   process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
+  process.env.TWILIO_AUTH_TOKEN,
 );
 
 const token = process.env.SMS_API_TOKEN;
 
 export const cleanSMSPhoneNumber = (phone: string): string => {
   let cleaned = phone.replace(/\D/g, "");
-  
+
   if (cleaned.startsWith("07")) {
     cleaned = "+250" + cleaned.slice(1);
   } else if (cleaned.startsWith("2507")) {
@@ -23,8 +23,7 @@ export const cleanSMSPhoneNumber = (phone: string): string => {
       cleaned = "+250" + cleaned;
     }
   }
-  
-  console.log(`Final cleaned phone number: ${cleaned}`);
+
   return cleaned;
 };
 
@@ -52,7 +51,7 @@ async function sendViaPindo(messageBody: string, phoneNumber: string) {
 
 async function sendViaTwilio(messageBody: string, phoneNumber: string) {
   const cleanedPhone = cleanSMSPhoneNumber(phoneNumber);
-  
+
   try {
     const message = await twilio.messages.create({
       body: `Hello from FoodBundles!\n${messageBody}`,
@@ -61,18 +60,17 @@ async function sendViaTwilio(messageBody: string, phoneNumber: string) {
     });
     return message;
   } catch (error: any) {
-    console.error('Twilio error details:', {
+    console.error("Twilio error details:", {
       code: error.code,
       message: error.message,
       moreInfo: error.moreInfo,
-      status: error.status
+      status: error.status,
     });
     throw error;
   }
 }
 
 export async function sendMessage(messageBody: string, phoneNumber: string) {
-  
   // If Pindo is configured, try it first
   if (token) {
     try {
@@ -89,14 +87,14 @@ export async function sendMessage(messageBody: string, phoneNumber: string) {
   try {
     const response = await sendViaTwilio(messageBody, phoneNumber);
     console.log({
-      message: token ? "SMS sent via Twilio (fallback)" : "SMS sent via Twilio (primary)",
+      message: token
+        ? "SMS sent via Twilio (fallback)"
+        : "SMS sent via Twilio (primary)",
       data: response,
     });
     return response;
   } catch (twilioError: any) {
     console.error("Twilio SMS failed:", twilioError);
-    throw new Error(
-      `SMS sending failed: ${twilioError.message}`
-    );
+    throw new Error(`SMS sending failed: ${twilioError.message}`);
   }
 }

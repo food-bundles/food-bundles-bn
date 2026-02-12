@@ -25,6 +25,12 @@ import {
   getTraderDelegationStatusService,
   adminApproveLoanOnBehalfService,
   reverseDelegationService,
+  verifyWithdrawOTPService,
+  requestWithdrawService,
+  adminApproveWithdrawService,
+  getTraderWithdrawRequestsService,
+  getAllWithdrawRequestsService,
+  cancelWithdrawRequestService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -699,5 +705,148 @@ export const acceptDelegation = async (req: Request, res: Response) => {
       success: false,
       message: error.message,
     });
+  }
+};
+
+// Request withdraw
+export const requestWithdraw = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user.id;
+    const { amount, withdrawType, paymentMethod, accountNumber, accountName } =
+      req.body;
+
+    if (
+      !amount ||
+      !withdrawType ||
+      !paymentMethod ||
+      !accountNumber ||
+      !accountName
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    const result = await requestWithdrawService(traderId, {
+      amount: parseFloat(amount),
+      withdrawType,
+      paymentMethod,
+      accountNumber,
+      accountName,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Withdraw request submitted successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Admin approve withdraw and send OTP
+export const adminApproveWithdraw = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { withdrawId } = req.params;
+
+    const result = await adminApproveWithdrawService(adminId, withdrawId);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      sessionId: result.sessionId,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Verify withdraw OTP (Admin only)
+export const verifyWithdrawOTP = async (req: Request, res: Response) => {
+  try {
+    const { sessionId, otp } = req.body;
+
+    if (!sessionId || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Session ID and OTP are required",
+      });
+    }
+
+    const result = await verifyWithdrawOTPService(sessionId, otp);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Get trader withdraw requests
+export const getTraderWithdrawRequests = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const traderId = (req as any).user.id;
+    const { page, limit, status } = req.query;
+
+    const result = await getTraderWithdrawRequestsService(traderId, {
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+      status: status as string,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result.requests,
+      pagination: result.pagination,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Get all withdraw requests (Admin)
+export const getAllWithdrawRequests = async (req: Request, res: Response) => {
+  try {
+    const { page, limit, status } = req.query;
+
+    const result = await getAllWithdrawRequestsService({
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+      status: status as string,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result.requests,
+      pagination: result.pagination,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+
+// Cancel withdraw request
+export const cancelWithdrawRequest = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user.id;
+    const { withdrawId } = req.params;
+
+    const result = await cancelWithdrawRequestService(traderId, withdrawId);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
   }
 };

@@ -2975,3 +2975,106 @@ export const processMaturedVouchersAutoDeductionService = async () => {
     throw new Error(`Auto-deduction failed: ${error.message}`);
   }
 };
+
+// Process all expired vouchers and return trader's pending approved amounts
+export const processExpiredVouchersService = async () => {
+  try {
+    const expiredVouchers = await prisma.voucher.findMany({
+      where: {
+        status: "EXPIRED",
+        approvedBy: { not: null },
+      },
+      include: { approver: true, loan: true },
+    });
+
+    const results = [];
+
+    for (const voucher of expiredVouchers) {
+      if (!voucher.approvedBy || !voucher.loan) continue;
+
+      const traderWallet = await prisma.wallet.findUnique({
+        where: { traderId: voucher.approvedBy },
+      });
+
+      if (!traderWallet) continue;
+
+      // Check if already processed
+      const existingTransaction = await prisma.walletTransaction.findFirst({
+        where: {
+          walletId: traderWallet.id,
+          reference: voucher.id,
+          type: "REVERSAL",
+          isReversed: true,
+        },
+      });
+
+      if (existingTransaction) continue;
+
+      const approvedAmount = voucher.loan.approvedAmount || voucher.creditLimit;
+
+      await prisma.wallet.update({
+        where: { id: traderWallet.id },
+        data: {
+          pendingApprovedAmount: Math.max(
+            0,
+            traderWallet.pendingApprovedAmount - approvedAmount,
+          ),
+        },
+      });
+
+      await prisma.walletTransaction.create({
+        data: {
+          walletId: traderWallet.id,
+          adminId: voucher.approvedBy,
+          type: "REVERSAL",
+          amount: 0,
+          previousBalance: traderWallet.balance,
+          newBalance: traderWallet.balance,
+          reference: voucher.id,
+          isReversed: true,
+          description: `Returned pending amount from expired voucher ${voucher.voucherCode}`,
+          status: "COMPLETED",
+        },
+      });
+
+      // Send notifications
+      const trader = await prisma.admin.findUnique({
+        where: { id: voucher.approvedBy },
+      });
+
+      if (trader) {
+        await sendMessage(
+          `Expired voucher ${voucher.voucherCode}: ${approvedAmount} RWF returned to available balance`,
+          trader.phone || "",
+        );
+
+        await createNotificationService({
+          title: "Expired Voucher Processed",
+          message: `${approvedAmount} RWF from expired voucher ${voucher.voucherCode} returned to available balance`,
+          eventType: "PAYMENT_PROCESSED",
+          targetType: "SPECIFIC_USER",
+          targetId: voucher.approvedBy,
+          metadata: { voucherId: voucher.id, approvedAmount },
+        });
+      }
+
+      await sendMessage(
+        `Trader ${trader?.username} - expired voucher ${voucher.voucherCode}: ${approvedAmount} RWF returned`,
+        process.env.PRIVATE_RECEIVER || "",
+      );
+
+      results.push({
+        voucherId: voucher.id,
+        voucherCode: voucher.voucherCode,
+        traderId: voucher.approvedBy,
+        approvedAmount,
+        success: true,
+      });
+    }
+
+    return results;
+  } catch (error: any) {
+    console.error("Error processing expired vouchers:", error.message);
+    return [];
+  }
+};

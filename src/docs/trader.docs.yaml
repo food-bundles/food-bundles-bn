@@ -1293,3 +1293,267 @@ paths:
           description: Admin access required
         404:
           description: Trader wallet not found
+
+  /traders/withdraw/request:
+    post:
+      tags:
+        - Trader API Management
+      summary: Request withdraw from balance or commission
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amount
+                - withdrawType
+                - paymentMethod
+                - accountNumber
+                - accountName
+              properties:
+                amount:
+                  type: number
+                  format: float
+                  description: Amount to withdraw
+                  example: 50000
+                withdrawType:
+                  type: string
+                  enum: [BALANCE, COMMISSION]
+                  description: Type of withdraw
+                paymentMethod:
+                  type: string
+                  description: Payment method (MoMo, Card, Bank Transfer)
+                  example: "Mobile Money"
+                accountNumber:
+                  type: string
+                  description: Account number for payment
+                  example: "0788123456"
+                accountName:
+                  type: string
+                  description: Account holder name
+                  example: "John Doe"
+      responses:
+        200:
+          description: Withdraw request submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Withdraw request submitted successfully"
+                  data:
+                    type: object
+        400:
+          description: Bad request
+
+  /traders/withdraw/{withdrawId}/approve:
+    post:
+      tags:
+        - Trader API Management
+      summary: Admin approve withdraw and send OTP (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: withdrawId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Withdraw request ID
+      responses:
+        200:
+          description: OTP sent to trader
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "OTP sent to trader"
+        400:
+          description: Bad request
+        403:
+          description: Admin access required
+
+  /traders/withdraw/verify-otp:
+    post:
+      tags:
+        - Trader API Management
+      summary: Verify withdraw OTP and complete withdrawal
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+                - otp
+              properties:
+                sessionId:
+                  type: string
+                  description: Withdraw request ID
+                otp:
+                  type: string
+                  description: OTP code
+                  example: "123456"
+      responses:
+        200:
+          description: Withdraw completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Withdraw completed successfully"
+        400:
+          description: Bad request - Invalid OTP or expired
+
+  /traders/withdraw/my-requests:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader's withdraw requests
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+      responses:
+        200:
+          description: Withdraw requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  pagination:
+                    type: object
+
+  /traders/withdraw/all-requests:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get all withdraw requests (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+      responses:
+        200:
+          description: All withdraw requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  pagination:
+                    type: object
+        403:
+          description: Admin access required
+
+  /traders/withdraw/{withdrawId}/cancel:
+    delete:
+      tags:
+        - Trader API Management
+      summary: Cancel pending withdraw request
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: withdrawId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Withdraw request ID to cancel
+      responses:
+        200:
+          description: Withdraw request cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Withdraw request cancelled successfully"
+        400:
+          description: Bad request - Request not found, unauthorized, or not pending
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    examples:
+                      not_found:
+                        value: "Withdraw request not found"
+                      unauthorized:
+                        value: "Unauthorized access"
+                      not_pending:
+                        value: "Can only cancel pending withdraw requests"

@@ -324,19 +324,20 @@ model Admin {
   managedLoans             LoanApplication[]     @relation("LoanManager")
   OrderDelivery            OrderDelivery[]
   promoCodes               PromoCode[]
-  walletTransactions       WalletTransaction[]
+  walletTransactions       WalletTransaction[]   @relation("WalletTransactionAdmin")
   Voucher                  Voucher[]
   traderWallet             Wallet?               @relation("TraderWallet")
   traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
   traderTransactionHistory TraderTransaction[]   @relation("TraderTransactionHistory")
+  approvedWithdrawals      WalletTransaction[]   @relation("WithdrawApprover")
 }
 
 model Product {
   id                   String              @id @default(uuid())
   tableTronicProductId Int?                @unique @map("tableTronicProductId")
   unitPrice            Float
-  restaurantPrice      Float?              // Price for restaurant users
-  hotelPrice           Float?              // Price for hotel users
+  restaurantPrice      Float? // Price for restaurant users
+  hotelPrice           Float? // Price for hotel users
   purchasePrice        Float
   unit                 String
   unitId               String?
@@ -629,29 +630,32 @@ model OrderDelivery {
 
 // Wallet model for managing user account balances
 model Wallet {
-  id                    String    @id @default(uuid())
-  restaurantId          String?   @unique
-  traderId              String?   @unique
-  balance               Float     @default(0)
-  pendingApprovedAmount Float     @default(0) // Amount approved for active vouchers
-  commissionEarned      Float     @default(0) // Total commission earned (separate from balance)
-  commission            Float     @default(5.0) // Commission percentage (default 5%)
-  totalDeposited        Float     @default(0) // Total amount deposited (never decreases)
-  canTradeOnBehalf      Boolean   @default(false) // Permission to trade on behalf
-  delegationStatus         DelegationStatus   @default(NORMAL) // Current delegation status
-  delegationRequestedAt    DateTime? // When delegation was requested
-  delegationApprovedAt     DateTime? // When delegation was approved by admin
-  delegationApprovedBy     String? // Admin ID who approved delegation
-  delegationAcceptedAt     DateTime? // When trader accepted delegation
-  currency                 String             @default("RWF")
-  isActive              Boolean   @default(true)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                        String           @id @default(uuid())
+  restaurantId              String?          @unique
+  traderId                  String?          @unique
+  balance                   Float            @default(0)
+  pendingApprovedAmount     Float            @default(0) // Amount approved for active vouchers
+  commissionEarned          Float            @default(0) // Total commission earned (separate from balance)
+  commission                Float            @default(5.0) // Commission percentage (default 5%)
+  totalDeposited            Float            @default(0) // Total amount deposited (never decreases)
+  pendingWithdrawBalance    Float            @default(0) // Pending withdraw from balance
+  pendingWithdrawCommission Float            @default(0) // Pending withdraw from commission
+  totalWithdrawn            Float            @default(0) // Total amount withdrawn
+  canTradeOnBehalf          Boolean          @default(false) // Permission to trade on behalf
+  delegationStatus          DelegationStatus @default(NORMAL) // Current delegation status
+  delegationRequestedAt     DateTime? // When delegation was requested
+  delegationApprovedAt      DateTime? // When delegation was approved
+  delegationApprovedBy      String? // Admin ID who approved delegation
+  delegationAcceptedAt      DateTime? // When trader accepted delegation
+  currency                  String           @default("RWF")
+  isActive                  Boolean          @default(true)
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
 
   // Relations
-  restaurant   Restaurant?         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  trader       Admin?              @relation("TraderWallet", fields: [traderId], references: [id], onDelete: Cascade)
-  transactions WalletTransaction[]
+  restaurant          Restaurant?         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  trader              Admin?              @relation("TraderWallet", fields: [traderId], references: [id], onDelete: Cascade)
+  transactions        WalletTransaction[]
   delegationHistories DelegationHistory[]
 
   @@index([restaurantId])
@@ -682,6 +686,16 @@ model WalletTransaction {
   paymentMethod String?
   externalTxId  String?
 
+  // Withdraw fields
+  withdrawType  WithdrawType?
+  accountNumber String?
+  accountName   String?
+  otp           String?
+  otpExpiresAt  DateTime?
+  otpVerified   Boolean?      @default(false)
+  approvedBy    String? // Admin ID who approved the withdraw
+  isReversed    Boolean       @default(false) // Track if transaction is a reversal
+
   status   TransactionStatus @default(PENDING)
   metadata Json?
 
@@ -690,10 +704,11 @@ model WalletTransaction {
 
   // Relations
   wallet     Wallet      @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  admin      Admin?      @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  admin      Admin?      @relation("WalletTransactionAdmin", fields: [adminId], references: [id], onDelete: Cascade)
   restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   affiliator Affiliator? @relation(fields: [affiliatorId], references: [id], onDelete: Cascade)
   trader     Admin?      @relation("TraderTransactions", fields: [traderId], references: [id], onDelete: Cascade)
+  approver   Admin?      @relation("WithdrawApprover", fields: [approvedBy], references: [id])
 
   @@index([walletId])
   @@index([type])
@@ -1293,6 +1308,12 @@ enum WalletTransactionType {
   ADJUSTMENT // Manual adjustment by admin
   WITHDRAWAL
   TRADING
+  REVERSAL // For returning pending amounts from expired vouchers
+}
+
+enum WithdrawType {
+  BALANCE
+  COMMISSION
 }
 
 // Enum for transaction status
@@ -1414,12 +1435,12 @@ enum DelegationStatus {
 
 // Delegation History - tracks all delegation control changes
 model DelegationHistory {
-  id          String   @id @default(uuid())
-  walletId    String
-  startedAt   DateTime @default(now()) // When Food Bundles took control
-  endedAt     DateTime? // When owner took back control (null = still active)
-  approvedBy  String? // Admin who approved this delegation period
-  createdAt   DateTime @default(now())
+  id         String    @id @default(uuid())
+  walletId   String
+  startedAt  DateTime  @default(now()) // When Food Bundles took control
+  endedAt    DateTime? // When owner took back control (null = still active)
+  approvedBy String? // Admin who approved this delegation period
+  createdAt  DateTime  @default(now())
 
   wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
