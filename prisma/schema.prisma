@@ -691,6 +691,7 @@ model WalletTransaction {
   otpExpiresAt  DateTime?
   otpVerified   Boolean?      @default(false)
   approvedBy    String? // Admin ID who approved the withdraw
+  isReversed    Boolean       @default(false) // Track if transaction is a reversal
 
   status   TransactionStatus @default(PENDING)
   metadata Json?
@@ -1304,6 +1305,7 @@ enum WalletTransactionType {
   ADJUSTMENT // Manual adjustment by admin
   WITHDRAWAL
   TRADING
+  REVERSAL // For returning pending amounts from expired vouchers
 }
 
 enum WithdrawType {
