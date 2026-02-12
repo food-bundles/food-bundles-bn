@@ -689,6 +689,7 @@ model WalletTransaction {
   otp           String?
   otpExpiresAt  DateTime?
   otpVerified   Boolean?      @default(false)
+  approvedBy    String? // Admin ID who approved the withdraw
 
   status   TransactionStatus @default(PENDING)
   metadata Json?
@@ -702,6 +703,7 @@ model WalletTransaction {
   restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   affiliator Affiliator? @relation(fields: [affiliatorId], references: [id], onDelete: Cascade)
   trader     Admin?      @relation("TraderTransactions", fields: [traderId], references: [id], onDelete: Cascade)
+  approver     Admin?               @relation(fields: [approvedBy], references: [id])
 
   @@index([walletId])
   @@index([type])

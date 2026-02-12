@@ -1157,7 +1157,6 @@ paths:
         403:
           description: Trader access required
 
-
   /traders/withdraw/request:
     post:
       tags:
@@ -1292,7 +1291,7 @@ paths:
         400:
           description: Bad request - Invalid OTP or expired
 
-  /traders/withdraw/requests:
+  /traders/withdraw/my-requests:
     get:
       tags:
         - Trader API Management
@@ -1373,7 +1372,6 @@ paths:
                     type: object
         403:
           description: Admin access required
-
 
   /traders/withdraw/{withdrawId}/cancel:
     delete:

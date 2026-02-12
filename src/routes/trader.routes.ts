@@ -231,7 +231,7 @@ traderRoutes.post(
 );
 
 traderRoutes.get(
-  "/withdraw/requests",
+  "/withdraw/my-requests",
   isAuthenticated,
   checkPermission("TRADER"),
   getTraderWithdrawRequests,
@@ -243,9 +243,6 @@ traderRoutes.get(
   checkPermission("ADMIN"),
   getAllWithdrawRequests,
 );
-
-export default traderRoutes;
-
 
 // Cancel withdraw request
 traderRoutes.delete(
