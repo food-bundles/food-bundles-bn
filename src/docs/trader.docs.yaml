@@ -1264,10 +1264,10 @@ paths:
             schema:
               type: object
               required:
-                - withdrawId
+                - sessionId
                 - otp
               properties:
-                withdrawId:
+                sessionId:
                   type: string
                   description: Withdraw request ID
                 otp:
