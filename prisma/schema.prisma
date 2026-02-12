@@ -646,6 +646,7 @@ model Wallet {
   delegationRequestedAt     DateTime? // When delegation was requested
   delegationApprovedAt      DateTime? // When delegation was approved
   delegationApprovedBy      String? // Admin ID who approved delegation
+  delegationAcceptedAt      DateTime? // When trader accepted delegation
   currency                  String           @default("RWF")
   isActive                  Boolean          @default(true)
   createdAt                 DateTime         @default(now())
