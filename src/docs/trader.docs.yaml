@@ -1206,6 +1206,169 @@ paths:
         403:
           description: Trader access required
 
+  /traders/delegation/history:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get all delegation history (Admin only)
+      description: |
+        Admin can view delegation history for all traders or filter by specific trader.
+        Shows all periods when Food Bundles had control of trader wallets.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: traderId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by specific trader ID
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+          description: Items per page
+      responses:
+        200:
+          description: Delegation history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        walletId:
+                          type: string
+                        startedAt:
+                          type: string
+                          format: date-time
+                        endedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        approvedBy:
+                          type: string
+                        wallet:
+                          type: object
+                          properties:
+                            traderId:
+                              type: string
+                            trader:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                username:
+                                  type: string
+                                email:
+                                  type: string
+                                phone:
+                                  type: string
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        403:
+          description: Admin access required
+
+  /traders/delegation/my-history:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader's own delegation history (Trader only)
+      description: |
+        Trader can view their own delegation history.
+        Shows all periods when Food Bundles had control of their wallet.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+          description: Items per page
+      responses:
+        200:
+          description: Delegation history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        walletId:
+                          type: string
+                        startedAt:
+                          type: string
+                          format: date-time
+                        endedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        approvedBy:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        400:
+          description: Trader wallet not found
+        403:
+          description: Trader access required
+
   /traders/delegation/{traderId}/approve:
     post:
       tags:
