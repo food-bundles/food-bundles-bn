@@ -158,7 +158,8 @@ export const getTraderWalletService = async (traderId: string) => {
     ...wallet,
     totalVouchersAmount: totalVouchersApproved._sum.creditLimit || 0,
     totalVouchersCount: totalVouchersApproved._count || 0,
-    availableBalance: wallet.balance - activeUnusedAmount,
+    availableBalance:
+      wallet.balance - activeUnusedAmount - wallet.pendingWithdrawBalance,
   };
 };
 
@@ -404,7 +405,9 @@ export const traderApproveLoanService = async (
   const paymentDays = loan.repaymentDays || 30; // Default to 30 days if not set
 
   const availableBalance =
-    traderWallet.balance - traderWallet.pendingApprovedAmount;
+    traderWallet.balance -
+    traderWallet.pendingApprovedAmount -
+    traderWallet.pendingWithdrawBalance;
 
   if (availableBalance < acceptedAmount) {
     throw new Error(
@@ -1638,7 +1641,9 @@ export const adminApproveLoanOnBehalfService = async (
 
   // Check trader wallet balance
   const availableBalance =
-    traderWallet.balance - traderWallet.pendingApprovedAmount;
+    traderWallet.balance -
+    traderWallet.pendingApprovedAmount -
+    traderWallet.pendingWithdrawBalance;
 
   if (availableBalance < approvedAmount) {
     throw new Error(
@@ -1845,12 +1850,19 @@ export const adminApproveWithdrawService = async (
   const withdrawRequest = await prisma.walletTransaction.findUnique({
     where: { id: withdrawId },
     include: {
-      wallet: { include: { trader: { select: { phone: true, username: true, id: true } } } },
+      wallet: {
+        include: {
+          trader: { select: { phone: true, username: true, id: true } },
+        },
+      },
     },
   });
 
   if (!withdrawRequest) throw new Error("Withdraw request not found");
-  if (withdrawRequest.status === "COMPLETED" || withdrawRequest.status === "CANCELLED")
+  if (
+    withdrawRequest.status === "COMPLETED" ||
+    withdrawRequest.status === "CANCELLED"
+  )
     throw new Error("Withdraw request already processed");
 
   // Generate OTP
@@ -1887,11 +1899,6 @@ export const adminApproveWithdrawService = async (
       withdrawRequest.wallet.trader.phone,
     );
   }
-
-  await sendMessage(
-    `Withdraw approved for ${withdrawRequest.wallet.trader?.username}. OTP sent.`,
-    process.env.PRIVATE_RECEIVER || "",
-  );
 
   return {
     success: true,
@@ -1938,7 +1945,9 @@ export const verifyWithdrawOTPService = async (
     const withdrawRequest = await prisma.walletTransaction.findUnique({
       where: { id: withdrawData.withdrawId },
       include: {
-        wallet: { include: { trader: { select: { username: true, phone: true } } } },
+        wallet: {
+          include: { trader: { select: { username: true, phone: true } } },
+        },
       },
     });
 
@@ -2061,7 +2070,9 @@ export const getAllWithdrawRequestsService = async (filters?: {
       take: limit,
       include: {
         wallet: {
-          include: { trader: { select: { id: true, username: true, email: true } } },
+          include: {
+            trader: { select: { id: true, username: true, email: true } },
+          },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -2074,7 +2085,6 @@ export const getAllWithdrawRequestsService = async (filters?: {
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };
 };
-
 
 // Cancel withdraw request
 export const cancelWithdrawRequestService = async (
@@ -2089,7 +2099,10 @@ export const cancelWithdrawRequestService = async (
   if (!withdrawRequest) throw new Error("Withdraw request not found");
   if (withdrawRequest.traderId !== traderId)
     throw new Error("Unauthorized access");
-  if (withdrawRequest.status !== "PENDING")
+  if (
+    withdrawRequest.status === "COMPLETED" ||
+    withdrawRequest.status === "CANCELLED"
+  )
     throw new Error("Can only cancel pending withdraw requests");
 
   const wallet = withdrawRequest.wallet;
@@ -2131,6 +2144,20 @@ export const cancelWithdrawRequestService = async (
       wallet.trader.phone,
     );
   }
+
+  // Notify admin
+  await createNotificationService({
+    title: "Withdraw Request Cancelled",
+    message: `Withdraw request of ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()} has been cancelled`,
+    eventType: "SYSTEM_MAINTENANCE",
+    targetType: "ADMIN",
+  });
+
+  // Send SMS to private receiver
+  await sendMessage(
+    `Withdraw request cancelled: ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()} by ${wallet.trader?.username}`,
+    process.env.PRIVATE_RECEIVER || "",
+  );
 
   return { success: true, message: "Withdraw request cancelled successfully" };
 };
