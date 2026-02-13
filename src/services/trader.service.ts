@@ -2346,5 +2346,30 @@ export const getTraderDelegationHistoryService = async (traderId: string, filter
   };
 };
 
+// Get traders with accepted delegations (Admin)
+export const getTradersWithAcceptedDelegationsService = async () => {
+  const traders = await prisma.wallet.findMany({
+    where: {
+      traderId: { not: null },
+      canTradeOnBehalf: true,
+      isActive: true,
+    },
+    select: {
+      traderId: true,
+      balance: true,
+      trader: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+        },
+      },
+    },
+  });
 
-
+  return traders.map((wallet) => ({
+    id: wallet.traderId,
+    name: wallet.trader?.username || wallet.trader?.email,
+    availableBalance: wallet.balance,
+  }));
+};

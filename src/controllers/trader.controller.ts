@@ -33,6 +33,7 @@ import {
   cancelWithdrawRequestService,
   getAllDelegationHistoryService,
   getTraderDelegationHistoryService,
+  getTradersWithAcceptedDelegationsService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -892,6 +893,26 @@ export const getTraderDelegationHistory = async (
       success: true,
       data: result.history,
       pagination: result.pagination,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get traders with accepted delegations (Admin)
+export const getTradersWithAcceptedDelegations = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const traders = await getTradersWithAcceptedDelegationsService();
+
+    res.status(200).json({
+      success: true,
+      data: traders,
     });
   } catch (error: any) {
     res.status(400).json({

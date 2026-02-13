@@ -1720,3 +1720,68 @@ paths:
                         value: "Unauthorized access"
                       not_pending:
                         value: "Can only cancel pending withdraw requests"
+
+  /traders/accepted-delegations:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get traders with accepted delegations (Admin only)
+      description: |
+        Returns list of traders who have accepted delegation (canTradeOnBehalf = true).
+        These are traders that FoodBundles can trade on behalf of.
+        Only returns active wallets.
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Traders with accepted delegations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Trader ID
+                          example: "uuid-trader-id"
+                        name:
+                          type: string
+                          description: Trader username or email
+                          example: "John Trader"
+                        availableBalance:
+                          type: number
+                          format: float
+                          description: Available balance in trader wallet
+                          example: 150000
+              examples:
+                success:
+                  value:
+                    success: true
+                    data:
+                      - id: "1e1e3348-acba-4110-aa4b-56bbbcb645c2"
+                        name: "sostene"
+                        availableBalance: 250000
+                      - id: "655a2c01-cccc-4ee0-96db-be2443ad0641"
+                        name: "Dioscore SHIKAMA"
+                        availableBalance: 180000
+        403:
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Admin access required"
