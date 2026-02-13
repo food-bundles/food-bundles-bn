@@ -31,6 +31,8 @@ import {
   getTraderWithdrawRequestsService,
   getAllWithdrawRequestsService,
   cancelWithdrawRequestService,
+  getAllDelegationHistoryService,
+  getTraderDelegationHistoryService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -833,7 +835,6 @@ export const getAllWithdrawRequests = async (req: Request, res: Response) => {
   }
 };
 
-
 // Cancel withdraw request
 export const cancelWithdrawRequest = async (req: Request, res: Response) => {
   try {
@@ -848,5 +849,54 @@ export const cancelWithdrawRequest = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Get all delegation history (Admin)
+export const getAllDelegationHistory = async (req: Request, res: Response) => {
+  try {
+    const { traderId, page, limit } = req.query;
+    const result = await getAllDelegationHistoryService({
+      traderId: traderId as string,
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result.history,
+      pagination: result.pagination,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get trader's own delegation history
+export const getTraderDelegationHistory = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const traderId = (req as any).user.id;
+    const { page, limit } = req.query;
+    const result = await getTraderDelegationHistoryService(traderId, {
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result.history,
+      pagination: result.pagination,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
   }
 };

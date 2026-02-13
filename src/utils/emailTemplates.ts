@@ -2390,7 +2390,7 @@ const sendTraderDelegationOTPTemplate = (data: {
         <p>Your delegation approval request requires OTP verification. with ${data.commission}% commission.</p>
         
         <div class="otp-box">
-          <p>Your OTP Code <span class="otp-code"> ${data.otp} </span>Valid for 24 hours</p>
+          <p>Your OTP Code <span class="otp-code">${data.otp}</span>Valid for 24 hours</p>
         </div>
       </div>
       <div class="footer">

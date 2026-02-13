@@ -383,9 +383,7 @@ export const traderApproveLoanService = async (
   }
 
   if (traderWallet.canTradeOnBehalf) {
-    throw new Error(
-      "Trader has delegation permission. Only admin can approve loans on behalf of this trader.",
-    );
+    throw new Error("Failed, Food Bundles is trading on your behalf.");
   }
   // Check if loan exists and is in ACCEPTED status
   const loan = await prisma.loanApplication.findUnique({
@@ -1832,7 +1830,7 @@ export const acceptDelegationService = async (traderId: string, otp: string) => 
   // Send notifications
   await createNotificationService({
     title: "Delegation Accepted",
-    message: "You have accepted delegation. Food Bundles now controls your wallet.",
+    message: "You have accepted the delegation. Food Bundles is now trading on your behalf.",
     eventType: "SYSTEM_MAINTENANCE",
     targetType: "SPECIFIC_USER",
     targetId: traderId,
@@ -1840,7 +1838,7 @@ export const acceptDelegationService = async (traderId: string, otp: string) => 
 
   if (trader.phone) {
     await sendMessage(
-      "Delegation accepted! Food Bundles now controls your wallet.",
+      "You have accepted the delegation. Food Bundles is now trading on your behalf.",
       trader.phone,
     );
   }
@@ -2253,3 +2251,100 @@ export const cancelWithdrawRequestService = async (
 
   return { success: true, message: "Withdraw request cancelled successfully" };
 };
+
+// Get all delegation history (Admin)
+export const getAllDelegationHistoryService = async (filters: {
+  traderId?: string;
+  page?: number;
+  limit?: number;
+}) => {
+  const { traderId, page = 1, limit = 10 } = filters;
+  const skip = (page - 1) * limit;
+
+  const whereClause: any = {};
+  if (traderId) {
+    const wallet = await prisma.wallet.findUnique({
+      where: { traderId },
+      select: { id: true },
+    });
+    if (wallet) {
+      whereClause.walletId = wallet.id;
+    }
+  }
+
+  const [history, total] = await Promise.all([
+    prisma.delegationHistory.findMany({
+      where: whereClause,
+      include: {
+        wallet: {
+          select: {
+            traderId: true,
+            trader: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { startedAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.delegationHistory.count({ where: whereClause }),
+  ]);
+
+  return {
+    history,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+// Get trader's own delegation history
+export const getTraderDelegationHistoryService = async (traderId: string, filters: {
+  page?: number;
+  limit?: number;
+}) => {
+  const { page = 1, limit = 10 } = filters;
+  const skip = (page - 1) * limit;
+
+  const wallet = await prisma.wallet.findUnique({
+    where: { traderId },
+    select: { id: true },
+  });
+
+  if (!wallet) {
+    throw new Error("Trader wallet not found");
+  }
+
+  const [history, total] = await Promise.all([
+    prisma.delegationHistory.findMany({
+      where: { walletId: wallet.id },
+      orderBy: { startedAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.delegationHistory.count({ where: { walletId: wallet.id } }),
+  ]);
+
+  return {
+    history,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+
+
