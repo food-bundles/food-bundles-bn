@@ -98,11 +98,12 @@ export const createVoucher = async (req: Request, res: Response) => {
  */
 export const getAllVouchers = async (req: Request, res: Response) => {
   try {
-    const { status, restaurantId, page, limit } = req.query;
+    const { status, restaurantId, page, limit, search } = req.query;
 
     const filters: any = {};
     if (status) filters.status = status as VoucherStatus;
     if (restaurantId) filters.restaurantId = restaurantId as string;
+    if (search) filters.search = search as string;
     if (page) filters.page = parseInt(page as string);
     if (limit) filters.limit = parseInt(limit as string);
 

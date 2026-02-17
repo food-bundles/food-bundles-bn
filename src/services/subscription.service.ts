@@ -225,9 +225,8 @@ const checkAndUpdateSubscriptionExpiry = async (subscription: any) => {
         (1000 * 60 * 60 * 24),
     );
 
-    // Send warning only when exactly 3 days remain (prevents multiple sends)
-
-    if (daysUntilExpiry === 3) {
+    // Send warning only when exactly 3 days remain AND warning hasn't been sent yet
+    if (daysUntilExpiry === 3 && !subscription.expiryWarningSent) {
       try {
         await sendMessage(
           `Dear ${subscription.restaurant?.name || ""}, Your subscription ${
@@ -235,6 +234,12 @@ const checkAndUpdateSubscriptionExpiry = async (subscription: any) => {
           } is about to expire in 3 days. Please renew your subscription to continue using our services. Thank you!`,
           subscription.restaurant?.phone || "",
         );
+
+        // Mark warning as sent
+        await prisma.restaurantSubscription.update({
+          where: { id: subscription.id },
+          data: { expiryWarningSent: true },
+        });
       } catch (error) {
         console.error("Failed to send subscription notification:", error);
       }
@@ -1459,6 +1464,7 @@ export const renewSubscriptionService = async (
         endDate,
         paymentStatus: PaymentStatus.PENDING,
         txRef: `SUB_RENEW_${restaurantId}_${Date.now()}`,
+        expiryWarningSent: false, // Reset warning flag on renewal
       },
       include: {
         plan: true,
@@ -1770,6 +1776,7 @@ export const changeSubscriptionPlanService = async (
         txRef: `SUB_${
           isUpgrade ? "UPGRADE" : "DOWNGRADE"
         }_${restaurantId}_${Date.now()}`,
+        expiryWarningSent: false, // Reset warning flag on plan change
       },
       include: {
         plan: true,
