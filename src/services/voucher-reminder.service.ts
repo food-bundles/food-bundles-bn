@@ -1,11 +1,13 @@
 import prisma from "../prisma";
-import { VoucherStatus } from "@prisma/client";
+import { VoucherStatus, NotificationCategory } from "@prisma/client";
 import { sendMessage } from "../utils/sms.utility";
+import { getRecipientsByCategoryService } from "./notification-recipient.service";
 
 /**
  * Check vouchers and send reminders
  * - 1 day before maturity: Send reminder with amount to be paid
  * - After maturity: Send daily reminder to pay voucher amount
+ * - Send summary to admin recipients
  */
 export const sendVoucherMaturityRemindersService = async () => {
   try {
@@ -13,7 +15,9 @@ export const sendVoucherMaturityRemindersService = async () => {
     const results = {
       usedVouchersFound: 0,
       maturedVouchersFound: 0,
+      expiredVouchersFound: 0,
       remindersSent: 0,
+      adminNotificationsSent: 0,
       skipped: [] as string[],
       sent: [] as string[],
     };
@@ -107,6 +111,107 @@ export const sendVoucherMaturityRemindersService = async () => {
       results.remindersSent++;
       results.sent.push(`${voucher.voucherCode} (matured)`);
       console.log(`Maturity reminder sent for voucher ${voucher.voucherCode}`);
+    }
+
+    if (maturedVouchers.length > 0) {
+      try {
+        const adminRecipients = await getRecipientsByCategoryService(
+          NotificationCategory.MATURED_VOUCHERS
+        );
+
+        if (adminRecipients.length > 0) {
+          const voucherSummary = maturedVouchers
+            .map(
+              (v) =>
+                `${v.restaurant?.name || "Unknown"}: ${v.voucherCode} - ${v.remainingAmount.toLocaleString()} RWF`
+            )
+            .join("\n");
+
+          const totalAmount = maturedVouchers.reduce(
+            (sum, v) => sum + v.remainingAmount,
+            0
+          );
+
+          const adminMessage = `MATURED VOUCHERS ALERT\n\nTotal: ${maturedVouchers.length} voucher(s)\nTotal Amount: ${totalAmount.toLocaleString()} RWF\n\nDetails:\n${voucherSummary}`;
+
+          for (const recipient of adminRecipients) {
+            try {
+              await sendMessage(adminMessage, recipient.phoneNumber);
+              results.adminNotificationsSent++;
+              console.log(
+                `Admin notification sent to ${recipient.name} (${recipient.phoneNumber})`
+              );
+            } catch (error) {
+              console.error(
+                `Failed to send admin notification to ${recipient.name}:`,
+                error
+              );
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to send admin notifications:", error);
+      }
+    }
+
+    // Get all EXPIRED vouchers and send summary to admin recipients
+    const expiredVouchers = await prisma.voucher.findMany({
+      where: {
+        status: VoucherStatus.EXPIRED,
+      },
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+      },
+    });
+
+    results.expiredVouchersFound = expiredVouchers.length;
+    console.log(`Found ${expiredVouchers.length} EXPIRED vouchers`);
+
+    if (expiredVouchers.length > 0) {
+      try {
+        const adminRecipients = await getRecipientsByCategoryService(
+          NotificationCategory.EXPIRED_VOUCHERS
+        );
+
+        if (adminRecipients.length > 0) {
+          const voucherSummary = expiredVouchers
+            .map(
+              (v) =>
+                `${v.restaurant?.name || "Unknown"}: ${v.voucherCode} - ${v.creditLimit.toLocaleString()} RWF`
+            )
+            .join("\n");
+
+          const totalCreditLimit = expiredVouchers.reduce(
+            (sum, v) => sum + v.creditLimit,
+            0
+          );
+
+          const adminMessage = `EXPIRED VOUCHERS ALERT\n\nTotal: ${expiredVouchers.length} voucher(s)\nTotal Credit: ${totalCreditLimit.toLocaleString()} RWF\n\nDetails:\n${voucherSummary}`;
+
+          for (const recipient of adminRecipients) {
+            try {
+              await sendMessage(adminMessage, recipient.phoneNumber);
+              results.adminNotificationsSent++;
+              console.log(
+                `Expired vouchers notification sent to ${recipient.name} (${recipient.phoneNumber})`
+              );
+            } catch (error) {
+              console.error(
+                `Failed to send expired vouchers notification to ${recipient.name}:`,
+                error
+              );
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to send expired vouchers notifications:", error);
+      }
     }
 
     return {

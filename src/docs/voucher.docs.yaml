@@ -641,7 +641,7 @@ paths:
     get:
       tags: [Voucher Management]
       summary: Get all vouchers with pagination (Admin only)
-      description: Retrieve all vouchers with filtering and pagination
+      description: Retrieve all vouchers with filtering and pagination. Supports searching by restaurant name and filtering by voucher status.
       security:
         - BearerAuth: []
       parameters:
@@ -656,6 +656,12 @@ paths:
           schema:
             type: string
           description: Filter by restaurant ID
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search vouchers by restaurant name (case-insensitive)
+          example: "Pizza Palace"
         - name: page
           in: query
           schema:
@@ -686,6 +692,54 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Voucher"
+                  statistics:
+                    type: object
+                    description: Voucher statistics summary
+                    properties:
+                      totalVouchers:
+                        type: integer
+                        description: Total number of vouchers
+                        example: 150
+                      activeVouchers:
+                        type: integer
+                        description: Number of active vouchers
+                        example: 45
+                      usedVouchers:
+                        type: object
+                        properties:
+                          count:
+                            type: integer
+                            example: 30
+                          totalAmount:
+                            type: number
+                            format: float
+                            example: 5000000
+                      suspendedVouchers:
+                        type: integer
+                        example: 5
+                      expiredVouchers:
+                        type: integer
+                        example: 20
+                      maturedVouchers:
+                        type: object
+                        properties:
+                          count:
+                            type: integer
+                            example: 15
+                          totalAmount:
+                            type: number
+                            format: float
+                            example: 2000000
+                      settledVouchers:
+                        type: object
+                        properties:
+                          count:
+                            type: integer
+                            example: 35
+                          totalAmount:
+                            type: number
+                            format: float
+                            example: 8000000
                   pagination:
                     type: object
                     properties:

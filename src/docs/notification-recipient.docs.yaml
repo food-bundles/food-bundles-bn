@@ -1,0 +1,372 @@
+tags:
+  - name: Notification Recipients
+    description: Admin management of notification recipients for system alerts
+
+components:
+  schemas:
+    NotificationRecipient:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique recipient identifier
+          example: "rec-12345-abcde"
+        name:
+          type: string
+          description: Name of the recipient
+          example: "Finance Manager"
+        phoneNumber:
+          type: string
+          description: Phone number to receive notifications
+          example: "+250788123456"
+        category:
+          type: string
+          enum:
+            - MATURED_VOUCHERS
+            - EXPIRED_VOUCHERS
+            - LOW_STOCK
+            - PAYMENT_ISSUES
+            - SYSTEM_ALERTS
+          description: Type of notifications to receive
+        isActive:
+          type: boolean
+          description: Whether recipient is active
+          example: true
+        createdBy:
+          type: string
+          description: Admin ID who created this recipient
+          example: "admin-123"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateNotificationRecipientRequest:
+      type: object
+      required:
+        - name
+        - phoneNumber
+        - category
+      properties:
+        name:
+          type: string
+          description: Name of the recipient
+          example: "Finance Manager"
+        phoneNumber:
+          type: string
+          description: Phone number in international format
+          example: "+250788123456"
+        category:
+          type: string
+          enum:
+            - MATURED_VOUCHERS
+            - EXPIRED_VOUCHERS
+            - LOW_STOCK
+            - PAYMENT_ISSUES
+            - SYSTEM_ALERTS
+          description: Type of notifications to receive
+
+    UpdateNotificationRecipientRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Updated name
+          example: "Senior Finance Manager"
+        phoneNumber:
+          type: string
+          description: Updated phone number
+          example: "+250788654321"
+        category:
+          type: string
+          enum:
+            - MATURED_VOUCHERS
+            - EXPIRED_VOUCHERS
+            - LOW_STOCK
+            - PAYMENT_ISSUES
+            - SYSTEM_ALERTS
+          description: Updated notification category
+        isActive:
+          type: boolean
+          description: Enable or disable recipient
+          example: false
+
+security:
+  - BearerAuth: []
+
+paths:
+  /notification-recipients:
+    post:
+      tags: [Notification Recipients]
+      summary: Add notification recipient (Admin only)
+      description: Add a new phone number to receive specific category of system notifications
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationRecipientRequest"
+            examples:
+              matured_vouchers:
+                summary: Add recipient for matured voucher alerts
+                value:
+                  name: "Finance Manager"
+                  phoneNumber: "+250788123456"
+                  category: "MATURED_VOUCHERS"
+              payment_issues:
+                summary: Add recipient for payment issue alerts
+                value:
+                  name: "Operations Manager"
+                  phoneNumber: "+250788654321"
+                  category: "PAYMENT_ISSUES"
+      responses:
+        201:
+          description: Notification recipient added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Notification recipient added successfully"
+                  data:
+                    $ref: "#/components/schemas/NotificationRecipient"
+        400:
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+              examples:
+                missing_fields:
+                  value:
+                    message: "Name, phone number, and category are required"
+                invalid_category:
+                  value:
+                    message: "Invalid notification category"
+                duplicate:
+                  value:
+                    message: "Phone number +250788123456 is already registered for MATURED_VOUCHERS notifications"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        500:
+          description: Internal server error
+
+    get:
+      tags: [Notification Recipients]
+      summary: Get all notification recipients (Admin only)
+      description: Retrieve all notification recipients with optional filtering by category and active status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum:
+              - MATURED_VOUCHERS
+              - EXPIRED_VOUCHERS
+              - LOW_STOCK
+              - PAYMENT_ISSUES
+              - SYSTEM_ALERTS
+          description: Filter by notification category
+          example: "MATURED_VOUCHERS"
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+          example: true
+      responses:
+        200:
+          description: Notification recipients retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Notification recipients retrieved successfully"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NotificationRecipient"
+              examples:
+                all_recipients:
+                  summary: All recipients
+                  value:
+                    message: "Notification recipients retrieved successfully"
+                    data:
+                      - id: "rec-123"
+                        name: "Finance Manager"
+                        phoneNumber: "+250788123456"
+                        category: "MATURED_VOUCHERS"
+                        isActive: true
+                        createdAt: "2024-01-15T10:00:00Z"
+                      - id: "rec-456"
+                        name: "Operations Manager"
+                        phoneNumber: "+250788654321"
+                        category: "PAYMENT_ISSUES"
+                        isActive: true
+                        createdAt: "2024-01-16T11:00:00Z"
+                filtered_by_category:
+                  summary: Filtered by category
+                  value:
+                    message: "Notification recipients retrieved successfully"
+                    data:
+                      - id: "rec-123"
+                        name: "Finance Manager"
+                        phoneNumber: "+250788123456"
+                        category: "MATURED_VOUCHERS"
+                        isActive: true
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        500:
+          description: Internal server error
+
+  /notification-recipients/{id}:
+    patch:
+      tags: [Notification Recipients]
+      summary: Update notification recipient (Admin only)
+      description: Update recipient details including name, phone number, category, or active status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Recipient ID
+          example: "rec-12345-abcde"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationRecipientRequest"
+            examples:
+              update_name:
+                summary: Update name
+                value:
+                  name: "Senior Finance Manager"
+              disable_recipient:
+                summary: Disable recipient
+                value:
+                  isActive: false
+              change_category:
+                summary: Change notification category
+                value:
+                  category: "SYSTEM_ALERTS"
+              update_phone:
+                summary: Update phone number
+                value:
+                  phoneNumber: "+250788999888"
+      responses:
+        200:
+          description: Notification recipient updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Notification recipient updated successfully"
+                  data:
+                    $ref: "#/components/schemas/NotificationRecipient"
+        400:
+          description: Invalid request data
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        404:
+          description: Recipient not found
+        500:
+          description: Internal server error
+
+    delete:
+      tags: [Notification Recipients]
+      summary: Delete notification recipient (Admin only)
+      description: Permanently delete a notification recipient
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Recipient ID
+          example: "rec-12345-abcde"
+      responses:
+        200:
+          description: Notification recipient deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Notification recipient deleted successfully"
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+        404:
+          description: Recipient not found
+        500:
+          description: Internal server error
+
+# ============================================
+# NOTIFICATION CATEGORIES DOCUMENTATION
+# ============================================
+
+# Category Descriptions:
+# 
+# MATURED_VOUCHERS:
+#   - Receives daily notifications about vouchers that have matured
+#   - Message includes: total count, total amount, list of restaurants with voucher codes
+#   - Example: "MATURED VOUCHERS ALERT\nTotal: 3 voucher(s)\nTotal Amount: 1,500,000 RWF..."
+#
+# EXPIRED_VOUCHERS:
+#   - Receives notifications about vouchers that have expired
+#   - Useful for tracking unused credit
+#
+# LOW_STOCK:
+#   - Receives alerts when product inventory is low
+#   - Helps maintain supply chain
+#
+# PAYMENT_ISSUES:
+#   - Receives notifications about payment failures
+#   - Critical for financial operations
+#
+# SYSTEM_ALERTS:
+#   - Receives system-wide alerts and maintenance notifications
+#   - Important for technical team
+
+# ============================================
+# USAGE NOTES
+# ============================================
+
+# 1. Multiple recipients can be added for the same category
+# 2. All active recipients in a category receive the same notification
+# 3. Recipients can be temporarily disabled by setting isActive to false
+# 4. Phone numbers must be in international format (+250...)
+# 5. Duplicate phone numbers are not allowed for the same category
+# 6. Only ADMIN role can manage notification recipients

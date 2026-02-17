@@ -275,10 +275,11 @@ const checkAndUpdateVoucherMaturity = async (voucher: any) => {
 export const getAllVouchersService = async (filters?: {
   status?: VoucherStatus;
   restaurantId?: string;
+  search?: string;
   page?: number;
   limit?: number;
 }) => {
-  const { status, restaurantId, page = 1, limit = 10 } = filters || {};
+  const { status, restaurantId, search, page = 1, limit = 10 } = filters || {};
 
   const skip = (page - 1) * limit;
 
@@ -290,6 +291,15 @@ export const getAllVouchersService = async (filters?: {
 
   if (restaurantId) {
     where.restaurantId = restaurantId;
+  }
+
+  if (search) {
+    where.restaurant = {
+      name: {
+        contains: search,
+        mode: 'insensitive',
+      },
+    };
   }
 
   const [vouchers, totalCount, voucherStats] = await Promise.all([
