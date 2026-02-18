@@ -18,6 +18,7 @@ import {
   upgradeSubscription,
   downgradeSubscription,
   getSubscriptionHistory,
+  adminCreateRestaurantSubscription,
 } from "../controllers/subscription.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 import { handleSubscriptionWebhook } from "../controllers/subscription.webhook";
@@ -196,6 +197,18 @@ subscriptionRoutes.get(
 // ========================================
 // ADMIN SUBSCRIPTION ROUTES
 // ========================================
+
+/**
+ * Admin creates subscription for a restaurant
+ * POST /subscriptions/admin/create
+ * Access: Admin only
+ */
+subscriptionRoutes.post(
+  "/admin/create",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  adminCreateRestaurantSubscription
+);
 
 /**
  * Check and expire subscriptions (Cron job)

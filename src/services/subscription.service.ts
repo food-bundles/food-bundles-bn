@@ -2020,3 +2020,74 @@ export const rollbackSubscriptionPaymentService = async (
     message: "Previous subscription status restored successfully",
   };
 };
+
+/**
+ * Admin service to create subscription for a restaurant with payment
+ */
+export const adminCreateRestaurantSubscriptionService = async (data: {
+  restaurantId: string;
+  planId: string;
+  paymentMethod: string;
+  phoneNumber?: string;
+  bankDetails?: { clientIp?: string };
+}) => {
+  const { restaurantId, planId, paymentMethod, phoneNumber, bankDetails } = data;
+
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+  });
+
+  if (!restaurant) {
+    throw new Error("Restaurant not found");
+  }
+
+  const plan = await prisma.subscriptionPlan.findUnique({
+    where: { id: planId },
+  });
+
+  if (!plan || !plan.isActive) {
+    throw new Error("Invalid or inactive subscription plan");
+  }
+
+  const startDate = new Date();
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + plan.duration);
+  const txRef = `ADMIN_SUB_${restaurantId}_${Date.now()}`;
+
+  const subscription = await prisma.restaurantSubscription.create({
+    data: {
+      restaurantId,
+      planId,
+      status: SubscriptionStatus.PENDING,
+      startDate,
+      endDate,
+      autoRenew: true,
+      paymentMethod,
+      paymentStatus: PaymentStatus.PENDING,
+      txRef,
+      flwRef: txRef,
+    },
+    include: {
+      restaurant: { select: { id: true, name: true, email: true, phone: true } },
+      plan: true,
+    },
+  });
+
+  await prisma.subscriptionHistory.create({
+    data: {
+      subscriptionId: subscription.id,
+      action: "CREATED",
+      newStatus: "PENDING",
+      newPlanId: planId,
+      reason: "Created by admin",
+    },
+  });
+
+  const paymentResult = await processSubscriptionPaymentService(subscription.id, {
+    paymentMethod,
+    phoneNumber,
+    bankDetails,
+  });
+
+  return { subscription, payment: paymentResult };
+};

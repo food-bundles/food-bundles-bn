@@ -509,6 +509,38 @@ components:
               description: Client IP address
               example: "154.123.220.1"
 
+    AdminCreateSubscriptionRequest:
+      type: object
+      required:
+        - restaurantId
+        - planId
+        - paymentMethodId
+      properties:
+        restaurantId:
+          type: string
+          description: Restaurant ID
+          example: "rest_123"
+        planId:
+          type: string
+          description: Subscription plan ID
+          example: "plan_123"
+        paymentMethodId:
+          type: string
+          description: Payment method configuration ID
+          example: "pm_mobile_money_123"
+        phoneNumber:
+          type: string
+          description: Phone number (required for MOBILE_MONEY)
+          example: "0780000000"
+        bankDetails:
+          type: object
+          description: Bank transfer details
+          properties:
+            clientIp:
+              type: string
+              description: Client IP address
+              example: "154.123.220.1"
+
     PaginationResponse:
       type: object
       properties:
@@ -1273,6 +1305,93 @@ paths:
           description: Forbidden
         404:
           description: Subscription not found
+        500:
+          description: Internal server error
+
+  /subscriptions/admin/create:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Admin creates subscription for restaurant
+      description: |
+        Admin creates a subscription for a restaurant and processes payment on their behalf.
+        Supports all payment methods: Wallet Balance (CASH), Mobile Money, Card, and Bank Transfer.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCreateSubscriptionRequest"
+            examples:
+              cash:
+                summary: Cash Payment (Wallet Balance)
+                value:
+                  restaurantId: "rest_123"
+                  planId: "plan_premium_123"
+                  paymentMethodId: "pm_cash_123"
+              mobileMoney:
+                summary: Mobile Money Payment
+                value:
+                  restaurantId: "rest_123"
+                  planId: "plan_premium_123"
+                  paymentMethodId: "pm_mobile_money_123"
+                  phoneNumber: "0780000000"
+              card:
+                summary: Card Payment (Hosted Checkout)
+                value:
+                  restaurantId: "rest_123"
+                  planId: "plan_premium_123"
+                  paymentMethodId: "pm_card_123"
+                  phoneNumber: "0780000000"
+              bankTransfer:
+                summary: Bank Transfer
+                value:
+                  restaurantId: "rest_123"
+                  planId: "plan_premium_123"
+                  paymentMethodId: "pm_bank_transfer_123"
+                  phoneNumber: "0780000000"
+                  bankDetails:
+                    clientIp: "154.123.220.1"
+      responses:
+        201:
+          description: Subscription created and payment initiated by admin
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Subscription created and payment initiated by admin"
+                  data:
+                    $ref: "#/components/schemas/RestaurantSubscription"
+                  payment:
+                    $ref: "#/components/schemas/SubscriptionPaymentResponse"
+        400:
+          description: Bad request - Invalid restaurant, plan, or payment method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingFields:
+                  value:
+                    message: "Restaurant ID, plan ID, and payment method ID are required"
+                restaurantNotFound:
+                  value:
+                    message: "Restaurant not found"
+                invalidPlan:
+                  value:
+                    message: "Invalid or inactive subscription plan"
+                missingPhone:
+                  value:
+                    message: "Phone number is required for mobile money payment"
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin access required
         500:
           description: Internal server error
 
