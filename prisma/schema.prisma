@@ -1450,6 +1450,10 @@ model DelegationHistory {
   @@index([endedAt])
 }
 
+
+
+
+
 // ============================================
 // MARKET PRICE TRACKING SCHEMA
 // ============================================
