@@ -3,6 +3,7 @@ import prisma from "../prisma";
 // Create market
 export const createMarketService = async (data: {
   name: string;
+  createdBy: string;
   location?: string;
   province?: string;
   district?: string;
@@ -37,6 +38,10 @@ export const getAllMarketsService = async (filters?: {
   const [markets, total] = await Promise.all([
     prisma.market.findMany({
       where,
+      include: {
+        priceHistory: true,
+        admin: true,
+      },
       skip,
       take: limit,
       orderBy: { createdAt: "desc" },
@@ -61,7 +66,7 @@ export const getMarketByIdService = async (marketId: string) => {
     where: { id: marketId },
     include: {
       priceHistory: {
-        include: { product: true },
+        include: { product: true, admin: true },
         orderBy: { recordedDate: "desc" },
         take: 10,
       },
@@ -123,6 +128,7 @@ export const recordMarketPriceService = async (data: {
   productId: string;
   marketId: string;
   marketPrice: number;
+  recordedBy: string;
   recordedDate?: Date;
 }) => {
   const [product, market] = await Promise.all([
@@ -144,11 +150,13 @@ export const recordMarketPriceService = async (data: {
       marketId: data.marketId,
       ourPrice: product.unitPrice,
       marketPrice: data.marketPrice,
+      recordedBy: data.recordedBy,
       recordedDate: data.recordedDate || new Date(),
     },
     include: {
       product: true,
       market: true,
+      admin: true,
     },
   });
 };
@@ -191,6 +199,7 @@ export const getPriceHistoryService = async (filters: {
         market: {
           select: { id: true, name: true, province: true, district: true },
         },
+        admin: true,
       },
       orderBy: { recordedDate: "desc" },
     }),
@@ -241,6 +250,7 @@ export const analyzePriceService = async (data: {
     where,
     include: {
       market: true,
+      admin: true,
     },
     orderBy: { recordedDate: "asc" },
   });
@@ -382,7 +392,7 @@ export const updateMarketPriceHistoryService = async (
   data: {
     marketPrice?: number;
     recordedDate?: Date;
-  }
+  },
 ) => {
   const history = await prisma.marketPriceHistory.findUnique({
     where: { id: historyId },

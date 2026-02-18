@@ -330,6 +330,8 @@ model Admin {
   traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
   traderTransactionHistory TraderTransaction[]   @relation("TraderTransactionHistory")
   approvedWithdrawals      WalletTransaction[]   @relation("WithdrawApprover")
+  Market                   Market[]
+  MarketPriceHistory       MarketPriceHistory[]
 }
 
 model Product {
@@ -760,17 +762,17 @@ model SubscriptionPlan {
 
 // Restaurant Subscription model
 model RestaurantSubscription {
-  id                  String             @id @default(uuid())
-  restaurantId        String?
-  farmerId            String?
-  planId              String
-  status              SubscriptionStatus @default(ACTIVE)
-  startDate           DateTime           @default(now())
-  endDate             DateTime
-  autoRenew           Boolean            @default(true)
-  paymentMethod       String?
-  paymentStatus       PaymentStatus      @default(PENDING)
-  expiryWarningSent   Boolean            @default(false) 
+  id                String             @id @default(uuid())
+  restaurantId      String?
+  farmerId          String?
+  planId            String
+  status            SubscriptionStatus @default(ACTIVE)
+  startDate         DateTime           @default(now())
+  endDate           DateTime
+  autoRenew         Boolean            @default(true)
+  paymentMethod     String?
+  paymentStatus     PaymentStatus      @default(PENDING)
+  expiryWarningSent Boolean            @default(false)
 
   // Payment tracking
   txRef         String? @unique
@@ -1249,14 +1251,14 @@ model DelegationHistory {
 }
 
 model NotificationRecipient {
-  id          String                    @id @default(uuid())
-  name        String 
-  phoneNumber String 
-  category    NotificationCategory 
-  isActive    Boolean                   @default(true)
-  createdBy   String? 
-  createdAt   DateTime                  @default(now())
-  updatedAt   DateTime                  @updatedAt
+  id          String               @id @default(uuid())
+  name        String
+  phoneNumber String
+  category    NotificationCategory
+  isActive    Boolean              @default(true)
+  createdBy   String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
   @@index([category])
   @@index([isActive])
@@ -1271,6 +1273,7 @@ model NotificationRecipient {
 model Market {
   id        String   @id @default(uuid())
   name      String   @unique
+  createdBy String
   location  String? // Can be street address or GPS coordinates
   province  String?
   district  String?
@@ -1280,6 +1283,7 @@ model Market {
 
   // Relations
   priceHistory MarketPriceHistory[]
+  admin        Admin                @relation(fields: [createdBy], references: [id])
 
   @@index([name])
   @@index([province])
@@ -1294,6 +1298,7 @@ model MarketPriceHistory {
   marketId     String
   ourPrice     Float // Price from our database at the time
   marketPrice  Float // Price at the external market
+  recordedBy   String
   recordedDate DateTime @default(now())
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -1301,13 +1306,13 @@ model MarketPriceHistory {
   // Relations
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   market  Market  @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  admin   Admin   @relation(fields: [recordedBy], references: [id])
 
   @@index([productId])
   @@index([marketId])
   @@index([recordedDate])
   @@index([createdAt])
 }
-
 
 enum Role {
   FARMER
@@ -1513,9 +1518,9 @@ enum DelegationStatus {
 }
 
 enum NotificationCategory {
-  MATURED_VOUCHERS 
-  EXPIRED_VOUCHERS 
-  LOW_STOCK 
-  PAYMENT_ISSUES 
-  SYSTEM_ALERTS 
+  MATURED_VOUCHERS
+  EXPIRED_VOUCHERS
+  LOW_STOCK
+  PAYMENT_ISSUES
+  SYSTEM_ALERTS
 }

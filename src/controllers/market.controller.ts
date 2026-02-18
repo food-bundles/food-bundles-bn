@@ -16,6 +16,8 @@ import {
 // Create market
 export const createMarket = async (req: Request, res: Response) => {
   try {
+    const adminId = (req as any).user.id;
+
     const { name, location, province, district } = req.body;
 
     if (!name) {
@@ -27,6 +29,7 @@ export const createMarket = async (req: Request, res: Response) => {
 
     const market = await createMarketService({
       name,
+      createdBy: adminId,
       location,
       province,
       district,
@@ -55,7 +58,8 @@ export const getAllMarkets = async (req: Request, res: Response) => {
       limit: limit ? parseInt(limit as string) : undefined,
       province: province as string,
       district: district as string,
-      isActive: isActive === "true" ? true : isActive === "false" ? false : undefined,
+      isActive:
+        isActive === "true" ? true : isActive === "false" ? false : undefined,
     });
 
     res.status(200).json({
@@ -139,6 +143,8 @@ export const deleteMarket = async (req: Request, res: Response) => {
 // Record market price
 export const recordMarketPrice = async (req: Request, res: Response) => {
   try {
+    const adminId = (req as any).user.id;
+
     const { productId, marketId, marketPrice, recordedDate } = req.body;
 
     if (!productId || !marketId || !marketPrice) {
@@ -152,6 +158,7 @@ export const recordMarketPrice = async (req: Request, res: Response) => {
       productId,
       marketId,
       marketPrice: parseFloat(marketPrice),
+      recordedBy: adminId,
       recordedDate: recordedDate ? new Date(recordedDate) : undefined,
     });
 

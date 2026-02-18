@@ -17,7 +17,12 @@ import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 const marketRoutes = Router();
 
 // Market CRUD operations (Admin only)
-marketRoutes.post("/", isAuthenticated, checkPermission("ADMIN"), createMarket);
+marketRoutes.post(
+  "/",
+  isAuthenticated,
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  createMarket,
+);
 
 marketRoutes.get("/", isAuthenticated, getAllMarkets);
 
@@ -26,7 +31,7 @@ marketRoutes.get("/:marketId", isAuthenticated, getMarketById);
 marketRoutes.put(
   "/:marketId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
   updateMarket,
 );
 
@@ -41,7 +46,7 @@ marketRoutes.delete(
 marketRoutes.post(
   "/prices",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
   recordMarketPrice,
 );
 
@@ -52,13 +57,14 @@ marketRoutes.post("/prices/analyze", isAuthenticated, analyzePrice);
 marketRoutes.get(
   "/prices/by-product",
   isAuthenticated,
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
   getMarketPricesByProduct,
 );
 
 marketRoutes.put(
   "/prices/:historyId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
   updateMarketPriceHistory,
 );
 
