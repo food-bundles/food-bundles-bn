@@ -333,25 +333,25 @@ model Admin {
 }
 
 model Product {
-  id                   String              @id @default(uuid())
-  tableTronicProductId Int?                @unique @map("tableTronicProductId")
+  id                   String               @id @default(uuid())
+  tableTronicProductId Int?                 @unique @map("tableTronicProductId")
   unitPrice            Float
   restaurantPrice      Float? // Price for restaurant users
   hotelPrice           Float? // Price for hotel users
   purchasePrice        Float
   unit                 String
   unitId               String?
-  createdAt            DateTime            @default(now())
+  createdAt            DateTime             @default(now())
   bonus                Int
   createdBy            String
   expiryDate           DateTime?
   images               String[]
   quantity             Float
-  sku                  String              @unique
-  updatedAt            DateTime            @updatedAt
+  sku                  String               @unique
+  updatedAt            DateTime             @updatedAt
   categoryId           String
-  productName          String              @unique
-  status               ProductStatus       @default(ACTIVE)
+  productName          String               @unique
+  status               ProductStatus        @default(ACTIVE)
   inactiveReason       String?
   province             String?
   district             String?
@@ -360,11 +360,12 @@ model Product {
   village              String?
   farmerSubmissions    FarmerSubmission[]
   orderItems           OrderItem[]
-  admin                Admin               @relation(fields: [createdBy], references: [id])
+  admin                Admin                @relation(fields: [createdBy], references: [id])
   CartItem             CartItem[]
-  category             ProductCategory     @relation(fields: [categoryId], references: [id])
+  category             ProductCategory      @relation(fields: [categoryId], references: [id])
   FarmerPrimaryCrop    FarmerPrimaryCrop[]
-  productUnit          ProductUnit?        @relation(fields: [unitId], references: [id])
+  productUnit          ProductUnit?         @relation(fields: [unitId], references: [id])
+  marketPriceHistory   MarketPriceHistory[]
 }
 
 model PaymentMethodConfig {
@@ -1447,4 +1448,49 @@ model DelegationHistory {
   @@index([walletId])
   @@index([startedAt])
   @@index([endedAt])
+}
+
+// ============================================
+// MARKET PRICE TRACKING SCHEMA
+// ============================================
+
+// External markets for price comparison
+model Market {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  location  String? // Can be street address or GPS coordinates
+  province  String?
+  district  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  priceHistory MarketPriceHistory[]
+
+  @@index([name])
+  @@index([province])
+  @@index([district])
+  @@index([isActive])
+}
+
+// Market price history for product comparison
+model MarketPriceHistory {
+  id           String   @id @default(uuid())
+  productId    String // Our product ID for comparison
+  marketId     String
+  ourPrice     Float // Price from our database at the time
+  marketPrice  Float // Price at the external market
+  recordedDate DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  market  Market  @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([marketId])
+  @@index([recordedDate])
+  @@index([createdAt])
 }

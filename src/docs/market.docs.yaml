@@ -1,0 +1,1186 @@
+tags:
+  - name: Market Price Tracking API
+    description: Operations for managing external markets and tracking product price comparisons
+
+components:
+  schemas:
+    Market:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique market identifier
+          example: "uuid-market-123"
+        name:
+          type: string
+          description: Market name
+          example: "Mubyangabo Market"
+        location:
+          type: string
+          nullable: true
+          description: Market location (street address or GPS coordinates)
+          example: "KK 15 Ave, Musanze"
+        province:
+          type: string
+          nullable: true
+          description: Province name
+          example: "Northern"
+        district:
+          type: string
+          nullable: true
+          description: District name
+          example: "MUSANZE"
+        isActive:
+          type: boolean
+          description: Market status
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    MarketPriceHistory:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique price record identifier
+        productId:
+          type: string
+          description: Product ID from our database
+        marketId:
+          type: string
+          description: Market ID
+        ourPrice:
+          type: number
+          format: float
+          description: Our product price at the time of recording
+          example: 1000
+        marketPrice:
+          type: number
+          format: float
+          description: Market price at the time of recording
+          example: 1080
+        recordedDate:
+          type: string
+          format: date-time
+          description: Date when price was recorded
+        createdAt:
+          type: string
+          format: date-time
+        product:
+          type: object
+          properties:
+            id:
+              type: string
+            productName:
+              type: string
+            unitPrice:
+              type: number
+              format: float
+        market:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            province:
+              type: string
+            district:
+              type: string
+
+    CreateMarketRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Market name (required, must be unique)
+          example: "Mubyangabo Market"
+        location:
+          type: string
+          description: Market location (street address or GPS coordinates)
+          example: "KK 15 Ave, Musanze or -1.4942, 29.6336"
+        province:
+          type: string
+          description: Province name
+          example: "Northern"
+        district:
+          type: string
+          description: District name
+          example: "MUSANZE"
+
+    UpdateMarketRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Market name
+          example: "Mubyangabo Market"
+        location:
+          type: string
+          description: Market location
+          example: "KK 15 Ave, Musanze"
+        province:
+          type: string
+          description: Province name
+          example: "Northern"
+        district:
+          type: string
+          description: District name
+          example: "MUSANZE"
+        isActive:
+          type: boolean
+          description: Market status
+          example: true
+
+    RecordMarketPriceRequest:
+      type: object
+      required:
+        - productId
+        - marketId
+        - marketPrice
+      properties:
+        productId:
+          type: string
+          description: Product ID from our database (required)
+          example: "uuid-product-123"
+        marketId:
+          type: string
+          description: Market ID (required)
+          example: "uuid-market-123"
+        marketPrice:
+          type: number
+          format: float
+          description: Price at the external market (required)
+          example: 1080
+        recordedDate:
+          type: string
+          format: date-time
+          description: Date of price recording (optional, defaults to now)
+          example: "2026-02-17T00:00:00Z"
+
+    UpdateMarketPriceHistoryRequest:
+      type: object
+      properties:
+        marketPrice:
+          type: number
+          format: float
+          description: Updated market price
+          example: 1100
+        recordedDate:
+          type: string
+          format: date-time
+          description: Updated recorded date
+          example: "2026-02-18T00:00:00Z"
+
+    PriceAnalysisRequest:
+      type: object
+      required:
+        - productId
+        - startDate
+        - endDate
+      properties:
+        productId:
+          type: string
+          description: Product ID to analyze (required)
+          example: "uuid-product-123"
+        marketIds:
+          type: array
+          items:
+            type: string
+          description: Specific market IDs to compare (optional, analyzes all if not provided)
+          example: ["uuid-market-1", "uuid-market-2"]
+        startDate:
+          type: string
+          format: date-time
+          description: Start date for analysis period (required)
+          example: "2026-02-01T00:00:00Z"
+        endDate:
+          type: string
+          format: date-time
+          description: End date for analysis period (required)
+          example: "2026-02-28T23:59:59Z"
+
+    PriceAnalysisResponse:
+      type: object
+      properties:
+        product:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            currentPrice:
+              type: number
+              format: float
+        period:
+          type: object
+          properties:
+            startDate:
+              type: string
+              format: date-time
+            endDate:
+              type: string
+              format: date-time
+        analysis:
+          type: object
+          properties:
+            totalRecords:
+              type: integer
+              description: Total number of price records analyzed
+            avgOurPrice:
+              type: number
+              format: float
+              description: Average of our prices
+            avgMarketPrice:
+              type: number
+              format: float
+              description: Average of market prices
+            avgDifference:
+              type: number
+              format: float
+              description: Average price difference (our price - market price)
+            minMarketPrice:
+              type: number
+              format: float
+              description: Minimum market price found
+            maxMarketPrice:
+              type: number
+              format: float
+              description: Maximum market price found
+            priceStatus:
+              type: string
+              enum: [HIGHER, LOWER, EQUAL]
+              description: Our price status compared to market
+            profitLoss:
+              type: string
+              enum: [PROFIT, LOSS, BREAK_EVEN]
+              description: Profit/loss indicator
+            percentageDifference:
+              type: number
+              format: float
+              description: Percentage difference
+        marketBreakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              market:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  location:
+                    type: string
+                  province:
+                    type: string
+                  district:
+                    type: string
+              recordCount:
+                type: integer
+              avgMarketPrice:
+                type: number
+                format: float
+              avgOurPrice:
+                type: number
+                format: float
+              avgDifference:
+                type: number
+                format: float
+              priceStatus:
+                type: string
+                enum: [HIGHER, LOWER, EQUAL]
+              profitLoss:
+                type: string
+                enum: [PROFIT, LOSS, BREAK_EVEN]
+              percentageDifference:
+                type: number
+                format: float
+        priceHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              ourPrice:
+                type: number
+                format: float
+              marketPrice:
+                type: number
+                format: float
+              difference:
+                type: number
+                format: float
+              recordedDate:
+                type: string
+                format: date-time
+              market:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+
+paths:
+  /markets:
+    post:
+      tags:
+        - Market Price Tracking API
+      summary: Create new external market
+      description: Register a new external market for price comparison tracking
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMarketRequest"
+            examples:
+              musanze_market:
+                summary: Musanze Market
+                value:
+                  name: "Mubyangabo Market"
+                  location: "KK 15 Ave, Musanze"
+                  province: "Northern"
+                  district: "MUSANZE"
+              karongi_market:
+                summary: Karongi Market
+                value:
+                  name: "Birambo Market"
+                  location: "Karongi District"
+                  province: "Southern"
+                  district: "KARONGI"
+              gps_location:
+                summary: Market with GPS coordinates
+                value:
+                  name: "Kimironko Market"
+                  location: "-1.9441, 30.1056"
+                  province: "Kigali City"
+                  district: "GASABO"
+      responses:
+        201:
+          description: Market created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Market created successfully"
+                  data:
+                    $ref: "#/components/schemas/Market"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+              examples:
+                missing_name:
+                  value:
+                    success: false
+                    message: "Market name is required"
+                duplicate_market:
+                  value:
+                    success: false
+                    message: "Market with this name already exists"
+        403:
+          description: Admin access required
+
+    get:
+      tags:
+        - Market Price Tracking API
+      summary: Get all markets
+      description: Retrieve all external markets with filtering and pagination
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Items per page
+        - name: province
+          in: query
+          schema:
+            type: string
+          description: Filter by province
+          example: "Northern"
+        - name: district
+          in: query
+          schema:
+            type: string
+          description: Filter by district
+          example: "MUSANZE"
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+      responses:
+        200:
+          description: Markets retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Market"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+
+  /markets/{marketId}:
+    get:
+      tags:
+        - Market Price Tracking API
+      summary: Get market by ID
+      description: Retrieve detailed information about a specific market including recent price history
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: marketId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Market ID
+      responses:
+        200:
+          description: Market retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/Market"
+                      - type: object
+                        properties:
+                          priceHistory:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/MarketPriceHistory"
+        404:
+          description: Market not found
+
+    put:
+      tags:
+        - Market Price Tracking API
+      summary: Update market
+      description: Update market information
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: marketId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Market ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMarketRequest"
+            examples:
+              update_location:
+                summary: Update location
+                value:
+                  location: "New Street Address, Musanze"
+              deactivate_market:
+                summary: Deactivate market
+                value:
+                  isActive: false
+              full_update:
+                summary: Full update
+                value:
+                  name: "Updated Market Name"
+                  location: "New Location"
+                  province: "Northern"
+                  district: "MUSANZE"
+                  isActive: true
+      responses:
+        200:
+          description: Market updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Market updated successfully"
+                  data:
+                    $ref: "#/components/schemas/Market"
+        400:
+          description: Bad request
+        403:
+          description: Admin access required
+        404:
+          description: Market not found
+
+    delete:
+      tags:
+        - Market Price Tracking API
+      summary: Delete market
+      description: Remove market from the system (also deletes all associated price history)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: marketId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Market ID
+      responses:
+        200:
+          description: Market deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Market deleted successfully"
+        400:
+          description: Bad request
+        403:
+          description: Admin access required
+        404:
+          description: Market not found
+
+  /markets/prices:
+    post:
+      tags:
+        - Market Price Tracking API
+      summary: Record market price
+      description: Record a product price from an external market for comparison
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordMarketPriceRequest"
+            examples:
+              current_date:
+                summary: Record price for today
+                value:
+                  productId: "uuid-product-123"
+                  marketId: "uuid-market-123"
+                  marketPrice: 1080
+              specific_date:
+                summary: Record price for specific date
+                value:
+                  productId: "uuid-product-456"
+                  marketId: "uuid-market-123"
+                  marketPrice: 800
+                  recordedDate: "2026-02-17T00:00:00Z"
+              beans_price:
+                summary: Beans price at Mubyangabo
+                value:
+                  productId: "uuid-beans-product"
+                  marketId: "uuid-mubyangabo-market"
+                  marketPrice: 800
+                  recordedDate: "2026-02-17T00:00:00Z"
+      responses:
+        201:
+          description: Market price recorded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Market price recorded successfully"
+                  data:
+                    $ref: "#/components/schemas/MarketPriceHistory"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+              examples:
+                missing_fields:
+                  value:
+                    success: false
+                    message: "Product ID, market ID, and market price are required"
+                product_not_found:
+                  value:
+                    success: false
+                    message: "Product not found"
+                market_not_found:
+                  value:
+                    success: false
+                    message: "Market not found"
+        403:
+          description: Admin access required
+
+  /markets/prices/history:
+    get:
+      tags:
+        - Market Price Tracking API
+      summary: Get price history
+      description: Retrieve price history with filtering options
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: productId
+          in: query
+          schema:
+            type: string
+          description: Filter by product ID
+        - name: marketId
+          in: query
+          schema:
+            type: string
+          description: Filter by market ID
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start date for filtering
+          example: "2026-02-01T00:00:00Z"
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End date for filtering
+          example: "2026-02-28T23:59:59Z"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Items per page
+      responses:
+        200:
+          description: Price history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MarketPriceHistory"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+
+  /markets/prices/analyze:
+    post:
+      tags:
+        - Market Price Tracking API
+      summary: Analyze product pricing
+      description: |
+        Comprehensive price analysis comparing our product prices with external market prices.
+        Provides insights on profit/loss, price trends, and market-by-market breakdown.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PriceAnalysisRequest"
+            examples:
+              single_product_all_markets:
+                summary: Analyze product across all markets
+                value:
+                  productId: "uuid-product-123"
+                  startDate: "2026-02-01T00:00:00Z"
+                  endDate: "2026-02-28T23:59:59Z"
+              single_product_specific_markets:
+                summary: Analyze product in specific markets
+                value:
+                  productId: "uuid-product-123"
+                  marketIds: ["uuid-market-1", "uuid-market-2"]
+                  startDate: "2026-02-01T00:00:00Z"
+                  endDate: "2026-02-28T23:59:59Z"
+              monthly_analysis:
+                summary: Monthly price analysis
+                value:
+                  productId: "uuid-beans-product"
+                  startDate: "2026-02-01T00:00:00Z"
+                  endDate: "2026-02-28T23:59:59Z"
+      responses:
+        200:
+          description: Price analysis completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/PriceAnalysisResponse"
+              examples:
+                profit_scenario:
+                  summary: Our prices are higher (profit)
+                  value:
+                    success: true
+                    data:
+                      product:
+                        id: "uuid-product-123"
+                        name: "Ifu-ibigori-yo-mumahanga"
+                        currentPrice: 1000
+                      period:
+                        startDate: "2026-02-01T00:00:00Z"
+                        endDate: "2026-02-28T23:59:59Z"
+                      analysis:
+                        totalRecords: 15
+                        avgOurPrice: 1000
+                        avgMarketPrice: 1126.67
+                        avgDifference: -126.67
+                        minMarketPrice: 1080
+                        maxMarketPrice: 1200
+                        priceStatus: "LOWER"
+                        profitLoss: "LOSS"
+                        percentageDifference: -11.24
+                      marketBreakdown:
+                        - market:
+                            id: "uuid-market-1"
+                            name: "Mubyangabo Market"
+                            location: "KK 15 Ave, Musanze"
+                            province: "Northern"
+                            district: "MUSANZE"
+                          recordCount: 8
+                          avgMarketPrice: 1080
+                          avgOurPrice: 1000
+                          avgDifference: -80
+                          priceStatus: "LOWER"
+                          profitLoss: "LOSS"
+                          percentageDifference: -7.41
+                        - market:
+                            id: "uuid-market-2"
+                            name: "Birambo Market"
+                            location: "Karongi District"
+                            province: "Southern"
+                            district: "KARONGI"
+                          recordCount: 7
+                          avgMarketPrice: 1180
+                          avgOurPrice: 1000
+                          avgDifference: -180
+                          priceStatus: "LOWER"
+                          profitLoss: "LOSS"
+                          percentageDifference: -15.25
+                loss_scenario:
+                  summary: Our prices are lower (loss)
+                  value:
+                    success: true
+                    data:
+                      product:
+                        id: "uuid-product-456"
+                        name: "Ibishyimbo/Mutiki"
+                        currentPrice: 700
+                      period:
+                        startDate: "2026-02-01T00:00:00Z"
+                        endDate: "2026-02-28T23:59:59Z"
+                      analysis:
+                        totalRecords: 10
+                        avgOurPrice: 700
+                        avgMarketPrice: 800
+                        avgDifference: -100
+                        minMarketPrice: 800
+                        maxMarketPrice: 800
+                        priceStatus: "LOWER"
+                        profitLoss: "LOSS"
+                        percentageDifference: -12.5
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+              examples:
+                missing_fields:
+                  value:
+                    success: false
+                    message: "Product ID, start date, and end date are required"
+                product_not_found:
+                  value:
+                    success: false
+                    message: "Product not found"
+
+  /markets/prices/by-product:
+    get:
+      tags:
+        - Market Price Tracking API
+      summary: Get market prices by product
+      description: |
+        Retrieve market prices for a specific product or all products.
+        If productId is provided, returns prices for that product only.
+        If no productId is provided, returns prices for all products.
+        Results can be filtered by date range.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: productId
+          in: query
+          schema:
+            type: string
+          description: Product ID (optional - if not provided, shows all products)
+          example: "uuid-product-123"
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start date for filtering
+          example: "2026-02-01T00:00:00Z"
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End date for filtering
+          example: "2026-02-28T23:59:59Z"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Items per page
+      responses:
+        200:
+          description: Market prices retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        product:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                        market:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                            province:
+                              type: string
+                            district:
+                              type: string
+                        ourPrice:
+                          type: number
+                          format: float
+                        marketPrice:
+                          type: number
+                          format: float
+                        difference:
+                          type: number
+                          format: float
+                        recordedDate:
+                          type: string
+                          format: date-time
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+              examples:
+                single_product:
+                  summary: Prices for specific product
+                  value:
+                    success: true
+                    data:
+                      - id: "uuid-price-1"
+                        product:
+                          id: "uuid-product-123"
+                          name: "Ifu-ibigori-yo-mumahanga"
+                        market:
+                          id: "uuid-market-1"
+                          name: "Mubyangabo Market"
+                          province: "Northern"
+                          district: "MUSANZE"
+                        ourPrice: 1000
+                        marketPrice: 1080
+                        difference: -80
+                        recordedDate: "2026-02-17T00:00:00Z"
+                      - id: "uuid-price-2"
+                        product:
+                          id: "uuid-product-123"
+                          name: "Ifu-ibigori-yo-mumahanga"
+                        market:
+                          id: "uuid-market-2"
+                          name: "Birambo Market"
+                          province: "Southern"
+                          district: "KARONGI"
+                        ourPrice: 967
+                        marketPrice: 1100
+                        difference: -133
+                        recordedDate: "2026-02-17T00:00:00Z"
+                    pagination:
+                      page: 1
+                      limit: 50
+                      total: 2
+                      totalPages: 1
+                all_products:
+                  summary: Prices for all products
+                  value:
+                    success: true
+                    data:
+                      - id: "uuid-price-1"
+                        product:
+                          id: "uuid-product-123"
+                          name: "Ifu-ibigori-yo-mumahanga"
+                        market:
+                          id: "uuid-market-1"
+                          name: "Mubyangabo Market"
+                          province: "Northern"
+                          district: "MUSANZE"
+                        ourPrice: 1000
+                        marketPrice: 1080
+                        difference: -80
+                        recordedDate: "2026-02-17T00:00:00Z"
+                      - id: "uuid-price-2"
+                        product:
+                          id: "uuid-product-456"
+                          name: "Ibishyimbo/Mutiki"
+                        market:
+                          id: "uuid-market-1"
+                          name: "Mubyangabo Market"
+                          province: "Northern"
+                          district: "MUSANZE"
+                        ourPrice: 700
+                        marketPrice: 800
+                        difference: -100
+                        recordedDate: "2026-02-17T00:00:00Z"
+                      - id: "uuid-price-3"
+                        product:
+                          id: "uuid-product-789"
+                          name: "Ibirayi- Kinigi Grade 1"
+                        market:
+                          id: "uuid-market-1"
+                          name: "Mubyangabo Market"
+                          province: "Northern"
+                          district: "MUSANZE"
+                        ourPrice: 520
+                        marketPrice: 550
+                        difference: -30
+                        recordedDate: "2026-02-17T00:00:00Z"
+                    pagination:
+                      page: 1
+                      limit: 50
+                      total: 3
+                      totalPages: 1
+        400:
+          description: Bad request
+
+  /markets/prices/{historyId}:
+    put:
+      tags:
+        - Market Price Tracking API
+      summary: Update market price history
+      description: Update an existing market price record
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: historyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Price history record ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMarketPriceHistoryRequest"
+            examples:
+              update_price:
+                summary: Update market price
+                value:
+                  marketPrice: 1100
+              update_date:
+                summary: Update recorded date
+                value:
+                  recordedDate: "2026-02-18T00:00:00Z"
+              update_both:
+                summary: Update price and date
+                value:
+                  marketPrice: 1100
+                  recordedDate: "2026-02-18T00:00:00Z"
+      responses:
+        200:
+          description: Price history updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Price history updated successfully"
+                  data:
+                    $ref: "#/components/schemas/MarketPriceHistory"
+        400:
+          description: Bad request
+        403:
+          description: Admin access required
+        404:
+          description: Price history record not found
+
+    delete:
+      tags:
+        - Market Price Tracking API
+      summary: Delete market price history
+      description: Remove a market price record from the system
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: historyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Price history record ID
+      responses:
+        200:
+          description: Price history deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Price history deleted successfully"
+        400:
+          description: Bad request
+        403:
+          description: Admin access required
+        404:
+          description: Price history record not found
