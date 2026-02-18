@@ -330,28 +330,30 @@ model Admin {
   traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
   traderTransactionHistory TraderTransaction[]   @relation("TraderTransactionHistory")
   approvedWithdrawals      WalletTransaction[]   @relation("WithdrawApprover")
+  Market                   Market[]
+  MarketPriceHistory       MarketPriceHistory[]
 }
 
 model Product {
-  id                   String              @id @default(uuid())
-  tableTronicProductId Int?                @unique @map("tableTronicProductId")
+  id                   String               @id @default(uuid())
+  tableTronicProductId Int?                 @unique @map("tableTronicProductId")
   unitPrice            Float
   restaurantPrice      Float? // Price for restaurant users
   hotelPrice           Float? // Price for hotel users
   purchasePrice        Float
   unit                 String
   unitId               String?
-  createdAt            DateTime            @default(now())
+  createdAt            DateTime             @default(now())
   bonus                Int
   createdBy            String
   expiryDate           DateTime?
   images               String[]
   quantity             Float
-  sku                  String              @unique
-  updatedAt            DateTime            @updatedAt
+  sku                  String               @unique
+  updatedAt            DateTime             @updatedAt
   categoryId           String
-  productName          String              @unique
-  status               ProductStatus       @default(ACTIVE)
+  productName          String               @unique
+  status               ProductStatus        @default(ACTIVE)
   inactiveReason       String?
   province             String?
   district             String?
@@ -360,11 +362,12 @@ model Product {
   village              String?
   farmerSubmissions    FarmerSubmission[]
   orderItems           OrderItem[]
-  admin                Admin               @relation(fields: [createdBy], references: [id])
+  admin                Admin                @relation(fields: [createdBy], references: [id])
   CartItem             CartItem[]
-  category             ProductCategory     @relation(fields: [categoryId], references: [id])
+  category             ProductCategory      @relation(fields: [categoryId], references: [id])
   FarmerPrimaryCrop    FarmerPrimaryCrop[]
-  productUnit          ProductUnit?        @relation(fields: [unitId], references: [id])
+  productUnit          ProductUnit?         @relation(fields: [unitId], references: [id])
+  marketPriceHistory   MarketPriceHistory[]
 }
 
 model PaymentMethodConfig {
@@ -759,17 +762,17 @@ model SubscriptionPlan {
 
 // Restaurant Subscription model
 model RestaurantSubscription {
-  id                  String             @id @default(uuid())
-  restaurantId        String?
-  farmerId            String?
-  planId              String
-  status              SubscriptionStatus @default(ACTIVE)
-  startDate           DateTime           @default(now())
-  endDate             DateTime
-  autoRenew           Boolean            @default(true)
-  paymentMethod       String?
-  paymentStatus       PaymentStatus      @default(PENDING)
-  expiryWarningSent   Boolean            @default(false) 
+  id                String             @id @default(uuid())
+  restaurantId      String?
+  farmerId          String?
+  planId            String
+  status            SubscriptionStatus @default(ACTIVE)
+  startDate         DateTime           @default(now())
+  endDate           DateTime
+  autoRenew         Boolean            @default(true)
+  paymentMethod     String?
+  paymentStatus     PaymentStatus      @default(PENDING)
+  expiryWarningSent Boolean            @default(false)
 
   // Payment tracking
   txRef         String? @unique
@@ -1231,6 +1234,86 @@ model PromoCode {
   @@index([createdBy])
 }
 
+// Delegation History - tracks all delegation control changes
+model DelegationHistory {
+  id         String    @id @default(uuid())
+  walletId   String
+  startedAt  DateTime  @default(now()) // When Food Bundles took control
+  endedAt    DateTime? // When owner took back control (null = still active)
+  approvedBy String? // Admin who approved this delegation period
+  createdAt  DateTime  @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([startedAt])
+  @@index([endedAt])
+}
+
+model NotificationRecipient {
+  id          String               @id @default(uuid())
+  name        String
+  phoneNumber String
+  category    NotificationCategory
+  isActive    Boolean              @default(true)
+  createdBy   String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+  @@index([phoneNumber])
+}
+
+// ============================================
+// MARKET PRICE TRACKING SCHEMA
+// ============================================
+
+// External markets for price comparison
+model Market {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdBy String
+  location  String? // Can be street address or GPS coordinates
+  province  String?
+  district  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  priceHistory MarketPriceHistory[]
+  admin        Admin                @relation(fields: [createdBy], references: [id])
+
+  @@index([name])
+  @@index([province])
+  @@index([district])
+  @@index([isActive])
+}
+
+// Market price history for product comparison
+model MarketPriceHistory {
+  id           String   @id @default(uuid())
+  productId    String // Our product ID for comparison
+  marketId     String
+  ourPrice     Float // Price from our database at the time
+  marketPrice  Float // Price at the external market
+  recordedBy   String
+  recordedDate DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  market  Market  @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  admin   Admin   @relation(fields: [recordedBy], references: [id])
+
+  @@index([productId])
+  @@index([marketId])
+  @@index([recordedDate])
+  @@index([createdAt])
+}
+
 enum Role {
   FARMER
   RESTAURANT
@@ -1434,41 +1517,10 @@ enum DelegationStatus {
   ACCEPTED // Trader accepted, delegation is active
 }
 
-// Delegation History - tracks all delegation control changes
-model DelegationHistory {
-  id         String    @id @default(uuid())
-  walletId   String
-  startedAt  DateTime  @default(now()) // When Food Bundles took control
-  endedAt    DateTime? // When owner took back control (null = still active)
-  approvedBy String? // Admin who approved this delegation period
-  createdAt  DateTime  @default(now())
-
-  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
-
-  @@index([walletId])
-  @@index([startedAt])
-  @@index([endedAt])
-}
-
-model NotificationRecipient {
-  id          String                    @id @default(uuid())
-  name        String 
-  phoneNumber String 
-  category    NotificationCategory 
-  isActive    Boolean                   @default(true)
-  createdBy   String? 
-  createdAt   DateTime                  @default(now())
-  updatedAt   DateTime                  @updatedAt
-
-  @@index([category])
-  @@index([isActive])
-  @@index([phoneNumber])
-}
-
 enum NotificationCategory {
-  MATURED_VOUCHERS 
-  EXPIRED_VOUCHERS 
-  LOW_STOCK 
-  PAYMENT_ISSUES 
-  SYSTEM_ALERTS 
+  MATURED_VOUCHERS
+  EXPIRED_VOUCHERS
+  LOW_STOCK
+  PAYMENT_ISSUES
+  SYSTEM_ALERTS
 }

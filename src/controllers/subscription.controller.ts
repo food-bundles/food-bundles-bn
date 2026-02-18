@@ -17,6 +17,7 @@ import {
   getRestaurantCurrentSubscriptionService,
   changeSubscriptionPlanService,
   getRestaurantSubscriptionHistoryService,
+  adminCreateRestaurantSubscriptionService,
 } from "../services/subscription.service";
 import { SubscriptionStatus } from "@prisma/client";
 import prisma from "../prisma";
@@ -793,6 +794,54 @@ export const getSubscriptionHistory = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to get subscription history",
+    });
+  }
+};
+
+/**
+ * Admin controller to create subscription for a restaurant
+ * POST /subscriptions/admin/create
+ */
+export const adminCreateRestaurantSubscription = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { restaurantId, planId, paymentMethodId, phoneNumber, bankDetails } =
+      req.body;
+
+    if (!restaurantId || !planId || !paymentMethodId) {
+      return res.status(400).json({
+        message: "Restaurant ID, plan ID, and payment method ID are required",
+      });
+    }
+
+    const paymentMethodConfig =
+      await getPaymentMethodByIdService(paymentMethodId);
+    const paymentMethod = paymentMethodConfig.name.toUpperCase();
+
+    if (paymentMethod === "MOBILE_MONEY" && !phoneNumber) {
+      return res.status(400).json({
+        message: "Phone number is required for mobile money payment",
+      });
+    }
+
+    const result = await adminCreateRestaurantSubscriptionService({
+      restaurantId,
+      planId,
+      paymentMethod,
+      phoneNumber,
+      bankDetails,
+    });
+
+    res.status(201).json({
+      message: "Subscription created and payment initiated by admin",
+      data: result.subscription,
+      payment: result.payment,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to create subscription",
     });
   }
 };
