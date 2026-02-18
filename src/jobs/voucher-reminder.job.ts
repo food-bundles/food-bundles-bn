@@ -3,7 +3,7 @@ import { sendVoucherMaturityRemindersService } from "../services/voucher-reminde
 
 /**
  * Schedule voucher maturity reminders
- * Runs daily at 7:00 AM
+ * Runs daily at 7:00 AM (00 07)
  */
 export const scheduleVoucherReminders = () => {
   // Run every day at 7:00 AM
@@ -19,5 +19,5 @@ export const scheduleVoucherReminders = () => {
     }
   });
 
-  console.log("Voucher reminder scheduler initialized - runs daily at 9:00 AM");
+  console.log("Voucher reminder scheduler initialized - runs daily at 7:00 AM");
 };

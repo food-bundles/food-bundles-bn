@@ -32,6 +32,9 @@ import {
   getAllWithdrawRequests,
   cancelWithdrawRequest,
   getAdminTraderWallet,
+  getAllDelegationHistory,
+  getTraderDelegationHistory,
+  getTradersWithAcceptedDelegations,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -267,6 +270,29 @@ traderRoutes.delete(
   isAuthenticated,
   checkPermission("TRADER"),
   cancelWithdrawRequest,
+)
+// Get all delegation history (Admin)
+traderRoutes.get(
+  "/delegation/history",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllDelegationHistory,
+);
+
+// Get trader's own delegation history
+traderRoutes.get(
+  "/delegation/my-history",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  getTraderDelegationHistory,
+);
+
+// Get traders with accepted delegations (Admin)
+traderRoutes.get(
+  "/accepted-delegations",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getTradersWithAcceptedDelegations,
 );
 
 export default traderRoutes;
