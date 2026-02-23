@@ -33,6 +33,7 @@ import unitRoutes from "./unit.routes";
 import paymentMethodRoutes from "./payment-method.routes";
 import smsNotifyRouter from "./notification-recipient.routes";
 import marketRoutes from "./market.routes";
+import newsletterRoutes from "./newsletter.routes";
 
 const routes = Router();
 
@@ -66,6 +67,7 @@ routes.use("/unit", unitRoutes);
 routes.use("/payment-method", paymentMethodRoutes);
 routes.use("/notification-recipients", smsNotifyRouter);
 routes.use("/markets", marketRoutes);
+routes.use("/newsletter", newsletterRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

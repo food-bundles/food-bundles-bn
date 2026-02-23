@@ -1230,9 +1230,10 @@ export const getRestaurantSubscriptionsService = async (
           },
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [
+        { endDate: "desc" },
+        { createdAt: "desc" },
+      ],
     }),
     prisma.restaurantSubscription.count({ where }),
   ]);
@@ -1568,9 +1569,10 @@ export const getAllSubscriptionsService = async ({
           },
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [
+        { endDate: "desc" },
+        { createdAt: "desc" },
+      ],
     }),
     prisma.restaurantSubscription.count({ where }),
   ]);

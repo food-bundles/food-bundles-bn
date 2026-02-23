@@ -15,10 +15,11 @@ import {
 import { VoucherType } from "@prisma/client";
 
 // Create trader transaction record
-const createTraderTransactionService = async (data: {
+export const createTraderTransactionService = async (data: {
   traderId: string;
   type:
     | "LOAN_APPROVAL"
+    | "LOAN_REVERSAL"
     | "COMMISSION_EARNED"
     | "COMMISSION_PAID"
     | "WALLET_TOPUP"
@@ -1340,7 +1341,10 @@ export const approveDelegationService = async (
   }
 
   // Allow PENDING or APPROVED (for resending OTP)
-  if (wallet.delegationStatus !== "PENDING" && wallet.delegationStatus !== "APPROVED") {
+  if (
+    wallet.delegationStatus !== "PENDING" &&
+    wallet.delegationStatus !== "APPROVED"
+  ) {
     throw new Error("No pending or approved delegation request found");
   }
 
@@ -1399,7 +1403,8 @@ export const approveDelegationService = async (
 
   return {
     success: true,
-    message: "Delegation approved. OTP sent to trader email (valid for 24 hours).",
+    message:
+      "Delegation approved. OTP sent to trader email (valid for 24 hours).",
   };
 };
 
@@ -1726,7 +1731,10 @@ export const reverseDelegationService = async (traderId: string) => {
   }
 
   // Check if delegation is APPROVED or ACCEPTED
-  if (wallet.delegationStatus === "NORMAL" || wallet.delegationStatus === "PENDING") {
+  if (
+    wallet.delegationStatus === "NORMAL" ||
+    wallet.delegationStatus === "PENDING"
+  ) {
     throw new Error("No active delegation to reverse");
   }
 
@@ -1775,7 +1783,10 @@ export const reverseDelegationService = async (traderId: string) => {
 };
 
 // Accept delegation with OTP (Trader accepts delegation)
-export const acceptDelegationService = async (traderId: string, otp: string) => {
+export const acceptDelegationService = async (
+  traderId: string,
+  otp: string,
+) => {
   const trader = await prisma.admin.findUnique({
     where: { id: traderId },
     select: { phone: true, email: true, username: true },
@@ -1830,7 +1841,8 @@ export const acceptDelegationService = async (traderId: string, otp: string) => 
   // Send notifications
   await createNotificationService({
     title: "Delegation Accepted",
-    message: "You have accepted the delegation. Food Bundles is now trading on your behalf.",
+    message:
+      "You have accepted the delegation. Food Bundles is now trading on your behalf.",
     eventType: "SYSTEM_MAINTENANCE",
     targetType: "SPECIFIC_USER",
     targetId: traderId,
@@ -2309,10 +2321,13 @@ export const getAllDelegationHistoryService = async (filters: {
 };
 
 // Get trader's own delegation history
-export const getTraderDelegationHistoryService = async (traderId: string, filters: {
-  page?: number;
-  limit?: number;
-}) => {
+export const getTraderDelegationHistoryService = async (
+  traderId: string,
+  filters: {
+    page?: number;
+    limit?: number;
+  },
+) => {
   const { page = 1, limit = 10 } = filters;
   const skip = (page - 1) * limit;
 
