@@ -25,7 +25,10 @@ import {
 import { sendMessage } from "../utils/sms.utility";
 import { getUserById } from "./userGets";
 import { getRestaurantFromAffiliatorService } from "./affiliator.service";
-import { processAllTradersCommissionService } from "./trader.service";
+import {
+  createTraderTransactionService,
+  processAllTradersCommissionService,
+} from "./trader.service";
 import { applyPromoCodeService } from "./promo.service";
 
 // Payment processing functions
@@ -297,7 +300,7 @@ export const getAllVouchersService = async (filters?: {
     where.restaurant = {
       name: {
         contains: search,
-        mode: 'insensitive',
+        mode: "insensitive",
       },
     };
   }
@@ -736,6 +739,19 @@ export const submitLoanApplicationService = async (
       },
     },
   });
+
+  try {
+    await sendMessage(
+      `A new Loan Application worth ${
+        loanApplication.requestedAmount
+      } RWF has been applied by restaurant: ${
+        loanApplication.restaurant?.name || ""
+      } with ${loanApplication.repaymentDays} days of repayment. Thank you!`,
+      process.env.PRIVATE_RECEIVER || "",
+    );
+  } catch (error) {
+    console.error("Failed to send loan application notification:", error);
+  }
 
   await createNotificationService({
     title: "New Voucher Application Submitted",
@@ -3065,6 +3081,31 @@ export const processExpiredVouchersService = async () => {
           targetType: "SPECIFIC_USER",
           targetId: voucher.approvedBy,
           metadata: { voucherId: voucher.id, approvedAmount },
+        });
+
+        // Calculate correct pending approved amount based on voucher usage
+        const activeVouchers = await prisma.voucher.findMany({
+          where: {
+            approvedBy: trader.id,
+            status: { in: ["ACTIVE", "USED"] },
+          },
+        });
+
+        // For used vouchers, available balance equals current balance since used amounts are already deducted
+        // Only subtract unused amounts from ACTIVE vouchers (not yet used)
+        const activeUnusedAmount = activeVouchers
+          .filter((voucher) => voucher.status === "ACTIVE")
+          .reduce((total, voucher) => {
+            return total + (voucher.creditLimit - voucher.usedCredit);
+          }, 0);
+
+        // Create trader transaction record
+        await createTraderTransactionService({
+          traderId: trader.id,
+          type: "LOAN_REVERSAL",
+          amount: approvedAmount,
+          loanId: voucher.loanId || voucher.loan?.id || undefined,
+          description: `Loan reversal of ${approvedAmount} RWF for expired voucher ${voucher.voucherCode} and money is returned to the wallet. Your available balance is ${traderWallet.balance - activeUnusedAmount - traderWallet.pendingWithdrawBalance} RWF.`,
         });
       }
 
