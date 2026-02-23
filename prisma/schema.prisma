@@ -332,6 +332,7 @@ model Admin {
   approvedWithdrawals      WalletTransaction[]   @relation("WithdrawApprover")
   Market                   Market[]
   MarketPriceHistory       MarketPriceHistory[]
+  NewsletterCampaign       NewsletterCampaign[]
 }
 
 model Product {
@@ -1150,6 +1151,7 @@ model TraderTransaction {
 
 enum TraderTransactionType {
   LOAN_APPROVAL
+  LOAN_REVERSAL
   COMMISSION_EARNED
   COMMISSION_PAID
   WALLET_TOPUP
@@ -1523,4 +1525,51 @@ enum NotificationCategory {
   LOW_STOCK
   PAYMENT_ISSUES
   SYSTEM_ALERTS
+}
+
+// ============================================
+// NEWSLETTER SCHEMA
+// ============================================
+
+model NewsletterSubscriber {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String?
+  phone        String?
+  restaurantId String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([email])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model NewsletterCampaign {
+  id             String           @id @default(uuid())
+  subject        String
+  content        String
+  status         NewsletterStatus @default(DRAFT)
+  sentAt         DateTime?
+  sentBy         String
+  recipientCount Int              @default(0)
+  openCount      Int              @default(0)
+  clickCount     Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  // Relations
+  admin Admin @relation(fields: [sentBy], references: [id])
+
+  @@index([status])
+  @@index([sentAt])
+  @@index([createdAt])
+}
+
+enum NewsletterStatus {
+  DRAFT
+  SENDING
+  SENT
+  FAILED
 }

@@ -1,0 +1,609 @@
+tags:
+  - name: Newsletter API
+    description: Newsletter subscription and campaign management operations
+
+components:
+  schemas:
+    NewsletterSubscriber:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "uuid-subscriber-123"
+        email:
+          type: string
+          example: "user@example.com"
+        name:
+          type: string
+          nullable: true
+          example: "John Doe"
+        phone:
+          type: string
+          nullable: true
+          example: "+250788123456"
+        restaurantId:
+          type: string
+          nullable: true
+          example: "uuid-restaurant-123"
+        isActive:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    NewsletterCampaign:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "uuid-campaign-123"
+        subject:
+          type: string
+          example: "Weekly Price Updates"
+        content:
+          type: string
+          example: "<h2>This week's updates...</h2>"
+        status:
+          type: string
+          enum: [DRAFT, SENDING, SENT, FAILED]
+          example: "SENT"
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        sentBy:
+          type: string
+          example: "uuid-admin-123"
+        recipientCount:
+          type: integer
+          example: 150
+        openCount:
+          type: integer
+          example: 0
+        clickCount:
+          type: integer
+          example: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SubscribeRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          description: Subscriber email (required)
+          example: "user@example.com"
+        name:
+          type: string
+          description: Subscriber name (optional)
+          example: "John Doe"
+        phone:
+          type: string
+          description: Subscriber phone (optional)
+          example: "+250788123456"
+        restaurantId:
+          type: string
+          description: Restaurant ID if subscriber is a restaurant (optional)
+          example: "uuid-restaurant-123"
+
+    UnsubscribeRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email to unsubscribe
+          example: "user@example.com"
+
+    CreateCampaignRequest:
+      type: object
+      required:
+        - subject
+        - content
+      properties:
+        subject:
+          type: string
+          description: Email subject line
+          example: "Weekly Price Updates - FoodBundles"
+        content:
+          type: string
+          description: HTML email content
+          example: "<h2>This Week's Updates</h2><p>Check out our latest prices...</p>"
+
+    UpdateCampaignRequest:
+      type: object
+      properties:
+        subject:
+          type: string
+          example: "Updated Subject"
+        content:
+          type: string
+          example: "<h2>Updated content...</h2>"
+
+paths:
+  /newsletter/subscribe:
+    post:
+      tags:
+        - Newsletter API
+      summary: Subscribe to newsletter
+      description: |
+        Public endpoint for users to subscribe to the FoodBundles newsletter.
+        Subscribers receive weekly price updates, new product announcements, and market trends.
+        Sends a welcome email upon successful subscription.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscribeRequest"
+            examples:
+              basic_subscription:
+                summary: Basic email subscription
+                value:
+                  email: "user@example.com"
+              full_subscription:
+                summary: Full subscription with details
+                value:
+                  email: "restaurant@example.com"
+                  name: "Green Valley Restaurant"
+                  phone: "+250788123456"
+                  restaurantId: "uuid-restaurant-123"
+      responses:
+        201:
+          description: Successfully subscribed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Successfully subscribed to newsletter"
+                  data:
+                    $ref: "#/components/schemas/NewsletterSubscriber"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+              examples:
+                missing_email:
+                  value:
+                    success: false
+                    message: "Email is required"
+                already_subscribed:
+                  value:
+                    success: false
+                    message: "Email already subscribed to newsletter"
+
+  /newsletter/unsubscribe:
+    post:
+      tags:
+        - Newsletter API
+      summary: Unsubscribe from newsletter
+      description: Public endpoint to unsubscribe from the newsletter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnsubscribeRequest"
+            examples:
+              unsubscribe:
+                value:
+                  email: "user@example.com"
+      responses:
+        200:
+          description: Successfully unsubscribed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Successfully unsubscribed from newsletter"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+              examples:
+                missing_email:
+                  value:
+                    success: false
+                    message: "Email is required"
+                not_found:
+                  value:
+                    success: false
+                    message: "Email not found in newsletter subscribers"
+
+  /newsletter/subscribers:
+    get:
+      tags:
+        - Newsletter API
+      summary: Get all newsletter subscribers
+      description: Admin endpoint to retrieve all newsletter subscribers with filtering
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Items per page
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+      responses:
+        200:
+          description: Subscribers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NewsletterSubscriber"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        403:
+          description: Admin access required
+
+  /newsletter/campaigns:
+    post:
+      tags:
+        - Newsletter API
+      summary: Create newsletter campaign
+      description: Admin endpoint to create a new newsletter campaign (draft status)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCampaignRequest"
+            examples:
+              price_update:
+                summary: Weekly price update campaign
+                value:
+                  subject: "Weekly Price Updates - FoodBundles"
+                  content: "<h2>This Week's Price Updates</h2><p>Check out the latest product prices...</p>"
+              new_products:
+                summary: New products announcement
+                value:
+                  subject: "New Products Available!"
+                  content: "<h2>Fresh Arrivals</h2><p>We've added new products to our catalog...</p>"
+      responses:
+        201:
+          description: Campaign created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Campaign created successfully"
+                  data:
+                    $ref: "#/components/schemas/NewsletterCampaign"
+        400:
+          description: Bad request
+        403:
+          description: Admin access required
+
+    get:
+      tags:
+        - Newsletter API
+      summary: Get all newsletter campaigns
+      description: Admin endpoint to retrieve all newsletter campaigns with filtering
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Items per page
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [DRAFT, SENDING, SENT, FAILED]
+          description: Filter by campaign status
+      responses:
+        200:
+          description: Campaigns retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NewsletterCampaign"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        403:
+          description: Admin access required
+
+  /newsletter/campaigns/{campaignId}:
+    put:
+      tags:
+        - Newsletter API
+      summary: Update newsletter campaign
+      description: Admin endpoint to update a draft campaign (cannot update sent campaigns)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Campaign ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCampaignRequest"
+            examples:
+              update_subject:
+                summary: Update subject only
+                value:
+                  subject: "Updated Weekly Price Report"
+              update_content:
+                summary: Update content only
+                value:
+                  content: "<h2>Revised content...</h2>"
+              update_both:
+                summary: Update both subject and content
+                value:
+                  subject: "New Subject"
+                  content: "<h2>New content...</h2>"
+      responses:
+        200:
+          description: Campaign updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Campaign updated successfully"
+                  data:
+                    $ref: "#/components/schemas/NewsletterCampaign"
+        400:
+          description: Bad request
+        403:
+          description: Admin access required
+        404:
+          description: Campaign not found
+
+    delete:
+      tags:
+        - Newsletter API
+      summary: Delete newsletter campaign
+      description: Admin endpoint to delete a draft campaign (cannot delete sent campaigns)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Campaign ID
+      responses:
+        200:
+          description: Campaign deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Campaign deleted successfully"
+        400:
+          description: Bad request
+        403:
+          description: Admin access required
+        404:
+          description: Campaign not found
+
+  /newsletter/campaigns/{campaignId}/send:
+    post:
+      tags:
+        - Newsletter API
+      summary: Send newsletter campaign
+      description: |
+        Admin endpoint to send a newsletter campaign to all active subscribers.
+        Campaign status will be updated to SENT upon successful delivery.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Campaign ID
+      responses:
+        200:
+          description: Campaign sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Campaign sent successfully"
+                  data:
+                    $ref: "#/components/schemas/NewsletterCampaign"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+              examples:
+                not_found:
+                  value:
+                    success: false
+                    message: "Campaign not found"
+                already_sent:
+                  value:
+                    success: false
+                    message: "Campaign already sent"
+                no_subscribers:
+                  value:
+                    success: false
+                    message: "No active subscribers found"
+        403:
+          description: Admin access required
+
+  /newsletter/weekly-update:
+    post:
+      tags:
+        - Newsletter API
+      summary: Send weekly price update
+      description: |
+        Admin endpoint to manually trigger the weekly price update newsletter.
+        Automatically sends price updates for products modified in the last 7 days.
+        This can also be scheduled as a cron job.
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Weekly update sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Weekly price update sent"
+                  data:
+                    type: object
+                    properties:
+                      sentCount:
+                        type: integer
+                        example: 150
+              examples:
+                success:
+                  value:
+                    success: true
+                    message: "Weekly price update sent"
+                    data:
+                      sentCount: 150
+                no_updates:
+                  value:
+                    success: true
+                    message: "No price updates this week"
+                    data:
+                      sentCount: 0
+        403:
+          description: Admin access required
