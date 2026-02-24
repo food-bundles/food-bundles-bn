@@ -3,11 +3,11 @@ import { sendVoucherMaturityRemindersService } from "../services/voucher-reminde
 
 /**
  * Schedule voucher maturity reminders
- * Runs daily at 7:00 AM (00 07)
+ * Runs daily at 5:00 AM (in Rwanda is 7:00 AM UTC+2)
  */
 export const scheduleVoucherReminders = () => {
   // Run every day at 7:00 AM
-  cron.schedule("00 07 * * *", async () => {
+  cron.schedule("00 05 * * *", async () => {
     console.log("Running voucher maturity reminders...");
     try {
       const result = await sendVoucherMaturityRemindersService();

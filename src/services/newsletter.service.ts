@@ -302,11 +302,11 @@ export const sendWeeklyPriceUpdateService = async () => {
 
 /**
  * Schedule weekly price update reminders
- * Runs every Monday at 9:00 AM (00 09 * * 1)
+ * Runs every Monday at 7:00 AM (00 09 * * 1)
  */
 export const scheduleWeeklyPriceUpdate = () => {
-  // Run every Monday at 9 AM
-  cron.schedule("0 9 * * 1", async () => {
+  // Run every Monday at 7 AM
+  cron.schedule("0 7 * * 1", async () => {
     console.log("Running weekly price update newsletter...");
     try {
       await sendWeeklyPriceUpdateService();
@@ -316,6 +316,6 @@ export const scheduleWeeklyPriceUpdate = () => {
   });
 
   console.log(
-    "Weekly price update scheduler initialized - runs every Monday at 9:00 AM",
+    "Weekly price update scheduler initialized - runs every Monday at 7:00 AM",
   );
 };

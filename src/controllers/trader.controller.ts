@@ -34,6 +34,8 @@ import {
   getAllDelegationHistoryService,
   getTraderDelegationHistoryService,
   getTradersWithAcceptedDelegationsService,
+  toggleTraderCommissionModeService,
+  processAllFixedModeMonthlyCommissionsService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -913,6 +915,70 @@ export const getTradersWithAcceptedDelegations = async (
     res.status(200).json({
       success: true,
       data: traders,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Toggle trader commission mode
+export const toggleTraderCommissionMode = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const traderId = (req as any).user.id;
+    const { mode } = req.body;
+
+    if (!mode || !["NORMAL", "FIXED"].includes(mode)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid commission mode (NORMAL or FIXED) is required",
+      });
+    }
+
+    const result = await toggleTraderCommissionModeService(traderId, mode);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: {
+        commissionMode: result.wallet.commissionMode,
+        commission: result.wallet.commission,
+        commissionModeChangedAt: result.wallet.commissionModeChangedAt,
+      },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Process all fixed mode monthly commissions (Admin only)
+export const processAllFixedModeMonthlyCommissions = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const results = await processAllFixedModeMonthlyCommissionsService();
+
+    const successCount = results.filter((r) => r.success).length;
+    const failureCount = results.filter((r) => !r.success).length;
+
+    res.status(200).json({
+      success: true,
+      message: `Processed monthly commissions for ${successCount} traders (${failureCount} failed)`,
+      data: {
+        totalProcessed: results.length,
+        successCount,
+        failureCount,
+        results,
+      },
     });
   } catch (error: any) {
     res.status(400).json({
