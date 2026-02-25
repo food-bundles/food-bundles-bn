@@ -299,6 +299,13 @@ export const getTraderVouchersService = async (
     throw new Error("Trader not found");
   }
 
+  // Get trader wallet for commission rate
+  const traderWallet = await prisma.wallet.findUnique({
+    where: { traderId },
+  });
+
+  const commissionRate = (traderWallet?.commission || 0) / 100;
+
   // Build pagination
   const page = filters?.page || 1;
   const limit = filters?.limit || 10;
@@ -314,7 +321,13 @@ export const getTraderVouchersService = async (
 
   // Add additional filters
   if (filters?.status) {
-    where.status = filters.status;
+    // Handle multiple statuses separated by comma
+    const statuses = filters.status.split(',').map((s: string) => s.trim());
+    if (statuses.length > 1) {
+      where.status = { in: statuses };
+    } else {
+      where.status = filters.status;
+    }
   }
   if (filters?.restaurantId) {
     where.restaurantId = filters.restaurantId;
@@ -352,8 +365,17 @@ export const getTraderVouchersService = async (
     prisma.voucher.count({ where }),
   ]);
 
+  // Calculate commission for each voucher
+  const vouchersWithCommission = vouchers.map((voucher) => {
+    const commission = voucher.usedCredit > 0 ? voucher.usedCredit * commissionRate : 0;
+    return {
+      ...voucher,
+      commission,
+    };
+  });
+
   return {
-    vouchers,
+    vouchers: vouchersWithCommission,
     statistics: {
       totalVouchers: vouchers.length,
       acceptedLoanVouchers: vouchers.filter(
@@ -555,7 +577,21 @@ export const calculateTraderCommissionService = async (traderId: string) => {
   // First process any existing used vouchers that haven't been processed
   await processExistingUsedVouchersForTrader(traderId);
 
-  // Then process commissions for settled/matured vouchers
+  // Get wallet to check commission mode
+  const traderWallet = await prisma.wallet.findUnique({
+    where: { traderId },
+  });
+
+  if (!traderWallet) {
+    return { totalCommission: 0, commissionDetails: [] };
+  }
+
+  // For FIXED mode, don't calculate commission per voucher
+  if (traderWallet.commissionMode === "FIXED") {
+    return { totalCommission: 0, commissionDetails: [], mode: "FIXED" };
+  }
+
+  // NORMAL mode: process commissions for settled/matured vouchers
   const settledVouchers = await prisma.voucher.findMany({
     where: {
       approvedBy: traderId,
@@ -582,15 +618,6 @@ export const calculateTraderCommissionService = async (traderId: string) => {
 
   let totalCommission = 0;
   const commissionDetails = [];
-
-  // Get wallet directly without calling getTraderWalletService to avoid circular dependency
-  const traderWallet = await prisma.wallet.findUnique({
-    where: { traderId },
-  });
-
-  if (!traderWallet) {
-    return { totalCommission: 0, commissionDetails: [] };
-  }
 
   const commissionRate = traderWallet.commission / 100;
 
@@ -630,7 +657,7 @@ export const calculateTraderCommissionService = async (traderId: string) => {
     });
   }
 
-  return { totalCommission, commissionDetails };
+  return { totalCommission, commissionDetails, mode: "NORMAL" };
 };
 
 // Process existing used vouchers for a specific trader
@@ -695,22 +722,79 @@ const processExistingUsedVouchersForTrader = async (traderId: string) => {
 // Process trader commission payment
 export const processTraderCommissionService = async (traderId: string) => {
   try {
-    // First calculate any new commissions
-    await calculateTraderCommissionService(traderId);
-
-    // Get current wallet state directly to avoid circular dependency
     const traderWallet = await prisma.wallet.findUnique({
       where: { traderId },
     });
 
-    if (!traderWallet || traderWallet.commissionEarned <= 0) {
-      console.log(`No commission available for trader ${traderId}`);
-      return { totalCommission: 0, commissionCount: 0 };
+    if (!traderWallet) {
+      throw new Error("Trader wallet not found");
     }
 
-    const totalCommission = traderWallet.commissionEarned;
+    const commissionMode = traderWallet.commissionMode || "NORMAL";
 
-    // Mark all unpaid commissions as paid (commission stays in commissionEarned)
+    // Handle FIXED mode monthly commission
+    if (commissionMode === "FIXED") {
+      const now = new Date();
+      const lastProcessed = traderWallet.lastMonthlyCommissionDate || traderWallet.createdAt;
+      const daysSinceLastProcessed = Math.floor(
+        (now.getTime() - lastProcessed.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      if (daysSinceLastProcessed < 30) {
+        throw new Error(
+          `Monthly commission can only be processed once per month.`,
+        );
+      }
+
+      const commissionRate = traderWallet.commission / 100;
+      const totalCommission = traderWallet.balance * commissionRate;
+
+      await createTraderTransactionService({
+        traderId,
+        type: "COMMISSION_EARNED",
+        amount: totalCommission,
+        commissionRate,
+        description: `Monthly fixed commission (${traderWallet.commission}% of balance ${traderWallet.balance} RWF)`,
+      });
+
+      await prisma.wallet.update({
+        where: { id: traderWallet.id },
+        data: {
+          commissionEarned: traderWallet.commissionEarned + totalCommission,
+          lastMonthlyCommissionDate: now,
+        },
+      });
+
+      await createNotificationService({
+        title: "Monthly Commission Processed",
+        message: `Monthly commission of ${totalCommission.toFixed(2)} RWF (${traderWallet.commission}% of ${traderWallet.balance} RWF balance) added to your account`,
+        eventType: "PAYMENT_PROCESSED",
+        targetType: "SPECIFIC_USER",
+        targetId: traderId,
+      });
+
+      return {
+        totalCommission,
+        commissionCount: 1,
+        balance: traderWallet.balance,
+        mode: "FIXED",
+      };
+    }
+
+    // Handle NORMAL mode commission
+    await calculateTraderCommissionService(traderId);
+
+    const updatedWallet = await prisma.wallet.findUnique({
+      where: { traderId },
+    });
+
+    if (!updatedWallet || updatedWallet.commissionEarned <= 0) {
+      console.log(`No commission available for trader ${traderId}`);
+      return { totalCommission: 0, commissionCount: 0, mode: "NORMAL" };
+    }
+
+    const totalCommission = updatedWallet.commissionEarned;
+
     await prisma.traderTransaction.updateMany({
       where: {
         traderId,
@@ -720,7 +804,6 @@ export const processTraderCommissionService = async (traderId: string) => {
       data: { isCommissionPaid: true },
     });
 
-    // Get count of commissions paid
     const commissionCount = await prisma.traderTransaction.count({
       where: {
         traderId,
@@ -729,7 +812,6 @@ export const processTraderCommissionService = async (traderId: string) => {
       },
     });
 
-    // Create commission payment record
     await createTraderTransactionService({
       traderId,
       type: "COMMISSION_PAID",
@@ -740,7 +822,8 @@ export const processTraderCommissionService = async (traderId: string) => {
     return {
       totalCommission,
       commissionCount,
-      balance: traderWallet.balance, // Balance unchanged
+      balance: updatedWallet.balance,
+      mode: "NORMAL",
     };
   } catch (error) {
     console.error("Error processing trader commission:", error);
@@ -2387,4 +2470,210 @@ export const getTradersWithAcceptedDelegationsService = async () => {
     name: wallet.trader?.username || wallet.trader?.email,
     availableBalance: wallet.balance,
   }));
+};
+
+// Toggle trader commission mode between NORMAL and FIXED
+export const toggleTraderCommissionModeService = async (
+  traderId: string,
+  newMode: "NORMAL" | "FIXED",
+) => {
+  const wallet = await prisma.wallet.findUnique({
+    where: { traderId },
+    include: { trader: { select: { username: true, phone: true } } },
+  });
+
+  if (!wallet) {
+    throw new Error("Trader wallet not found");
+  }
+
+  const now = new Date();
+  const currentMode = wallet.commissionMode || "NORMAL";
+
+  // If switching from FIXED to NORMAL mid-month, no commission for that month
+  if (currentMode === "FIXED" && newMode === "NORMAL") {
+    const lastChange = wallet.commissionModeChangedAt || wallet.createdAt;
+    const daysSinceChange = Math.floor(
+      (now.getTime() - lastChange.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    if (daysSinceChange < 30) {
+      await createNotificationService({
+        title: "Commission Mode Changed",
+        message: `Commission mode changed to NORMAL. No commission will be paid for the current month period.`,
+        eventType: "SYSTEM_MAINTENANCE",
+        targetType: "SPECIFIC_USER",
+        targetId: traderId,
+      });
+    }
+  }
+
+  const newCommissionRate = newMode === "FIXED" ? 5.0 : 3.0;
+  const canTradeOnBehalf = newMode === "FIXED";
+
+  // Update wallet with auto-delegation for FIXED mode
+  const updatedWallet = await prisma.wallet.update({
+    where: { id: wallet.id },
+    data: {
+      commissionMode: newMode,
+      commission: newCommissionRate,
+      commissionModeChangedAt: now,
+      canTradeOnBehalf,
+      delegationStatus: canTradeOnBehalf ? "ACCEPTED" : "NORMAL",
+    },
+  });
+
+  // Create delegation history if switching to FIXED
+  if (newMode === "FIXED" && !wallet.canTradeOnBehalf) {
+    await prisma.delegationHistory.create({
+      data: {
+        walletId: wallet.id,
+        action: "AUTO_DELEGATED",
+        startedAt: now,
+        reason: "Auto-delegated for FIXED commission mode",
+      },
+    });
+  }
+
+  // End delegation if switching to NORMAL
+  if (newMode === "NORMAL" && wallet.canTradeOnBehalf) {
+    await prisma.delegationHistory.create({
+      data: {
+        walletId: wallet.id,
+        action: "REVOKED",
+        startedAt: wallet.commissionModeChangedAt || wallet.createdAt,
+        endedAt: now,
+        reason: "Auto-revoked when switching to NORMAL commission mode",
+      },
+    });
+  }
+
+  await createNotificationService({
+    title: "Commission Mode Updated",
+    message: `Your commission mode has been changed to ${newMode} with ${newCommissionRate}% rate. ${newMode === "FIXED" ? "Food Bundles will approve loans on your behalf." : "You will approve loans directly."}`,
+    eventType: "SYSTEM_MAINTENANCE",
+    targetType: "SPECIFIC_USER",
+    targetId: traderId,
+  });
+
+  if (wallet.trader?.phone) {
+    await sendMessage(
+      `Commission mode changed to ${newMode} (${newCommissionRate}%). ${newMode === "FIXED" ? "Food Bundles will approve loans on your behalf. Monthly commission based on balance." : "Commission earned per voucher approval."}`,
+      wallet.trader.phone,
+    );
+  }
+
+  return {
+    success: true,
+    wallet: updatedWallet,
+    message: `Commission mode changed to ${newMode} with ${newCommissionRate}% rate`,
+  };
+};
+
+// Process monthly commission for FIXED mode traders
+export const processMonthlyCommissionService = async (
+  traderId: string,
+): Promise<{
+  success: boolean;
+  totalCommission: number;
+  message: string;
+}> => {
+  const wallet = await prisma.wallet.findUnique({
+    where: { traderId },
+    include: { trader: { select: { username: true, phone: true } } },
+  });
+
+  if (!wallet) {
+    throw new Error("Trader wallet not found");
+  }
+
+  if (wallet.commissionMode !== "FIXED") {
+    throw new Error("Trader is not in FIXED commission mode");
+  }
+
+  const now = new Date();
+  const lastProcessed = wallet.lastMonthlyCommissionDate || wallet.createdAt;
+  const daysSinceLastProcessed = Math.floor(
+    (now.getTime() - lastProcessed.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (daysSinceLastProcessed < 30) {
+    throw new Error(
+      `Monthly commission can only be processed once per month.`,
+    );
+  }
+
+  // Calculate commission based on current balance (not vouchers)
+  const commissionRate = wallet.commission / 100;
+  const totalCommission = wallet.balance * commissionRate;
+
+  // Create commission earned record
+  await createTraderTransactionService({
+    traderId,
+    type: "COMMISSION_EARNED",
+    amount: totalCommission,
+    commissionRate,
+    description: `Monthly fixed commission (${wallet.commission}% of balance ${wallet.balance} RWF)`,
+  });
+
+  // Update wallet
+  await prisma.wallet.update({
+    where: { id: wallet.id },
+    data: {
+      commissionEarned: wallet.commissionEarned + totalCommission,
+      lastMonthlyCommissionDate: now,
+    },
+  });
+
+  // Send notifications
+  await createNotificationService({
+    title: "Monthly Commission Processed",
+    message: `Monthly commission of ${totalCommission.toFixed(2)} RWF (${wallet.commission}% of ${wallet.balance} RWF balance) added to your account`,
+    eventType: "PAYMENT_PROCESSED",
+    targetType: "SPECIFIC_USER",
+    targetId: traderId,
+  });
+
+  if (wallet.trader?.phone) {
+    await sendMessage(
+      `Monthly commission: ${totalCommission.toFixed(2)} RWF (${wallet.commission}% of balance) added to your account`,
+      wallet.trader.phone,
+    );
+  }
+
+  return {
+    success: true,
+    totalCommission,
+    message: `Monthly commission of ${totalCommission.toFixed(2)} RWF processed successfully`,
+  };
+};
+
+// Process all FIXED mode traders' monthly commissions (Admin cron job)
+export const processAllFixedModeMonthlyCommissionsService = async () => {
+  const fixedModeWallets = await prisma.wallet.findMany({
+    where: {
+      traderId: { not: null },
+      commissionMode: "FIXED",
+      isActive: true,
+    },
+  });
+
+  const results = [];
+
+  for (const wallet of fixedModeWallets) {
+    try {
+      const result = await processMonthlyCommissionService(wallet.traderId!);
+      results.push({
+        traderId: wallet.traderId,
+        ...result,
+      });
+    } catch (error: any) {
+      results.push({
+        traderId: wallet.traderId,
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+
+  return results;
 };

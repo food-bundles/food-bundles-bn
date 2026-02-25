@@ -1271,6 +1271,18 @@ export const processVoucherPaymentService = async (
   // This ensures delivery and packaging fees are also covered by the voucher
   const actualDeduction = originalAmount;
 
+  // Get trader commission rate
+  let commissionAmount = 0;
+  if (voucher.approvedBy) {
+    const traderWallet = await prisma.wallet.findUnique({
+      where: { traderId: voucher.approvedBy },
+    });
+    if (traderWallet) {
+      const commissionRate = traderWallet.commission / 100;
+      commissionAmount = actualDeduction * commissionRate;
+    }
+  }
+
   // Process payment in transaction
   const result = await prisma.$transaction(async (tx) => {
     // Create voucher transaction
@@ -1293,7 +1305,7 @@ export const processVoucherPaymentService = async (
     const newTotalCredit = newUsedCredit; // Only the amount used, no penalties
     const newRemainingCredit = 0; // Always 0 since single-use
 
-    // Update voucher - mark as USED after single use
+    // Update voucher - mark as USED after single use and save commission
     const updatedVoucher = await tx.voucher.update({
       where: { id: voucherId },
       data: {
@@ -1303,6 +1315,7 @@ export const processVoucherPaymentService = async (
         remainingAmount: newUsedCredit, // Set remaining amount to be paid
         usedAt: new Date(),
         status: VoucherStatus.USED, // Always mark as USED after single use
+        commission: commissionAmount, // Save commission on voucher
       },
     });
 

@@ -35,6 +35,8 @@ import {
   getAllDelegationHistory,
   getTraderDelegationHistory,
   getTradersWithAcceptedDelegations,
+  toggleTraderCommissionMode,
+  processAllFixedModeMonthlyCommissions,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -295,4 +297,23 @@ traderRoutes.get(
   getTradersWithAcceptedDelegations,
 );
 
+
+// FIXED | NORMAL Commission Mode Toggle
+
+traderRoutes.post(
+  "/commission/toggle-mode",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  toggleTraderCommissionMode,
+);
+
+traderRoutes.post(
+  "/commission/process-all-monthly",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  processAllFixedModeMonthlyCommissions,
+);
+
+
 export default traderRoutes;
+

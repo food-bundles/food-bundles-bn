@@ -660,7 +660,10 @@ model Wallet {
   balance                   Float            @default(0)
   pendingApprovedAmount     Float            @default(0) // Amount approved for active vouchers
   commissionEarned          Float            @default(0) // Total commission earned (separate from balance)
-  commission                Float            @default(5.0) // Commission percentage (default 5%)
+  commission                Float            @default(3.0) // Commission percentage (default 3% for NORMAL, 5% for FIXED)
+  commissionMode            CommissionMode   @default(NORMAL) // NORMAL (per voucher) or FIXED (monthly)
+  commissionModeChangedAt   DateTime? // When commission mode was last changed
+  lastMonthlyCommissionDate DateTime? // Last date monthly commission was processed
   totalDeposited            Float            @default(0) // Total amount deposited (never decreases)
   pendingWithdrawBalance    Float            @default(0) // Pending withdraw from balance
   pendingWithdrawCommission Float            @default(0) // Pending withdraw from commission
@@ -884,6 +887,9 @@ model Voucher {
   // Payment tracking
   paidAmount      Float @default(0)
   remainingAmount Float @default(0)
+
+  // Commission tracking
+  commission Float @default(0) // Commission amount saved when voucher is used
 
   // Status and dates
   status     VoucherStatus @default(ACTIVE)
@@ -1260,9 +1266,11 @@ model PromoCode {
 model DelegationHistory {
   id         String    @id @default(uuid())
   walletId   String
-  startedAt  DateTime  @default(now()) // When Food Bundles took control
-  endedAt    DateTime? // When owner took back control (null = still active)
-  approvedBy String? // Admin who approved this delegation period
+  action     String    @default("REQUESTED") // "AUTO_DELEGATED", "REVOKED", "REQUESTED", "APPROVED", "ACCEPTED"
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+  reason     String?
+  approvedBy String?
   createdAt  DateTime  @default(now())
 
   wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
@@ -1536,7 +1544,7 @@ enum DelegationStatus {
   NORMAL // No delegation active or requested
   PENDING // Trader requested delegation
   APPROVED // Admin approved, waiting for trader acceptance
-  ACCEPTED // Trader accepted, delegation is active
+  ACCEPTED // Trader accepted, delegation is active (used for both manual and auto-delegation)
 }
 
 enum NotificationCategory {
@@ -1592,4 +1600,9 @@ enum NewsletterStatus {
   SENDING
   SENT
   FAILED
+}
+
+enum CommissionMode {
+  NORMAL 
+  FIXED 
 }

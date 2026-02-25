@@ -1785,3 +1785,328 @@ paths:
                   message:
                     type: string
                     example: "Admin access required"
+
+  /traders/commission/toggle-mode:
+    post:
+      tags:
+        - Trader API Management
+      summary: Toggle commission mode between NORMAL and FIXED
+      description: |
+        Switch trader commission mode:
+        - **NORMAL Mode**: 3% commission per voucher approval (immediate payment when voucher settles)
+        - **FIXED Mode**: 5% commission calculated monthly (paid at end of each 30-day period)
+        
+        **Important**: Switching from FIXED to NORMAL mid-month forfeits that month's commission.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - mode
+              properties:
+                mode:
+                  type: string
+                  enum: [NORMAL, FIXED]
+                  description: Commission mode to switch to
+                  example: "FIXED"
+            examples:
+              switch_to_fixed:
+                summary: Switch to FIXED mode (5% monthly)
+                value:
+                  mode: "FIXED"
+              switch_to_normal:
+                summary: Switch to NORMAL mode (3% per voucher)
+                value:
+                  mode: "NORMAL"
+      responses:
+        200:
+          description: Commission mode changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Commission mode changed to FIXED with 5% rate"
+                  data:
+                    type: object
+                    properties:
+                      commissionMode:
+                        type: string
+                        enum: [NORMAL, FIXED]
+                        example: "FIXED"
+                      commission:
+                        type: number
+                        format: float
+                        description: New commission rate
+                        example: 5.0
+                      commissionModeChangedAt:
+                        type: string
+                        format: date-time
+                        description: Timestamp of mode change
+                        example: "2024-02-17T10:30:00.000Z"
+              examples:
+                switched_to_fixed:
+                  value:
+                    success: true
+                    message: "Commission mode changed to FIXED with 5% rate"
+                    data:
+                      commissionMode: "FIXED"
+                      commission: 5.0
+                      commissionModeChangedAt: "2024-02-17T10:30:00.000Z"
+        400:
+          description: Bad request - Invalid mode or trader wallet not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+              examples:
+                invalid_mode:
+                  value:
+                    success: false
+                    message: "Valid commission mode (NORMAL or FIXED) is required"
+                wallet_not_found:
+                  value:
+                    success: false
+                    message: "Trader wallet not found"
+        403:
+          description: Trader access required
+
+  /traders/commission/process-monthly:
+    post:
+      tags:
+        - Trader API Management
+      summary: Process monthly commission (FIXED mode only)
+      description: |
+        Process monthly commission for traders in FIXED mode.
+        
+        **Requirements**:
+        - Trader must be in FIXED commission mode
+        - Must be at least 30 days since last processing
+        - Calculates 5% commission on all vouchers approved in the last 30 days
+        
+        **Note**: Commission is added to `commissionEarned` field and can be withdrawn anytime.
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Monthly commission processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Monthly commission of 50000 RWF processed successfully"
+                  data:
+                    type: object
+                    properties:
+                      totalCommission:
+                        type: number
+                        format: float
+                        description: Total commission amount processed
+                        example: 50000
+                      vouchersProcessed:
+                        type: integer
+                        description: Number of vouchers included in calculation
+                        example: 10
+              examples:
+                success:
+                  value:
+                    success: true
+                    message: "Monthly commission of 50000 RWF processed successfully"
+                    data:
+                      totalCommission: 50000
+                      vouchersProcessed: 10
+                no_vouchers:
+                  value:
+                    success: true
+                    message: "No vouchers to process for monthly commission"
+                    data:
+                      totalCommission: 0
+                      vouchersProcessed: 0
+        400:
+          description: Bad request - Not in FIXED mode, too soon, or wallet not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+              examples:
+                not_fixed_mode:
+                  value:
+                    success: false
+                    message: "Trader is not in FIXED commission mode"
+                too_soon:
+                  value:
+                    success: false
+                    message: "Monthly commission can only be processed once per month."
+                wallet_not_found:
+                  value:
+                    success: false
+                    message: "Trader wallet not found"
+        403:
+          description: Trader access required
+
+  /traders/commission/process-all-monthly:
+    post:
+      tags:
+        - Trader API Management
+      summary: Process all FIXED mode traders' monthly commissions (Admin only)
+      description: |
+        Admin endpoint to process monthly commissions for all traders in FIXED mode.
+        
+        **Use Case**: Scheduled cron job to run at the end of each month.
+        
+        **Process**:
+        - Finds all traders with FIXED commission mode
+        - Processes monthly commission for each eligible trader
+        - Returns success/failure status for each trader
+        
+        **Recommended**: Set up as monthly cron job on the 1st of each month.
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Batch processing completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Processed monthly commissions for 5 traders (0 failed)"
+                  data:
+                    type: object
+                    properties:
+                      totalProcessed:
+                        type: integer
+                        description: Total number of traders processed
+                        example: 5
+                      successCount:
+                        type: integer
+                        description: Number of successful processings
+                        example: 5
+                      failureCount:
+                        type: integer
+                        description: Number of failed processings
+                        example: 0
+                      results:
+                        type: array
+                        description: Detailed results for each trader
+                        items:
+                          type: object
+                          properties:
+                            traderId:
+                              type: string
+                              description: Trader ID
+                            success:
+                              type: boolean
+                              description: Whether processing succeeded
+                            totalCommission:
+                              type: number
+                              format: float
+                              description: Commission amount (if successful)
+                              nullable: true
+                            vouchersProcessed:
+                              type: integer
+                              description: Number of vouchers processed (if successful)
+                              nullable: true
+                            message:
+                              type: string
+                              description: Success message (if successful)
+                              nullable: true
+                            error:
+                              type: string
+                              description: Error message (if failed)
+                              nullable: true
+              examples:
+                all_success:
+                  value:
+                    success: true
+                    message: "Processed monthly commissions for 5 traders (0 failed)"
+                    data:
+                      totalProcessed: 5
+                      successCount: 5
+                      failureCount: 0
+                      results:
+                        - traderId: "trader-id-1"
+                          success: true
+                          totalCommission: 50000
+                          vouchersProcessed: 10
+                          message: "Monthly commission of 50000 RWF processed successfully"
+                        - traderId: "trader-id-2"
+                          success: true
+                          totalCommission: 30000
+                          vouchersProcessed: 6
+                          message: "Monthly commission of 30000 RWF processed successfully"
+                partial_success:
+                  value:
+                    success: true
+                    message: "Processed monthly commissions for 3 traders (2 failed)"
+                    data:
+                      totalProcessed: 5
+                      successCount: 3
+                      failureCount: 2
+                      results:
+                        - traderId: "trader-id-1"
+                          success: true
+                          totalCommission: 50000
+                          vouchersProcessed: 10
+                          message: "Monthly commission of 50000 RWF processed successfully"
+                        - traderId: "trader-id-2"
+                          success: false
+                          error: "Monthly commission can only be processed once per month."
+        400:
+          description: Processing error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Failed to process monthly commissions"
+        403:
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Admin access required"
