@@ -1,0 +1,415 @@
+tags:
+  - name: Two-Factor Authentication API
+    description: Google Authenticator-based 2FA for enhanced security on sensitive operations
+
+components:
+  schemas:
+    Enable2FAResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "2FA setup initiated. Scan the QR code with Google Authenticator and verify with a code."
+        data:
+          type: object
+          properties:
+            secret:
+              type: string
+              description: Base32 encoded secret for manual entry
+              example: "JBSWY3DPEHPK3PXP"
+            qrCode:
+              type: string
+              description: Data URL of QR code image
+              example: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+            backupCodes:
+              type: array
+              items:
+                type: string
+              description: One-time backup codes for account recovery
+              example: ["ABC123XY", "DEF456ZW", "GHI789UV"]
+
+    Verify2FARequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: 6-digit code from Google Authenticator or backup code
+          example: "123456"
+
+    TwoFAStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+              description: Whether 2FA is enabled
+              example: true
+            backupCodesCount:
+              type: integer
+              description: Number of remaining backup codes
+              example: 8
+
+    RegenerateBackupCodesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Backup codes regenerated successfully"
+        data:
+          type: object
+          properties:
+            backupCodes:
+              type: array
+              items:
+                type: string
+              example: ["NEW123AB", "NEW456CD", "NEW789EF"]
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error message"
+
+paths:
+  /authenticator/enable:
+    post:
+      tags:
+        - Two-Factor Authentication API
+      summary: Enable 2FA
+      description: |
+        Initiates 2FA setup by generating a secret, QR code, and backup codes.
+        User must scan the QR code with Google Authenticator app and verify with a token.
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: 2FA setup initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enable2FAResponse"
+              examples:
+                success:
+                  summary: Successful 2FA initialization
+                  value:
+                    success: true
+                    message: "2FA setup initiated. Scan the QR code with Google Authenticator and verify with a code."
+                    data:
+                      secret: "JBSWY3DPEHPK3PXP"
+                      qrCode: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+                      backupCodes:
+                        - "ABC123XY"
+                        - "DEF456ZW"
+                        - "GHI789UV"
+                        - "JKL012ST"
+                        - "MNO345QR"
+                        - "PQR678OP"
+                        - "STU901MN"
+                        - "VWX234KL"
+                        - "YZA567IJ"
+                        - "BCD890GH"
+        401:
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /authenticator/verify-setup:
+    post:
+      tags:
+        - Two-Factor Authentication API
+      summary: Verify 2FA setup
+      description: |
+        Confirms 2FA setup by verifying the first token from Google Authenticator.
+        This activates 2FA for the user account.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Verify2FARequest"
+            examples:
+              valid_token:
+                summary: Valid 6-digit token
+                value:
+                  token: "123456"
+      responses:
+        200:
+          description: 2FA enabled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "2FA enabled successfully"
+        400:
+          description: Invalid verification token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_token:
+                  value:
+                    success: false
+                    message: "Invalid verification token"
+                missing_token:
+                  value:
+                    success: false
+                    message: "Verification token is required"
+        401:
+          description: Unauthorized
+        500:
+          description: Internal server error
+
+  /authenticator/verify:
+    post:
+      tags:
+        - Two-Factor Authentication API
+      summary: Verify 2FA token
+      description: |
+        Validates a 2FA token for sensitive operations. Accepts both:
+        - 6-digit codes from Google Authenticator
+        - One-time backup codes
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Verify2FARequest"
+            examples:
+              authenticator_code:
+                summary: Google Authenticator code
+                value:
+                  token: "123456"
+              backup_code:
+                summary: Backup code
+                value:
+                  token: "ABC123XY"
+      responses:
+        200:
+          description: Token verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "2FA token verified successfully"
+        400:
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_token:
+                  value:
+                    success: false
+                    message: "Invalid 2FA token"
+                missing_token:
+                  value:
+                    success: false
+                    message: "2FA token is required"
+        401:
+          description: Unauthorized
+        500:
+          description: Internal server error
+
+  /authenticator/disable:
+    post:
+      tags:
+        - Two-Factor Authentication API
+      summary: Disable 2FA
+      description: |
+        Disables 2FA for the user account. Requires valid 2FA token for security.
+        This removes the secret and all backup codes.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Verify2FARequest"
+            examples:
+              valid_token:
+                summary: Valid token to disable
+                value:
+                  token: "123456"
+      responses:
+        200:
+          description: 2FA disabled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "2FA disabled successfully"
+        400:
+          description: Invalid token or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_token:
+                  value:
+                    success: false
+                    message: "Invalid 2FA token"
+                missing_token:
+                  value:
+                    success: false
+                    message: "2FA token is required to disable 2FA"
+        401:
+          description: Unauthorized
+        500:
+          description: Internal server error
+
+  /authenticator/status:
+    get:
+      tags:
+        - Two-Factor Authentication API
+      summary: Get 2FA status
+      description: |
+        Retrieves the current 2FA status for the authenticated user,
+        including whether it's enabled and the number of remaining backup codes.
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: 2FA status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TwoFAStatusResponse"
+              examples:
+                enabled:
+                  summary: 2FA enabled
+                  value:
+                    success: true
+                    data:
+                      enabled: true
+                      backupCodesCount: 8
+                disabled:
+                  summary: 2FA disabled
+                  value:
+                    success: true
+                    data:
+                      enabled: false
+                      backupCodesCount: 0
+        401:
+          description: Unauthorized
+        500:
+          description: Internal server error
+
+  /authenticator/regenerate-backup-codes:
+    post:
+      tags:
+        - Two-Factor Authentication API
+      summary: Regenerate backup codes
+      description: |
+        Generates new backup codes, replacing all existing ones.
+        Requires valid 2FA token for security. Use this when:
+        - Backup codes are running low
+        - Backup codes may have been compromised
+        - User needs fresh backup codes
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Verify2FARequest"
+            examples:
+              valid_token:
+                summary: Valid token to regenerate
+                value:
+                  token: "123456"
+      responses:
+        200:
+          description: Backup codes regenerated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegenerateBackupCodesResponse"
+              examples:
+                success:
+                  summary: New backup codes generated
+                  value:
+                    success: true
+                    message: "Backup codes regenerated successfully"
+                    data:
+                      backupCodes:
+                        - "NEW123AB"
+                        - "NEW456CD"
+                        - "NEW789EF"
+                        - "NEW012GH"
+                        - "NEW345IJ"
+                        - "NEW678KL"
+                        - "NEW901MN"
+                        - "NEW234OP"
+                        - "NEW567QR"
+                        - "NEW890ST"
+        400:
+          description: Invalid token or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_token:
+                  value:
+                    success: false
+                    message: "Invalid 2FA token"
+                missing_token:
+                  value:
+                    success: false
+                    message: "2FA token is required to regenerate backup codes"
+        401:
+          description: Unauthorized
+        500:
+          description: Internal server error
