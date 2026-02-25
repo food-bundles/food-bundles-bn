@@ -2446,9 +2446,7 @@ export async function sendTraderDelegationOTPEmail(data: {
 /**
  * Generate newsletter welcome email template
  */
-const sendNewsletterWelcomeTemplate = (data: {
-  name: string;
-}): string => {
+const sendNewsletterWelcomeTemplate = (data: { name: string }): string => {
   return `<!DOCTYPE html>
   <html lang="en">
   <head>
@@ -2488,10 +2486,7 @@ const sendNewsletterWelcomeTemplate = (data: {
         </div>
         
         <p>Our newsletter is designed to help you make informed decisions and get the best value from FoodBundles.</p>
-        
-        <p><span class="highlight">Stable Prices, Updated Weekly</span> - We monitor market conditions and update our prices regularly to ensure you always get competitive rates.</p>
-        
-        <p>If you ever wish to unsubscribe, you can do so at any time by clicking the unsubscribe link in any of our emails.</p>
+              
         
         <p>Welcome aboard! 🇷🇼</p>
       </div>
@@ -2624,6 +2619,9 @@ export async function sendNewsletterCampaignEmail(data: {
     await transporter.sendMail(campaignEmail);
     console.log(`Newsletter campaign email sent to ${data.email}`);
   } catch (error) {
-    console.error(`Failed to send newsletter campaign email to ${data.email}:`, error);
+    console.error(
+      `Failed to send newsletter campaign email to ${data.email}:`,
+      error,
+    );
   }
 }

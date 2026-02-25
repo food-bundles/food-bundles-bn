@@ -36,6 +36,11 @@ model Farmer {
   smsNotifications      Boolean @default(false)
   notificationFrequency String?
 
+  // Two-Factor Authentication
+  twoFactorSecret      String?  @db.Text
+  twoFactorEnabled     Boolean  @default(false)
+  twoFactorBackupCodes String[] @default([])
+
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt
   submissions            FarmerSubmission[]
@@ -76,6 +81,11 @@ model Restaurant {
   agreed            Boolean @default(false)
   preferredLanguage String? @default("KINY")
 
+  // Two-Factor Authentication
+  twoFactorSecret      String?  @db.Text
+  twoFactorEnabled     Boolean  @default(false)
+  twoFactorBackupCodes String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -103,6 +113,11 @@ model Affiliator {
   restaurantId String
   password     String
   role         Role    @default(AFFILIATOR)
+
+  // Two-Factor Authentication
+  twoFactorSecret      String?  @db.Text
+  twoFactorEnabled     Boolean  @default(false)
+  twoFactorBackupCodes String[] @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -313,6 +328,11 @@ model Admin {
   sector   String?
   cell     String?
   village  String?
+
+  // Two-Factor Authentication
+  twoFactorSecret      String?  @db.Text
+  twoFactorEnabled     Boolean  @default(false)
+  twoFactorBackupCodes String[] @default([])
 
   aggregatorAssignments    FarmerSubmission[]    @relation("Aggregator")
   logisticsAssignments     Order[]               @relation("LOGISTICS")
