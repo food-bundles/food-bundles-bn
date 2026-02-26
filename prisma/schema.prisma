@@ -1603,6 +1603,6 @@ enum NewsletterStatus {
 }
 
 enum CommissionMode {
-  NORMAL 
-  FIXED 
+  NORMAL
+  FIXED
 }
