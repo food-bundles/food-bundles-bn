@@ -194,7 +194,14 @@ export const topUpTraderWalletService = async (data: {
     throw new Error("Trader not found");
   }
 
-  const traderWallet = await getTraderWalletService(data.traderId);
+  // Check if wallet exists, create if not
+  let traderWallet;
+  try {
+    traderWallet = await getTraderWalletService(data.traderId);
+  } catch (error) {
+    // Wallet doesn't exist, create it automatically
+    traderWallet = await createTraderWalletService(data.traderId);
+  }
 
   const result = await topUpWalletService({
     walletId: traderWallet.id,
@@ -322,7 +329,7 @@ export const getTraderVouchersService = async (
   // Add additional filters
   if (filters?.status) {
     // Handle multiple statuses separated by comma
-    const statuses = filters.status.split(',').map((s: string) => s.trim());
+    const statuses = filters.status.split(",").map((s: string) => s.trim());
     if (statuses.length > 1) {
       where.status = { in: statuses };
     } else {
@@ -367,7 +374,8 @@ export const getTraderVouchersService = async (
 
   // Calculate commission for each voucher
   const vouchersWithCommission = vouchers.map((voucher) => {
-    const commission = voucher.usedCredit > 0 ? voucher.usedCredit * commissionRate : 0;
+    const commission =
+      voucher.usedCredit > 0 ? voucher.usedCredit * commissionRate : 0;
     return {
       ...voucher,
       commission,
@@ -735,7 +743,8 @@ export const processTraderCommissionService = async (traderId: string) => {
     // Handle FIXED mode monthly commission
     if (commissionMode === "FIXED") {
       const now = new Date();
-      const lastProcessed = traderWallet.lastMonthlyCommissionDate || traderWallet.createdAt;
+      const lastProcessed =
+        traderWallet.lastMonthlyCommissionDate || traderWallet.createdAt;
       const daysSinceLastProcessed = Math.floor(
         (now.getTime() - lastProcessed.getTime()) / (1000 * 60 * 60 * 24),
       );
@@ -1122,6 +1131,24 @@ export const setTraderWalletCommissionService = async (
 ) => {
   if (commission < 0 || commission > 100) {
     throw new Error("Commission must be between 0 and 100 percent");
+  }
+
+  // Check if trader exists
+  const trader = await prisma.admin.findUnique({
+    where: { id: traderId, role: "TRADER" },
+  });
+
+  if (!trader) {
+    throw new Error("Trader not found");
+  }
+
+  // Check if trader has a wallet
+  const existingWallet = await prisma.wallet.findUnique({
+    where: { traderId },
+  });
+
+  if (!existingWallet) {
+    throw new Error("Trader wallet not found. Please create a wallet first.");
   }
 
   const wallet = await prisma.wallet.update({
@@ -2597,9 +2624,7 @@ export const processMonthlyCommissionService = async (
   );
 
   if (daysSinceLastProcessed < 30) {
-    throw new Error(
-      `Monthly commission can only be processed once per month.`,
-    );
+    throw new Error(`Monthly commission can only be processed once per month.`);
   }
 
   // Calculate commission based on current balance (not vouchers)
@@ -2676,4 +2701,118 @@ export const processAllFixedModeMonthlyCommissionsService = async () => {
   }
 
   return results;
+};
+
+// Get all traders (Admin only)
+export const getAllTradersService = async () => {
+  const traders = await prisma.admin.findMany({
+    where: { role: "TRADER" },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      phone: true,
+      location: true,
+      province: true,
+      district: true,
+      sector: true,
+      cell: true,
+      village: true,
+      createdAt: true,
+      updatedAt: true,
+      traderWallet: {
+        select: {
+          id: true,
+          balance: true,
+          commission: true,
+          commissionEarned: true,
+          isActive: true,
+          commissionMode: true,
+          canTradeOnBehalf: true,
+          delegationStatus: true,
+        },
+      },
+      _count: {
+        select: {
+          approvedLoans: true,
+          Voucher: true,
+          traderTransactions: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Transform the response to use 'wallet' instead of 'traderWallet'
+  return traders.map((trader) => ({
+    ...trader,
+    wallet: trader.traderWallet,
+    traderWallet: undefined, // Remove the original field
+  }));
+};
+
+// Get trader by ID or email
+export const getTraderByIdOrEmailService = async (identifier: string) => {
+  const trader = await prisma.admin.findFirst({
+    where: {
+      role: "TRADER",
+      OR: [{ id: identifier }, { email: identifier }],
+    },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      phone: true,
+      location: true,
+      province: true,
+      district: true,
+      sector: true,
+      cell: true,
+      village: true,
+      createdAt: true,
+      updatedAt: true,
+      traderWallet: {
+        select: {
+          id: true,
+          balance: true,
+          commission: true,
+          commissionEarned: true,
+          isActive: true,
+          commissionMode: true,
+          canTradeOnBehalf: true,
+          delegationStatus: true,
+          totalDeposited: true,
+          pendingWithdrawBalance: true,
+          pendingWithdrawCommission: true,
+          totalWithdrawn: true,
+          currency: true,
+          createdAt: true,
+          updatedAt: true,
+          _count: {
+            select: {
+              transactions: true,
+            },
+          },
+        },
+      },
+      _count: {
+        select: {
+          approvedLoans: true,
+          Voucher: true,
+          traderTransactions: true,
+        },
+      },
+    },
+  });
+
+  if (!trader) {
+    throw new Error("Trader not found");
+  }
+
+  // Transform the response to use 'wallet' instead of 'traderWallet'
+  return {
+    ...trader,
+    wallet: trader.traderWallet,
+    traderWallet: undefined, // Remove the original field
+  };
 };

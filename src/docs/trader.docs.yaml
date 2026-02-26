@@ -300,6 +300,111 @@ components:
           format: float
           description: Pending commission to be processed
 
+    TraderList:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Trader ID
+        username:
+          type: string
+          description: Trader username
+        email:
+          type: string
+          description: Trader email
+        phone:
+          type: string
+          nullable: true
+          description: Trader phone number
+        location:
+          type: string
+          nullable: true
+          description: Trader location
+        province:
+          type: string
+          nullable: true
+          description: Trader province
+        district:
+          type: string
+          nullable: true
+          description: Trader district
+        sector:
+          type: string
+          nullable: true
+          description: Trader sector
+        cell:
+          type: string
+          nullable: true
+          description: Trader cell
+        village:
+          type: string
+          nullable: true
+          description: Trader village
+        createdAt:
+          type: string
+          format: date-time
+          description: Account creation date
+        updatedAt:
+          type: string
+          format: date-time
+          description: Account last update date
+        wallet:
+          $ref: "#/components/schemas/TraderWallet"
+        _count:
+          type: object
+          properties:
+            approvedLoans:
+              type: integer
+              description: Number of loans approved
+            Voucher:
+              type: integer
+              description: Number of vouchers managed
+            traderTransactions:
+              type: integer
+              description: Number of trader transactions
+
+    TraderDetail:
+      allOf:
+        - $ref: "#/components/schemas/TraderList"
+        - type: object
+          properties:
+            wallet:
+              allOf:
+                - $ref: "#/components/schemas/TraderWallet"
+                - type: object
+                  properties:
+                    totalDeposited:
+                      type: number
+                      format: float
+                      description: Total amount deposited
+                    pendingWithdrawBalance:
+                      type: number
+                      format: float
+                      description: Pending balance withdrawal
+                    pendingWithdrawCommission:
+                      type: number
+                      format: float
+                      description: Pending commission withdrawal
+                    totalWithdrawn:
+                      type: number
+                      format: float
+                      description: Total amount withdrawn
+                    currency:
+                      type: string
+                      description: Wallet currency
+                    createdAt:
+                      type: string
+                      format: date-time
+                    updatedAt:
+                      type: string
+                      format: date-time
+                    _count:
+                      type: object
+                      properties:
+                        transactions:
+                          type: integer
+                          description: Number of wallet transactions
+
 paths:
   /traders/wallet:
     post:
@@ -1795,7 +1900,7 @@ paths:
         Switch trader commission mode:
         - **NORMAL Mode**: 3% commission per voucher approval (immediate payment when voucher settles)
         - **FIXED Mode**: 5% commission calculated monthly (paid at end of each 30-day period)
-        
+
         **Important**: Switching from FIXED to NORMAL mid-month forfeits that month's commission.
       security:
         - BearerAuth: []
@@ -1893,12 +1998,12 @@ paths:
       summary: Process monthly commission (FIXED mode only)
       description: |
         Process monthly commission for traders in FIXED mode.
-        
+
         **Requirements**:
         - Trader must be in FIXED commission mode
         - Must be at least 30 days since last processing
         - Calculates 5% commission on all vouchers approved in the last 30 days
-        
+
         **Note**: Commission is added to `commissionEarned` field and can be withdrawn anytime.
       security:
         - BearerAuth: []
@@ -1978,14 +2083,14 @@ paths:
       summary: Process all FIXED mode traders' monthly commissions (Admin only)
       description: |
         Admin endpoint to process monthly commissions for all traders in FIXED mode.
-        
+
         **Use Case**: Scheduled cron job to run at the end of each month.
-        
+
         **Process**:
         - Finds all traders with FIXED commission mode
         - Processes monthly commission for each eligible trader
         - Returns success/failure status for each trader
-        
+
         **Recommended**: Set up as monthly cron job on the 1st of each month.
       security:
         - BearerAuth: []
@@ -2097,6 +2202,116 @@ paths:
                   message:
                     type: string
                     example: "Failed to process monthly commissions"
+        403:
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Admin access required"
+
+  /traders/all:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get all traders (Admin only)
+      description: Retrieve a list of all traders with their wallet information and statistics
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Traders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TraderList"
+                  count:
+                    type: integer
+                    description: Total number of traders
+                    example: 25
+        403:
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Admin access required"
+
+  /traders/search/{identifier}:
+    get:
+      tags:
+        - Trader API Management
+      summary: Get trader by ID or email (Admin only)
+      description: Retrieve detailed information about a specific trader by their ID or email address
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: identifier
+          in: path
+          required: true
+          description: Trader ID or email address
+          schema:
+            type: string
+          example: "trader@example.com"
+      responses:
+        200:
+          description: Trader retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/TraderDetail"
+        400:
+          description: Invalid identifier
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Trader ID or email is required"
+        404:
+          description: Trader not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Trader not found"
         403:
           description: Admin access required
           content:

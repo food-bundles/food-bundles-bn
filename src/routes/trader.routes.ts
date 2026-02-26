@@ -37,6 +37,8 @@ import {
   getTradersWithAcceptedDelegations,
   toggleTraderCommissionMode,
   processAllFixedModeMonthlyCommissions,
+  getAllTraders,
+  getTraderByIdOrEmail,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -272,7 +274,7 @@ traderRoutes.delete(
   isAuthenticated,
   checkPermission("TRADER"),
   cancelWithdrawRequest,
-)
+);
 // Get all delegation history (Admin)
 traderRoutes.get(
   "/delegation/history",
@@ -297,7 +299,6 @@ traderRoutes.get(
   getTradersWithAcceptedDelegations,
 );
 
-
 // FIXED | NORMAL Commission Mode Toggle
 
 traderRoutes.post(
@@ -314,6 +315,20 @@ traderRoutes.post(
   processAllFixedModeMonthlyCommissions,
 );
 
+// Get all traders (Admin only)
+traderRoutes.get(
+  "/all",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllTraders,
+);
+
+// Get trader by ID or email (Admin only)
+traderRoutes.get(
+  "/search/:identifier",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getTraderByIdOrEmail,
+);
 
 export default traderRoutes;
-
