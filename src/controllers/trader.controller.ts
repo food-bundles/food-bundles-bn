@@ -36,6 +36,8 @@ import {
   getTradersWithAcceptedDelegationsService,
   toggleTraderCommissionModeService,
   processAllFixedModeMonthlyCommissionsService,
+  getAllTradersService,
+  getTraderByIdOrEmailService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -979,6 +981,50 @@ export const processAllFixedModeMonthlyCommissions = async (
         failureCount,
         results,
       },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get all traders (Admin only)
+export const getAllTraders = async (req: Request, res: Response) => {
+  try {
+    const traders = await getAllTradersService();
+
+    res.status(200).json({
+      success: true,
+      data: traders,
+      count: traders.length,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get trader by ID or email (Admin only)
+export const getTraderByIdOrEmail = async (req: Request, res: Response) => {
+  try {
+    const { identifier } = req.params;
+
+    if (!identifier) {
+      return res.status(400).json({
+        success: false,
+        message: "Trader ID or email is required",
+      });
+    }
+
+    const trader = await getTraderByIdOrEmailService(identifier);
+
+    res.status(200).json({
+      success: true,
+      data: trader,
     });
   } catch (error: any) {
     res.status(400).json({
