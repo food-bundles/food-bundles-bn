@@ -1133,26 +1133,17 @@ export const setTraderWalletCommissionService = async (
     throw new Error("Commission must be between 0 and 100 percent");
   }
 
-  // Check if trader exists
-  const trader = await prisma.admin.findUnique({
-    where: { id: traderId, role: "TRADER" },
-  });
-
-  if (!trader) {
-    throw new Error("Trader not found");
-  }
-
-  // Check if trader has a wallet
-  const existingWallet = await prisma.wallet.findUnique({
-    where: { traderId },
-  });
-
-  if (!existingWallet) {
-    throw new Error("Trader wallet not found. Please create a wallet first.");
+  // Check if wallet exists, create if not
+  let traderWallet;
+  try {
+    traderWallet = await getTraderWalletService(traderId);
+  } catch (error) {
+    // Wallet doesn't exist, create it automatically
+    traderWallet = await createTraderWalletService(traderId);
   }
 
   const wallet = await prisma.wallet.update({
-    where: { traderId },
+    where: { id: traderWallet.id },
     data: { commission },
     include: {
       trader: {
