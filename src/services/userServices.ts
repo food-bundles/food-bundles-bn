@@ -27,6 +27,10 @@ import {
   sendPasswordSMS,
 } from "../utils/passwordGenerator";
 import { sendAdminUserCreatedEmail } from "../utils/emailTemplates";
+import {
+  createTraderWalletService,
+  getTraderWalletService,
+} from "./trader.service";
 
 // Helper function to check for existing phone/email across all user types
 export const checkExistingUser = async (phone?: string, email?: string) => {
@@ -473,7 +477,9 @@ export const createRestaurantService = async (
     const { password: _, ...restaurantWithoutPassword } = restaurant;
     return restaurantWithoutPassword;
   } catch (error: any) {
-    throw new Error(`Failed to create ${role?.toLowerCase() || 'restaurant'}: ${error.message}`);
+    throw new Error(
+      `Failed to create ${role?.toLowerCase() || "restaurant"}: ${error.message}`,
+    );
   }
 };
 
@@ -797,6 +803,16 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
       userName: admin.username,
       userEmail: admin.email,
     });
+
+    if (admin.role === "TRADER") {
+      // Check if wallet exists, create if not
+      try {
+        await getTraderWalletService(admin.id);
+      } catch (error) {
+        // Wallet doesn't exist, create it automatically
+        await createTraderWalletService(admin.id);
+      }
+    }
 
     const { password: _, ...adminWithoutPassword } = admin;
     return adminWithoutPassword;
