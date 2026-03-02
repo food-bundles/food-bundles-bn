@@ -13,6 +13,7 @@ import {
   getTraderTransactionByIdService,
   getTraderTransactionStatsService,
   getTraderDashboardStatsService,
+  sendCommissionOTPService,
   setTraderWalletCommissionService,
   processAllTradersCommissionService,
   processExistingUsedVouchersService,
@@ -392,11 +393,8 @@ export const getTraderTransactionStats = async (
   }
 };
 
-// Set trader wallet commission (Admin only)
-export const setTraderWalletCommission = async (
-  req: Request,
-  res: Response,
-) => {
+// Send OTP for commission update (Admin only)
+export const sendCommissionOTP = async (req: Request, res: Response) => {
   try {
     const { traderId } = req.params;
     const { commission } = req.body;
@@ -408,10 +406,38 @@ export const setTraderWalletCommission = async (
       });
     }
 
-    const wallet = await setTraderWalletCommissionService(
-      traderId,
-      parseFloat(commission),
-    );
+    const result = await sendCommissionOTPService(traderId, parseFloat(commission));
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      sessionId: result.sessionId,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Set trader wallet commission (Admin only)
+export const setTraderWalletCommission = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { traderId } = req.params;
+    const { sessionId, otp } = req.body;
+
+    if (!sessionId || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Session ID and OTP are required",
+      });
+    }
+
+    const wallet = await setTraderWalletCommissionService(sessionId, otp);
 
     res.status(200).json({
       success: true,

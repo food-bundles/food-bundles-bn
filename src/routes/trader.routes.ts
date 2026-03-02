@@ -13,6 +13,7 @@ import {
   getTraderTransactionById,
   getTraderTransactionStats,
   getTraderDashboard,
+  sendCommissionOTP,
   setTraderWalletCommission,
   processAllTradersCommission,
   processExistingUsedVouchers,
@@ -139,6 +140,13 @@ traderRoutes.get(
   isAuthenticated,
   checkPermission("ADMIN"),
   getAdminTraderWallet,
+);
+
+traderRoutes.post(
+  "/:traderId/commission/send-otp",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  sendCommissionOTP,
 );
 
 traderRoutes.patch(
