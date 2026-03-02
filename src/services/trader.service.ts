@@ -1124,36 +1124,103 @@ const sendCommissionEarnedNotifications = async (
   }
 };
 
-// Set trader wallet commission
-export const setTraderWalletCommissionService = async (
+// Send OTP for commission update
+export const sendCommissionOTPService = async (
   traderId: string,
   commission: number,
 ) => {
-  if (commission < 0 || commission > 100) {
-    throw new Error("Commission must be between 0 and 100 percent");
-  }
-
-  // Check if wallet exists, create if not
-  let traderWallet;
-  try {
-    traderWallet = await getTraderWalletService(traderId);
-  } catch (error) {
-    // Wallet doesn't exist, create it automatically
-    traderWallet = await createTraderWalletService(traderId);
-  }
-
-  const wallet = await prisma.wallet.update({
-    where: { id: traderWallet.id },
-    data: { commission },
+  const wallet = await prisma.wallet.findUnique({
+    where: { traderId },
     include: {
-      trader: {
-        select: { id: true, username: true, email: true, phone: true },
-      },
+      trader: { select: { username: true, email: true, phone: true } },
     },
   });
 
-  // Send notifications
+  if (!wallet) {
+    throw new Error("Trader wallet not found");
+  }
+
+  const privateReceiver = process.env.PRIVATE_RECEIVER;
+  if (!privateReceiver) {
+    throw new Error("Private receiver not configured");
+  }
+
+  const otp = OTPService.generateOTP();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  await prisma.oTP.create({
+    data: {
+      phone: privateReceiver,
+      otp,
+      purpose: "ADMIN_WALLET_OPERATION",
+      expiresAt,
+    },
+  });
+
+  await sendMessage(
+    `Commission update OTP: ${otp}. Trader: ${wallet.trader?.username}. New rate: ${commission}%. Valid for 10 minutes.`,
+    privateReceiver,
+  );
+
+  const sessionData = {
+    traderId,
+    commission,
+    otp,
+    expiresAt,
+    timestamp: Date.now(),
+  };
+
+  return {
+    success: true,
+    message: "OTP sent to admin",
+    sessionId: Buffer.from(JSON.stringify(sessionData)).toString("base64"),
+  };
+};
+
+// Set trader wallet commission with OTP verification
+export const setTraderWalletCommissionService = async (
+  sessionId: string,
+  otp: string,
+) => {
   try {
+    const sessionData = JSON.parse(
+      Buffer.from(sessionId, "base64").toString(),
+    );
+
+    if (
+      !sessionData.otp ||
+      !sessionData.expiresAt ||
+      !sessionData.traderId ||
+      !sessionData.commission
+    ) {
+      throw new Error("Invalid session data");
+    }
+
+    if (new Date() > new Date(sessionData.expiresAt)) {
+      throw new Error("OTP expired");
+    }
+
+    if (sessionData.otp !== otp) {
+      throw new Error("Invalid OTP");
+    }
+
+    const commission = sessionData.commission;
+    const traderId = sessionData.traderId;
+
+    if (commission < 0 || commission > 100) {
+      throw new Error("Commission must be between 0 and 100 percent");
+    }
+
+    const wallet = await prisma.wallet.update({
+      where: { traderId },
+      data: { commission },
+      include: {
+        trader: {
+          select: { id: true, username: true, email: true, phone: true },
+        },
+      },
+    });
+
     await sendMessage(
       `Your wallet commission has been updated to ${commission}%`,
       wallet.trader?.phone || "",
@@ -1167,11 +1234,13 @@ export const setTraderWalletCommissionService = async (
       targetId: traderId,
       metadata: { newCommission: commission },
     });
-  } catch (error) {
-    console.error("Failed to send commission update notifications:", error);
-  }
 
-  return wallet;
+    return wallet;
+  } catch (error: any) {
+    throw new Error(
+      error.message || "Invalid session or OTP verification failed",
+    );
+  }
 };
 
 // Get trader dashboard stats
