@@ -497,3 +497,118 @@ export const getMarketPricesByProductService = async (filters: {
     },
   };
 };
+
+// Export markets to CSV/Excel
+export const exportMarketsService = async (format: string = 'csv') => {
+  const markets = await prisma.market.findMany({
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const headers = ['Market Name', 'Location', 'Province', 'District', 'Status', 'Created Date'];
+  const rows = markets.map(m => [
+    `"${m.name}"`,
+    `"${m.location || ''}"`,
+    `"${m.province || ''}"`,
+    `"${m.district || ''}"`,
+    m.isActive ? 'Active' : 'Inactive',
+    new Date(m.createdAt).toLocaleDateString(),
+  ]);
+
+  if (format === 'csv') {
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    return {
+      data: csv,
+      contentType: 'text/csv',
+      filename: `markets_${Date.now()}.csv`,
+    };
+  }
+
+  const tsv = [headers.join('\t'), ...rows.map(r => r.map(c => c.replace(/"/g, '')).join('\t'))].join('\n');
+  return {
+    data: tsv,
+    contentType: 'application/vnd.ms-excel',
+    filename: `markets_${Date.now()}.xls`,
+  };
+};
+
+// Export price history to CSV/Excel
+export const exportPriceHistoryService = async (format: string = 'csv') => {
+  const history = await prisma.marketPriceHistory.findMany({
+    include: {
+      product: { select: { productName: true } },
+      market: { select: { name: true, district: true, province: true } },
+    },
+    orderBy: { recordedDate: 'desc' },
+  });
+
+  const headers = ['Product', 'Market Name', 'Location', 'Our Price (RWF)', 'Market Price (RWF)', 'Difference (RWF)', 'Recorded Date'];
+  const rows = history.map(h => [
+    `"${h.product.productName}"`,
+    `"${h.market.name}"`,
+    `"${h.market.district}, ${h.market.province}"`,
+    h.ourPrice.toString(),
+    h.marketPrice.toString(),
+    (h.ourPrice - h.marketPrice).toString(),
+    new Date(h.recordedDate).toLocaleDateString(),
+  ]);
+
+  if (format === 'csv') {
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    return {
+      data: csv,
+      contentType: 'text/csv',
+      filename: `price_history_${Date.now()}.csv`,
+    };
+  }
+
+  const tsv = [headers.join('\t'), ...rows.map(r => r.map(c => c.replace(/"/g, '')).join('\t'))].join('\n');
+  return {
+    data: tsv,
+    contentType: 'application/vnd.ms-excel',
+    filename: `price_history_${Date.now()}.xls`,
+  };
+};
+
+// Export comparison to CSV/Excel
+export const exportComparisonService = async (format: string = 'csv') => {
+  const history = await prisma.marketPriceHistory.findMany({
+    include: {
+      product: { select: { productName: true } },
+      market: { select: { name: true, district: true, province: true } },
+    },
+    orderBy: { recordedDate: 'desc' },
+  });
+
+  const headers = ['Product', 'Our Price (RWF)', 'Market Name', 'Market Price (RWF)', 'Difference (RWF)', 'Status', 'Location', 'Recorded Date'];
+  const rows = history.map(h => {
+    const diff = h.ourPrice - h.marketPrice;
+    const isProfit = diff < 0;
+    const percentChange = ((Math.abs(diff) / h.ourPrice) * 100).toFixed(1);
+    return [
+      `"${h.product.productName}"`,
+      h.ourPrice.toString(),
+      `"${h.market.name}"`,
+      h.marketPrice.toString(),
+      `${isProfit ? '-' : '+'}${Math.abs(diff)}`,
+      `${isProfit ? 'PROFIT' : 'LOSS'} (${percentChange}%)`,
+      `"${h.market.district}, ${h.market.province}"`,
+      new Date(h.recordedDate).toLocaleDateString(),
+    ];
+  });
+
+  if (format === 'csv') {
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    return {
+      data: csv,
+      contentType: 'text/csv',
+      filename: `price_comparison_${Date.now()}.csv`,
+    };
+  }
+
+  const tsv = [headers.join('\t'), ...rows.map(r => r.map(c => c.replace(/"/g, '')).join('\t'))].join('\n');
+  return {
+    data: tsv,
+    contentType: 'application/vnd.ms-excel',
+    filename: `price_comparison_${Date.now()}.xls`,
+  };
+};

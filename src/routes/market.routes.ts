@@ -11,6 +11,10 @@ import {
   getMarketPricesByProduct,
   updateMarketPriceHistory,
   deleteMarketPriceHistory,
+  exportMarkets,
+  exportPriceHistory,
+  exportComparison,
+  getLowestPriceComparison,
 } from "../controllers/market.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -50,7 +54,9 @@ marketRoutes.post(
   recordMarketPrice,
 );
 
-marketRoutes.get("/prices/history", isAuthenticated, getPriceHistory);
+marketRoutes.get("/prices/history", getPriceHistory);
+
+marketRoutes.get("/prices/lowest-comparison", getLowestPriceComparison);
 
 marketRoutes.post("/prices/analyze", isAuthenticated, analyzePrice);
 
@@ -73,6 +79,28 @@ marketRoutes.delete(
   isAuthenticated,
   checkPermission("ADMIN"),
   deleteMarketPriceHistory,
+);
+
+// Export endpoints
+marketRoutes.get(
+  "/export/markets",
+  isAuthenticated,
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  exportMarkets,
+);
+
+marketRoutes.get(
+  "/export/price-history",
+  isAuthenticated,
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  exportPriceHistory,
+);
+
+marketRoutes.get(
+  "/export/comparison",
+  isAuthenticated,
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  exportComparison,
 );
 
 export default marketRoutes;

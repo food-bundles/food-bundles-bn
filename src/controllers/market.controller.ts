@@ -11,6 +11,9 @@ import {
   getMarketPricesByProductService,
   updateMarketPriceHistoryService,
   deleteMarketPriceHistoryService,
+  exportMarketsService,
+  exportPriceHistoryService,
+  exportComparisonService,
 } from "../services/market.service";
 
 // Create market
@@ -293,6 +296,82 @@ export const deleteMarketPriceHistory = async (req: Request, res: Response) => {
     res.status(200).json({
       success: true,
       message: "Price history deleted successfully",
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Export markets
+export const exportMarkets = async (req: Request, res: Response) => {
+  try {
+    const { format } = req.query;
+    const result = await exportMarketsService(format as string);
+    
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.send(result.data);
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Export price history
+export const exportPriceHistory = async (req: Request, res: Response) => {
+  try {
+    const { format } = req.query;
+    const result = await exportPriceHistoryService(format as string);
+    
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.send(result.data);
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Export comparison
+export const exportComparison = async (req: Request, res: Response) => {
+  try {
+    const { format } = req.query;
+    const result = await exportComparisonService(format as string);
+    
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.send(result.data);
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get lowest price comparison (PUBLIC - no auth required)
+export const getLowestPriceComparison = async (req: Request, res: Response) => {
+  try {
+    const { limit } = req.query;
+    const result = await getPriceHistoryService({
+      limit: limit ? parseInt(limit as string) : 50,
+    });
+
+    // Filter where ourPrice < marketPrice
+    const lowestPrices = result.history.filter(
+      (item: any) => item.ourPrice < item.marketPrice
+    ).slice(0, limit ? parseInt(limit as string) : 5);
+
+    res.status(200).json({
+      success: true,
+      data: lowestPrices,
     });
   } catch (error: any) {
     res.status(400).json({
