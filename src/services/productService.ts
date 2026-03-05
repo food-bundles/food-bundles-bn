@@ -544,6 +544,7 @@ export const getAllProductsService = async ({
         unitPrice: true,
         restaurantPrice: true,
         hotelPrice: true,
+        purchasePrice: true,
         category: true,
         bonus: true,
         sku: true,
@@ -559,12 +560,50 @@ export const getAllProductsService = async ({
     prisma.product.count({ where }),
   ]);
 
+  // Fetch latest market prices for each product
+  const productIds = products.map(p => p.id);
+  const marketPrices = await prisma.marketPriceHistory.findMany({
+    where: {
+      productId: { in: productIds },
+    },
+    select: {
+      productId: true,
+      marketPrice: true,
+      recordedDate: true,
+      market: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      recordedDate: "desc",
+    },
+  });
+
+  // Group market prices by product
+  const pricesByProduct = marketPrices.reduce((acc: any, price) => {
+    if (!acc[price.productId]) {
+      acc[price.productId] = [];
+    }
+    if (acc[price.productId].length < 3) { // Only keep latest 3 prices
+      acc[price.productId].push({
+        marketPrice: price.marketPrice,
+        recordedDate: price.recordedDate,
+        market: price.market,
+      });
+    }
+    return acc;
+  }, {});
+
   const productsWithDiscount = products.map((product) => ({
     ...product,
     discountedPrice:
       Number(product.bonus) > 0
         ? product.unitPrice * (1 - Number(product.bonus) / 100)
         : null,
+    latestMarketPrices: pricesByProduct[product.id] || [],
   }));
 
   return {
