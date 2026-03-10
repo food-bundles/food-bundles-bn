@@ -413,7 +413,6 @@ export const getMyVouchersService = async (
     activeOnly?: boolean;
   },
 ) => {
-  console.log("Getting my vouchers");
   if (affiliatorId) {
     const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
     restaurantId = restaurant.id;
@@ -447,8 +446,6 @@ export const getMyVouchersService = async (
   } catch (error) {
     console.error("Failed to process matured vouchers auto-deduction:", error);
   }
-
-  console.log("Received my vouchers", vouchers);
 
   return vouchers;
 };

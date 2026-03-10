@@ -100,6 +100,7 @@ export interface CreateCheckoutData {
     originalAmount: number;
     finalAmount: number;
   };
+  verificationType?: "OTP" | "2FA";
 }
 
 export interface CreateAdminOrderData {
