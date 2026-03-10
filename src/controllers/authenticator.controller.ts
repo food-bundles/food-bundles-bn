@@ -147,12 +147,7 @@ export const get2FAStatus = async (req: Request, res: Response) => {
     const userId = (req as any).user.id;
     const userRole = (req as any).user.role;
 
-    console.log("Received userId:", userId);
-    console.log("Received userRole:", userRole);
-
     const status = await AuthenticatorService.get2FAStatus(userId, userRole);
-
-    console.log("Received status:", status);
 
     res.status(200).json({
       success: true,
