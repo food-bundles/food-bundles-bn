@@ -851,6 +851,139 @@ paths:
                     success: false
                     message: "Invalid or expired reset token"
 
+  /users/id/{id}:
+    get:
+      tags:
+        - Authentication API Management
+      summary: Get user by ID
+      description: Retrieve user information by unique identifier. Searches across all user types (Farmer, Restaurant, Affiliator, Admin).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique user identifier
+          example: "clx123abc456def789"
+      responses:
+        200:
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: User data with userType field indicating the user role
+        404:
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "User not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/email/{email}:
+    get:
+      tags:
+        - Authentication API Management
+      summary: Get user by email
+      description: Retrieve user information by email address. Searches across all user types (Farmer, Restaurant, Affiliator, Admin).
+      parameters:
+        - name: email
+          in: path
+          required: true
+          schema:
+            type: string
+            format: email
+          description: User's email address
+          example: "user@food.rw"
+      responses:
+        200:
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: User data with userType field indicating the user role
+        404:
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "User not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/phone/{phone}:
+    get:
+      tags:
+        - Authentication API Management
+      summary: Get user by phone
+      description: Retrieve user information by phone number. Searches across Farmer, Restaurant, and Affiliator (Admin doesn't have phone field).
+      parameters:
+        - name: phone
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User's phone number
+          example: "+250788123456"
+      responses:
+        200:
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: User data with userType field indicating the user role
+        404:
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "User not found"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # Farmer Endpoints
   /farmers:
     post:
