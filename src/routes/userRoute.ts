@@ -10,4 +10,9 @@ userRoutes.get("/me", UserController.me);
 userRoutes.post("/forgot-password", UserController.requestPasswordReset);
 userRoutes.post("/reset-password", UserController.resetPassword);
 
+// User lookup routes
+userRoutes.get("/users/id/:id", UserController.getUserById);
+userRoutes.get("/users/email/:email", UserController.getUserByEmail);
+userRoutes.get("/users/phone/:phone", UserController.getUserByPhone);
+
 export default userRoutes;

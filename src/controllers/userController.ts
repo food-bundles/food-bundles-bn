@@ -22,6 +22,7 @@ import {
   createFarmerByAdminService,
   createRestaurantByAdminService,
 } from "../services/userServices";
+import { getUserById, getUserByEmail, getUserByPhone } from "../services/userGets";
 import { PaginationService } from "../services/paginationService";
 import { Role } from "@prisma/client";
 import { generateToken, verifyToken } from "../utils/jwt";
@@ -609,6 +610,78 @@ export class UserController {
       });
     } catch (error: any) {
       res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static getUserById = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const user = await getUserById(id);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: user,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static getUserByEmail = async (req: Request, res: Response) => {
+    try {
+      const { email } = req.params;
+      const user = await getUserByEmail(email);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: user,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static getUserByPhone = async (req: Request, res: Response) => {
+    try {
+      const { phone } = req.params;
+      const user = await getUserByPhone(phone);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: user,
+      });
+    } catch (error: any) {
+      res.status(500).json({
         success: false,
         message: error.message,
       });

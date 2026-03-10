@@ -1,55 +1,16 @@
 import prisma from "../prisma";
 
 export const getUserById = async (id: string) => {
-  const farmer = await prisma.farmer.findUnique({ 
+  const farmer = await prisma.farmer.findUnique({
     where: { id },
     include: {
       submissions: {
         include: {
           approvedProduct: true,
           aggregator: true,
-          category: true
+          category: true,
         },
-        orderBy: { createdAt: "desc" }
-      },
-      Voucher: {
-        include: {
-          loan: true,
-          transactions: true,
-          repayments: true,
-          penalties: true
-        }
-      },
-      LoanApplication: {
-        include: {
-          vouchers: true,
-          repayments: true,
-          approver: true
-        }
-      },
-      RestaurantSubscription: {
-        include: {
-          plan: true,
-          payments: true
-        }
-      }
-    }
-  });
-  if (farmer) return { ...farmer, userType: "FARMER", name: "Farmer" };
-
-  const restaurant = await prisma.restaurant.findUnique({ 
-    where: { id },
-    include: {
-      orders: {
-        include: {
-          orderItems: {
-            include: {
-              product: true
-            }
-          },
-          affiliator: true
-        },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       Voucher: {
         include: {
@@ -57,8 +18,47 @@ export const getUserById = async (id: string) => {
           transactions: true,
           repayments: true,
           penalties: true,
-          approver: true
-        }
+        },
+      },
+      LoanApplication: {
+        include: {
+          vouchers: true,
+          repayments: true,
+          approver: true,
+        },
+      },
+      RestaurantSubscription: {
+        include: {
+          plan: true,
+          payments: true,
+        },
+      },
+    },
+  });
+  if (farmer) return { ...farmer, userType: "FARMER", name: "Farmer" };
+
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id },
+    include: {
+      orders: {
+        include: {
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
+          affiliator: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
+      Voucher: {
+        include: {
+          loan: true,
+          transactions: true,
+          repayments: true,
+          penalties: true,
+          approver: true,
+        },
       },
       Wallet: {
         include: {
@@ -66,37 +66,37 @@ export const getUserById = async (id: string) => {
             include: {
               admin: true,
               affiliator: true,
-              trader: true
+              trader: true,
             },
-            orderBy: { createdAt: "desc" }
-          }
-        }
+            orderBy: { createdAt: "desc" },
+          },
+        },
       },
       subscriptions: {
         include: {
           plan: true,
           payments: true,
-          history: true
+          history: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       affiliators: {
         include: {
           orders: {
             include: {
-              orderItems: true
-            }
+              orderItems: true,
+            },
           },
-          walletTransactions: true
-        }
+          walletTransactions: true,
+        },
       },
       walletTransactions: {
         include: {
           admin: true,
           affiliator: true,
-          trader: true
+          trader: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       posts: true,
       LoanApplication: {
@@ -104,32 +104,32 @@ export const getUserById = async (id: string) => {
           vouchers: true,
           repayments: true,
           approver: true,
-          manager: true
-        }
+          manager: true,
+        },
       },
       VoucherTransaction: {
         include: {
           voucher: true,
-          order: true
-        }
+          order: true,
+        },
       },
       VoucherRepayment: {
         include: {
           voucher: true,
-          loan: true
-        }
+          loan: true,
+        },
       },
       VoucherPenalty: {
         include: {
-          voucher: true
-        }
-      }
-    }
+          voucher: true,
+        },
+      },
+    },
   });
   if (restaurant)
     return { ...restaurant, userType: "RESTAURANT", name: restaurant.name };
 
-  const affiliator = await prisma.affiliator.findUnique({ 
+  const affiliator = await prisma.affiliator.findUnique({
     where: { id },
     include: {
       restaurant: {
@@ -138,81 +138,81 @@ export const getUserById = async (id: string) => {
           Voucher: true,
           subscriptions: {
             include: {
-              plan: true
-            }
-          }
-        }
+              plan: true,
+            },
+          },
+        },
       },
       orders: {
         include: {
           orderItems: {
             include: {
-              product: true
-            }
+              product: true,
+            },
           },
-          restaurant: true
+          restaurant: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       walletTransactions: {
         include: {
           wallet: {
             include: {
-              restaurant: true
-            }
-          }
+              restaurant: true,
+            },
+          },
         },
-        orderBy: { createdAt: "desc" }
-      }
-    }
+        orderBy: { createdAt: "desc" },
+      },
+    },
   });
   if (affiliator)
     return { ...affiliator, userType: "AFFILIATOR", name: affiliator.name };
 
-  const admin = await prisma.admin.findUnique({ 
+  const admin = await prisma.admin.findUnique({
     where: { id },
     include: {
       aggregatorAssignments: {
         include: {
           farmer: true,
           approvedProduct: true,
-          category: true
+          category: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       logisticsAssignments: {
         include: {
           restaurant: true,
           orderItems: {
             include: {
-              product: true
-            }
+              product: true,
+            },
           },
-          affiliator: true
+          affiliator: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       products: {
         include: {
           category: true,
-          productUnit: true
+          productUnit: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       productCategories: {
         include: {
-          products: true
+          products: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       productUnits: {
         include: {
-          Product: true
+          Product: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       paymentMethods: {
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       approvedLoans: {
         include: {
@@ -221,13 +221,13 @@ export const getUserById = async (id: string) => {
           vouchers: {
             include: {
               transactions: true,
-              repayments: true
-            }
+              repayments: true,
+            },
           },
           repayments: true,
-          manager: true
+          manager: true,
         },
-        orderBy: { approvedAt: "desc" }
+        orderBy: { approvedAt: "desc" },
       },
       managedLoans: {
         include: {
@@ -236,41 +236,41 @@ export const getUserById = async (id: string) => {
           vouchers: {
             include: {
               transactions: true,
-              repayments: true
-            }
+              repayments: true,
+            },
           },
           repayments: true,
-          approver: true
+          approver: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       OrderDelivery: {
         include: {
           order: {
             include: {
               restaurant: true,
-              orderItems: true
-            }
-          }
+              orderItems: true,
+            },
+          },
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       promoCodes: {
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       walletTransactions: {
         include: {
           wallet: {
             include: {
               restaurant: true,
-              trader: true
-            }
+              trader: true,
+            },
           },
           restaurant: true,
           affiliator: true,
-          trader: true
+          trader: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       Voucher: {
         include: {
@@ -279,18 +279,18 @@ export const getUserById = async (id: string) => {
           loan: {
             include: {
               restaurant: true,
-              farmer: true
-            }
+              farmer: true,
+            },
           },
           transactions: {
             include: {
-              order: true
-            }
+              order: true,
+            },
           },
           repayments: true,
-          penalties: true
+          penalties: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       traderWallet: {
         include: {
@@ -298,26 +298,26 @@ export const getUserById = async (id: string) => {
             include: {
               admin: true,
               restaurant: true,
-              affiliator: true
+              affiliator: true,
             },
-            orderBy: { createdAt: "desc" }
-          }
-        }
+            orderBy: { createdAt: "desc" },
+          },
+        },
       },
       traderTransactions: {
         include: {
           wallet: {
             include: {
-              restaurant: true
-            }
-          }
+              restaurant: true,
+            },
+          },
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       traderTransactionHistory: {
-        orderBy: { createdAt: "desc" }
-      }
-    }
+        orderBy: { createdAt: "desc" },
+      },
+    },
   });
   if (admin) return { ...admin, userType: "ADMIN", name: admin.username };
 
@@ -325,55 +325,16 @@ export const getUserById = async (id: string) => {
 };
 
 export const getUserByEmail = async (email: string) => {
-  const farmer = await prisma.farmer.findUnique({ 
+  const farmer = await prisma.farmer.findUnique({
     where: { email },
     include: {
       submissions: {
         include: {
           approvedProduct: true,
           aggregator: true,
-          category: true
+          category: true,
         },
-        orderBy: { createdAt: "desc" }
-      },
-      Voucher: {
-        include: {
-          loan: true,
-          transactions: true,
-          repayments: true,
-          penalties: true
-        }
-      },
-      LoanApplication: {
-        include: {
-          vouchers: true,
-          repayments: true,
-          approver: true
-        }
-      },
-      RestaurantSubscription: {
-        include: {
-          plan: true,
-          payments: true
-        }
-      }
-    }
-  });
-  if (farmer) return { ...farmer, userType: "FARMER" };
-
-  const restaurant = await prisma.restaurant.findUnique({ 
-    where: { email },
-    include: {
-      orders: {
-        include: {
-          orderItems: {
-            include: {
-              product: true
-            }
-          },
-          affiliator: true
-        },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       Voucher: {
         include: {
@@ -381,8 +342,47 @@ export const getUserByEmail = async (email: string) => {
           transactions: true,
           repayments: true,
           penalties: true,
-          approver: true
-        }
+        },
+      },
+      LoanApplication: {
+        include: {
+          vouchers: true,
+          repayments: true,
+          approver: true,
+        },
+      },
+      RestaurantSubscription: {
+        include: {
+          plan: true,
+          payments: true,
+        },
+      },
+    },
+  });
+  if (farmer) return { ...farmer, userType: "FARMER" };
+
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { email },
+    include: {
+      orders: {
+        include: {
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
+          affiliator: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
+      Voucher: {
+        include: {
+          loan: true,
+          transactions: true,
+          repayments: true,
+          penalties: true,
+          approver: true,
+        },
       },
       Wallet: {
         include: {
@@ -390,37 +390,37 @@ export const getUserByEmail = async (email: string) => {
             include: {
               admin: true,
               affiliator: true,
-              trader: true
+              trader: true,
             },
-            orderBy: { createdAt: "desc" }
-          }
-        }
+            orderBy: { createdAt: "desc" },
+          },
+        },
       },
       subscriptions: {
         include: {
           plan: true,
           payments: true,
-          history: true
+          history: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       affiliators: {
         include: {
           orders: {
             include: {
-              orderItems: true
-            }
+              orderItems: true,
+            },
           },
-          walletTransactions: true
-        }
+          walletTransactions: true,
+        },
       },
       walletTransactions: {
         include: {
           admin: true,
           affiliator: true,
-          trader: true
+          trader: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       posts: true,
       LoanApplication: {
@@ -428,31 +428,31 @@ export const getUserByEmail = async (email: string) => {
           vouchers: true,
           repayments: true,
           approver: true,
-          manager: true
-        }
+          manager: true,
+        },
       },
       VoucherTransaction: {
         include: {
           voucher: true,
-          order: true
-        }
+          order: true,
+        },
       },
       VoucherRepayment: {
         include: {
           voucher: true,
-          loan: true
-        }
+          loan: true,
+        },
       },
       VoucherPenalty: {
         include: {
-          voucher: true
-        }
-      }
-    }
+          voucher: true,
+        },
+      },
+    },
   });
   if (restaurant) return { ...restaurant, userType: "RESTAURANT" };
 
-  const affiliator = await prisma.affiliator.findUnique({ 
+  const affiliator = await prisma.affiliator.findUnique({
     where: { email },
     include: {
       restaurant: {
@@ -461,80 +461,80 @@ export const getUserByEmail = async (email: string) => {
           Voucher: true,
           subscriptions: {
             include: {
-              plan: true
-            }
-          }
-        }
+              plan: true,
+            },
+          },
+        },
       },
       orders: {
         include: {
           orderItems: {
             include: {
-              product: true
-            }
+              product: true,
+            },
           },
-          restaurant: true
+          restaurant: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       walletTransactions: {
         include: {
           wallet: {
             include: {
-              restaurant: true
-            }
-          }
+              restaurant: true,
+            },
+          },
         },
-        orderBy: { createdAt: "desc" }
-      }
-    }
+        orderBy: { createdAt: "desc" },
+      },
+    },
   });
   if (affiliator) return { ...affiliator, userType: "AFFILIATOR" };
 
-  const admin = await prisma.admin.findUnique({ 
+  const admin = await prisma.admin.findUnique({
     where: { email },
     include: {
       aggregatorAssignments: {
         include: {
           farmer: true,
           approvedProduct: true,
-          category: true
+          category: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       logisticsAssignments: {
         include: {
           restaurant: true,
           orderItems: {
             include: {
-              product: true
-            }
+              product: true,
+            },
           },
-          affiliator: true
+          affiliator: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       products: {
         include: {
           category: true,
-          productUnit: true
+          productUnit: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       productCategories: {
         include: {
-          products: true
+          products: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       productUnits: {
         include: {
-          Product: true
+          Product: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       paymentMethods: {
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       approvedLoans: {
         include: {
@@ -543,13 +543,13 @@ export const getUserByEmail = async (email: string) => {
           vouchers: {
             include: {
               transactions: true,
-              repayments: true
-            }
+              repayments: true,
+            },
           },
           repayments: true,
-          manager: true
+          manager: true,
         },
-        orderBy: { approvedAt: "desc" }
+        orderBy: { approvedAt: "desc" },
       },
       managedLoans: {
         include: {
@@ -558,41 +558,41 @@ export const getUserByEmail = async (email: string) => {
           vouchers: {
             include: {
               transactions: true,
-              repayments: true
-            }
+              repayments: true,
+            },
           },
           repayments: true,
-          approver: true
+          approver: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       OrderDelivery: {
         include: {
           order: {
             include: {
               restaurant: true,
-              orderItems: true
-            }
-          }
+              orderItems: true,
+            },
+          },
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       promoCodes: {
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       walletTransactions: {
         include: {
           wallet: {
             include: {
               restaurant: true,
-              trader: true
-            }
+              trader: true,
+            },
           },
           restaurant: true,
           affiliator: true,
-          trader: true
+          trader: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       Voucher: {
         include: {
@@ -601,18 +601,18 @@ export const getUserByEmail = async (email: string) => {
           loan: {
             include: {
               restaurant: true,
-              farmer: true
-            }
+              farmer: true,
+            },
           },
           transactions: {
             include: {
-              order: true
-            }
+              order: true,
+            },
           },
           repayments: true,
-          penalties: true
+          penalties: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       traderWallet: {
         include: {
@@ -620,26 +620,26 @@ export const getUserByEmail = async (email: string) => {
             include: {
               admin: true,
               restaurant: true,
-              affiliator: true
+              affiliator: true,
             },
-            orderBy: { createdAt: "desc" }
-          }
-        }
+            orderBy: { createdAt: "desc" },
+          },
+        },
       },
       traderTransactions: {
         include: {
           wallet: {
             include: {
-              restaurant: true
-            }
-          }
+              restaurant: true,
+            },
+          },
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       traderTransactionHistory: {
-        orderBy: { createdAt: "desc" }
-      }
-    }
+        orderBy: { createdAt: "desc" },
+      },
+    },
   });
   if (admin) return { ...admin, userType: admin.role };
 
@@ -647,55 +647,16 @@ export const getUserByEmail = async (email: string) => {
 };
 
 export const getUserByPhone = async (phone: string) => {
-  const farmer = await prisma.farmer.findUnique({ 
+  const farmer = await prisma.farmer.findUnique({
     where: { phone },
     include: {
       submissions: {
         include: {
           approvedProduct: true,
           aggregator: true,
-          category: true
+          category: true,
         },
-        orderBy: { createdAt: "desc" }
-      },
-      Voucher: {
-        include: {
-          loan: true,
-          transactions: true,
-          repayments: true,
-          penalties: true
-        }
-      },
-      LoanApplication: {
-        include: {
-          vouchers: true,
-          repayments: true,
-          approver: true
-        }
-      },
-      RestaurantSubscription: {
-        include: {
-          plan: true,
-          payments: true
-        }
-      }
-    }
-  });
-  if (farmer) return { ...farmer, userType: "FARMER" };
-
-  const restaurant = await prisma.restaurant.findUnique({ 
-    where: { phone },
-    include: {
-      orders: {
-        include: {
-          orderItems: {
-            include: {
-              product: true
-            }
-          },
-          affiliator: true
-        },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       Voucher: {
         include: {
@@ -703,8 +664,47 @@ export const getUserByPhone = async (phone: string) => {
           transactions: true,
           repayments: true,
           penalties: true,
-          approver: true
-        }
+        },
+      },
+      LoanApplication: {
+        include: {
+          vouchers: true,
+          repayments: true,
+          approver: true,
+        },
+      },
+      RestaurantSubscription: {
+        include: {
+          plan: true,
+          payments: true,
+        },
+      },
+    },
+  });
+  if (farmer) return { ...farmer, userType: "FARMER" };
+
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { phone },
+    include: {
+      orders: {
+        include: {
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
+          affiliator: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
+      Voucher: {
+        include: {
+          loan: true,
+          transactions: true,
+          repayments: true,
+          penalties: true,
+          approver: true,
+        },
       },
       Wallet: {
         include: {
@@ -712,37 +712,37 @@ export const getUserByPhone = async (phone: string) => {
             include: {
               admin: true,
               affiliator: true,
-              trader: true
+              trader: true,
             },
-            orderBy: { createdAt: "desc" }
-          }
-        }
+            orderBy: { createdAt: "desc" },
+          },
+        },
       },
       subscriptions: {
         include: {
           plan: true,
           payments: true,
-          history: true
+          history: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       affiliators: {
         include: {
           orders: {
             include: {
-              orderItems: true
-            }
+              orderItems: true,
+            },
           },
-          walletTransactions: true
-        }
+          walletTransactions: true,
+        },
       },
       walletTransactions: {
         include: {
           admin: true,
           affiliator: true,
-          trader: true
+          trader: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       posts: true,
       LoanApplication: {
@@ -750,31 +750,31 @@ export const getUserByPhone = async (phone: string) => {
           vouchers: true,
           repayments: true,
           approver: true,
-          manager: true
-        }
+          manager: true,
+        },
       },
       VoucherTransaction: {
         include: {
           voucher: true,
-          order: true
-        }
+          order: true,
+        },
       },
       VoucherRepayment: {
         include: {
           voucher: true,
-          loan: true
-        }
+          loan: true,
+        },
       },
       VoucherPenalty: {
         include: {
-          voucher: true
-        }
-      }
-    }
+          voucher: true,
+        },
+      },
+    },
   });
   if (restaurant) return { ...restaurant, userType: "RESTAURANT" };
 
-  const affiliator = await prisma.affiliator.findUnique({ 
+  const affiliator = await prisma.affiliator.findUnique({
     where: { phone },
     include: {
       restaurant: {
@@ -783,33 +783,33 @@ export const getUserByPhone = async (phone: string) => {
           Voucher: true,
           subscriptions: {
             include: {
-              plan: true
-            }
-          }
-        }
+              plan: true,
+            },
+          },
+        },
       },
       orders: {
         include: {
           orderItems: {
             include: {
-              product: true
-            }
+              product: true,
+            },
           },
-          restaurant: true
+          restaurant: true,
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
       },
       walletTransactions: {
         include: {
           wallet: {
             include: {
-              restaurant: true
-            }
-          }
+              restaurant: true,
+            },
+          },
         },
-        orderBy: { createdAt: "desc" }
-      }
-    }
+        orderBy: { createdAt: "desc" },
+      },
+    },
   });
   if (affiliator) return { ...affiliator, userType: "AFFILIATOR" };
 
