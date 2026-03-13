@@ -15,6 +15,7 @@ import {
   getTraderDashboardStatsService,
   sendCommissionOTPService,
   setTraderWalletCommissionService,
+  setTraderWalletCommissionDirectService,
   processAllTradersCommissionService,
   processExistingUsedVouchersService,
   requestDelegationService,
@@ -396,6 +397,9 @@ export const getTraderTransactionStats = async (
 // Send OTP for commission update (Admin only)
 export const sendCommissionOTP = async (req: Request, res: Response) => {
   try {
+    const userRole = (req as any).user.role;
+    const isSuperUser = userRole === "SUPERUSER";
+    const adminId = (req as any).user.id;
     const { traderId } = req.params;
     const { commission } = req.body;
 
@@ -406,13 +410,25 @@ export const sendCommissionOTP = async (req: Request, res: Response) => {
       });
     }
 
-    const result = await sendCommissionOTPService(traderId, parseFloat(commission));
+    const result = await sendCommissionOTPService(
+      adminId,
+      traderId,
+      parseFloat(commission),
+    );
 
-    res.status(200).json({
-      success: true,
-      message: result.message,
-      sessionId: result.sessionId,
-    });
+    if (result.wallet) {
+      res.status(200).json({
+        success: true,
+        message: "Trader wallet commission updated successfully",
+        data: result.wallet,
+      });
+    } else {
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        sessionId: result.sessionId,
+      });
+    }
   } catch (error: any) {
     res.status(400).json({
       success: false,
@@ -427,7 +443,44 @@ export const setTraderWalletCommission = async (
   res: Response,
 ) => {
   try {
+    const userRole = (req as any).user.role;
+    // Allow SUPERUSER (and ADMIN for convenience) to update commission directly
+    const isSuperUser = userRole === "SUPERUSER" || userRole === "ADMIN";
     const { traderId } = req.params;
+
+    if (isSuperUser) {
+      const { commission } = req.body;
+
+      if (commission === undefined || commission === null) {
+        return res.status(400).json({
+          success: false,
+          message: "Commission percentage is required",
+        });
+      }
+
+      if (
+        typeof commission !== "number" ||
+        commission < 0 ||
+        commission > 100
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid commission percentage (0-100) is required",
+        });
+      }
+
+      const wallet = await setTraderWalletCommissionDirectService(
+        traderId,
+        commission,
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Trader wallet commission updated successfully",
+        data: wallet,
+      });
+    }
+
     const { sessionId, otp } = req.body;
 
     if (!sessionId || !otp) {
@@ -782,16 +835,25 @@ export const requestWithdraw = async (req: Request, res: Response) => {
 // Admin approve withdraw and send OTP
 export const adminApproveWithdraw = async (req: Request, res: Response) => {
   try {
+    const userRole = (req as any).user.role;
+    const isSuperUser = userRole === "SUPERUSER";
     const adminId = (req as any).user.id;
     const { withdrawId } = req.params;
 
     const result = await adminApproveWithdrawService(adminId, withdrawId);
 
-    res.status(200).json({
-      success: true,
-      message: result.message,
-      sessionId: result.sessionId,
-    });
+    if (result.isDirect) {
+      res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } else {
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        sessionId: result.sessionId,
+      });
+    }
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }

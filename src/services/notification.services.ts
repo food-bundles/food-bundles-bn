@@ -8,14 +8,14 @@ export interface NotificationData {
   message: string;
   eventType: string;
   targetType: string;
-  targetId?: string;
+  targetId?: string | null | undefined;
   targetRole?: string;
   metadata?: any;
 }
 
 // Create Notification
 export const createNotificationService = async (
-  notificationData: NotificationData
+  notificationData: NotificationData,
 ) => {
   const notification = await prisma.notification.create({
     data: {
@@ -92,7 +92,7 @@ export const getUserNotificationsService = async (
     limit = 10,
     isRead,
     restaurantId,
-  }: { page?: number; limit?: number; isRead?: boolean; restaurantId?: string }
+  }: { page?: number; limit?: number; isRead?: boolean; restaurantId?: string },
 ) => {
   const skip = (page - 1) * limit;
 
@@ -171,7 +171,7 @@ export const markNotificationAsReadService = async (notificationId: string) => {
 export const markAllUserNotificationsAsReadService = async (
   userId: string,
   userRole: string,
-  restaurantId?: string
+  restaurantId?: string,
 ) => {
   const result = await prisma.notification.updateMany({
     where: {
@@ -181,9 +181,12 @@ export const markAllUserNotificationsAsReadService = async (
         { targetType: "ROLE_BASED", targetRole: userRole as any },
         ...(restaurantId
           ? [
-            { targetType: "SPECIFIC_USER" as any, targetId: restaurantId },
-            { targetType: "ROLE_BASED" as any, targetRole: "RESTAURANT" as any },
-          ]
+              { targetType: "SPECIFIC_USER" as any, targetId: restaurantId },
+              {
+                targetType: "ROLE_BASED" as any,
+                targetRole: "RESTAURANT" as any,
+              },
+            ]
           : []),
       ],
       isRead: false,
@@ -218,7 +221,7 @@ export const deleteNotificationService = async (notificationId: string) => {
 export const getUnreadCountService = async (
   userId: string,
   userRole: string,
-  restaurantId?: string
+  restaurantId?: string,
 ) => {
   const count = await prisma.notification.count({
     where: {
@@ -228,9 +231,12 @@ export const getUnreadCountService = async (
         { targetType: "ROLE_BASED", targetRole: userRole as any },
         ...(restaurantId
           ? [
-            { targetType: "SPECIFIC_USER" as any, targetId: restaurantId },
-            { targetType: "ROLE_BASED" as any, targetRole: "RESTAURANT" as any },
-          ]
+              { targetType: "SPECIFIC_USER" as any, targetId: restaurantId },
+              {
+                targetType: "ROLE_BASED" as any,
+                targetRole: "RESTAURANT" as any,
+              },
+            ]
           : []),
       ],
       isRead: false,
@@ -314,13 +320,13 @@ export const sendPriceUpdateNotificationsService = async () => {
             `Dear ${
               restaurant.name || "valued customer"
             }, product prices have been updated on FoodBundles. Check the latest prices for your next order. Thank you!`,
-            restaurant.phone
+            restaurant.phone,
           ).catch((error) =>
             console.error(
               `SMS failed for restaurant ${restaurant.name}:`,
-              error
-            )
-          )
+              error,
+            ),
+          ),
         );
       }
     });
@@ -337,10 +343,10 @@ export const sendPriceUpdateNotificationsService = async () => {
       smsPromises.push(
         sendMessage(
           "Product prices have been updated on FoodBundles platform. Please check the latest updates.",
-          phone!
+          phone!,
         ).catch((error) =>
-          console.error(`SMS failed for private number ${phone}:`, error)
-        )
+          console.error(`SMS failed for private number ${phone}:`, error),
+        ),
       );
     });
 
@@ -357,9 +363,9 @@ export const sendPriceUpdateNotificationsService = async () => {
           }).catch((error) =>
             console.error(
               `Email failed for restaurant ${restaurant.name}:`,
-              error
-            )
-          )
+              error,
+            ),
+          ),
         );
       }
     });
@@ -372,8 +378,8 @@ export const sendPriceUpdateNotificationsService = async () => {
             ...priceUpdateData,
             recipientName: admin.username,
           }).catch((error) =>
-            console.error(`Email failed for admin ${admin.username}:`, error)
-          )
+            console.error(`Email failed for admin ${admin.username}:`, error),
+          ),
         );
       }
     });
@@ -387,8 +393,8 @@ export const sendPriceUpdateNotificationsService = async () => {
     privateEmails.forEach((email) => {
       emailPromises.push(
         sendPriceUpdateEmail(email!, priceUpdateData).catch((error) =>
-          console.error(`Email failed for private email ${email}:`, error)
-        )
+          console.error(`Email failed for private email ${email}:`, error),
+        ),
       );
     });
 
