@@ -398,7 +398,6 @@ export const getTraderTransactionStats = async (
 export const sendCommissionOTP = async (req: Request, res: Response) => {
   try {
     const userRole = (req as any).user.role;
-    const isSuperUser = userRole === "SUPERUSER";
     const adminId = (req as any).user.id;
     const { traderId } = req.params;
     const { commission } = req.body;
@@ -444,8 +443,8 @@ export const setTraderWalletCommission = async (
 ) => {
   try {
     const userRole = (req as any).user.role;
-    // Allow SUPERUSER (and ADMIN for convenience) to update commission directly
-    const isSuperUser = userRole === "SUPERUSER" || userRole === "ADMIN";
+    // Allow SUPERUSER to update commission directly
+    const isSuperUser = userRole === "SUPERUSER";
     const { traderId } = req.params;
 
     if (isSuperUser) {
@@ -836,7 +835,6 @@ export const requestWithdraw = async (req: Request, res: Response) => {
 export const adminApproveWithdraw = async (req: Request, res: Response) => {
   try {
     const userRole = (req as any).user.role;
-    const isSuperUser = userRole === "SUPERUSER";
     const adminId = (req as any).user.id;
     const { withdrawId } = req.params;
 
