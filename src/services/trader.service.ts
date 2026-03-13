@@ -1126,55 +1126,101 @@ const sendCommissionEarnedNotifications = async (
 
 // Send OTP for commission update
 export const sendCommissionOTPService = async (
+  adminId: string,
   traderId: string,
   commission: number,
 ) => {
-  const wallet = await prisma.wallet.findUnique({
-    where: { traderId },
-    include: {
-      trader: { select: { username: true, email: true, phone: true } },
-    },
+  const admin = await prisma.admin.findUnique({
+    where: { id: adminId },
+    select: { role: true },
   });
 
-  if (!wallet) {
-    throw new Error("Trader wallet not found");
-  }
+  if (!admin) throw new Error("Admin not found");
 
-  const privateReceiver = process.env.PRIVATE_RECEIVER;
-  if (!privateReceiver) {
-    throw new Error("Private receiver not configured");
-  }
+  if (admin.role === "SUPERUSER") {
+    // Direct update
+    if (commission < 0 || commission > 100) {
+      throw new Error("Commission must be between 0 and 100 percent");
+    }
 
-  const otp = OTPService.generateOTP();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const wallet = await prisma.wallet.update({
+      where: { traderId },
+      data: { commission },
+      include: {
+        trader: {
+          select: { id: true, username: true, email: true, phone: true },
+        },
+      },
+    });
 
-  await prisma.oTP.create({
-    data: {
-      phone: privateReceiver,
+    await sendMessage(
+      `Your wallet commission has been updated to ${commission}%`,
+      wallet.trader?.phone || "",
+    );
+
+    await createNotificationService({
+      title: "Commission Rate Updated",
+      message: `Your commission rate has been updated to ${commission}%`,
+      eventType: "SYSTEM_MAINTENANCE",
+      targetType: "SPECIFIC_USER",
+      targetId: traderId,
+      metadata: { newCommission: commission },
+    });
+
+    return {
+      success: true,
+      message: "Commission updated successfully",
+      wallet,
+    };
+  } else {
+    // OTP flow
+    const wallet = await prisma.wallet.findUnique({
+      where: { traderId },
+      include: {
+        trader: { select: { username: true, email: true, phone: true } },
+      },
+    });
+
+    if (!wallet) {
+      throw new Error("Trader wallet not found");
+    }
+
+    const privateReceiver = process.env.PRIVATE_RECEIVER;
+    if (!privateReceiver) {
+      throw new Error("Private receiver not configured");
+    }
+
+    const otp = OTPService.generateOTP();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await prisma.oTP.create({
+      data: {
+        phone: privateReceiver,
+        otp,
+        purpose: "ADMIN_WALLET_OPERATION",
+        expiresAt,
+      },
+    });
+
+    await sendMessage(
+      `Commission update OTP: ${otp}. Trader: ${wallet.trader?.username}. New rate: ${commission}%. Valid for 10 minutes.`,
+      privateReceiver,
+    );
+
+    const sessionData = {
+      traderId,
+      commission,
       otp,
-      purpose: "ADMIN_WALLET_OPERATION",
       expiresAt,
-    },
-  });
+      timestamp: Date.now(),
+    };
 
-  await sendMessage(
-    `Commission update OTP: ${otp}. Trader: ${wallet.trader?.username}. New rate: ${commission}%. Valid for 10 minutes.`,
-    privateReceiver,
-  );
-
-  const sessionData = {
-    traderId,
-    commission,
-    otp,
-    expiresAt,
-    timestamp: Date.now(),
-  };
-
-  return {
-    success: true,
-    message: "OTP sent to admin",
-    sessionId: Buffer.from(JSON.stringify(sessionData)).toString("base64"),
-  };
+    return {
+      success: true,
+      message: "OTP sent to admin",
+      sessionId: Buffer.from(JSON.stringify(sessionData)).toString("base64"),
+    };
+  }
 };
 
 // Set trader wallet commission with OTP verification
@@ -1183,9 +1229,7 @@ export const setTraderWalletCommissionService = async (
   otp: string,
 ) => {
   try {
-    const sessionData = JSON.parse(
-      Buffer.from(sessionId, "base64").toString(),
-    );
+    const sessionData = JSON.parse(Buffer.from(sessionId, "base64").toString());
 
     if (
       !sessionData.otp ||
@@ -1241,6 +1285,42 @@ export const setTraderWalletCommissionService = async (
       error.message || "Invalid session or OTP verification failed",
     );
   }
+};
+
+// Set trader wallet commission directly (Superuser/Admin bypass)
+export const setTraderWalletCommissionDirectService = async (
+  traderId: string,
+  commission: number,
+) => {
+  if (commission < 0 || commission > 100) {
+    throw new Error("Commission must be between 0 and 100 percent");
+  }
+
+  const wallet = await prisma.wallet.update({
+    where: { traderId },
+    data: { commission },
+    include: {
+      trader: {
+        select: { id: true, username: true, email: true, phone: true },
+      },
+    },
+  });
+
+  await sendMessage(
+    `Your wallet commission has been updated to ${commission}%`,
+    wallet.trader?.phone || "",
+  );
+
+  await createNotificationService({
+    title: "Commission Rate Updated",
+    message: `Your commission rate has been updated to ${commission}%`,
+    eventType: "SYSTEM_MAINTENANCE",
+    targetType: "SPECIFIC_USER",
+    targetId: traderId,
+    metadata: { newCommission: commission },
+  });
+
+  return wallet;
 };
 
 // Get trader dashboard stats
@@ -1499,83 +1579,152 @@ export const approveDelegationService = async (
   traderId: string,
   commission: number,
 ) => {
-  const wallet = await prisma.wallet.findUnique({
-    where: { traderId },
-    include: {
-      trader: { select: { username: true, email: true, phone: true } },
-    },
+  const admin = await prisma.admin.findUnique({
+    where: { id: adminId },
+    select: { role: true },
   });
 
-  if (!wallet) {
-    throw new Error("Trader wallet not found");
-  }
+  if (!admin) throw new Error("Admin not found");
 
-  // Allow PENDING or APPROVED (for resending OTP)
-  if (
-    wallet.delegationStatus !== "PENDING" &&
-    wallet.delegationStatus !== "APPROVED"
-  ) {
-    throw new Error("No pending or approved delegation request found");
-  }
+  if (admin.role === "SUPERUSER") {
+    // Direct approval
+    const wallet = await prisma.wallet.findUnique({
+      where: { traderId },
+      include: {
+        trader: { select: { username: true, email: true, phone: true } },
+      },
+    });
 
-  if (!wallet.trader?.email) {
-    throw new Error("Trader email not found. Cannot send OTP.");
-  }
+    if (!wallet) {
+      throw new Error("Trader wallet not found");
+    }
 
-  // Generate OTP valid for 24 hours
-  const otp = OTPService.generateOTP();
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    // Approve delegation
+    await prisma.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        canTradeOnBehalf: true,
+        delegationApprovedAt: new Date(),
+        delegationApprovedBy: adminId,
+        commission,
+      },
+    });
 
-  // Store OTP in database
-  await prisma.oTP.create({
-    data: {
-      phone: wallet.trader.phone || wallet.trader.email,
-      otp,
-      purpose: "ADMIN_WALLET_OPERATION",
-      expiresAt,
-    },
-  });
+    // Create delegation history record
+    await prisma.delegationHistory.create({
+      data: {
+        walletId: wallet.id,
+        startedAt: new Date(),
+        approvedBy: adminId,
+      },
+    });
 
-  // Update wallet to APPROVED status
-  await prisma.wallet.update({
-    where: { id: wallet.id },
-    data: {
-      delegationStatus: "APPROVED",
-      delegationApprovedAt: new Date(),
-      delegationApprovedBy: adminId,
-      commission,
-    },
-  });
+    // Send notifications
+    await createNotificationService({
+      title: "Delegation Approved",
+      message: `You can now trade on behalf with ${commission}% commission`,
+      eventType: "SYSTEM_MAINTENANCE",
+      targetType: "SPECIFIC_USER",
+      targetId: traderId,
+    });
 
-  // Send OTP via email
-  await sendTraderDelegationOTPEmail({
-    traderEmail: wallet.trader.email,
-    traderName: wallet.trader.username,
-    otp,
-    commission,
-  });
+    if (wallet.trader?.phone) {
+      await sendMessage(
+        `Delegation approved! You can now trade on behalf with ${commission}% commission.`,
+        wallet.trader.phone,
+      );
+    }
 
-  // Send notifications
-  await createNotificationService({
-    title: "Delegation Approved",
-    message: `Your delegation request has been approved with ${commission}% commission. Check your email for OTP to accept.`,
-    eventType: "SYSTEM_MAINTENANCE",
-    targetType: "SPECIFIC_USER",
-    targetId: traderId,
-  });
-
-  if (wallet.trader?.phone) {
     await sendMessage(
-      `Delegation approved with ${commission}% commission. Check your email for OTP to accept delegation.`,
-      wallet.trader.phone,
+      `Delegation approved for trader ${wallet.trader?.username} with ${commission}% commission.`,
+      process.env.PRIVATE_RECEIVER || "",
     );
-  }
 
-  return {
-    success: true,
-    message:
-      "Delegation approved. OTP sent to trader email (valid for 24 hours).",
-  };
+    return {
+      success: true,
+      message: "Delegation approved successfully",
+      isDirect: true,
+    };
+  } else {
+    // OTP flow
+    const wallet = await prisma.wallet.findUnique({
+      where: { traderId },
+      include: {
+        trader: { select: { username: true, email: true, phone: true } },
+      },
+    });
+
+    if (!wallet) {
+      throw new Error("Trader wallet not found");
+    }
+
+    // Allow PENDING or APPROVED (for resending OTP)
+    if (
+      wallet.delegationStatus !== "PENDING" &&
+      wallet.delegationStatus !== "APPROVED"
+    ) {
+      throw new Error("No pending or approved delegation request found");
+    }
+
+    if (!wallet.trader?.email) {
+      throw new Error("Trader email not found. Cannot send OTP.");
+    }
+
+    // Generate OTP valid for 24 hours
+    const otp = OTPService.generateOTP();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Store OTP in database
+    await prisma.oTP.create({
+      data: {
+        phone: wallet.trader.phone || wallet.trader.email,
+        otp,
+        purpose: "ADMIN_WALLET_OPERATION",
+        expiresAt,
+      },
+    });
+
+    // Update wallet to APPROVED status
+    await prisma.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        delegationStatus: "APPROVED",
+        delegationApprovedAt: new Date(),
+        delegationApprovedBy: adminId,
+        commission,
+      },
+    });
+
+    // Send OTP via email
+    await sendTraderDelegationOTPEmail({
+      traderEmail: wallet.trader.email,
+      traderName: wallet.trader.username,
+      otp,
+      commission,
+    });
+
+    // Send notifications
+    await createNotificationService({
+      title: "Delegation Approved",
+      message: `Your delegation request has been approved with ${commission}% commission. Check your email for OTP to accept.`,
+      eventType: "SYSTEM_MAINTENANCE",
+      targetType: "SPECIFIC_USER",
+      targetId: traderId,
+    });
+
+    if (wallet.trader?.phone) {
+      await sendMessage(
+        `Delegation approved with ${commission}% commission. Check your email for OTP to accept delegation.`,
+        wallet.trader.phone,
+      );
+    }
+
+    return {
+      success: true,
+      message:
+        "Delegation approved. OTP sent to trader email (valid for 24 hours).",
+    };
+  }
 };
 
 // Verify delegation OTP and complete approval
@@ -2119,66 +2268,154 @@ export const adminApproveWithdrawService = async (
   adminId: string,
   withdrawId: string,
 ) => {
-  const withdrawRequest = await prisma.walletTransaction.findUnique({
-    where: { id: withdrawId },
-    include: {
-      wallet: {
-        include: {
-          trader: { select: { phone: true, username: true, id: true } },
+  const admin = await prisma.admin.findUnique({
+    where: { id: adminId },
+    select: { role: true },
+  });
+
+  if (!admin) throw new Error("Admin not found");
+
+  if (admin.role === "SUPERUSER") {
+    // Direct approval
+    const withdrawRequest = await prisma.walletTransaction.findUnique({
+      where: { id: withdrawId },
+      include: {
+        wallet: {
+          include: {
+            trader: { select: { phone: true, username: true, id: true } },
+          },
         },
       },
-    },
-  });
+    });
 
-  if (!withdrawRequest) throw new Error("Withdraw request not found");
-  if (
-    withdrawRequest.status === "COMPLETED" ||
-    withdrawRequest.status === "CANCELLED"
-  )
-    throw new Error("Withdraw request already processed");
+    if (!withdrawRequest) throw new Error("Withdraw request not found");
+    if (
+      withdrawRequest.status === "COMPLETED" ||
+      withdrawRequest.status === "CANCELLED"
+    )
+      throw new Error("Withdraw request already processed");
 
-  // Generate OTP
-  const otp = OTPService.generateOTP();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    // Complete the withdrawal directly
+    const amount = Math.abs(withdrawRequest.amount);
+    const wallet = withdrawRequest.wallet;
 
-  // Store all withdraw data in session
-  const withdrawSessionData = {
-    adminId,
-    withdrawId,
-    traderId: withdrawRequest.traderId,
-    walletId: withdrawRequest.walletId,
-    amount: Math.abs(withdrawRequest.amount),
-    withdrawType: withdrawRequest.withdrawType,
-    paymentMethod: withdrawRequest.paymentMethod,
-    accountNumber: withdrawRequest.accountNumber,
-    accountName: withdrawRequest.accountName,
-    otp,
-    expiresAt,
-    traderInfo: withdrawRequest.wallet.trader,
-    timestamp: Date.now(),
-  };
+    // Deduct from wallet and clear pending
+    const newBalance =
+      withdrawRequest.withdrawType === "BALANCE"
+        ? wallet.balance - amount
+        : wallet.balance;
+    const newCommission =
+      withdrawRequest.withdrawType === "COMMISSION"
+        ? wallet.commissionEarned - amount
+        : wallet.commissionEarned;
 
-  // Update withdraw request status to PROCESSING
-  await prisma.walletTransaction.update({
-    where: { id: withdrawId },
-    data: { status: "PROCESSING", adminId },
-  });
+    await prisma.$transaction([
+      prisma.wallet.update({
+        where: { id: wallet.id },
+        data: {
+          balance: newBalance,
+          commissionEarned: newCommission,
+        },
+      }),
+      prisma.walletTransaction.update({
+        where: { id: withdrawId },
+        data: {
+          status: "COMPLETED",
+          approvedBy: adminId,
+          otpVerified: true,
+        },
+      }),
+    ]);
 
-  // Send OTP to trader
-  if (withdrawRequest.wallet.trader?.phone) {
+    // Send notifications
+    await createNotificationService({
+      title: "Withdrawal Completed",
+      message: `Your withdrawal of ₦${amount} has been processed successfully.`,
+      eventType: "SYSTEM_MAINTENANCE",
+      targetType: "SPECIFIC_USER",
+      targetId: withdrawRequest.traderId,
+    });
+
+    if (withdrawRequest.wallet.trader?.phone) {
+      await sendMessage(
+        `Withdrawal completed! ₦${amount} has been deducted from your wallet.`,
+        withdrawRequest.wallet.trader.phone,
+      );
+    }
+
     await sendMessage(
-      `Your withdraw OTP: ${otp}. Valid for 10 minutes. Amount: ${Math.abs(withdrawRequest.amount)} RWF`,
-      withdrawRequest.wallet.trader.phone,
+      `Withdrawal completed for trader ${withdrawRequest.wallet.trader?.username}: ₦${amount}.`,
+      process.env.PRIVATE_RECEIVER || "",
     );
-  }
 
-  return {
-    success: true,
-    message: "OTP sent to trader for verification",
-    sessionId: Buffer.from(JSON.stringify(withdrawSessionData)).toString(
-      "base64",
-    ),
-  };
+    return {
+      success: true,
+      message: "Withdrawal completed successfully",
+      isDirect: true,
+    };
+  } else {
+    // OTP flow
+    const withdrawRequest = await prisma.walletTransaction.findUnique({
+      where: { id: withdrawId },
+      include: {
+        wallet: {
+          include: {
+            trader: { select: { phone: true, username: true, id: true } },
+          },
+        },
+      },
+    });
+
+    if (!withdrawRequest) throw new Error("Withdraw request not found");
+    if (
+      withdrawRequest.status === "COMPLETED" ||
+      withdrawRequest.status === "CANCELLED"
+    )
+      throw new Error("Withdraw request already processed");
+
+    // Generate OTP
+    const otp = OTPService.generateOTP();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Store all withdraw data in session
+    const withdrawSessionData = {
+      adminId,
+      withdrawId,
+      traderId: withdrawRequest.traderId,
+      walletId: withdrawRequest.walletId,
+      amount: Math.abs(withdrawRequest.amount),
+      withdrawType: withdrawRequest.withdrawType,
+      paymentMethod: withdrawRequest.paymentMethod,
+      accountNumber: withdrawRequest.accountNumber,
+      accountName: withdrawRequest.accountName,
+      otp,
+      expiresAt,
+      traderInfo: withdrawRequest.wallet.trader,
+      timestamp: Date.now(),
+    };
+
+    // Update withdraw request status to PROCESSING
+    await prisma.walletTransaction.update({
+      where: { id: withdrawId },
+      data: { status: "PROCESSING", adminId },
+    });
+
+    // Send OTP to trader
+    if (withdrawRequest.wallet.trader?.phone) {
+      await sendMessage(
+        `Your withdraw OTP: ${otp}. Valid for 10 minutes. Amount: ${Math.abs(withdrawRequest.amount)} RWF`,
+        withdrawRequest.wallet.trader.phone,
+      );
+    }
+
+    return {
+      success: true,
+      message: "OTP sent to trader for verification",
+      sessionId: Buffer.from(JSON.stringify(withdrawSessionData)).toString(
+        "base64",
+      ),
+    };
+  }
 };
 
 // Verify withdraw OTP and complete

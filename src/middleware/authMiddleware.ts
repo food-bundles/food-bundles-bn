@@ -6,7 +6,7 @@ import { getUserById } from "../services/userGets";
 export const isAuthenticated = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     // Get token from Authorization header
@@ -36,7 +36,10 @@ export const checkPermission = (...allowedRoles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const user = (req as any).user;
 
-    if (!user || !allowedRoles.includes(user.role)) {
+    if (
+      !user ||
+      (!allowedRoles.includes(user.role) && user.role !== "SUPERUSER")
+    ) {
       return res.status(403).json({ message: "Forbidden: Access denied" });
     }
 

@@ -22,7 +22,11 @@ import {
   createFarmerByAdminService,
   createRestaurantByAdminService,
 } from "../services/userServices";
-import { getUserById, getUserByEmail, getUserByPhone } from "../services/userGets";
+import {
+  getUserById,
+  getUserByEmail,
+  getUserByPhone,
+} from "../services/userGets";
 import { PaginationService } from "../services/paginationService";
 import { Role } from "@prisma/client";
 import { generateToken, verifyToken } from "../utils/jwt";
@@ -88,7 +92,7 @@ export class UserController {
       const otpResult = await OTPService.verifyOTP(
         phone,
         otp,
-        "RESTAURANT_SIGNUP"
+        "RESTAURANT_SIGNUP",
       );
 
       if (!otpResult.success) {
@@ -173,6 +177,8 @@ export class UserController {
 
       if (isAdmin) {
         sms = "Admin created successfully";
+      } else if (result.role === Role.SUPERUSER) {
+        sms = "SUPERUSER created successfully";
       } else if (result.role === Role.TRADER) {
         sms = "TRADER created successfully";
       } else {
@@ -197,7 +203,7 @@ export class UserController {
       const { page, limit } = req.query;
       const paginationQuery = PaginationService.validatePaginationParams(
         page as string,
-        limit as string
+        limit as string,
       );
       const farmers = await getAllFarmersService(paginationQuery);
 
@@ -218,7 +224,7 @@ export class UserController {
       const { page, limit } = req.query;
       const paginationQuery = PaginationService.validatePaginationParams(
         page as string,
-        limit as string
+        limit as string,
       );
       const restaurants = await getAllRestaurantsService(paginationQuery);
 
@@ -239,7 +245,7 @@ export class UserController {
       const { page, limit } = req.query;
       const paginationQuery = PaginationService.validatePaginationParams(
         page as string,
-        limit as string
+        limit as string,
       );
       const admins = await getAllAdminsService(paginationQuery);
 
