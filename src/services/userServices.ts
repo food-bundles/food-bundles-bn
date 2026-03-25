@@ -1124,8 +1124,13 @@ export const resetPasswordService = async (
         where: { id: userId },
         data: { password: hashedPassword },
       });
-    } else if (userType === "ADMIN") {
+    } else if (userType === "ADMIN" || userType === "TRADER" || userType === "AGGREGATOR" || userType === "LOGISTICS" || userType === "FOOD_BUNDLE" || userType === "SUPERUSER") {
       await prisma.admin.update({
+        where: { id: userId },
+        data: { password: hashedPassword },
+      });
+    } else if (userType === "AFFILIATOR") {
+      await prisma.affiliator.update({
         where: { id: userId },
         data: { password: hashedPassword },
       });
