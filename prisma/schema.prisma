@@ -322,6 +322,8 @@ model Admin {
 
   phone String? @unique
 
+  agreed   Boolean  @default(false)
+
   location String?
   province String?
   district String?

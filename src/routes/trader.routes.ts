@@ -40,6 +40,8 @@ import {
   processAllFixedModeMonthlyCommissions,
   getAllTraders,
   getTraderByIdOrEmail,
+  acceptTraderAgreement,
+  getTraderAgreementStatus,
 } from "../controllers/trader.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -337,6 +339,21 @@ traderRoutes.get(
   isAuthenticated,
   checkPermission("ADMIN"),
   getTraderByIdOrEmail,
+);
+
+// Agreement
+traderRoutes.post(
+  "/agreement/accept",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  acceptTraderAgreement,
+);
+
+traderRoutes.get(
+  "/agreement/status",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  getTraderAgreementStatus,
 );
 
 export default traderRoutes;

@@ -40,6 +40,8 @@ import {
   processAllFixedModeMonthlyCommissionsService,
   getAllTradersService,
   getTraderByIdOrEmailService,
+  acceptTraderAgreementService,
+  getTraderAgreementStatusService,
 } from "../services/trader.service";
 
 // Create trader wallet
@@ -1117,5 +1119,27 @@ export const getTraderByIdOrEmail = async (req: Request, res: Response) => {
       success: false,
       message: error.message,
     });
+  }
+};
+
+// Accept trader agreement
+export const acceptTraderAgreement = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user.id;
+    const result = await acceptTraderAgreementService(traderId);
+    res.status(200).json({ success: true, message: "Agreement accepted", data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Get trader agreement status
+export const getTraderAgreementStatus = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user.id;
+    const result = await getTraderAgreementStatusService(traderId);
+    res.status(200).json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
   }
 };

@@ -3000,6 +3000,25 @@ export const processAllFixedModeMonthlyCommissionsService = async () => {
   return results;
 };
 
+// Agreement services
+export const acceptTraderAgreementService = async (traderId: string) => {
+  const trader = await prisma.admin.update({
+    where: { id: traderId },
+    data: { agreed: true },
+    select: { id: true, agreed: true },
+  });
+  return trader;
+};
+
+export const getTraderAgreementStatusService = async (traderId: string) => {
+  const trader = await prisma.admin.findUnique({
+    where: { id: traderId },
+    select: { agreed: true },
+  });
+  if (!trader) throw new Error("Trader not found");
+  return { agreed: trader.agreed };
+};
+
 // Get all traders (Admin only)
 export const getAllTradersService = async () => {
   const traders = await prisma.admin.findMany({
