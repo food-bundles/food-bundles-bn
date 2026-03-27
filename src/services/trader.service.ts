@@ -2177,6 +2177,43 @@ export const acceptDelegationService = async (
   return { success: true, message: "Delegation accepted successfully" };
 };
 
+// Send withdraw completed admin email notification
+async function sendWithdrawCompletedAdminEmail(data: {
+  traderName: string;
+  traderEmail: string;
+  amount: number;
+  withdrawType: string;
+  withdrawId: string;
+  paymentProofImage: string;
+}) {
+  const nodemailer = require("nodemailer");
+  if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD || !process.env.ADMIN_EMAIL) return;
+
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: process.env.GOOGLE_EMAIL, pass: process.env.GOOGLE_PASSWORD },
+    tls: { rejectUnauthorized: false },
+  });
+
+  await transporter.sendMail({
+    from: `"FoodBundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `Withdraw Completed - ${data.traderName} (${data.amount.toLocaleString()} RWF ${data.withdrawType})`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+        <h2 style="color:#10b981;">Withdrawal Completed</h2>
+        <p><strong>Trader:</strong> ${data.traderName} (${data.traderEmail})</p>
+        <p><strong>Amount:</strong> ${data.amount.toLocaleString()} RWF</p>
+        <p><strong>Type:</strong> ${data.withdrawType}</p>
+        <p><strong>Withdraw ID:</strong> ${data.withdrawId}</p>
+        <p><strong>Payment Proof:</strong></p>
+        <img src="${data.paymentProofImage}" alt="Payment Proof" style="max-width:100%;border-radius:8px;" />
+        <p style="color:#64748b;font-size:12px;">FoodBundles System - Automated Notification</p>
+      </div>
+    `,
+  });
+}
+
 // Request withdraw
 export const requestWithdrawService = async (
   traderId: string,
@@ -2320,8 +2357,9 @@ export const adminApproveWithdrawService = async (
       prisma.walletTransaction.update({
         where: { id: withdrawId },
         data: {
-          status: "COMPLETED",
+          status: "APPROVED",
           approvedBy: adminId,
+          approvedAt: new Date(),
           otpVerified: true,
         },
       }),
@@ -2329,28 +2367,28 @@ export const adminApproveWithdrawService = async (
 
     // Send notifications
     await createNotificationService({
-      title: "Withdrawal Completed",
-      message: `Your withdrawal of ₦${amount} has been processed successfully.`,
+      title: "Withdrawal Approved",
+      message: `Your withdrawal of ${amount} RWF has been approved.`,
       eventType: "SYSTEM_MAINTENANCE",
       targetType: "SPECIFIC_USER",
-      targetId: withdrawRequest.traderId,
+      targetId: withdrawRequest.traderId!,
     });
 
     if (withdrawRequest.wallet.trader?.phone) {
       await sendMessage(
-        `Withdrawal completed! ₦${amount} has been deducted from your wallet.`,
+        `Withdrawal approved! ${amount} RWF. Awaiting payment completion.`,
         withdrawRequest.wallet.trader.phone,
       );
     }
 
     await sendMessage(
-      `Withdrawal completed for trader ${withdrawRequest.wallet.trader?.username}: ₦${amount}.`,
+      `Withdrawal approved for trader ${withdrawRequest.wallet.trader?.username}: ${amount} RWF.`,
       process.env.PRIVATE_RECEIVER || "",
     );
 
     return {
       success: true,
-      message: "Withdrawal completed successfully",
+      message: "Withdrawal approved successfully",
       isDirect: true,
     };
   } else {
@@ -2418,7 +2456,7 @@ export const adminApproveWithdrawService = async (
   }
 };
 
-// Verify withdraw OTP and complete
+// Verify withdraw OTP and complete (marks as APPROVED with approvedAt timestamp)
 export const verifyWithdrawOTPService = async (
   sessionId: string,
   otp: string,
@@ -2464,50 +2502,26 @@ export const verifyWithdrawOTPService = async (
     if (withdrawRequest.status !== "PROCESSING")
       throw new Error("Withdraw request not ready for verification");
 
+    const now = new Date();
+
+    // Mark as APPROVED with approvedAt timestamp (starts 45-day countdown for BALANCE)
+    await prisma.walletTransaction.update({
+      where: { id: withdrawData.withdrawId },
+      data: {
+        status: "APPROVED",
+        otpVerified: true,
+        approvedBy: withdrawData.adminId,
+        approvedAt: now,
+      },
+    });
+
     const amount = withdrawData.amount;
     const wallet = withdrawRequest.wallet;
 
-    // Deduct from wallet and clear pending
-    const newBalance =
-      withdrawData.withdrawType === "BALANCE"
-        ? wallet.balance - amount
-        : wallet.balance;
-    const newCommission =
-      withdrawData.withdrawType === "COMMISSION"
-        ? wallet.commissionEarned - amount
-        : wallet.commissionEarned;
-
-    await prisma.$transaction([
-      prisma.wallet.update({
-        where: { id: wallet.id },
-        data: {
-          balance: newBalance,
-          commissionEarned: newCommission,
-          totalWithdrawn: wallet.totalWithdrawn + amount,
-          pendingWithdrawBalance:
-            withdrawData.withdrawType === "BALANCE"
-              ? Math.max(0, wallet.pendingWithdrawBalance - amount)
-              : wallet.pendingWithdrawBalance,
-          pendingWithdrawCommission:
-            withdrawData.withdrawType === "COMMISSION"
-              ? Math.max(0, wallet.pendingWithdrawCommission - amount)
-              : wallet.pendingWithdrawCommission,
-        },
-      }),
-      prisma.walletTransaction.update({
-        where: { id: withdrawData.withdrawId },
-        data: {
-          status: "COMPLETED",
-          otpVerified: true,
-          newBalance,
-        },
-      }),
-    ]);
-
     // Notifications
     await createNotificationService({
-      title: "Withdraw Completed",
-      message: `Your withdraw of ${amount} RWF has been completed`,
+      title: "Withdraw Approved",
+      message: `Your withdraw of ${amount} RWF has been approved`,
       eventType: "PAYMENT_PROCESSED",
       targetType: "SPECIFIC_USER",
       targetId: withdrawData.traderId,
@@ -2515,22 +2529,131 @@ export const verifyWithdrawOTPService = async (
 
     if (wallet.trader?.phone) {
       await sendMessage(
-        `Withdraw completed: ${amount} RWF from ${withdrawData.withdrawType?.toLowerCase()}`,
+        `Withdraw approved: ${amount} RWF from ${withdrawData.withdrawType?.toLowerCase()}. Payment will be completed soon.`,
         wallet.trader.phone,
       );
     }
 
     await sendMessage(
-      `Withdraw completed for ${wallet.trader?.username}: ${amount} RWF by admin`,
+      `Withdraw approved for ${wallet.trader?.username}: ${amount} RWF by admin`,
       process.env.PRIVATE_RECEIVER || "",
     );
 
-    return { success: true, message: "Withdraw completed successfully" };
+    return { success: true, message: "Withdraw approved successfully" };
   } catch (error: any) {
     throw new Error(
       error.message || "Invalid session or OTP verification failed",
     );
   }
+};
+
+// Complete withdraw — admin uploads payment proof image
+// BALANCE: checks 45 days have passed since approvedAt, then deducts from balance
+// COMMISSION: completes immediately (no 45-day wait)
+export const completeWithdrawService = async (
+  adminId: string,
+  withdrawId: string,
+  paymentProofImage: string,
+) => {
+  const withdrawRequest = await prisma.walletTransaction.findUnique({
+    where: { id: withdrawId },
+    include: {
+      wallet: {
+        include: {
+          trader: { select: { phone: true, username: true, id: true, email: true } },
+        },
+      },
+    },
+  });
+
+  if (!withdrawRequest) throw new Error("Withdraw request not found");
+  if (withdrawRequest.status !== "APPROVED")
+    throw new Error("Only approved withdrawals can be completed");
+
+  const approvedAt = withdrawRequest.approvedAt;
+  if (!approvedAt) throw new Error("Approval date not found");
+
+  // BALANCE: enforce 45-day wait
+  if (withdrawRequest.withdrawType === "BALANCE") {
+    const daysSinceApproval = Math.floor(
+      (Date.now() - approvedAt.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    if (daysSinceApproval < 45) {
+      const remainingDays = 45 - daysSinceApproval;
+      const completionDate = new Date(approvedAt.getTime() + 45 * 24 * 60 * 60 * 1000);
+      throw new Error(
+        `Balance withdrawal cannot be completed yet. ${remainingDays} day(s) remaining. Completion date: ${completionDate.toLocaleDateString()}`,
+      );
+    }
+  }
+
+  const amount = Math.abs(withdrawRequest.amount);
+  const wallet = withdrawRequest.wallet;
+
+  const newBalance =
+    withdrawRequest.withdrawType === "BALANCE"
+      ? wallet.balance - amount
+      : wallet.balance;
+  const newCommission =
+    withdrawRequest.withdrawType === "COMMISSION"
+      ? wallet.commissionEarned - amount
+      : wallet.commissionEarned;
+
+  await prisma.$transaction([
+    prisma.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        balance: newBalance,
+        commissionEarned: newCommission,
+        totalDeposited: Math.max(0, wallet.totalDeposited - amount),
+        totalWithdrawn: wallet.totalWithdrawn + amount,
+        pendingWithdrawBalance:
+          withdrawRequest.withdrawType === "BALANCE"
+            ? Math.max(0, wallet.pendingWithdrawBalance - amount)
+            : wallet.pendingWithdrawBalance,
+        pendingWithdrawCommission:
+          withdrawRequest.withdrawType === "COMMISSION"
+            ? Math.max(0, wallet.pendingWithdrawCommission - amount)
+            : wallet.pendingWithdrawCommission,
+      },
+    }),
+    prisma.walletTransaction.update({
+      where: { id: withdrawId },
+      data: {
+        status: "COMPLETED",
+        paymentProofImage,
+        newBalance,
+      },
+    }),
+  ]);
+
+  // Notify trader via SMS
+  if (wallet.trader?.phone) {
+    await sendMessage(
+      `Your ${withdrawRequest.withdrawType?.toLowerCase()} withdrawal of ${amount} RWF has been completed.`,
+      wallet.trader.phone,
+    );
+  }
+
+  // Notify admin via email
+  await sendWithdrawCompletedAdminEmail({
+    traderName: wallet.trader?.username || "Trader",
+    traderEmail: wallet.trader?.email || "",
+    amount,
+    withdrawType: withdrawRequest.withdrawType || "",
+    withdrawId,
+    paymentProofImage,
+  });
+
+  await createNotificationService({
+    title: "Withdrawal Completed",
+    message: `Your ${withdrawRequest.withdrawType?.toLowerCase()} withdrawal of ${amount} RWF has been completed.`,
+    eventType: "PAYMENT_PROCESSED",
+    targetType: "SPECIFIC_USER",
+    targetId: withdrawRequest.traderId!,
+  });
+
+  return { success: true, message: "Withdrawal completed successfully" };
 };
 
 // Get trader withdraw requests

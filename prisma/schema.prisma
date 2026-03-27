@@ -723,6 +723,8 @@ model WalletTransaction {
   otpExpiresAt  DateTime?
   otpVerified   Boolean?      @default(false)
   approvedBy    String? // Admin ID who approved the withdraw
+  approvedAt        DateTime? // When withdraw was approved (for 45-day countdown)
+  paymentProofImage String? // Cloudinary URL of payment proof (screenshot/receipt)
   isReversed    Boolean       @default(false) // Track if transaction is a reversal
 
   status   TransactionStatus @default(PENDING)
@@ -1437,6 +1439,7 @@ enum WithdrawType {
 enum TransactionStatus {
   PENDING
   PROCESSING
+  APPROVED
   COMPLETED
   FAILED
   CANCELLED

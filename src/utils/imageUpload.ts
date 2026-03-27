@@ -2,6 +2,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
+import { v2 } from "cloudinary";
 
 // Create uploads directory if it doesn't exist
 const uploadDir = "uploads/products";
@@ -122,3 +123,12 @@ export const validateImages = (req: any, res: any, next: any) => {
 
   next();
 };
+
+// Upload withdraw payment proof image (base64 or file path)
+export async function uploadWithdrawProofImage(imageData: string): Promise<string> {
+  const result = await v2.uploader.upload(imageData, {
+    folder: "withdraw_proofs",
+    resource_type: "image",
+  });
+  return result.secure_url;
+}
