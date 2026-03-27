@@ -30,6 +30,7 @@ import {
   verifyWithdrawOTPService,
   requestWithdrawService,
   adminApproveWithdrawService,
+  completeWithdrawService,
   getTraderWithdrawRequestsService,
   getAllWithdrawRequestsService,
   cancelWithdrawRequestService,
@@ -43,6 +44,7 @@ import {
   acceptTraderAgreementService,
   getTraderAgreementStatusService,
 } from "../services/trader.service";
+import { uploadWithdrawProofImage } from "../utils/imageUpload";
 
 // Create trader wallet
 export const createTraderWallet = async (req: Request, res: Response) => {
@@ -859,7 +861,7 @@ export const adminApproveWithdraw = async (req: Request, res: Response) => {
   }
 };
 
-// Verify withdraw OTP (Admin only)
+// Verify withdraw OTP (Admin only) — marks withdraw as APPROVED with approvedAt timestamp
 export const verifyWithdrawOTP = async (req: Request, res: Response) => {
   try {
     const { sessionId, otp } = req.body;
@@ -872,6 +874,33 @@ export const verifyWithdrawOTP = async (req: Request, res: Response) => {
     }
 
     const result = await verifyWithdrawOTPService(sessionId, otp);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Complete withdraw — admin uploads payment proof image after 45 days (BALANCE)
+// or immediately (COMMISSION). Deducts from wallet and notifies trader + admin.
+export const completeWithdraw = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { withdrawId } = req.params;
+    const { paymentProofImage } = req.body;
+
+    if (!paymentProofImage) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment proof image is required",
+      });
+    }
+
+    const imageUrl = await uploadWithdrawProofImage(paymentProofImage);
+    const result = await completeWithdrawService(adminId, withdrawId, imageUrl);
 
     res.status(200).json({
       success: true,

@@ -29,6 +29,7 @@ import {
   requestWithdraw,
   adminApproveWithdraw,
   verifyWithdrawOTP,
+  completeWithdraw,
   getTraderWithdrawRequests,
   getAllWithdrawRequests,
   cancelWithdrawRequest,
@@ -262,6 +263,13 @@ traderRoutes.post(
   isAuthenticated,
   checkPermission("ADMIN"),
   verifyWithdrawOTP,
+);
+
+traderRoutes.post(
+  "/withdraw/:withdrawId/complete",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  completeWithdraw,
 );
 
 traderRoutes.get(
