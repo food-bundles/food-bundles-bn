@@ -2780,6 +2780,8 @@ async function processBankTransfer({
       redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
     };
 
+    const Flutterwave = require("flutterwave-node-v3");
+    const flw = new Flutterwave(process.env.FLW_PUBLIC_KEY, process.env.FLW_SECRET_KEY);
     const response = await flw.Charge.bank_transfer(payload);
     if (response.status === "success") {
       return {

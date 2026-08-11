@@ -1,4 +1,3 @@
-import dotenv from "dotenv";
 import prisma from "../prisma";
 import {
   SubscriptionStatus,
@@ -19,23 +18,28 @@ import {
   getWalletByRestaurantIdService,
 } from "./wallet.service";
 
-dotenv.config();
+// Payment clients - lazy initialized to ensure env vars are loaded
+let _paypack: any = null;
+let _flw: any = null;
 
-// Payment Integration
-const PaypackJs = require("paypack-js").default;
-const Flutterwave = require("flutterwave-node-v3");
+function getPaypack() {
+  if (!_paypack) {
+    const PaypackJs = require("paypack-js").default;
+    _paypack = PaypackJs.config({
+      client_id: process.env.PAYPACK_APPLICATION_ID,
+      client_secret: process.env.PAYPACK_APPLICATION_SECRET,
+    });
+  }
+  return _paypack;
+}
 
-// Initialize Paypack
-const paypack = PaypackJs.config({
-  client_id: process.env.PAYPACK_APPLICATION_ID,
-  client_secret: process.env.PAYPACK_APPLICATION_SECRET,
-});
-
-// Initialize Flutterwave
-const flw = new Flutterwave(
-  process.env.FLW_PUBLIC_KEY,
-  process.env.FLW_SECRET_KEY,
-);
+function getFlw() {
+  if (!_flw) {
+    const Flutterwave = require("flutterwave-node-v3");
+    _flw = new Flutterwave(process.env.FLW_PUBLIC_KEY, process.env.FLW_SECRET_KEY);
+  }
+  return _flw;
+}
 
 // Types for payment results
 interface SubscriptionPaymentResult {
@@ -942,7 +946,7 @@ async function processSubscriptionMobileMoneyPayment({
 
     // Try PayPack first
     try {
-      const response = await paypack.cashin({
+      const response = await getPaypack().cashin({
         number: cleanedPhoneNumber,
         amount: amount,
         environment:
@@ -989,7 +993,7 @@ async function processSubscriptionMobileMoneyPayment({
         redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/subscribe`,
       };
 
-      const response = await flw.MobileMoney.rwanda(payload);
+      const response = await getFlw().MobileMoney.rwanda(payload);
 
       if (response.status === "success") {
         return {
@@ -1148,7 +1152,7 @@ async function processSubscriptionBankTransfer({
       expires: 3600,
     };
 
-    const response = await flw.Charge.bank_transfer(payload);
+    const response = await getFlw().Charge.bank_transfer(payload);
 
     if (response.status === "success") {
       const transferDetails = response.meta?.authorization && {
