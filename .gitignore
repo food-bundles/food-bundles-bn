@@ -12,3 +12,7 @@ uploads
 ngrok_recovery_codes.txt
 twilio_2FA_recovery_code.txt
 *.html
+check_counts.js
+download_fonts.js
+inspect_excel.js
+seed_from_excel.js
