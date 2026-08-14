@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../prisma';
 import nodemailer from 'nodemailer';
-
-const prisma = new PrismaClient();
 
 export const createContactSubmission = async (req: Request, res: Response) => {
   try {

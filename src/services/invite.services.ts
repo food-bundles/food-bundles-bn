@@ -1,10 +1,8 @@
-import { PrismaClient, Role } from "@prisma/client";
-
+import prisma from "../prisma";
+import { Role } from "@prisma/client";
 import { hashPassword } from "../utils/password";
 import crypto from "crypto";
 import { checkExistingUser } from "./userServices";
-
-const prisma = new PrismaClient();
 
 interface CreateInviteData {
   email: string;
