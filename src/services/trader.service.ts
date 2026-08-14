@@ -2506,8 +2506,8 @@ export const verifyWithdrawOTPService = async (
 
     // Notifications
     await createNotificationService({
-      title: "Withdraw Completed",
-      message: `Your withdraw of ${amount} RWF has been completed`,
+      title: "Withdraw Approved",
+      message: `Your withdraw of ${amount} RWF has been approved`,
       eventType: "PAYMENT_PROCESSED",
       targetType: "SPECIFIC_USER",
       targetId: withdrawData.traderId,

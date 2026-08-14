@@ -1,17 +1,9 @@
 import { Request, Response } from "express";
 import {
-  exportUsersService,
-  exportOrdersService,
-  exportRestaurantsService,
-  exportPaymentsService,
-  exportProductsService,
-  exportFarmersService,
-  exportLogisticsService,
-  exportAggregatorsService,
-  exportSubscriptionsService,
-  exportWalletsService,
+  exportDataService,
   ExportFormat,
   ExportType,
+  ExportFilterOptions,
 } from "../services/export.services";
 
 // Generic export controller
@@ -19,112 +11,79 @@ export const exportData = async (req: Request, res: Response) => {
   try {
     const { type, format } = req.params;
 
+    console.log(`[EXPORT] Received request for type=${type}, format=${format}, options=`, req.query);
+
     if (!["pdf", "csv", "excel", "html"].includes(format)) {
       return res.status(400).json({
         message: "Invalid format. Supported formats: pdf, csv, excel, html",
       });
     }
 
-    if (
-      ![
-        "users",
-        "orders",
-        "restaurants",
-        "payments",
-        "products",
-        "farmers",
-        "logistics",
-        "aggregators",
-        "subscriptions",
-        "wallets",
-      ].includes(type)
-    ) {
+    const validTypes = [
+      "users",
+      "orders",
+      "restaurants",
+      "payments",
+      "products",
+      "farmers",
+      "logistics",
+      "aggregators",
+      "subscriptions",
+      "wallets",
+      "loans",
+      "deposits",
+      "transactions",
+    ];
+
+    if (!validTypes.includes(type)) {
       return res.status(400).json({
         message: "Invalid export type",
       });
     }
 
-    // parse optional options from query: orientation for PDF and dateFormat
+    // Extract options and filters from req.query
     const orientation =
       req.query.orientation === "portrait" ? "portrait" : "landscape";
     const dateFormat = req.query.dateFormat === "local" ? "local" : "iso";
-    const options = { orientation, dateFormat } as any;
 
-    let exportData;
-    let filename;
+    const options: ExportFilterOptions = {
+      orientation,
+      dateFormat,
+      startDate: req.query.startDate as string,
+      endDate: req.query.endDate as string,
+      status: req.query.status as string,
+      category: req.query.category as string,
+      role: req.query.role as string,
+      search: req.query.search as string,
+      restaurantId: req.query.restaurantId as string,
+      farmerId: req.query.farmerId as string,
+      province: req.query.province as string,
+      district: req.query.district as string,
+      type: req.query.type as string,
+      columns: req.query.columns as string,
+      ids: req.query.ids as string,
+    };
 
-    switch (type as ExportType) {
-      case "users":
-        exportData = await exportUsersService(format as ExportFormat, options);
-        filename = `users_export.${format === "excel" ? "xlsx" : format}`;
-        break;
-      case "orders":
-        exportData = await exportOrdersService(format as ExportFormat, options);
-        filename = `orders_export.${format === "excel" ? "xlsx" : format}`;
-        break;
-      case "restaurants":
-        exportData = await exportRestaurantsService(
-          format as ExportFormat,
-          options
-        );
-        filename = `restaurants_export.${format === "excel" ? "xlsx" : format}`;
-        break;
-      case "payments":
-        exportData = await exportPaymentsService(
-          format as ExportFormat,
-          options
-        );
-        filename = `payments_export.${format === "excel" ? "xlsx" : format}`;
-        break;
-      case "products":
-        exportData = await exportProductsService(
-          format as ExportFormat,
-          options
-        );
-        filename = `products_export.${format === "excel" ? "xlsx" : format}`;
-        break;
-      case "farmers":
-        exportData = await exportFarmersService(
-          format as ExportFormat,
-          options
-        );
-        filename = `farmers_export.${format === "excel" ? "xlsx" : format}`;
-        break;
-      case "logistics":
-        exportData = await exportLogisticsService(
-          format as ExportFormat,
-          options
-        );
-        filename = `logistics_export.${format === "excel" ? "xlsx" : format}`;
-        break;
-      case "aggregators":
-        exportData = await exportAggregatorsService(
-          format as ExportFormat,
-          options
-        );
-        filename = `aggregators_export.${format === "excel" ? "xlsx" : format}`;
-        break;
-      case "subscriptions":
-        exportData = await exportSubscriptionsService(
-          format as ExportFormat,
-          options
-        );
-        filename = `subscriptions_export.${
-          format === "excel" ? "xlsx" : format
-        }`;
-        break;
-      case "wallets":
-        exportData = await exportWalletsService(
-          format as ExportFormat,
-          options
-        );
-        filename = `wallets_export.${format === "excel" ? "xlsx" : format}`;
-        break;
-      default:
-        return res.status(400).json({
-          message: "Invalid export type",
-        });
+    // Dynamic filename generation
+    const todayStr = new Date().toISOString().split("T")[0];
+    const ext = format === "excel" ? "xlsx" : format;
+    let dateSuffix = todayStr;
+    if (options.startDate) {
+      const startStr = options.startDate.split("T")[0];
+      if (options.endDate) {
+        const endStr = options.endDate.split("T")[0];
+        dateSuffix = `${startStr}_to_${endStr}`;
+      } else {
+        dateSuffix = `from_${startStr}`;
+      }
     }
+    const filename = `${type}_${dateSuffix}.${ext}`;
+
+    const exportDataResult = await exportDataService(
+      type as ExportType,
+      format as ExportFormat,
+      options
+    );
 
     // Set appropriate headers based on format
     switch (format) {
@@ -134,7 +93,7 @@ export const exportData = async (req: Request, res: Response) => {
           "Content-Disposition",
           `attachment; filename="${filename}"`
         );
-        res.send(exportData);
+        res.send(exportDataResult);
         break;
       case "excel":
         res.setHeader(
@@ -145,7 +104,7 @@ export const exportData = async (req: Request, res: Response) => {
           "Content-Disposition",
           `attachment; filename="${filename}"`
         );
-        res.send(exportData);
+        res.send(exportDataResult);
         break;
       case "pdf":
         res.setHeader("Content-Type", "application/pdf");
@@ -153,11 +112,11 @@ export const exportData = async (req: Request, res: Response) => {
           "Content-Disposition",
           `attachment; filename="${filename}"`
         );
-        res.send(await exportData);
+        res.send(await exportDataResult);
         break;
       case "html":
         res.setHeader("Content-Type", "text/html");
-        res.send(exportData);
+        res.send(exportDataResult);
         break;
       default:
         res.status(400).json({
@@ -165,6 +124,7 @@ export const exportData = async (req: Request, res: Response) => {
         });
     }
   } catch (error: any) {
+    require("fs").writeFileSync("export-error.log", error.stack || error.message);
     res.status(500).json({
       message: error.message || "Failed to export data",
     });
@@ -185,12 +145,15 @@ export const getExportTypes = async (req: Request, res: Response) => {
       { type: "aggregators", description: "Export aggregator information" },
       { type: "subscriptions", description: "Export subscription records" },
       { type: "wallets", description: "Export wallets and balances" },
+      { type: "loans", description: "Export loan applications and credit" },
+      { type: "deposits", description: "Export wallet deposit transactions" },
+      { type: "transactions", description: "Export detailed financial transactions" },
     ];
 
     const formats = [
-      { format: "csv", description: "Comma-separated values" },
-      { format: "excel", description: "Microsoft Excel format" },
-      { format: "pdf", description: "Portable Document Format" },
+      { format: "excel", description: "Microsoft Excel format (.xlsx)" },
+      { format: "csv", description: "Comma-separated values (.csv)" },
+      { format: "pdf", description: "Portable Document Format (.pdf)" },
       { format: "html", description: "HTML table format" },
     ];
 
