@@ -595,6 +595,7 @@ export class UserController {
   };
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   static myProfile = async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization;
@@ -651,6 +652,8 @@ export class UserController {
 
 =======
 >>>>>>> dfd7b79 (error fixed from package-lock)
+=======
+>>>>>>> 7bc5b2e (error fixed from package-lock)
   static me = async (req: Request, res: Response) => {
     try {
       // Get token from Authorization header
