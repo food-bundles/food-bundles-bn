@@ -20,11 +20,11 @@ import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
 const marketRoutes = Router();
 
-// Market CRUD operations (Admin only)
+// Market CRUD operations
 marketRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
   createMarket,
 );
 
@@ -35,7 +35,7 @@ marketRoutes.get("/:marketId", isAuthenticated, getMarketById);
 marketRoutes.put(
   "/:marketId",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
   updateMarket,
 );
 
@@ -50,7 +50,7 @@ marketRoutes.delete(
 marketRoutes.post(
   "/prices",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
   recordMarketPrice,
 );
 
@@ -63,14 +63,14 @@ marketRoutes.post("/prices/analyze", isAuthenticated, analyzePrice);
 marketRoutes.get(
   "/prices/by-product",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
   getMarketPricesByProduct,
 );
 
 marketRoutes.put(
   "/prices/:historyId",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
   updateMarketPriceHistory,
 );
 
@@ -85,21 +85,21 @@ marketRoutes.delete(
 marketRoutes.get(
   "/export/markets",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
   exportMarkets,
 );
 
 marketRoutes.get(
   "/export/price-history",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
   exportPriceHistory,
 );
 
 marketRoutes.get(
   "/export/comparison",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
   exportComparison,
 );
 
