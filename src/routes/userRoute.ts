@@ -4,6 +4,8 @@ import { UserController } from "../controllers/userController";
 const userRoutes = Router();
 
 userRoutes.post("/login", UserController.login);
+userRoutes.post("/google-login", UserController.googleLogin);
+userRoutes.post("/google-signup", UserController.googleSignup);
 userRoutes.get("/me", UserController.me);
 
 // Password reset routes
