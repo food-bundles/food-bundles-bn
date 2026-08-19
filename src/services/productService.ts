@@ -293,6 +293,49 @@ export const updateProductService = async (
 
   console.log("updatedProduct:", updatedProduct);
 
+  // If unitPrice has changed, auto-create a MarketPriceHistory for each market
+  // that this product is already recorded in, using the new ourPrice.
+  if (
+    updateData.unitPrice !== undefined &&
+    Number(updateData.unitPrice) !== existingProduct.unitPrice
+  ) {
+    try {
+      const distinctMarkets = await prisma.marketPriceHistory.findMany({
+        where: { productId },
+        select: { marketId: true },
+        distinct: ['marketId'],
+      });
+
+      const recordsToCreate = [];
+      for (const { marketId } of distinctMarkets) {
+        const latestHistory = await prisma.marketPriceHistory.findFirst({
+          where: { productId, marketId },
+          orderBy: { recordedDate: 'desc' },
+        });
+
+        if (latestHistory) {
+          recordsToCreate.push({
+            productId,
+            marketId,
+            ourPrice: Number(updateData.unitPrice),
+            marketPrice: latestHistory.marketPrice,
+            recordedBy: adminId,
+            recordedDate: new Date(),
+          });
+        }
+      }
+
+      if (recordsToCreate.length > 0) {
+        await prisma.marketPriceHistory.createMany({
+          data: recordsToCreate,
+        });
+        console.log(`Auto-created ${recordsToCreate.length} market price history records for product ${productId}`);
+      }
+    } catch (error) {
+      console.error("Failed to auto-create market price history:", error);
+    }
+  }
+
   return updatedProduct;
 };
 
