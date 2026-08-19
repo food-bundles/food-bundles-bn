@@ -364,10 +364,8 @@ export const getLowestPriceComparison = async (req: Request, res: Response) => {
       limit: limit ? parseInt(limit as string) : 50,
     });
 
-    // Filter where ourPrice < marketPrice
-    const lowestPrices = result.history.filter(
-      (item: any) => item.ourPrice < item.marketPrice
-    ).slice(0, limit ? parseInt(limit as string) : 5);
+    // Get the limited number of most recent prices
+    const lowestPrices = result.history.slice(0, limit ? parseInt(limit as string) : 5);
 
     res.status(200).json({
       success: true,
