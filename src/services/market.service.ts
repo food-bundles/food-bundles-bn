@@ -189,6 +189,9 @@ export const getPriceHistoryService = async (filters: {
     if (endDate) where.recordedDate.lte = endDate;
   }
 
+  // Only fetch history from active markets
+  where.market = { isActive: true };
+
   const [history, total] = await Promise.all([
     prisma.marketPriceHistory.findMany({
       where,
