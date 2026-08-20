@@ -55,6 +55,17 @@ export const unsubscribeFromNewsletterService = async (email: string) => {
   });
 };
 
+// Check newsletter subscription status
+export const getNewsletterStatusService = async (email: string) => {
+  const subscriber = await prisma.newsletterSubscriber.findUnique({
+    where: { email },
+  });
+
+  return {
+    isSubscribed: !!subscriber && subscriber.isActive,
+  };
+};
+
 // Get all subscribers (admin)
 export const getAllSubscribersService = async (filters?: {
   page?: number;

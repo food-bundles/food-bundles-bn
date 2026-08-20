@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   subscribeToNewsletter,
   unsubscribeFromNewsletter,
+  getNewsletterStatus,
   getAllSubscribers,
   createNewsletterCampaign,
   sendNewsletterCampaign,
@@ -17,6 +18,7 @@ const newsletterRoutes = Router();
 // Public routes - anyone can subscribe/unsubscribe
 newsletterRoutes.post("/subscribe", subscribeToNewsletter);
 newsletterRoutes.post("/unsubscribe", unsubscribeFromNewsletter);
+newsletterRoutes.get("/status", getNewsletterStatus);
 
 // Admin routes - subscriber management
 newsletterRoutes.get(

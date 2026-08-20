@@ -6,6 +6,7 @@ export interface ICreateFarmerData extends UserLocationData {
   email?: string;
   name?: string;
   password?: string;
+  agreed?: boolean;
 }
 
 export interface ICreateRestaurantData extends UserLocationData {
@@ -15,6 +16,7 @@ export interface ICreateRestaurantData extends UserLocationData {
   tin: string;
   password: string;
   role: Role;
+  agreed?: boolean;
 }
 
 export interface ICreateAdminData extends Partial<UserLocationData> {

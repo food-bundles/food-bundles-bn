@@ -530,6 +530,18 @@ export class UserController {
         });
       }
 
+      // If user has not accepted the terms yet, return for frontend to
+      // redirect them to the terms agreement page instead of logging in
+      if (result.needsTermsAgreement) {
+        return res.status(200).json({
+          success: true,
+          needsTermsAgreement: true,
+          email: result.email,
+          name: result.name,
+          message: result.message,
+        });
+      }
+
       // User found, generate JWT
       const user = result.user;
       const token = generateToken({ id: user.id });

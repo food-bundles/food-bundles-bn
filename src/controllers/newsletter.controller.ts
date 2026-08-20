@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import {
   subscribeToNewsletterService,
   unsubscribeFromNewsletterService,
+  getNewsletterStatusService,
   getAllSubscribersService,
   createNewsletterCampaignService,
   sendNewsletterCampaignService,
@@ -63,6 +64,32 @@ export const unsubscribeFromNewsletter = async (
     res.status(200).json({
       success: true,
       message: "Successfully unsubscribed from newsletter",
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Check newsletter subscription status
+export const getNewsletterStatus = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const status = await getNewsletterStatusService(email as string);
+
+    res.status(200).json({
+      success: true,
+      data: status,
     });
   } catch (error: any) {
     res.status(400).json({
