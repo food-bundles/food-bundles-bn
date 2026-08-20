@@ -83,9 +83,17 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
     sector,
     cell,
     village,
+    agreed,
   } = farmerData;
 
   console.log("Received farmer data:---", farmerData);
+
+  // Terms and Conditions must be explicitly accepted before completing signup
+  if (!agreed) {
+    throw new Error(
+      "You must accept the Terms and Conditions to complete your registration.",
+    );
+  }
 
   if (!phone && !email) {
     throw new Error("Either phone or email is required");
@@ -375,7 +383,15 @@ export const createRestaurantService = async (
     cell,
     village,
     role = "RESTAURANT", // Default to RESTAURANT if not specified
+    agreed,
   } = restaurantData;
+
+  // Terms and Conditions must be explicitly accepted before completing signup
+  if (!agreed) {
+    throw new Error(
+      "You must accept the Terms and Conditions to complete your registration.",
+    );
+  }
 
   // Require fields
   if (!name || !password) {
@@ -447,6 +463,7 @@ export const createRestaurantService = async (
         cell,
         village,
         role: role as any, // Set the role (RESTAURANT or HOTEL)
+        agreed: true, // Terms accepted explicitly on the signup form
       },
     });
 
@@ -1076,13 +1093,25 @@ export const googleLoginService = async (googleUser: {
     });
     if (user) {
       foundUserType = "restaurant";
-      if (!user.verified) {
+
+      // Google-created accounts (no password) are authenticated via Google,
+      // so the email is already verified and no OTP is needed.
+      const isGoogleAccount = !user.password;
+
+      if (!user.verified && !isGoogleAccount) {
         throw new Error("Your account is not verified yet.");
       }
+
       if (!user.agreed) {
-        throw new Error(
-          "You must agree to the Terms and Conditions before logging in.",
-        );
+        const { password: _, ...userWithoutPassword } = user;
+        return {
+          needsTermsAgreement: true,
+          email,
+          name,
+          user: userWithoutPassword,
+          userType: foundUserType,
+          message: "Please accept the Terms and Conditions to continue.",
+        };
       }
     }
   }
@@ -1130,8 +1159,16 @@ export const googleSignupService = async (data: {
   phone?: string;
   tin?: string;
   location?: string;
+  agreed?: boolean;
 }) => {
-  const { email, name, role, phone, tin, location } = data;
+  const { email, name, role, phone, tin, location, agreed } = data;
+
+  // Terms and Conditions must be explicitly accepted before completing signup
+  if (!agreed) {
+    throw new Error(
+      "You must accept the Terms and Conditions to complete your registration.",
+    );
+  }
 
   // Check if email already exists across all tables
   const existingUser = await checkExistingUser(undefined, email);
@@ -1183,9 +1220,9 @@ export const googleSignupService = async (data: {
         tin,
         location: location || undefined,
         role: role as any,
-        password: "", // No password for Google signups - they authenticate via Google
-        verified: false,
-        agreed: false,
+password: "", // No password for Google signups - they authenticate via Google
+        verified: true, // Email is verified by Google, no OTP flow for Google signups
+        agreed: false, // Google user must accept the terms before accessing the dashboard
       },
     });
 
@@ -1193,7 +1230,8 @@ export const googleSignupService = async (data: {
     return {
       user: restaurantWithoutPassword,
       userType: "restaurant",
-      message: "Account created successfully. Please verify your phone number.",
+      message:
+        "Account created successfully. Please accept the terms and conditions.",
     };
   } else {
     throw new Error("Invalid role for Google signup");
