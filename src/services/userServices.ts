@@ -20,6 +20,7 @@ import {
 import { PaginationService } from "./paginationService";
 import { LocationValidationService } from "./location.service";
 import { validateTIN } from "../utils/validateTin";
+import { getFriendlyPrismaError } from "../utils/prismaError";
 import { createNotificationService } from "./notification.services";
 import {
   generateFarmerPIN,
@@ -1139,24 +1140,39 @@ export const googleSignupService = async (data: {
     throw new Error("An account with this email already exists");
   }
 
-  if (role === "FARMER") {
-    const farmer = await prisma.farmer.create({
-      data: {
-        email,
-        name: name || undefined,
-        phone: phone || undefined,
-        location: location || undefined,
-        role: "FARMER",
-        phoneVerified: false,
-      },
-    });
+  // Check if phone already exists across all tables
+  if (phone) {
+    const existingPhone = await checkExistingUser(phone);
+    if (existingPhone) {
+      throw new Error(
+        "This phone number is already registered. Please use a different phone number.",
+      );
+    }
+  }
 
-    const { password: _, ...farmerWithoutPassword } = farmer;
-    return {
-      user: farmerWithoutPassword,
-      userType: "farmer",
-      message: "Account created successfully",
-    };
+  if (role === "FARMER") {
+    try {
+      const farmer = await prisma.farmer.create({
+        data: {
+          email,
+          name: name || undefined,
+          phone: phone || undefined,
+          location: location || undefined,
+          role: "FARMER",
+          phoneVerified: false,
+        },
+      });
+
+      const { password: _, ...farmerWithoutPassword } = farmer;
+      return {
+        user: farmerWithoutPassword,
+        userType: "farmer",
+        message: "Account created successfully",
+      };
+    } catch (error: any) {
+      const friendlyMessage = getFriendlyPrismaError(error);
+      throw new Error(friendlyMessage || `Failed to create account: ${error.message}`);
+    }
   } else if (role === "RESTAURANT" || role === "HOTEL") {
     if (!tin) {
       throw new Error("TIN number is required for restaurant/hotel accounts");
@@ -1175,26 +1191,32 @@ export const googleSignupService = async (data: {
       throw new Error("This TIN is already registered");
     }
 
-    const restaurant = await prisma.restaurant.create({
-      data: {
-        name,
-        email,
-        phone: phone || undefined,
-        tin,
-        location: location || undefined,
-        role: role as any,
-        password: "", // No password for Google signups - they authenticate via Google
-        verified: false,
-        agreed: false,
-      },
-    });
+    try {
+      const restaurant = await prisma.restaurant.create({
+        data: {
+          name,
+          email,
+          phone: phone || undefined,
+          tin,
+          location: location || undefined,
+          role: role as any,
+          password: "", // No password for Google signups - they authenticate via Google
+          verified: false,
+          agreed: false,
+        },
+      });
 
-    const { password: _, ...restaurantWithoutPassword } = restaurant;
-    return {
-      user: restaurantWithoutPassword,
-      userType: "restaurant",
-      message: "Account created successfully. Please verify your phone number.",
-    };
+      const { password: _, ...restaurantWithoutPassword } = restaurant;
+      return {
+        user: restaurantWithoutPassword,
+        userType: "restaurant",
+        message:
+          "Account created successfully. Please verify your phone number.",
+      };
+    } catch (error: any) {
+      const friendlyMessage = getFriendlyPrismaError(error);
+      throw new Error(friendlyMessage || `Failed to create account: ${error.message}`);
+    }
   } else {
     throw new Error("Invalid role for Google signup");
   }
