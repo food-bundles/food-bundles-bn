@@ -1500,11 +1500,6 @@ const sendInvitationEmailTemplate = (
         
         <p>You've been invited to join <strong>FoodBundles Platform</strong>. We're excited to have you on board!</p>
         
-        <div class="invitation-details">
-          <h2>🎯 Your Role & Responsibilities</h2>
-          <p>${roleInfo.description}</p>
-        </div>
-        
         <p>This invitation will expire in <span class="highlight">24 hours</span>.</p>
         
         <div style="text-align: center;">

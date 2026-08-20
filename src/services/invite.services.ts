@@ -54,10 +54,14 @@ export const inviteServices = {
       },
     });
 
+    const clientUrl = process.env.NODE_ENV === "production"
+      ? process.env.CLIENT_PRODUCTION_URL
+      : process.env.FRONTEND_URL || "http://localhost:3000";
+
     return {
       invitation,
       token,
-      inviteUrl: `${process.env.CLIENT_PRODUCTION_URL}/accept-invitation?token=${token}`,
+      inviteUrl: `${clientUrl}/accept-invitation?token=${token}`,
     };
   },
 
@@ -165,7 +169,9 @@ export const inviteServices = {
     return {
       invitation: updatedInvitation,
       token,
-      inviteUrl: `${process.env.CLIENT_PRODUCTION_URL}/signup?token=${token}`,
+      inviteUrl: `${process.env.NODE_ENV === "production"
+        ? process.env.CLIENT_PRODUCTION_URL
+        : process.env.FRONTEND_URL || "http://localhost:3000"}/accept-invitation?token=${token}`,
     };
   },
 

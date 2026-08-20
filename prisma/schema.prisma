@@ -1357,6 +1357,7 @@ enum Role {
   AFFILIATOR
   TRADER
   SUPERUSER
+  MARKET_PRICES
 }
 
 enum SubmissionStatus {
