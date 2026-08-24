@@ -17,8 +17,8 @@ export const createProductCategoryService = async (
     where: { id: categoryData.createdBy },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can create product categories");
+  if (!admin || !['ADMIN', 'SUPERUSER', 'MARKET_PRICES'].includes(admin.role)) {
+    throw new Error("You do not have permission to create product categories");
   }
 
   // Check if category name already exists (case insensitive)
@@ -182,11 +182,9 @@ export const updateProductCategoryService = async (
     where: { id: adminId },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can update product categories");
+  if (!admin || !['ADMIN', 'SUPERUSER', 'MARKET_PRICES'].includes(admin.role)) {
+    throw new Error("You do not have permission to update product categories");
   }
-
-  // Check name uniqueness if name is being updated
   if (updateData.name && updateData.name !== existingCategory.name) {
     const existingName = await prisma.productCategory.findFirst({
       where: {
@@ -312,8 +310,8 @@ export const updateCategoryStatusService = async (
     where: { id: adminId },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can update product categories");
+  if (!admin || !['ADMIN', 'SUPERUSER', 'MARKET_PRICES'].includes(admin.role)) {
+    throw new Error("You do not have permission to update product categories");
   }
 
   // Update multiple categories
