@@ -19,7 +19,7 @@ productCategoryRoutes.get("/active", getActiveProductCategories);
 productCategoryRoutes.patch(
   "/bulk-status",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  checkPermission("ADMIN", "MARKET_PRICES"),
   updateCategoryStatus
 );
 
@@ -27,7 +27,7 @@ productCategoryRoutes.patch(
 productCategoryRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  checkPermission("ADMIN", "MARKET_PRICES"),
   createProductCategory
 );
 
@@ -35,7 +35,7 @@ productCategoryRoutes.post(
 productCategoryRoutes.get(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN", "AGGREGATOR", "LOGISTICS"),
+  checkPermission("ADMIN", "MARKET_PRICES", "AGGREGATOR", "LOGISTICS"),
   getAllProductCategories
 );
 
@@ -46,7 +46,7 @@ productCategoryRoutes.get("/:categoryId", getProductCategoryById);
 productCategoryRoutes.patch(
   "/:categoryId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  checkPermission("ADMIN", "MARKET_PRICES"),
   updateProductCategory
 );
 
@@ -54,7 +54,7 @@ productCategoryRoutes.patch(
 productCategoryRoutes.delete(
   "/:categoryId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  checkPermission("ADMIN", "MARKET_PRICES"),
   deleteProductCategory
 );
 
