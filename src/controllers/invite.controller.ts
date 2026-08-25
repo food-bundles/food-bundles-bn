@@ -1,7 +1,10 @@
 import { Request, Response } from "express";
 import { inviteServices } from "../services/invite.services";
-import { sendInvitationEmail } from "../utils/emailTemplates";
+import { sendInvitationEmail, sendAdminUserCreatedEmail } from "../utils/emailTemplates";
+import { sendMessage } from "../utils/sms.utility";
+import { createNotificationService } from "../services/notification.services";
 import { Role } from "@prisma/client";
+import prisma from "../prisma";
 
 export const inviteController = {
   // Create invitation
@@ -25,17 +28,28 @@ export const inviteController = {
         });
       }
 
+      // Check env vars BEFORE creating invitation
+      if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+        return res.status(500).json({
+          success: false,
+          message: "GOOGLE_EMAIL and GOOGLE_PASSWORD environment variables are not configured",
+        });
+      }
+
       const result = await inviteServices.createInvite({
         email,
         role,
       });
 
-      // Send invitation email
-      await sendInvitationEmail(email, "User", result.inviteUrl, role);
+      // Send invitation email and track result
+      const emailResult = await sendInvitationEmail(email, "User", result.inviteUrl, role);
 
       res.status(201).json({
         success: true,
-        message: "Invitation sent successfully",
+        message: emailResult.success
+          ? "Invitation sent successfully"
+          : "Invitation created but email not sent",
+        emailNotSent: !emailResult.success,
         data: {
           id: result.invitation.id,
           email: result.invitation.email,
@@ -143,6 +157,60 @@ export const inviteController = {
         password,
       });
 
+      // Notify admin: SMS, email, and system notification (fire-and-forget)
+      const adminNotificationErrors: string[] = [];
+
+      // 1. SMS to admin private number
+      const privateReceiver = process.env.PRIVATE_RECEIVER;
+      if (privateReceiver) {
+        sendMessage(
+          `invitation accepted so account created. New user: ${user.username} (${user.email}) with role: ${user.role}`,
+          privateReceiver,
+        ).catch((err) => {
+          console.error("Failed to send admin SMS for invitation accepted:", err);
+          adminNotificationErrors.push("SMS");
+        });
+      }
+
+      // 2. Email to all ADMIN role users
+      prisma.admin
+        .findMany({
+          where: { role: "ADMIN" },
+          select: { email: true, username: true },
+        })
+        .then((admins) => {
+          admins.forEach((admin) => {
+            sendAdminUserCreatedEmail({
+              userType: user.role,
+              userName: user.username,
+              userEmail: user.email || "",
+            }).catch((err) => {
+              console.error(`Failed to send admin email to ${admin.email}:`, err);
+              adminNotificationErrors.push(`Email:${admin.email}`);
+            });
+          });
+        })
+        .catch((err) => {
+          console.error("Failed to fetch admins for notification:", err);
+        });
+
+      // 3. System notification for ADMIN role
+      createNotificationService({
+        title: "Invitation Accepted",
+        message: `invitation accepted so account created. New user: ${user.username} (${user.email}) with role: ${user.role}`,
+        eventType: "USER_SIGNUP",
+        targetType: "ROLE_BASED",
+        targetRole: "ADMIN",
+        metadata: {
+          userId: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+        },
+      }).catch((err) => {
+        console.error("Failed to create system notification for invitation accepted:", err);
+      });
+
       res.status(200).json({
         success: true,
         message: "Invitation accepted successfully",
@@ -160,10 +228,19 @@ export const inviteController = {
   async resendInvite(req: Request, res: Response) {
     try {
       const { id } = req.params;
+
+      // Check env vars BEFORE resending
+      if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
+        return res.status(500).json({
+          success: false,
+          message: "GOOGLE_EMAIL and GOOGLE_PASSWORD environment variables are not configured",
+        });
+      }
+
       const result = await inviteServices.resendInvite(id);
 
-      // Send invitation email
-      await sendInvitationEmail(
+      // Send invitation email and track result
+      const emailResult = await sendInvitationEmail(
         result.invitation.email,
         result.invitation.role,
         result.inviteUrl,
@@ -172,7 +249,10 @@ export const inviteController = {
 
       res.status(200).json({
         success: true,
-        message: "Invitation resent successfully",
+        message: emailResult.success
+          ? "Invitation resent successfully"
+          : "Invitation resent but email not sent",
+        emailNotSent: !emailResult.success,
         data: {
           email: result.invitation.email,
           inviteUrl: result.inviteUrl,
