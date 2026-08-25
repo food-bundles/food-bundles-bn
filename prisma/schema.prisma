@@ -103,6 +103,9 @@ model Restaurant {
   posts              Post[]
   affiliators        Affiliator[]
   walletTransactions WalletTransaction[]
+  VoucherCard        VoucherCard?
+  LoanSession        LoanSession[]
+  CardEnrollmentRequest CardEnrollmentRequest?
 }
 
 model Affiliator {
@@ -355,6 +358,8 @@ model Admin {
   Market                   Market[]
   MarketPriceHistory       MarketPriceHistory[]
   NewsletterCampaign       NewsletterCampaign[]
+  issuedCards              VoucherCard[]         @relation("CardIssuer")
+  approvedSessions         LoanSession[]         @relation("SessionApprover")
 }
 
 model Product {
@@ -1496,6 +1501,155 @@ enum LoanStatus {
   APPROVED
   REJECTED
   SETTLED
+}
+
+// ============================================
+// NEW VOUCHER CARD SYSTEM (PAN-based)
+// ============================================
+
+model VoucherCard {
+  id           String     @id @default(uuid())
+  pan          String     @unique // 16-digit permanent card number
+  restaurantId String     @unique // one card per restaurant
+  status       CardStatus @default(ACTIVE)
+  loanLimit    Float      @default(500000)
+  riskScore    Float?
+  issuedDate   DateTime   @default(now())
+  issuedBy     String? // Admin ID who issued the card
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  restaurant   Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  issuer       Admin?       @relation("CardIssuer", fields: [issuedBy], references: [id])
+  loanSessions LoanSession[]
+
+  @@index([pan])
+  @@index([restaurantId])
+  @@index([status])
+}
+
+model CardEnrollmentRequest {
+  id           String                  @id @default(uuid())
+  restaurantId String                  @unique
+  status       CardEnrollmentStatus    @default(PENDING)
+  requestedAt  DateTime                @default(now())
+  reviewedAt   DateTime?
+  reviewedBy   String?
+  notes        String?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([status])
+}
+
+model LoanSession {
+  id                  String            @id @default(uuid())
+  rrn                 String            @unique // Retrieval Reference Number
+  cardId              String
+  restaurantId        String
+  requestedAmount     Float
+  approvedAmount      Float?
+  approvalPercentage  Float?            @default(100)
+  unlockFeePercentage Float             @default(4.5)
+  unlockFee           Float?
+  unlockStatus        UnlockStatus      @default(LOCKED)
+  unlockPaidAt        DateTime?
+  amountUsed          Float             @default(0)
+  amountRepaid        Float             @default(0)
+  outstandingAmount   Float             @default(0)
+  status              LoanSessionStatus @default(REQUESTED)
+  purpose             String?
+  notes               String?
+  repaymentDays       Int?
+  dueDate             DateTime?
+  approvedBy          String?
+  fundingTraderId     String?
+  requestedAt         DateTime          @default(now())
+  approvedAt          DateTime?
+  unlockedAt          DateTime?
+  closedAt            DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  card           VoucherCard          @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  restaurant     Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  approver       Admin?               @relation("SessionApprover", fields: [approvedBy], references: [id])
+  unlockPayments UnlockFeePayment[]
+  authorizations SessionAuthorization[]
+
+  @@index([rrn])
+  @@index([cardId])
+  @@index([restaurantId])
+  @@index([status])
+  @@index([unlockStatus])
+}
+
+model UnlockFeePayment {
+  id              String        @id @default(uuid())
+  sessionId       String
+  amount          Float
+  paymentMethod   String
+  paymentReference String?
+  phoneNumber     String?
+  status          PaymentStatus @default(PENDING)
+  confirmedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  session LoanSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([status])
+}
+
+model SessionAuthorization {
+  id                String   @id @default(uuid())
+  stan              String   @unique // System Trace Audit Number
+  sessionId         String
+  transactionAmount Float
+  posTerminal       String?
+  responseStatus    String   @default("APPROVED")
+  createdAt         DateTime @default(now())
+
+  session LoanSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([stan])
+  @@index([sessionId])
+}
+
+enum CardStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  DEACTIVATED
+}
+
+enum CardEnrollmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LoanSessionStatus {
+  REQUESTED
+  APPROVED_LOCKED
+  UNLOCK_FEE_PENDING
+  ACTIVE
+  PARTIALLY_USED
+  FULLY_USED
+  CLOSED
+  SETTLED
+  REJECTED
+  OVERDUE
+}
+
+enum UnlockStatus {
+  LOCKED
+  PENDING_PAYMENT
+  UNLOCKED
 }
 
 enum PenaltyStatus {
