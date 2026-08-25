@@ -1718,7 +1718,7 @@ const sendSubscriptionExpiryTemplate = (
         isWarning ? "#f59e0b" : "#ef4444"
       }; }
       .subscription-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #22c55e; }
-      .button { display: inline-block; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
+      .button { display: inline-block; background: linear-gradient(135deg, #22c55e, #16a34a); color: #ffffff !important; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
       .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
       .highlight { color: #22c55e; font-weight: bold; }
     </style>
