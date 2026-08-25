@@ -815,8 +815,7 @@ export async function sendPaymentNotificationEmail(paymentData: {
   };
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -865,8 +864,7 @@ export async function sendPaymentConfirmationEmail(paymentData: {
   orderNumber: string;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -914,8 +912,7 @@ export async function sendPaymentFailedEmail(paymentData: {
   failureReason?: string;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -950,8 +947,7 @@ export async function sendWalletNotificationEmail(
   data: WalletNotificationData,
 ) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -1098,8 +1094,7 @@ export async function sendAdminOrderConfirmationEmail(paymentData: {
     !process.env.GOOGLE_PASSWORD ||
     !process.env.ADMIN_EMAIL
   ) {
-    console.log("Email credentials or admin email not configured");
-    return;
+    throw new Error("GOOGLE_EMAIL, GOOGLE_PASSWORD, and ADMIN_EMAIL environment variables are not configured");
   }
 
   const config = {
@@ -1317,8 +1312,7 @@ export async function sendAdminWalletOTPEmail(data: {
     !process.env.GOOGLE_PASSWORD ||
     !process.env.ADMIN_EMAIL
   ) {
-    console.log("Email credentials or admin email not configured");
-    return;
+    throw new Error("GOOGLE_EMAIL, GOOGLE_PASSWORD, and ADMIN_EMAIL environment variables are not configured");
   }
 
   const config = {
@@ -1363,8 +1357,7 @@ export async function sendLogisticsOrderNotificationEmail(paymentData: {
   orderNumber: string;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   try {
@@ -1487,7 +1480,7 @@ const sendInvitationEmailTemplate = (
       .header { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #ffffff; padding: 30px 20px; text-align: center; }
       .content { padding: 30px; }
       .invitation-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6366f1; }
-      .button { display: inline-block; background: linear-gradient(135deg, #82f163ff, #66e546ff); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
+      .button { display: inline-block; background: linear-gradient(135deg, #82f163ff, #66e546ff); color: #ffffff !important; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
       .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
       .highlight { color: #6366f1; font-weight: bold; }
       .warning { background-color: #fef3c7; color: #92400e; padding: 15px; border-radius: 8px; margin: 15px 0; }
@@ -1601,8 +1594,7 @@ export async function sendAffiliatorWelcomeEmail(
   password: string,
 ) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -1646,10 +1638,9 @@ export async function sendInvitationEmail(
   firstName: string,
   inviteUrl: string,
   userType: string,
-) {
+): Promise<{ success: boolean; error?: string }> {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -1675,8 +1666,10 @@ export async function sendInvitationEmail(
   try {
     await transporter.sendMail(invitationEmail);
     console.log("Invitation email sent successfully");
-  } catch (error) {
+    return { success: true };
+  } catch (error: any) {
     console.error("Failed to send invitation email:", error);
+    return { success: false, error: error.message || "Failed to send invitation email" };
   }
 }
 /**
@@ -1780,8 +1773,7 @@ export async function sendSubscriptionExpiryEmail(
   data: SubscriptionExpiryData,
 ) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -2011,8 +2003,7 @@ export async function sendAdminUserCreatedEmail(data: AdminNotificationData) {
     !process.env.GOOGLE_PASSWORD ||
     !process.env.ADMIN_EMAIL
   ) {
-    console.log("Email credentials or admin email not configured");
-    return;
+    throw new Error("GOOGLE_EMAIL, GOOGLE_PASSWORD, and ADMIN_EMAIL environment variables are not configured");
   }
 
   const config = {
@@ -2049,8 +2040,7 @@ export async function sendAdminSubscriptionPaidEmail(
     !process.env.GOOGLE_PASSWORD ||
     !process.env.ADMIN_EMAIL
   ) {
-    console.log("Email credentials or admin email not configured");
-    return;
+    throw new Error("GOOGLE_EMAIL, GOOGLE_PASSWORD, and ADMIN_EMAIL environment variables are not configured");
   }
 
   const config = {
@@ -2090,8 +2080,7 @@ export async function sendAdminVoucherAppliedEmail(
     !process.env.GOOGLE_PASSWORD ||
     !process.env.ADMIN_EMAIL
   ) {
-    console.log("Email credentials or admin email not configured");
-    return;
+    throw new Error("GOOGLE_EMAIL, GOOGLE_PASSWORD, and ADMIN_EMAIL environment variables are not configured");
   }
 
   const config = {
@@ -2130,8 +2119,7 @@ export async function sendAdminVoucherApprovedEmail(
     !process.env.GOOGLE_PASSWORD ||
     !process.env.ADMIN_EMAIL
   ) {
-    console.log("Email credentials or admin email not configured");
-    return;
+    throw new Error("GOOGLE_EMAIL, GOOGLE_PASSWORD, and ADMIN_EMAIL environment variables are not configured");
   }
 
   const config = {
@@ -2232,8 +2220,7 @@ export async function sendPriceUpdateEmail(
   data: PriceUpdateData,
 ) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -2321,8 +2308,7 @@ export async function sendTraderLoanApprovalEmail(data: {
   walletBalance: number;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -2408,8 +2394,7 @@ export async function sendTraderDelegationOTPEmail(data: {
   commission: number;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -2550,8 +2535,7 @@ export async function sendNewsletterWelcomeEmail(data: {
   name: string;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
@@ -2588,8 +2572,7 @@ export async function sendNewsletterCampaignEmail(data: {
   content: string;
 }) {
   if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
-    console.log("Email credentials not configured");
-    return;
+    throw new Error("Email not sent: EVs are not configured.");
   }
 
   const config = {
