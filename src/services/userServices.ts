@@ -10,7 +10,7 @@ import {
   IUpdateRestaurantData,
 } from "../types/userTypes";
 import { comparePassword, hashPassword } from "../utils/password";
-import { getUserByEmail } from "./userGets";
+import { getUserByEmail, getUserByPhone } from "./userGets";
 import {
   sendEmail,
   sendPasswordResetTemplate,
@@ -18,6 +18,7 @@ import {
   verifyResetToken,
 } from "../utils/passwordReset";
 import { PaginationService } from "./paginationService";
+import { OTPService } from "./otp.service";
 import { LocationValidationService } from "./location.service";
 import { validateTIN } from "../utils/validateTin";
 import { createNotificationService } from "./notification.services";
@@ -1321,6 +1322,72 @@ export const resetPasswordService = async (
       });
     } else {
       throw new Error("Invalid user type");
+    }
+
+    return {
+      message: "Password has been reset successfully",
+    };
+  } catch (error: any) {
+    throw new Error(`Failed to reset password: ${error.message}`);
+  }
+};
+
+// PASSWORD RESET VIA PHONE SERVICES
+export const requestPasswordResetViaPhoneService = async (phone: string) => {
+  const user = await getUserByPhone(phone);
+
+  if (!user) {
+    throw new Error("No account found with this phone number");
+  }
+
+  const result = await OTPService.sendPasswordResetOTP(phone);
+
+  if (!result.success) {
+    throw new Error(result.message);
+  }
+
+  return {
+    message: "Password reset OTP has been sent to your phone number",
+  };
+};
+
+export const resetPasswordViaPhoneService = async (
+  phone: string,
+  otp: string,
+  newPassword: string,
+) => {
+  const user = await getUserByPhone(phone);
+
+  if (!user) {
+    throw new Error("No account found with this phone number");
+  }
+
+  const otpResult = await OTPService.verifyPasswordResetOTP(phone, otp);
+
+  if (!otpResult.success) {
+    throw new Error(otpResult.message);
+  }
+
+  const hashedPassword = await hashPassword(newPassword);
+
+  try {
+    if (user.userType === "FARMER") {
+      await prisma.farmer.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      });
+    } else if (user.userType === "RESTAURANT") {
+      await prisma.restaurant.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      });
+    } else if (user.userType === "AFFILIATOR") {
+      await prisma.affiliator.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      });
+    } else {
+      throw new Error("Password reset via phone is not supported for this account type");
     }
 
     return {
