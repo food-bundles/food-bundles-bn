@@ -232,4 +232,36 @@ export class OTPService {
       };
     }
   }
+
+  static async sendPasswordResetOTP(
+    phone: string,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const otp = this.generateOTP();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      await prisma.oTP.deleteMany({
+        where: { phone, purpose: "PASSWORD_RESET", verified: false },
+      });
+
+      await prisma.oTP.create({
+        data: { phone, otp, purpose: "PASSWORD_RESET", expiresAt },
+      });
+
+      await sendMessage(
+        `Your FoodBundles password reset OTP is: ${otp}. Valid for 10 minutes.`,
+        phone,
+      );
+      return { success: true, message: "OTP sent successfully" };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  }
+
+  static async verifyPasswordResetOTP(
+    phone: string,
+    otp: string,
+  ): Promise<{ success: boolean; message: string }> {
+    return this.verifyOTP(phone, otp, "PASSWORD_RESET");
+  }
 }
