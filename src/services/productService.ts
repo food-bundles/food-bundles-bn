@@ -418,6 +418,20 @@ export const createProductFromSubmissionService = async ({
     };
   });
 
+  await createNotificationService({
+    title: "Product Approved",
+    message: `Your product "${submission.productName}" has been approved and is now available`,
+    eventType: "PRODUCT_APPROVED",
+    targetType: "SPECIFIC_USER",
+    targetId: submission.farmerId,
+    metadata: {
+      productId: result.product.id,
+      productName: submission.productName,
+      submissionId: submission.id,
+      approvedBy: productData.createdBy,
+    },
+  });
+
   return result;
 };
 

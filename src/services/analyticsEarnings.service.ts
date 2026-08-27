@@ -160,6 +160,49 @@ export class AnalyticsEarningsService {
     }
   }
 
+  /**
+   * Month-bucketed submissions + earnings for charting. Submission counts
+   * include all statuses (bucketed by submittedAt); earnings only sum
+   * PAID submissions, so the two series answer different questions
+   * (activity volume vs. realized income) on a shared month axis.
+   */
+  static async getEarningsTimeSeries(
+    phoneNumber: string,
+    months: number = 12
+  ): Promise<{ month: string; submissions: number; earnings: number }[]> {
+    try {
+      const farmer = await prisma.farmer.findUnique({
+        where: { phone: phoneNumber },
+      });
+
+      if (!farmer) return [];
+
+      const clampedMonths = Math.min(Math.max(months, 1), 12);
+
+      const rows = await prisma.$queryRaw`
+        SELECT
+          EXTRACT(YEAR FROM "submittedAt") as year,
+          EXTRACT(MONTH FROM "submittedAt") as month,
+          COUNT(*) as submissions,
+          COALESCE(SUM(CASE WHEN "status" = 'PAID' THEN "totalAmount" ELSE 0 END), 0) as earnings
+        FROM "FarmerSubmission"
+        WHERE "farmerId" = ${farmer.id}
+          AND "submittedAt" >= NOW() - (${clampedMonths} || ' months')::interval
+        GROUP BY EXTRACT(YEAR FROM "submittedAt"), EXTRACT(MONTH FROM "submittedAt")
+        ORDER BY year, month
+      `;
+
+      return (rows as any[]).map((row) => ({
+        month: `${Number(row.year)}-${String(Number(row.month)).padStart(2, "0")}`,
+        submissions: Number(row.submissions),
+        earnings: Number(row.earnings),
+      }));
+    } catch (error) {
+      console.error("Earnings time series error:", error);
+      return [];
+    }
+  }
+
   private static async getEarningsForPeriod(
     farmerId: string,
     startDate: Date,

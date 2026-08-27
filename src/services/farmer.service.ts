@@ -4,6 +4,7 @@ import { PaginationService } from "./paginationService";
 import prisma from "../prisma";
 import { LocationValidationService } from "./location.service";
 import { ProductSubmissionInput } from "../types/productTypes";
+import { createNotificationService } from "./notification.services";
 
 // Interface for farmer feedback request
 export interface IFarmerFeedbackRequest {
@@ -119,28 +120,51 @@ export const submitFarmerFeedbackService = async (
     },
   });
 
-  // Send notification to aggregator about farmer's feedback
-  if (existingSubmission.aggregator?.phone) {
-    let message = `🌾 Farmer feedback on ${existingSubmission.productName}:\n`;
+  // Notify the assigned aggregator about the farmer's feedback, or ADMIN role-wide if unassigned
+  const feedbackTitle: Record<typeof feedbackData.feedbackStatus, string> = {
+    PENDING: "Farmer Feedback Received",
+    ACCEPTED: "Farmer Accepted Offer",
+    REJECTED: "Farmer Rejected Offer",
+    EXTENDED: "Farmer Requested Negotiation",
+  };
 
-    switch (feedbackData.feedbackStatus) {
-      case "ACCEPTED":
-        message += `ACCEPTED - Ready for payment\nQty: ${existingSubmission.acceptedQty}kg at ${existingSubmission.acceptedPrice}RWF/kg`;
-        break;
-      case "REJECTED":
-        message += `REJECTED - Purchase declined\n${
-          feedbackData.notes ? `Reason: ${feedbackData.notes}` : ""
-        }`;
-        break;
-      case "EXTENDED":
-        message += `💬 NEGOTIATION REQUESTED\n`;
-        if (feedbackData.counterOffer)
-          message += `Counter price: ${feedbackData.counterOffer}RWF/kg\n`;
-        if (feedbackData.counterQty)
-          message += `Counter qty: ${feedbackData.counterQty}kg\n`;
-        if (feedbackData.notes) message += `Notes: ${feedbackData.notes}`;
-        break;
-    }
+  const feedbackMessage: Record<typeof feedbackData.feedbackStatus, string> = {
+    PENDING: `${existingSubmission.productName}: feedback pending.`,
+    ACCEPTED: `Farmer accepted the offer on ${existingSubmission.productName} — Qty: ${existingSubmission.acceptedQty}, Price: ${existingSubmission.acceptedPrice} RWF. Ready for approval.`,
+    REJECTED: `Farmer rejected the offer on ${existingSubmission.productName}.${
+      feedbackData.notes ? ` Reason: ${feedbackData.notes}` : ""
+    }`,
+    EXTENDED: `Farmer proposed a counter-offer on ${existingSubmission.productName}${
+      feedbackData.counterOffer ? ` — Price: ${feedbackData.counterOffer} RWF` : ""
+    }${feedbackData.counterQty ? `, Qty: ${feedbackData.counterQty}` : ""}.${
+      feedbackData.notes ? ` Notes: ${feedbackData.notes}` : ""
+    }`,
+  };
+
+  const notificationPayload = {
+    title: feedbackTitle[feedbackData.feedbackStatus],
+    message: feedbackMessage[feedbackData.feedbackStatus],
+    eventType: "SUBMISSION_FEEDBACK_RECEIVED",
+    metadata: {
+      submissionId: updatedSubmission.id,
+      productName: existingSubmission.productName,
+      feedbackStatus: feedbackData.feedbackStatus,
+      farmerId: existingSubmission.farmerId,
+    },
+  };
+
+  if (existingSubmission.aggregatorId) {
+    await createNotificationService({
+      ...notificationPayload,
+      targetType: "SPECIFIC_USER",
+      targetId: existingSubmission.aggregatorId,
+    });
+  } else {
+    await createNotificationService({
+      ...notificationPayload,
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+    });
   }
 
   return updatedSubmission;
@@ -359,6 +383,35 @@ export const updateFarmerFeedbackService = async (
       },
     },
   });
+
+  const effectiveStatus = updatedSubmission.farmerFeedbackStatus ?? "PENDING";
+  const updateNotificationPayload = {
+    title: "Farmer Updated Feedback",
+    message: `Farmer updated their feedback on ${existingSubmission.productName} to ${effectiveStatus}.${
+      feedbackData.notes ? ` Notes: ${feedbackData.notes}` : ""
+    }`,
+    eventType: "SUBMISSION_FEEDBACK_RECEIVED",
+    metadata: {
+      submissionId: updatedSubmission.id,
+      productName: existingSubmission.productName,
+      feedbackStatus: effectiveStatus,
+      farmerId: existingSubmission.farmerId,
+    },
+  };
+
+  if (existingSubmission.aggregatorId) {
+    await createNotificationService({
+      ...updateNotificationPayload,
+      targetType: "SPECIFIC_USER",
+      targetId: existingSubmission.aggregatorId,
+    });
+  } else {
+    await createNotificationService({
+      ...updateNotificationPayload,
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+    });
+  }
 
   return updatedSubmission;
 };
