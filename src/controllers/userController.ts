@@ -19,6 +19,8 @@ import {
   acceptTermsService,
   requestPasswordResetService,
   resetPasswordService,
+  requestPasswordResetViaPhoneService,
+  resetPasswordViaPhoneService,
   createFarmerByAdminService,
   createRestaurantByAdminService,
   googleLoginService,
@@ -727,6 +729,91 @@ export class UserController {
       }
 
       const result = await resetPasswordService(token, newPassword);
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static requestPasswordResetViaPhone = async (req: Request, res: Response) => {
+    try {
+      const { phone } = req.body;
+
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number is required",
+        });
+      }
+
+      const result = await requestPasswordResetViaPhoneService(phone);
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static resetPasswordViaPhone = async (req: Request, res: Response) => {
+    try {
+      const { phone, otp, newPassword } = req.body;
+
+      if (!phone || !otp || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number, OTP, and new password are required",
+        });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 8 characters long",
+        });
+      }
+
+      if (!/(?=.*[a-z])/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one lowercase letter",
+        });
+      }
+
+      if (!/(?=.*[A-Z])/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one uppercase letter",
+        });
+      }
+
+      if (!/(?=.*\d)/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one number",
+        });
+      }
+
+      if (!/(?=.*[@$!%*?&])/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one special character (@$!%*?&)",
+        });
+      }
+
+      const result = await resetPasswordViaPhoneService(phone, otp, newPassword);
 
       res.status(200).json({
         success: true,

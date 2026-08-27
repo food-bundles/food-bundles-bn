@@ -15,6 +15,9 @@ import {
   exportPriceHistory,
   exportComparison,
   getLowestPriceComparison,
+  bulkUpdateMarketStatus,
+  bulkDeleteMarkets,
+  bulkDeletePriceHistory,
 } from "../controllers/market.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -29,6 +32,28 @@ marketRoutes.post(
 );
 
 marketRoutes.get("/", isAuthenticated, getAllMarkets);
+
+// Bulk operations (must be before /:marketId routes)
+marketRoutes.patch(
+  "/bulk-status",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  bulkUpdateMarketStatus,
+);
+
+marketRoutes.delete(
+  "/bulk",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  bulkDeleteMarkets,
+);
+
+marketRoutes.delete(
+  "/prices/bulk",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  bulkDeletePriceHistory,
+);
 
 marketRoutes.get("/:marketId", isAuthenticated, getMarketById);
 

@@ -501,6 +501,58 @@ export const getMarketPricesByProductService = async (filters: {
   };
 };
 
+// Bulk update market status (activate/deactivate)
+export const bulkUpdateMarketStatusService = async (
+  marketIds: string[],
+  isActive: boolean,
+) => {
+  if (!marketIds || marketIds.length === 0) {
+    throw new Error("Market IDs array is required");
+  }
+
+  const result = await prisma.market.updateMany({
+    where: { id: { in: marketIds } },
+    data: { isActive },
+  });
+
+  return {
+    message: `${result.count} market(s) ${isActive ? "activated" : "deactivated"} successfully`,
+    updatedCount: result.count,
+  };
+};
+
+// Bulk delete markets
+export const bulkDeleteMarketsService = async (marketIds: string[]) => {
+  if (!marketIds || marketIds.length === 0) {
+    throw new Error("Market IDs array is required");
+  }
+
+  const result = await prisma.market.deleteMany({
+    where: { id: { in: marketIds } },
+  });
+
+  return {
+    message: `${result.count} market(s) deleted successfully`,
+    deletedCount: result.count,
+  };
+};
+
+// Bulk delete price history
+export const bulkDeletePriceHistoryService = async (historyIds: string[]) => {
+  if (!historyIds || historyIds.length === 0) {
+    throw new Error("History IDs array is required");
+  }
+
+  const result = await prisma.marketPriceHistory.deleteMany({
+    where: { id: { in: historyIds } },
+  });
+
+  return {
+    message: `${result.count} price record(s) deleted successfully`,
+    deletedCount: result.count,
+  };
+};
+
 // Export markets to CSV/Excel
 export const exportMarketsService = async (format: string = 'csv') => {
   const markets = await prisma.market.findMany({
