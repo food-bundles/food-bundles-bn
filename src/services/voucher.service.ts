@@ -2648,7 +2648,6 @@ export const processRepaymentPaymentService = async (data: {
           currency: "RWF",
           clientIp: "",
           deviceFingerprint: "62wd23423rq324323qew1",
-          narration: `Voucher repayment for ${data.voucherId}`,
         });
 
       case "CASH":
@@ -2765,7 +2764,6 @@ async function processBankTransfer({
   currency = "RWF",
   clientIp,
   deviceFingerprint,
-  narration,
 }: any) {
   try {
     const payload = {
@@ -2776,7 +2774,6 @@ async function processBankTransfer({
       currency: currency,
       client_ip: clientIp,
       device_fingerprint: deviceFingerprint,
-      narration: narration,
       redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
     };
 

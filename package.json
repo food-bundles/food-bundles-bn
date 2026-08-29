@@ -8,6 +8,7 @@
     "dev": "nodemon --exec ts-node src/index.ts",
     "ussd": "npx ngrok http 4000",
     "build": "npx prisma generate && tsc",
+    "db:migrate:deploy": "npx prisma migrate deploy",
     "db:push": "npx prisma db push",
     "generate": "npx prisma generate",
     "seed": "ts-node prisma/seed.ts",

@@ -14,7 +14,6 @@ import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import { wsManager } from "../index";
 import { OrderStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
 import { createNotificationService } from "../services/notification.services";
-import { generateEBMInvoiceService } from "../services/order.services";
 import { rollbackSubscriptionPaymentService } from "../services/subscription.service";
 
 // Process wallet transactions with WebSocket notification
@@ -197,9 +196,6 @@ async function processVoucherRepaymentPayment(
   console.log("Found matching voucher repayment:", repaymentTransaction.id);
 
   if (status === "successful") {
-    let isFullyPaid = false;
-    let orderId: string | null = null;
-
     await retryDatabaseOperation(async () => {
       return await prisma.$transaction(async (tx) => {
         // Update voucher credit for successful payment
@@ -267,37 +263,11 @@ async function processVoucherRepaymentPayment(
               data: { status: "SETTLED" },
             });
 
-            isFullyPaid = true;
             console.log(`Loan ${repaymentTransaction.loanId} fully settled`);
-
-            // Get order ID from voucher transactions if loan is fully paid
-            const voucherTransaction = await tx.voucherTransaction.findFirst({
-              where: { voucher: { loanId: repaymentTransaction.loanId } },
-              orderBy: { createdAt: "desc" },
-            });
-
-            if (voucherTransaction?.orderId) {
-              orderId = voucherTransaction.orderId;
-            }
           }
         }
       });
     });
-
-    // Generate EBM invoice if loan is fully paid and linked to an order
-    if (isFullyPaid && orderId) {
-      try {
-        await generateEBMInvoiceService(orderId);
-        console.log(
-          `EBM invoice generated for order ${orderId} after loan settlement`,
-        );
-      } catch (error) {
-        console.error(
-          `Failed to generate EBM invoice for order ${orderId}:`,
-          error,
-        );
-      }
-    }
 
     // Broadcast voucher repayment success
     try {
@@ -787,18 +757,6 @@ async function processCheckoutPayment(
     });
 
     console.log(`Checkout payment failed: ${orderData.id}`);
-  }
-
-  // Generate invoice when status is successful
-  if (status === "successful") {
-    try {
-      await generateEBMInvoiceService(orderData.id);
-      console.log(`Generated invoice for order ${orderData.id}`);
-    } catch (invoiceError) {
-      console.error(
-        `Failed to generate invoice for order ${orderData.id}: ${invoiceError}`,
-      );
-    }
   }
 
   return orderData;

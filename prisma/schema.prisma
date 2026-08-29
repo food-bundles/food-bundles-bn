@@ -1202,6 +1202,33 @@ model ContactSubmission {
 }
 
 // ============================================
+// SUPPORT REQUEST SCHEMA
+// ============================================
+
+model SupportRequest {
+  id               String   @id @default(uuid())
+  ticketNumber     String   @unique
+  name             String
+  email            String
+  subject          String
+  category         String // orders, delivery, payments, account, products, refunds, technical, other
+  severity         String? // low, medium, high, critical
+  preferredContact String   @default("email") // email, phone, whatsapp
+  description      String
+  screenshots      String[] @default([]) // URLs to uploaded images
+  status           String   @default("open") // open, in_progress, resolved, closed
+  response         String?
+  respondedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("support_requests")
+  @@index([email])
+  @@index([status])
+  @@index([ticketNumber])
+}
+
+// ============================================
 // PROMO CODE SCHEMA
 // ============================================
 

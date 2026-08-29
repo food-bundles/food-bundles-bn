@@ -12,7 +12,8 @@ import {
   getOrderByNumber,
   reOrderFromExistingOrder,
   testWebSocket,
-  generateEBMInvoice,
+  editOrder,
+  sendPaymentLink,
 } from "../controllers/order.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -117,15 +118,26 @@ orderRoutes.post(
 );
 
 /**
- * Generate EBM invoice for an order
- * POST /orders/:orderId/generate-ebm-invoice
- * Access: Admin only
+ * Edit order items, quantities, and prices
+ * PATCH /orders/:orderId/edit
+ * Access: Restaurant (own orders), Affiliator (own orders), or Admin (any order)
+ */
+orderRoutes.patch(
+  "/:orderId/edit",
+  isAuthenticated,
+  checkPermission("ADMIN", "RESTAURANT", "AFFILIATOR"),
+  editOrder
+);
+
+/**
+ * Send/retry payment link for an order
+ * POST /orders/:orderId/send-payment-link
+ * Access: Restaurant (own orders) or Admin (any order)
  */
 orderRoutes.post(
-  "/:orderId/generate-ebm-invoice",
+  "/:orderId/send-payment-link",
   isAuthenticated,
-  checkPermission("ADMIN"),
-  generateEBMInvoice
+  sendPaymentLink
 );
 
 /**
