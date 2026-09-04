@@ -35,8 +35,14 @@ export const createProductCategory = async (req: Request, res: Response) => {
       data: productCategory,
     });
   } catch (error: any) {
+    if (error.message === "Product category name already exists") {
+      return res.status(409).json({ message: error.message });
+    }
+    if (error.message?.includes("permission")) {
+      return res.status(403).json({ message: error.message });
+    }
     res.status(500).json({
-      message: error.message || "Failed to create product category",
+      message: "Failed to create product category",
     });
   }
 };
