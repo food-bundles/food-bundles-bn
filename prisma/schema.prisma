@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Farmer {
@@ -1508,6 +1507,7 @@ enum OTPPurpose {
   RESTAURANT_SIGNUP
   VOUCHER_CHECKOUT
   ADMIN_WALLET_OPERATION
+  PASSWORD_RESET
 }
 
 enum NotificationEvent {

@@ -14,6 +14,9 @@ import {
   exportMarketsService,
   exportPriceHistoryService,
   exportComparisonService,
+  bulkUpdateMarketStatusService,
+  bulkDeleteMarketsService,
+  bulkDeletePriceHistoryService,
 } from "../services/market.service";
 
 // Create market
@@ -305,6 +308,94 @@ export const deleteMarketPriceHistory = async (req: Request, res: Response) => {
   }
 };
 
+// Bulk update market status (activate/deactivate)
+export const bulkUpdateMarketStatus = async (req: Request, res: Response) => {
+  try {
+    const { marketIds, isActive } = req.body;
+
+    if (!marketIds || !Array.isArray(marketIds) || marketIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Market IDs array is required",
+      });
+    }
+
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "isActive boolean value is required",
+      });
+    }
+
+    const result = await bulkUpdateMarketStatusService(marketIds, isActive);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: { updatedCount: result.updatedCount },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Bulk delete markets
+export const bulkDeleteMarkets = async (req: Request, res: Response) => {
+  try {
+    const { marketIds } = req.body;
+
+    if (!marketIds || !Array.isArray(marketIds) || marketIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Market IDs array is required",
+      });
+    }
+
+    const result = await bulkDeleteMarketsService(marketIds);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: { deletedCount: result.deletedCount },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Bulk delete price history
+export const bulkDeletePriceHistory = async (req: Request, res: Response) => {
+  try {
+    const { historyIds } = req.body;
+
+    if (!historyIds || !Array.isArray(historyIds) || historyIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "History IDs array is required",
+      });
+    }
+
+    const result = await bulkDeletePriceHistoryService(historyIds);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: { deletedCount: result.deletedCount },
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // Export markets
 export const exportMarkets = async (req: Request, res: Response) => {
   try {
@@ -364,10 +455,8 @@ export const getLowestPriceComparison = async (req: Request, res: Response) => {
       limit: limit ? parseInt(limit as string) : 50,
     });
 
-    // Filter where ourPrice < marketPrice
-    const lowestPrices = result.history.filter(
-      (item: any) => item.ourPrice < item.marketPrice
-    ).slice(0, limit ? parseInt(limit as string) : 5);
+    // Get the limited number of most recent prices
+    const lowestPrices = result.history.slice(0, limit ? parseInt(limit as string) : 5);
 
     res.status(200).json({
       success: true,

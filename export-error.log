@@ -1,0 +1,40 @@
+PrismaClientValidationError: 
+Invalid `prisma.walletTransaction.findMany()` invocation:
+
+{
+  where: {
+    type: "WALLET_TOPUP"
+          ~~~~~~~~~~~~~~
+  },
+  select: {
+    flwTxRef: true,
+    amount: true,
+    paymentMethod: true,
+    status: true,
+    description: true,
+    createdAt: true,
+    wallet: {
+      select: {
+        restaurant: {
+          select: {
+            name: true,
+            tin: true
+          }
+        }
+      }
+    }
+  },
+  orderBy: {
+    createdAt: "desc"
+  }
+}
+
+Invalid value for argument `type`. Expected WalletTransactionType.
+    at throwValidationException (C:\Users\muvunyi\Documents\CODE\FOODBUNDLES\food-bundles-bn\node_modules\@prisma\client\src\runtime\core\errorRendering\throwValidationException.ts:46:9)
+    at Jr.handleRequestError (C:\Users\muvunyi\Documents\CODE\FOODBUNDLES\food-bundles-bn\node_modules\@prisma\client\src\runtime\RequestHandler.ts:211:7)
+    at Jr.handleAndLogRequestError (C:\Users\muvunyi\Documents\CODE\FOODBUNDLES\food-bundles-bn\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at Jr.request (C:\Users\muvunyi\Documents\CODE\FOODBUNDLES\food-bundles-bn\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async a (C:\Users\muvunyi\Documents\CODE\FOODBUNDLES\food-bundles-bn\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:1014:24)
+    at async exportDataService (C:\Users\muvunyi\Documents\CODE\FOODBUNDLES\food-bundles-bn\src\services\export.services.ts:825:19)
+    at async exportData (C:\Users\muvunyi\Documents\CODE\FOODBUNDLES\food-bundles-bn\src\controllers\export.controller.ts:82:30)

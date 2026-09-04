@@ -19,8 +19,12 @@ import {
   acceptTermsService,
   requestPasswordResetService,
   resetPasswordService,
+  requestPasswordResetViaPhoneService,
+  resetPasswordViaPhoneService,
   createFarmerByAdminService,
   createRestaurantByAdminService,
+  googleLoginService,
+  googleSignupService,
 } from "../services/userServices";
 import {
   getUserById,
@@ -474,6 +478,135 @@ export class UserController {
     }
   };
 
+  static googleLogin = async (req: Request, res: Response) => {
+    try {
+      const { credential } = req.body;
+
+      if (!credential) {
+        return res.status(400).json({
+          success: false,
+          message: "Google credential is required",
+        });
+      }
+
+      // Verify the Google ID token
+      const { OAuth2Client } = require("google-auth-library");
+      const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+      const ticket = await client.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+
+      const payload = ticket.getPayload();
+      if (!payload) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid Google credential",
+        });
+      }
+
+      const { email, name, sub: googleId } = payload;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: "Email not provided by Google",
+        });
+      }
+
+      const result = await googleLoginService({
+        email,
+        name: name || "",
+        googleId,
+      });
+
+      // If user not found, return for frontend registration flow
+      if (result.userNotFound) {
+        return res.status(200).json({
+          success: true,
+          userNotFound: true,
+          email: result.email,
+          name: result.name,
+          message: result.message,
+        });
+      }
+
+      // If user has not accepted the terms yet, return for frontend to
+      // redirect them to the terms agreement page instead of logging in
+      if (result.needsTermsAgreement) {
+        return res.status(200).json({
+          success: true,
+          needsTermsAgreement: true,
+          email: result.email,
+          name: result.name,
+          message: result.message,
+        });
+      }
+
+      // User found, generate JWT
+      const user = result.user;
+      const token = generateToken({ id: user.id });
+
+      res.status(200).json({
+        success: true,
+        message: "Google login successful",
+        token,
+        data: {
+          user,
+          userType: result.userType,
+        },
+      });
+    } catch (error: any) {
+      console.error("Google login error:", error);
+      res.status(401).json({
+        success: false,
+        message: error.message || "Google login failed",
+      });
+    }
+  };
+
+  static googleSignup = async (req: Request, res: Response) => {
+    try {
+      const { email, name, role, phone, tin, location } = req.body;
+
+      if (!email || !role) {
+        return res.status(400).json({
+          success: false,
+          message: "Email and role are required",
+        });
+      }
+
+      const result = await googleSignupService({
+        email,
+        name,
+        role,
+        phone,
+        tin,
+        location,
+      });
+
+      const user = result.user;
+      const token = generateToken({ id: user.id });
+
+      res.status(201).json({
+        success: true,
+        message: result.message,
+        token,
+        data: {
+          user,
+          userType: result.userType,
+        },
+      });
+    } catch (error: any) {
+      console.error("Google signup error:", error);
+      res.status(400).json({
+        success: false,
+        message: error.message || "Google signup failed",
+      });
+    }
+  };
+
   static me = async (req: Request, res: Response) => {
     try {
       // Get token from Authorization header
@@ -560,14 +693,127 @@ export class UserController {
         });
       }
 
-      if (newPassword.length < 6) {
+      if (newPassword.length < 8) {
         return res.status(400).json({
           success: false,
-          message: "Password must be at least 6 characters long",
+          message: "Password must be at least 8 characters long",
+        });
+      }
+
+      if (!/(?=.*[a-z])/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one lowercase letter",
+        });
+      }
+
+      if (!/(?=.*[A-Z])/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one uppercase letter",
+        });
+      }
+
+      if (!/(?=.*\d)/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one number",
+        });
+      }
+
+      if (!/(?=.*[@$!%*?&])/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one special character (@$!%*?&)",
         });
       }
 
       const result = await resetPasswordService(token, newPassword);
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static requestPasswordResetViaPhone = async (req: Request, res: Response) => {
+    try {
+      const { phone } = req.body;
+
+      if (!phone) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number is required",
+        });
+      }
+
+      const result = await requestPasswordResetViaPhoneService(phone);
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  };
+
+  static resetPasswordViaPhone = async (req: Request, res: Response) => {
+    try {
+      const { phone, otp, newPassword } = req.body;
+
+      if (!phone || !otp || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number, OTP, and new password are required",
+        });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 8 characters long",
+        });
+      }
+
+      if (!/(?=.*[a-z])/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one lowercase letter",
+        });
+      }
+
+      if (!/(?=.*[A-Z])/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one uppercase letter",
+        });
+      }
+
+      if (!/(?=.*\d)/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one number",
+        });
+      }
+
+      if (!/(?=.*[@$!%*?&])/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must contain at least one special character (@$!%*?&)",
+        });
+      }
+
+      const result = await resetPasswordViaPhoneService(phone, otp, newPassword);
 
       res.status(200).json({
         success: true,

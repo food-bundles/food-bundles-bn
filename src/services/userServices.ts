@@ -10,7 +10,7 @@ import {
   IUpdateRestaurantData,
 } from "../types/userTypes";
 import { comparePassword, hashPassword } from "../utils/password";
-import { getUserByEmail } from "./userGets";
+import { getUserByEmail, getUserByPhone } from "./userGets";
 import {
   sendEmail,
   sendPasswordResetTemplate,
@@ -18,6 +18,7 @@ import {
   verifyResetToken,
 } from "../utils/passwordReset";
 import { PaginationService } from "./paginationService";
+import { OTPService } from "./otp.service";
 import { LocationValidationService } from "./location.service";
 import { validateTIN } from "../utils/validateTin";
 import { createNotificationService } from "./notification.services";
@@ -83,9 +84,17 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
     sector,
     cell,
     village,
+    agreed,
   } = farmerData;
 
   console.log("Received farmer data:---", farmerData);
+
+  // Terms and Conditions must be explicitly accepted before completing signup
+  if (!agreed) {
+    throw new Error(
+      "You must accept the Terms and Conditions to complete your registration.",
+    );
+  }
 
   if (!phone && !email) {
     throw new Error("Either phone or email is required");
@@ -375,7 +384,15 @@ export const createRestaurantService = async (
     cell,
     village,
     role = "RESTAURANT", // Default to RESTAURANT if not specified
+    agreed,
   } = restaurantData;
+
+  // Terms and Conditions must be explicitly accepted before completing signup
+  if (!agreed) {
+    throw new Error(
+      "You must accept the Terms and Conditions to complete your registration.",
+    );
+  }
 
   // Require fields
   if (!name || !password) {
@@ -447,6 +464,7 @@ export const createRestaurantService = async (
         cell,
         village,
         role: role as any, // Set the role (RESTAURANT or HOTEL)
+        agreed: true, // Terms accepted explicitly on the signup form
       },
     });
 
@@ -1053,6 +1071,174 @@ export const loginService = async (loginData: ILoginData) => {
   };
 };
 
+// GOOGLE LOGIN SERVICE
+export const googleLoginService = async (googleUser: {
+  email: string;
+  name: string;
+  googleId: string;
+}) => {
+  const { email, name, googleId } = googleUser;
+
+  let user: any = null;
+  let foundUserType = "";
+
+  // Search by email across all user tables (same order as loginService)
+  user = await prisma.farmer.findFirst({
+    where: { email },
+  });
+  if (user) foundUserType = "farmer";
+
+  if (!user) {
+    user = await prisma.restaurant.findFirst({
+      where: { email },
+    });
+    if (user) {
+      foundUserType = "restaurant";
+
+      // Google-created accounts (no password) are authenticated via Google,
+      // so the email is already verified and no OTP is needed.
+      const isGoogleAccount = !user.password;
+
+      if (!user.verified && !isGoogleAccount) {
+        throw new Error("Your account is not verified yet.");
+      }
+
+      if (!user.agreed) {
+        const { password: _, ...userWithoutPassword } = user;
+        return {
+          needsTermsAgreement: true,
+          email,
+          name,
+          user: userWithoutPassword,
+          userType: foundUserType,
+          message: "Please accept the Terms and Conditions to continue.",
+        };
+      }
+    }
+  }
+
+  if (!user) {
+    user = await prisma.affiliator.findFirst({
+      where: { email },
+    });
+    if (user) foundUserType = "affiliator";
+  }
+
+  if (!user) {
+    user = await prisma.admin.findFirst({
+      where: { email },
+    });
+    if (user) foundUserType = "admin";
+  }
+
+  // If user not found, return indication for frontend to handle registration
+  if (!user) {
+    return {
+      userNotFound: true,
+      email,
+      name,
+      googleId,
+      message: "No account found. Please complete registration.",
+    };
+  }
+
+  const { password: _, ...userWithoutPassword } = user;
+
+  return {
+    user: userWithoutPassword,
+    userType: foundUserType,
+    userNotFound: false,
+    message: "Google login successful",
+  };
+};
+
+// GOOGLE SIGNUP SERVICE
+export const googleSignupService = async (data: {
+  email: string;
+  name: string;
+  role: string;
+  phone?: string;
+  tin?: string;
+  location?: string;
+  agreed?: boolean;
+}) => {
+  const { email, name, role, phone, tin, location, agreed } = data;
+
+  // Terms and Conditions must be explicitly accepted before completing signup
+  if (!agreed) {
+    throw new Error(
+      "You must accept the Terms and Conditions to complete your registration.",
+    );
+  }
+
+  // Check if email already exists across all tables
+  const existingUser = await checkExistingUser(undefined, email);
+  if (existingUser) {
+    throw new Error("An account with this email already exists");
+  }
+
+  if (role === "FARMER") {
+    const farmer = await prisma.farmer.create({
+      data: {
+        email,
+        name: name || undefined,
+        phone: phone || undefined,
+        location: location || undefined,
+        role: "FARMER",
+        phoneVerified: false,
+      },
+    });
+
+    const { password: _, ...farmerWithoutPassword } = farmer;
+    return {
+      user: farmerWithoutPassword,
+      userType: "farmer",
+      message: "Account created successfully",
+    };
+  } else if (role === "RESTAURANT" || role === "HOTEL") {
+    if (!tin) {
+      throw new Error("TIN number is required for restaurant/hotel accounts");
+    }
+
+    // Validate TIN
+    if (!validateTIN(tin)) {
+      throw new Error("TIN must be a valid 9-digit number");
+    }
+
+    // Check TIN uniqueness
+    const existingTin = await prisma.restaurant.findUnique({
+      where: { tin },
+    });
+    if (existingTin) {
+      throw new Error("This TIN is already registered");
+    }
+
+    const restaurant = await prisma.restaurant.create({
+      data: {
+        name,
+        email,
+        phone: phone || undefined,
+        tin,
+        location: location || undefined,
+        role: role as any,
+password: "", // No password for Google signups - they authenticate via Google
+        verified: true, // Email is verified by Google, no OTP flow for Google signups
+        agreed: false, // Google user must accept the terms before accessing the dashboard
+      },
+    });
+
+    const { password: _, ...restaurantWithoutPassword } = restaurant;
+    return {
+      user: restaurantWithoutPassword,
+      userType: "restaurant",
+      message:
+        "Account created successfully. Please accept the terms and conditions.",
+    };
+  } else {
+    throw new Error("Invalid role for Google signup");
+  }
+};
+
 // PASSWORD RESET SERVICES
 export const requestPasswordResetService = async (email: string) => {
   const user = await getUserByEmail(email);
@@ -1136,6 +1322,72 @@ export const resetPasswordService = async (
       });
     } else {
       throw new Error("Invalid user type");
+    }
+
+    return {
+      message: "Password has been reset successfully",
+    };
+  } catch (error: any) {
+    throw new Error(`Failed to reset password: ${error.message}`);
+  }
+};
+
+// PASSWORD RESET VIA PHONE SERVICES
+export const requestPasswordResetViaPhoneService = async (phone: string) => {
+  const user = await getUserByPhone(phone);
+
+  if (!user) {
+    throw new Error("No account found with this phone number");
+  }
+
+  const result = await OTPService.sendPasswordResetOTP(phone);
+
+  if (!result.success) {
+    throw new Error(result.message);
+  }
+
+  return {
+    message: "Password reset OTP has been sent to your phone number",
+  };
+};
+
+export const resetPasswordViaPhoneService = async (
+  phone: string,
+  otp: string,
+  newPassword: string,
+) => {
+  const user = await getUserByPhone(phone);
+
+  if (!user) {
+    throw new Error("No account found with this phone number");
+  }
+
+  const otpResult = await OTPService.verifyPasswordResetOTP(phone, otp);
+
+  if (!otpResult.success) {
+    throw new Error(otpResult.message);
+  }
+
+  const hashedPassword = await hashPassword(newPassword);
+
+  try {
+    if (user.userType === "FARMER") {
+      await prisma.farmer.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      });
+    } else if (user.userType === "RESTAURANT") {
+      await prisma.restaurant.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      });
+    } else if (user.userType === "AFFILIATOR") {
+      await prisma.affiliator.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      });
+    } else {
+      throw new Error("Password reset via phone is not supported for this account type");
     }
 
     return {
