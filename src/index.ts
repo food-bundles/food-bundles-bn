@@ -67,6 +67,12 @@ app.use((err: any, req: any, res: any, next: any) => {
 // Raw body for webhooks
 app.use("/webhooks", express.raw({ type: "application/json" }));
 
+// Serve uploaded images (product images, support ticket screenshots, etc.)
+app.use(
+  "/uploads",
+  express.static("uploads", { maxAge: "7d", fallthrough: true }),
+);
+
 app.use("/", routes);
 
 app.get("/health", (_req, res) => {

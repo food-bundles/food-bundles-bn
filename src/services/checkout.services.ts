@@ -29,7 +29,6 @@ import {
 import { OrderStatus, PaymentStatus, VoucherStatus } from "@prisma/client";
 import {
   createOrderFromCartService,
-  generateEBMInvoiceService,
   getOrderByIdService,
   updateOrderService,
 } from "./order.services";
@@ -345,7 +344,6 @@ export const processPaymentService = async (
           currency: order.currency || "RWF",
           clientIp: paymentData.bankDetails?.clientIp || order.clientIp || "",
           deviceFingerprint: order.deviceFingerprint || "62wd23423rq324323qew1",
-          narration: order.narration || "Order payment",
         });
         break;
 
@@ -380,11 +378,6 @@ export const processPaymentService = async (
             affiliatorId: paymentData.affiliatorId,
             voucherCode: paymentData.voucherCode,
           });
-
-          if (walletDebitResult) {
-            // Generate an invoice or receipt here after successful payment
-            await generateEBMInvoiceService(orderId);
-          }
 
           paymentResult = {
             success: true,
@@ -996,7 +989,6 @@ async function processBankTransfer({
   currency = "RWF",
   clientIp,
   deviceFingerprint = "62wd23423rq324323qew1",
-  narration = "Order payment",
 }: {
   amount: number;
   txRef: string;
@@ -1005,7 +997,6 @@ async function processBankTransfer({
   currency?: string;
   clientIp?: string;
   deviceFingerprint?: string;
-  narration?: string;
 }): Promise<BankTransferPaymentResult> {
   try {
     console.log(`Processing bank transfer: ${amount} ${currency} for ${email}`);
@@ -1018,7 +1009,6 @@ async function processBankTransfer({
       currency: currency,
       client_ip: clientIp,
       device_fingerprint: deviceFingerprint,
-      narration: narration,
       redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
       is_permanent: false,
       expires: 3600, // 1 hour expiration

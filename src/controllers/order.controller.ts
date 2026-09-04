@@ -10,7 +10,8 @@ import {
   deleteOrderService,
   getOrderStatisticsService,
   createOrderFromCartService,
-  generateEBMInvoiceService,
+  editOrderService,
+  sendPaymentLinkService,
 } from "../services/order.services";
 import { OrderStatus, PaymentStatus } from "@prisma/client";
 import prisma from "../prisma";
@@ -303,7 +304,6 @@ export const updateOrder = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     const {
-      ebmReference,
       status,
       notes,
       requestedDelivery,
@@ -387,7 +387,6 @@ export const updateOrder = async (req: Request, res: Response) => {
     }
 
     const updateData: any = {};
-    if (ebmReference !== undefined) updateData.ebmReference = ebmReference;
     if (status !== undefined) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
     if (requestedDelivery !== undefined)
@@ -460,6 +459,7 @@ export const cancelOrder = async (req: Request, res: Response) => {
 export const reOrderFromExistingOrder = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
+    const { paymentMethodId } = req.body;
 
     const user = (req as any).user;
     const restaurantId =
@@ -467,7 +467,8 @@ export const reOrderFromExistingOrder = async (req: Request, res: Response) => {
 
     const paymentResult = await reOrderFromExistingOrderService(
       orderId,
-      restaurantId
+      restaurantId,
+      paymentMethodId
     );
 
     if (paymentResult.success) {
@@ -678,30 +679,121 @@ export const getOrderByNumber = async (req: Request, res: Response) => {
 };
 
 /**
- * Controller to generate EBM invoice for an order
- * POST /orders/:orderId/generate-ebm-invoice
+ * Controller to edit order items, quantities, and prices (Admin only)
+ * PATCH /orders/:orderId/edit
  */
-export const generateEBMInvoice = async (req: Request, res: Response) => {
+export const editOrder = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const userRole = (req as any).user.role;
+    const { items, notes, requestedDelivery, billingName, billingPhone, billingEmail, billingAddress } = req.body;
+    const user = (req as any).user;
+    const userRole = user.role;
 
-    // Only admins can generate EBM invoices
-    if (userRole !== "ADMIN") {
+    // Only owners (restaurant/affiliator) or admins can edit orders
+    if (userRole !== "ADMIN" && userRole !== "RESTAURANT" && userRole !== "AFFILIATOR") {
       return res.status(403).json({
-        message: "Only admins can generate EBM invoices",
+        message: "You do not have permission to edit orders",
       });
     }
 
-    const result = await generateEBMInvoiceService(orderId);
+    // For restaurant/affiliator roles, verify they own the order
+    let restaurantId: string | undefined;
+    if (userRole === "RESTAURANT") {
+      restaurantId = user.id;
+    } else if (userRole === "AFFILIATOR") {
+      restaurantId = user.restaurantId;
+    }
+
+    if (restaurantId) {
+      const order = await getOrderByIdService(orderId, restaurantId);
+      if (!order) {
+        return res.status(404).json({
+          message: "Order not found or you do not have access to it",
+        });
+      }
+    }
+
+    const updatedOrder = await editOrderService(orderId, {
+      items,
+      notes,
+      requestedDelivery: requestedDelivery ? new Date(requestedDelivery) : undefined,
+      billingName,
+      billingPhone,
+      billingEmail,
+      billingAddress,
+    });
 
     res.status(200).json({
-      message: "EBM invoice generated successfully",
-      data: result,
+      message: "Order updated successfully",
+      data: updatedOrder,
     });
   } catch (error: any) {
+    if (error.message.includes("not found") || error.message.includes("Cannot edit order")) {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
     res.status(500).json({
-      message: error.message || "Failed to generate EBM invoice",
+      message: error.message || "Failed to edit order",
+    });
+  }
+};
+
+/**
+ * Controller to send/retry payment link for an order
+ * POST /orders/:orderId/send-payment-link
+ */
+export const sendPaymentLink = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const user = (req as any).user;
+    const userRole = user.role;
+    const restaurantId =
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+        ? user.restaurantId
+        : undefined;
+
+    const paymentResult = await sendPaymentLinkService(orderId, restaurantId);
+
+    if (paymentResult.success) {
+      if (paymentResult.redirectUrl) {
+        res.status(200).json({
+          message: "Payment link generated successfully",
+          data: {
+            redirectUrl: paymentResult.redirectUrl,
+            transactionId: paymentResult.transactionId,
+            status: paymentResult.status,
+            requiresRedirect: true,
+          },
+        });
+      } else if (paymentResult.transferDetails) {
+        res.status(200).json({
+          message: "Bank transfer details generated",
+          data: {
+            transferDetails: paymentResult.transferDetails,
+            transactionId: paymentResult.transactionId,
+            status: paymentResult.status,
+          },
+        });
+      } else {
+        res.status(200).json({
+          message: paymentResult.message || "Payment link sent successfully",
+          data: {
+            transactionId: paymentResult.transactionId,
+            status: paymentResult.status,
+          },
+        });
+      }
+    } else {
+      res.status(400).json({
+        message: paymentResult.error || "Failed to generate payment link",
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to send payment link",
     });
   }
 };
