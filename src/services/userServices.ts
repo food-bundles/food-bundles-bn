@@ -1223,7 +1223,7 @@ export const googleSignupService = async (data: {
         role: role as any,
 password: "", // No password for Google signups - they authenticate via Google
         verified: true, // Email is verified by Google, no OTP flow for Google signups
-        agreed: false, // Google user must accept the terms before accessing the dashboard
+        agreed: true, // User accepted terms on the signup form before calling this service
       },
     });
 
