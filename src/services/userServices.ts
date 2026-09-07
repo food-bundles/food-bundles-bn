@@ -924,7 +924,7 @@ export const updateAdminService = async (
 
   // Check if new phone/email already exists in any user table (excluding current admin)
   if (email) {
-    const existingUser = await checkExistingUser(email || undefined);
+    const existingUser = await checkExistingUser(undefined, email || undefined);
 
     if (existingUser && existingUser.id !== id) {
       throw new Error("User with this phone/email already exists");
@@ -1094,7 +1094,6 @@ export const googleLoginService = async (googleUser: {
     });
     if (user) {
       foundUserType = "restaurant";
-<<<<<<< HEAD
 
       // Google-created accounts (no password) are authenticated via Google,
       // so the email is already verified and no OTP is needed.
@@ -1114,15 +1113,6 @@ export const googleLoginService = async (googleUser: {
           userType: foundUserType,
           message: "Please accept the Terms and Conditions to continue.",
         };
-=======
-      if (!user.verified) {
-        throw new Error("Your account is not verified yet.");
-      }
-      if (!user.agreed) {
-        throw new Error(
-          "You must agree to the Terms and Conditions before logging in.",
-        );
->>>>>>> 7bc5b2e (error fixed from package-lock)
       }
     }
   }
@@ -1170,7 +1160,6 @@ export const googleSignupService = async (data: {
   phone?: string;
   tin?: string;
   location?: string;
-<<<<<<< HEAD
   agreed?: boolean;
 }) => {
   const { email, name, role, phone, tin, location, agreed } = data;
@@ -1181,10 +1170,6 @@ export const googleSignupService = async (data: {
       "You must accept the Terms and Conditions to complete your registration.",
     );
   }
-=======
-}) => {
-  const { email, name, role, phone, tin, location } = data;
->>>>>>> 7bc5b2e (error fixed from package-lock)
 
   // Check if email already exists across all tables
   const existingUser = await checkExistingUser(undefined, email);
@@ -1236,15 +1221,9 @@ export const googleSignupService = async (data: {
         tin,
         location: location || undefined,
         role: role as any,
-<<<<<<< HEAD
-password: "", // No password for Google signups - they authenticate via Google
+        password: "", // No password for Google signups - they authenticate via Google
         verified: true, // Email is verified by Google, no OTP flow for Google signups
         agreed: true, // User accepted terms on the signup form before calling this service
-=======
-        password: "", // No password for Google signups - they authenticate via Google
-        verified: false,
-        agreed: false,
->>>>>>> 7bc5b2e (error fixed from package-lock)
       },
     });
 
@@ -1252,12 +1231,8 @@ password: "", // No password for Google signups - they authenticate via Google
     return {
       user: restaurantWithoutPassword,
       userType: "restaurant",
-<<<<<<< HEAD
       message:
         "Account created successfully. Please accept the terms and conditions.",
-=======
-      message: "Account created successfully. Please verify your phone number.",
->>>>>>> 7bc5b2e (error fixed from package-lock)
     };
   } else {
     throw new Error("Invalid role for Google signup");
