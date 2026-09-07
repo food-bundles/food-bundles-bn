@@ -11,6 +11,9 @@ import {
   getOrderStatisticsService,
   createOrderFromCartService,
   generateEBMInvoiceService,
+  generatePaymentLinkService,
+  getOrderByPaymentLinkService,
+  payViaPaymentLinkService,
 } from "../services/order.services";
 import { OrderStatus, PaymentStatus } from "@prisma/client";
 import prisma from "../prisma";
@@ -62,18 +65,26 @@ export const createOrderFromCart = async (req: Request, res: Response) => {
  */
 export const createDirectOrder = async (req: Request, res: Response) => {
   try {
-    const { items, paymentMethod, notes, requestedDelivery } = req.body;
+    const {
+      items,
+      paymentMethod,
+      notes,
+      requestedDelivery,
+      restaurantId: bodyRestaurantId,
+    } = req.body;
 
     const userId = (req as any).user.id;
     const userRole = (req as any).user.role;
 
-    // Determine if user is affiliator or restaurant
+    // Determine if user is affiliator, restaurant, or acting on behalf of one (e.g. admin)
     let restaurantId = userId;
     let affiliatorId;
 
     if (userRole === "AFFILIATOR") {
       affiliatorId = userId;
       restaurantId = undefined;
+    } else if (userRole !== "RESTAURANT") {
+      restaurantId = bodyRestaurantId;
     }
 
     if (affiliatorId) {
@@ -746,6 +757,88 @@ export const testWebSocket = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to test WebSocket",
+    });
+  }
+};
+
+/**
+ * Controller to generate a shareable public payment link for an order
+ * POST /orders/:orderId/payment-link
+ * @access Restaurant/Affiliator (own orders) or Admin (any order)
+ */
+export const generatePaymentLink = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const user = (req as any).user;
+    const userRole = user.role;
+    const restaurantId =
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+        ? user.restaurantId
+        : undefined;
+
+    const result = await generatePaymentLinkService(orderId, restaurantId);
+
+    res.status(200).json({
+      message: "Payment link generated successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to generate payment link",
+    });
+  }
+};
+
+/**
+ * Controller to fetch a public-safe order summary by payment link token
+ * GET /orders/pay/:token
+ * @access Public
+ */
+export const getOrderByPaymentLink = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const order = await getOrderByPaymentLinkService(token);
+
+    res.status(200).json({
+      message: "Order retrieved successfully",
+      data: order,
+    });
+  } catch (error: any) {
+    res.status(404).json({
+      message: error.message || "Payment link not found",
+    });
+  }
+};
+
+/**
+ * Controller to submit a payment via a public payment link
+ * POST /orders/pay/:token
+ * @access Public
+ */
+export const payViaPaymentLink = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const { paymentMethod, phoneNumber, cardDetails, bankDetails } = req.body;
+
+    if (!paymentMethod) {
+      return res.status(400).json({
+        message: "Payment method is required",
+      });
+    }
+
+    const result = await payViaPaymentLinkService(token, {
+      paymentMethod,
+      phoneNumber,
+      cardDetails,
+      bankDetails,
+    });
+
+    res.status(200).json(result);
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to process payment",
     });
   }
 };

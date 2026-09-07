@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import crypto from "crypto";
 import { OrderStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
 import { ProductData } from "./productService";
 import { processPaymentService } from "./checkout.services";
@@ -1249,6 +1250,115 @@ export const deleteOrderService = async (orderId: string) => {
   ]);
 
   return { message: "Order deleted successfully" };
+};
+
+/**
+ * Service to generate (or regenerate) a shareable public payment link for an order
+ */
+export const generatePaymentLinkService = async (
+  orderId: string,
+  restaurantId?: string,
+) => {
+  const order = await getOrderByIdService(orderId, restaurantId);
+
+  if (order.paymentStatus === "COMPLETED") {
+    throw new Error("Order is already paid");
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      paymentLinkToken: token,
+      paymentLinkExpiry: expiresAt,
+    },
+  });
+
+  return { token, expiresAt };
+};
+
+/**
+ * Service to fetch a public-safe order summary by payment link token
+ */
+export const getOrderByPaymentLinkService = async (token: string) => {
+  const order = await prisma.order.findUnique({
+    where: { paymentLinkToken: token },
+    include: {
+      restaurant: {
+        select: { name: true },
+      },
+      orderItems: {
+        select: {
+          productName: true,
+          quantity: true,
+          unitPrice: true,
+          subtotal: true,
+          unit: true,
+        },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new Error("Payment link not found");
+  }
+
+  if (order.paymentLinkExpiry && order.paymentLinkExpiry < new Date()) {
+    throw new Error("Payment link has expired");
+  }
+
+  if (order.paymentStatus === "COMPLETED") {
+    throw new Error("This order has already been paid");
+  }
+
+  return {
+    orderNumber: order.orderNumber,
+    restaurantName: order.restaurant.name,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    currency: order.currency || "RWF",
+    totalAmount: order.totalAmount,
+    items: order.orderItems,
+  };
+};
+
+/**
+ * Service to process a payment submitted via a public payment link
+ */
+export const payViaPaymentLinkService = async (
+  token: string,
+  paymentData: {
+    paymentMethod: string;
+    phoneNumber?: string;
+    cardDetails?: {
+      cardNumber: string;
+      cvv: string;
+      expiryMonth: string;
+      expiryYear: string;
+      pin?: string;
+    };
+    bankDetails?: { clientIp?: string };
+  },
+) => {
+  const order = await prisma.order.findUnique({
+    where: { paymentLinkToken: token },
+  });
+
+  if (!order) {
+    throw new Error("Payment link not found");
+  }
+
+  if (order.paymentLinkExpiry && order.paymentLinkExpiry < new Date()) {
+    throw new Error("Payment link has expired");
+  }
+
+  if (order.paymentStatus === "COMPLETED") {
+    throw new Error("This order has already been paid");
+  }
+
+  return processPaymentService(order.id, paymentData);
 };
 
 /**
