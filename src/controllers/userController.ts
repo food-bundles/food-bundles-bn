@@ -568,7 +568,7 @@ export class UserController {
 
   static googleSignup = async (req: Request, res: Response) => {
     try {
-      const { email, name, role, phone, tin, location, agreed } = req.body;
+      const { email, name, role, phone, tin, location } = req.body;
 
       if (!email || !role) {
         return res.status(400).json({
@@ -584,7 +584,6 @@ export class UserController {
         phone,
         tin,
         location,
-        agreed,
       });
 
       const user = result.user;

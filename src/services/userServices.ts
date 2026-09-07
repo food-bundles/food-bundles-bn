@@ -1221,9 +1221,15 @@ export const googleSignupService = async (data: {
         tin,
         location: location || undefined,
         role: role as any,
+<<<<<<< HEAD
         password: "", // No password for Google signups - they authenticate via Google
         verified: true, // Email is verified by Google, no OTP flow for Google signups
         agreed: true, // User accepted terms on the signup form before calling this service
+=======
+password: "", // No password for Google signups - they authenticate via Google
+        verified: true, // Email is verified by Google, no OTP flow for Google signups
+        agreed: false, // Google user must accept the terms before accessing the dashboard
+>>>>>>> d4fe31a505f7d58399c6ace9eb1e5b30890398c6
       },
     });
 
