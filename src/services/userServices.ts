@@ -1140,7 +1140,6 @@ export const googleSignupService = async (data: {
     throw new Error("An account with this email already exists");
   }
 
-<<<<<<< HEAD
   // Check if phone already exists across all tables
   if (phone) {
     const existingPhone = await checkExistingUser(phone);
@@ -1174,26 +1173,6 @@ export const googleSignupService = async (data: {
       const friendlyMessage = getFriendlyPrismaError(error);
       throw new Error(friendlyMessage || `Failed to create account: ${error.message}`);
     }
-=======
-  if (role === "FARMER") {
-    const farmer = await prisma.farmer.create({
-      data: {
-        email,
-        name: name || undefined,
-        phone: phone || undefined,
-        location: location || undefined,
-        role: "FARMER",
-        phoneVerified: false,
-      },
-    });
-
-    const { password: _, ...farmerWithoutPassword } = farmer;
-    return {
-      user: farmerWithoutPassword,
-      userType: "farmer",
-      message: "Account created successfully",
-    };
->>>>>>> 7bc5b2e (error fixed from package-lock)
   } else if (role === "RESTAURANT" || role === "HOTEL") {
     if (!tin) {
       throw new Error("TIN number is required for restaurant/hotel accounts");
@@ -1212,7 +1191,6 @@ export const googleSignupService = async (data: {
       throw new Error("This TIN is already registered");
     }
 
-<<<<<<< HEAD
     try {
       const restaurant = await prisma.restaurant.create({
         data: {
@@ -1239,28 +1217,6 @@ export const googleSignupService = async (data: {
       const friendlyMessage = getFriendlyPrismaError(error);
       throw new Error(friendlyMessage || `Failed to create account: ${error.message}`);
     }
-=======
-    const restaurant = await prisma.restaurant.create({
-      data: {
-        name,
-        email,
-        phone: phone || undefined,
-        tin,
-        location: location || undefined,
-        role: role as any,
-        password: "", // No password for Google signups - they authenticate via Google
-        verified: false,
-        agreed: false,
-      },
-    });
-
-    const { password: _, ...restaurantWithoutPassword } = restaurant;
-    return {
-      user: restaurantWithoutPassword,
-      userType: "restaurant",
-      message: "Account created successfully. Please verify your phone number.",
-    };
->>>>>>> 7bc5b2e (error fixed from package-lock)
   } else {
     throw new Error("Invalid role for Google signup");
   }
