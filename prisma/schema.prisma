@@ -7,124 +7,103 @@ datasource db {
 }
 
 model Farmer {
-  id    String  @id @default(uuid())
-  phone String? @unique
-  email String? @unique
-  name  String?
-
-  location String?
-  province String?
-  district String?
-  sector   String?
-  cell     String?
-  village  String?
-
-  locationUpdatedAt DateTime?
-
-  role              Role    @default(FARMER)
-  preferredLanguage String? @default("KINY")
-  password          String?
-
-  phoneVerified  Boolean   @default(false)
-  phoneChangedAt DateTime?
-
-  accountLocked Boolean   @default(false)
-  lockedUntil   DateTime?
-  pinChangedAt  DateTime?
-
-  smsNotifications      Boolean @default(false)
-  notificationFrequency String?
-
-  // Two-Factor Authentication
-  twoFactorSecret      String?  @db.Text
-  twoFactorEnabled     Boolean  @default(false)
-  twoFactorBackupCodes String[] @default([])
-
+  id                     String                   @id @default(uuid())
+  phone                  String?                  @unique
+  email                  String?                  @unique
+  name                   String?
+  location               String?
+  province               String?
+  district               String?
+  sector                 String?
+  cell                   String?
+  village                String?
+  locationUpdatedAt      DateTime?
+  role                   Role                     @default(FARMER)
+  preferredLanguage      String?                  @default("KINY")
+  password               String?
+  phoneVerified          Boolean                  @default(false)
+  phoneChangedAt         DateTime?
+  accountLocked          Boolean                  @default(false)
+  lockedUntil            DateTime?
+  pinChangedAt           DateTime?
+  smsNotifications       Boolean                  @default(false)
+  notificationFrequency  String?
+  twoFactorSecret        String?
+  twoFactorEnabled       Boolean                  @default(false)
+  twoFactorBackupCodes   String[]                 @default([])
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt
-  submissions            FarmerSubmission[]
+  CallbackRequest        CallbackRequest[]
+  FarmerLoginAttempt     FarmerLoginAttempt[]
+  FarmerPrimaryCrop      FarmerPrimaryCrop[]
+  FarmerProfile          FarmerProfile?
+  FarmerSecurityAlert    FarmerSecurityAlert[]
   FarmerSecurityEvent    FarmerSecurityEvent[]
   FarmerSecurityQuestion FarmerSecurityQuestion[]
-  FarmerLoginAttempt     FarmerLoginAttempt[]
-  FarmerSecurityAlert    FarmerSecurityAlert[]
-  FarmerProfile          FarmerProfile?
-  FarmerPrimaryCrop      FarmerPrimaryCrop[]
-  SupportTicket          SupportTicket[]
-  CallbackRequest        CallbackRequest[]
-  Voucher                Voucher[]
+  submissions            FarmerSubmission[]
   LoanApplication        LoanApplication[]
-  VoucherTransaction     VoucherTransaction[]
-  VoucherRepayment       VoucherRepayment[]
-  VoucherPenalty         VoucherPenalty[]
   RestaurantSubscription RestaurantSubscription[]
+  SupportTicket          SupportTicket[]
+  Voucher                Voucher[]
+  VoucherPenalty         VoucherPenalty[]
+  VoucherRepayment       VoucherRepayment[]
+  VoucherTransaction     VoucherTransaction[]
 }
 
 model Restaurant {
-  id    String  @id @default(uuid())
-  name  String
-  email String? @unique
-  phone String? @unique
-  tin   String  @unique
-
-  location String?
-  province String?
-  district String?
-  sector   String?
-  cell     String?
-  village  String?
-
-  password          String
-  ussdPin           String? // Optional 4-digit PIN for USSD authentication
-  role              Role    @default(RESTAURANT)
-  verified          Boolean @default(false)
-  agreed            Boolean @default(false)
-  preferredLanguage String? @default("KINY")
-
-  // Two-Factor Authentication
-  twoFactorSecret      String?  @db.Text
-  twoFactorEnabled     Boolean  @default(false)
-  twoFactorBackupCodes String[] @default([])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  orders             Order[]
-  posSales           POSSale[]
-  Cart               Cart[]
-  Wallet             Wallet?
-  subscriptions      RestaurantSubscription[]
-  Voucher            Voucher[]
-  LoanApplication    LoanApplication[]
-  VoucherTransaction VoucherTransaction[]
-  VoucherRepayment   VoucherRepayment[]
-  VoucherPenalty     VoucherPenalty[]
-  posts              Post[]
-  affiliators        Affiliator[]
-  walletTransactions WalletTransaction[]
+  id                   String                   @id @default(uuid())
+  name                 String
+  email                String?                  @unique
+  phone                String?                  @unique
+  tin                  String                   @unique
+  location             String?
+  province             String?
+  district             String?
+  sector               String?
+  cell                 String?
+  village              String?
+  password             String
+  ussdPin              String?
+  role                 Role                     @default(RESTAURANT)
+  verified             Boolean                  @default(false)
+  agreed               Boolean                  @default(false)
+  preferredLanguage    String?                  @default("KINY")
+  twoFactorSecret      String?
+  twoFactorEnabled     Boolean                  @default(false)
+  twoFactorBackupCodes String[]                 @default([])
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  affiliators          Affiliator[]
+  Cart                 Cart[]
+  LoanApplication      LoanApplication[]
+  orders               Order[]
+  posSales             POSSale[]
+  posts                Post[]
+  subscriptions        RestaurantSubscription[]
+  Voucher              Voucher[]
+  VoucherPenalty       VoucherPenalty[]
+  VoucherRepayment     VoucherRepayment[]
+  VoucherTransaction   VoucherTransaction[]
+  Wallet               Wallet?
+  walletTransactions   WalletTransaction[]
 }
 
 model Affiliator {
-  id           String  @id @default(uuid())
-  name         String
-  email        String? @unique
-  phone        String? @unique
-  restaurantId String
-  password     String
-  role         Role    @default(AFFILIATOR)
-
-  // Two-Factor Authentication
-  twoFactorSecret      String?  @db.Text
-  twoFactorEnabled     Boolean  @default(false)
-  twoFactorBackupCodes String[] @default([])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  restaurant         Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  orders             Order[]
-  walletTransactions WalletTransaction[]
+  id                   String              @id @default(uuid())
+  name                 String
+  email                String?             @unique
+  phone                String?             @unique
+  restaurantId         String
+  password             String
+  role                 Role                @default(AFFILIATOR)
+  twoFactorSecret      String?
+  twoFactorEnabled     Boolean             @default(false)
+  twoFactorBackupCodes String[]            @default([])
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  restaurant           Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders               Order[]
+  walletTransactions   WalletTransaction[]
 
   @@index([restaurantId])
 }
@@ -141,9 +120,9 @@ model FarmerSubmission {
   farmerFeedbackStatus FarmerFeedbackStatus? @default(PENDING)
   farmerFeedbackAt     DateTime?
   farmerFeedbackNotes  String?
-  farmerCounterOffer   Float? // If farmer wants different price
-  farmerCounterQty     Float? // If farmer wants different quantity
-  feedbackDeadline     DateTime? // Deadline for farmer response
+  farmerCounterOffer   Float?
+  farmerCounterQty     Float?
+  feedbackDeadline     DateTime?
   aggregatorId         String?
   submittedAt          DateTime              @default(now())
   verifiedAt           DateTime?
@@ -153,33 +132,29 @@ model FarmerSubmission {
   acceptedPrice        Float?
   approvedProductId    String?
   wishedPrice          Float?
-
-  location String?
-  province String?
-  district String?
-  sector   String?
-  cell     String?
-  village  String?
-
-  approvedProduct Product?         @relation(fields: [approvedProductId], references: [id])
-  farmer          Farmer           @relation(fields: [farmerId], references: [id])
-  aggregator      Admin?           @relation("Aggregator", fields: [aggregatorId], references: [id])
-  category        ProductCategory? @relation(fields: [categoryId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  location             String?
+  province             String?
+  district             String?
+  sector               String?
+  cell                 String?
+  village              String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  aggregator           Admin?                @relation("Aggregator", fields: [aggregatorId], references: [id])
+  approvedProduct      Product?              @relation(fields: [approvedProductId], references: [id])
+  category             ProductCategory?      @relation(fields: [categoryId], references: [id])
+  farmer               Farmer                @relation(fields: [farmerId], references: [id])
 }
 
 model FarmerSecurityEvent {
   id          String   @id @default(uuid())
   farmerId    String
-  eventType   String // PIN_CHANGE, PHONE_CHANGE, LOGIN_ATTEMPT, etc.
+  eventType   String
   description String?
   ipAddress   String?
   deviceInfo  String?
   createdAt   DateTime @default(now())
-
-  farmer Farmer @relation(fields: [farmerId], references: [id])
+  farmer      Farmer   @relation(fields: [farmerId], references: [id])
 
   @@index([farmerId])
   @@index([eventType])
@@ -191,8 +166,7 @@ model FarmerSecurityQuestion {
   question   String
   answerHash String
   createdAt  DateTime @default(now())
-
-  farmer Farmer @relation(fields: [farmerId], references: [id])
+  farmer     Farmer   @relation(fields: [farmerId], references: [id])
 
   @@index([farmerId])
 }
@@ -203,8 +177,7 @@ model FarmerLoginAttempt {
   successful  Boolean
   attemptTime DateTime
   deviceInfo  String?
-
-  farmer Farmer @relation(fields: [farmerId], references: [id])
+  farmer      Farmer   @relation(fields: [farmerId], references: [id])
 
   @@index([farmerId])
   @@index([attemptTime])
@@ -215,11 +188,10 @@ model FarmerSecurityAlert {
   farmerId    String
   alertType   String
   description String
-  severity    String // LOW, MEDIUM, HIGH, CRITICAL
+  severity    String
   resolved    Boolean  @default(false)
   createdAt   DateTime @default(now())
-
-  farmer Farmer @relation(fields: [farmerId], references: [id])
+  farmer      Farmer   @relation(fields: [farmerId], references: [id])
 
   @@index([farmerId])
   @@index([severity])
@@ -229,21 +201,20 @@ model FarmerProfile {
   id                     String   @id @default(uuid())
   farmerId               String   @unique
   farmSize               Float?
-  farmSizeUnit           String? // HECTARES, ACRES
+  farmSizeUnit           String?
   experienceYears        Int?
   cooperativeMember      Boolean?
   cooperativeName        String?
   certifications         String[]
-  farmingMethod          String? // ORGANIC, CONVENTIONAL, MIXED
-  preferredPaymentMethod String? // MOBILE_MONEY, BANK_TRANSFER, CASH
+  farmingMethod          String?
+  preferredPaymentMethod String?
   minimumOrderQuantity   Float?
-  deliveryPreference     String? // FARM_PICKUP, COOPERATIVE_CENTER, MARKET_DELIVERY
+  deliveryPreference     String?
   maxDeliveryDistance    Float?
   defaultLocation        Json?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
-
-  farmer Farmer @relation(fields: [farmerId], references: [id])
+  farmer                 Farmer   @relation(fields: [farmerId], references: [id])
 
   @@index([farmerId])
 }
@@ -256,27 +227,25 @@ model FarmerPrimaryCrop {
   defaultQuantity Float
   harvestMonths   String[]
   createdAt       DateTime @default(now())
-
-  farmer  Farmer  @relation(fields: [farmerId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  farmer          Farmer   @relation(fields: [farmerId], references: [id])
+  product         Product  @relation(fields: [productId], references: [id])
 
   @@index([farmerId])
   @@index([productId])
 }
 
 model SupportTicket {
-  id           String   @id @default(uuid())
-  ticketNumber String   @unique
+  id           String            @id @default(uuid())
+  ticketNumber String            @unique
   farmerId     String
-  category     String // TECHNICAL, PAYMENT, ACCOUNT, GENERAL
+  category     String
   description  String
-  priority     String // LOW, MEDIUM, HIGH, URGENT
-  status       String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  farmer    Farmer            @relation(fields: [farmerId], references: [id])
-  responses SupportResponse[]
+  priority     String
+  status       String            @default("OPEN")
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  responses    SupportResponse[]
+  farmer       Farmer            @relation(fields: [farmerId], references: [id])
 
   @@index([farmerId])
   @@index([status])
@@ -284,15 +253,36 @@ model SupportTicket {
 }
 
 model SupportResponse {
-  id        String   @id @default(uuid())
+  id        String        @id @default(uuid())
   ticketId  String
   message   String
-  isStaff   Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  ticket SupportTicket @relation(fields: [ticketId], references: [id])
+  isStaff   Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id])
 
   @@index([ticketId])
+}
+
+model SupportRequest {
+  id               String    @id @default(uuid())
+  ticketNumber     String    @unique
+  name             String
+  email            String
+  subject          String
+  category         String
+  severity         String?
+  preferredContact String    @default("email")
+  description      String
+  screenshots      String[]
+  status           String    @default("open")
+  response         String?
+  respondedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([ticketNumber])
+  @@index([status])
+  @@index([email])
 }
 
 model CallbackRequest {
@@ -301,95 +291,120 @@ model CallbackRequest {
   phoneNumber   String
   preferredTime String
   issue         String
-  status        String   @default("PENDING") // PENDING, SCHEDULED, COMPLETED
+  status        String   @default("PENDING")
   createdAt     DateTime @default(now())
-
-  farmer Farmer @relation(fields: [farmerId], references: [id])
+  farmer        Farmer   @relation(fields: [farmerId], references: [id])
 
   @@index([farmerId])
   @@index([status])
 }
 
 model Admin {
-  id        String   @id @default(uuid())
-  username  String
-  email     String   @unique
-  password  String
-  role      Role
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  phone String? @unique
-
-  agreed   Boolean  @default(false)
-
-  location String?
-  province String?
-  district String?
-  sector   String?
-  cell     String?
-  village  String?
-
-  // Two-Factor Authentication
-  twoFactorSecret      String?  @db.Text
-  twoFactorEnabled     Boolean  @default(false)
-  twoFactorBackupCodes String[] @default([])
-
+  id                       String                @id @default(uuid())
+  username                 String
+  email                    String                @unique
+  password                 String
+  role                     Role
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  phone                    String?               @unique
+  agreed                   Boolean               @default(false)
+  location                 String?
+  province                 String?
+  district                 String?
+  sector                   String?
+  cell                     String?
+  village                  String?
+  twoFactorSecret          String?
+  twoFactorEnabled         Boolean               @default(false)
+  twoFactorBackupCodes     String[]              @default([])
+  customerTypes            CustomerType[]
   aggregatorAssignments    FarmerSubmission[]    @relation("Aggregator")
-  logisticsAssignments     Order[]               @relation("LOGISTICS")
-  products                 Product[]
-  productCategories        ProductCategory[]
-  productUnits             ProductUnit[]
-  paymentMethods           PaymentMethodConfig[]
   approvedLoans            LoanApplication[]     @relation("LoanApprover")
   managedLoans             LoanApplication[]     @relation("LoanManager")
-  OrderDelivery            OrderDelivery[]
-  promoCodes               PromoCode[]
-  walletTransactions       WalletTransaction[]   @relation("WalletTransactionAdmin")
-  Voucher                  Voucher[]
-  traderWallet             Wallet?               @relation("TraderWallet")
-  traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
-  traderTransactionHistory TraderTransaction[]   @relation("TraderTransactionHistory")
-  approvedWithdrawals      WalletTransaction[]   @relation("WithdrawApprover")
   Market                   Market[]
   MarketPriceHistory       MarketPriceHistory[]
   NewsletterCampaign       NewsletterCampaign[]
+  logisticsAssignments     Order[]               @relation("LOGISTICS")
+  OrderDelivery            OrderDelivery[]
+  paymentMethods           PaymentMethodConfig[]
+  products                 Product[]
+  productCategories        ProductCategory[]
+  productUnits             ProductUnit[]
+  promoCodes               PromoCode[]
+  traderTransactionHistory TraderTransaction[]   @relation("TraderTransactionHistory")
+  Voucher                  Voucher[]
+  traderWallet             Wallet?               @relation("TraderWallet")
+  walletTransactions       WalletTransaction[]   @relation("WalletTransactionAdmin")
+  approvedWithdrawals      WalletTransaction[]   @relation("WithdrawApprover")
+  traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
+}
+
+model CustomerType {
+  id            String                 @id @default(uuid())
+  name          String                 @unique
+  description   String?
+  isActive      Boolean                @default(true)
+  createdBy     String
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  admin         Admin                  @relation(fields: [createdBy], references: [id])
+  productPrices ProductCustomerPrice[]
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model ProductCustomerPrice {
+  id             String       @id @default(uuid())
+  productId      String
+  customerTypeId String
+  price          Float
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  customerType   CustomerType @relation(fields: [customerTypeId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, customerTypeId])
+  @@index([productId])
+  @@index([customerTypeId])
 }
 
 model Product {
-  id                   String               @id @default(uuid())
-  tableTronicProductId Int?                 @unique @map("tableTronicProductId")
+  id                   String                 @id @default(uuid())
+  tableTronicProductId Int?                   @unique @map("tableTronicProductId")
   unitPrice            Float
-  restaurantPrice      Float? // Price for restaurant users
-  hotelPrice           Float? // Price for hotel users
+  restaurantPrice      Float?
+  hotelPrice           Float?
   purchasePrice        Float
   unit                 String
   unitId               String?
-  createdAt            DateTime             @default(now())
+  createdAt            DateTime               @default(now())
   bonus                Int
   createdBy            String
   expiryDate           DateTime?
   images               String[]
   quantity             Float
-  sku                  String               @unique
-  updatedAt            DateTime             @updatedAt
+  sku                  String                 @unique
+  updatedAt            DateTime               @updatedAt
   categoryId           String
-  productName          String               @unique
-  status               ProductStatus        @default(ACTIVE)
+  productName          String                 @unique
+  status               ProductStatus          @default(ACTIVE)
   inactiveReason       String?
   province             String?
   district             String?
   sector               String?
   cell                 String?
   village              String?
-  farmerSubmissions    FarmerSubmission[]
-  orderItems           OrderItem[]
-  admin                Admin                @relation(fields: [createdBy], references: [id])
   CartItem             CartItem[]
-  category             ProductCategory      @relation(fields: [categoryId], references: [id])
   FarmerPrimaryCrop    FarmerPrimaryCrop[]
-  productUnit          ProductUnit?         @relation(fields: [unitId], references: [id])
+  farmerSubmissions    FarmerSubmission[]
   marketPriceHistory   MarketPriceHistory[]
+  orderItems           OrderItem[]
+  category             ProductCategory        @relation(fields: [categoryId], references: [id])
+  admin                Admin                  @relation(fields: [createdBy], references: [id])
+  productUnit          ProductUnit?           @relation(fields: [unitId], references: [id])
+  customerTypePrices   ProductCustomerPrice[]
 }
 
 model PaymentMethodConfig {
@@ -401,10 +416,8 @@ model PaymentMethodConfig {
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
   createdBy                  String
-
-  // Relations
-  admin  Admin   @relation(fields: [createdBy], references: [id])
-  orders Order[]
+  orders                     Order[]
+  admin                      Admin    @relation(fields: [createdBy], references: [id])
 
   @@index([name])
   @@index([isActive])
@@ -412,176 +425,137 @@ model PaymentMethodConfig {
 }
 
 model ProductUnit {
-  id                String   @id @default(uuid())
-  tableTronicUnitId Int?     @unique
-  name              String   @unique
+  id                String    @id @default(uuid())
+  tableTronicUnitId Int?      @unique
+  name              String    @unique
   description       String?
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   createdBy         String
-
-  // Relations
-  admin   Admin     @relation(fields: [createdBy], references: [id])
-  Product Product[]
+  Product           Product[]
+  admin             Admin     @relation(fields: [createdBy], references: [id])
 
   @@index([name])
   @@index([isActive])
 }
 
 model ProductCategory {
-  id                    String   @id @default(uuid())
-  tableTronicCategoryId Int?     @unique
-  name                  String   @unique
+  id                    String             @id @default(uuid())
+  tableTronicCategoryId Int?               @unique
+  name                  String             @unique
   description           String?
-  isActive              Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  isActive              Boolean            @default(true)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
   createdBy             String
-
-  // Relations
-  admin             Admin              @relation(fields: [createdBy], references: [id])
-  products          Product[]
-  farmerSubmissions FarmerSubmission[]
+  farmerSubmissions     FarmerSubmission[]
+  products              Product[]
+  admin                 Admin              @relation(fields: [createdBy], references: [id])
 
   @@index([name])
   @@index([isActive])
 }
 
-// Cart schema model - Prisma Schema for Cart Management
 model Cart {
   id           String     @id @default(uuid())
-  restaurantId String // Foreign key to Restaurant model
-  totalAmount  Float      @default(0) // Total amount of all items in cart
-  status       CartStatus @default(ACTIVE) // Cart status (ACTIVE, CHECKED_OUT, ABANDONED)
+  restaurantId String
+  totalAmount  Float      @default(0)
+  status       CartStatus @default(ACTIVE)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  cartItems    CartItem[]
+  orders       Order[]
 
-  // Relations
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  cartItems  CartItem[] // One cart can have many cart items
-  orders     Order[] // Cart can have multiple orders created from it
-
-  // Indexes for better performance
   @@index([restaurantId])
   @@index([status])
 }
 
-// Cart Item model to store individual items in the cart
 model CartItem {
   id        String   @id @default(uuid())
-  cartId    String // Foreign key to Cart model
-  productId String // Foreign key to Product model
-  quantity  Float // Quantity of the product
-  unitPrice Float // Price per unit at the time of adding to cart
-  subtotal  Float // quantity * unitPrice
+  cartId    String
+  productId String
+  quantity  Float
+  unitPrice Float
+  subtotal  Float
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  // Relations
-  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  // Ensure unique product per cart (restaurant can't add same product multiple times)
   @@unique([cartId, productId])
   @@index([cartId])
   @@index([productId])
 }
 
-// ORDER model 
 model Order {
-  id             String      @id @default(uuid())
-  restaurantId   String
-  orderedBy      String?
-  logisticsId    String?
-  orderNumber    String      @unique
-  status         OrderStatus @default(PENDING)
-  totalAmount    Float
-  originalAmount Float?
-
-  // Cart reference 
-  cartId String?
-
-  // Billing information 
-  billingName    String?
-  billingEmail   String?
-  billingPhone   String?
-  billingAddress String?
-
-  // Order notes and dates
-  notes             String?
-  requestedDelivery DateTime?
-  estimatedDelivery DateTime?
-  actualDelivery    DateTime?
-  deliveryFee       Float     @default(0)
-  packagingFee      Float     @default(0)
-
-  // Payment information
-  paymentMethod    String?
-  paymentStatus    PaymentStatus @default(PENDING)
-  paymentReference String?
-  paymentProvider  String?       @default("FLUTTERWAVE")
-  paymentType      String?
-
-  // Enhanced Payment Fields 
-  txRef             String? @unique
-  flwRef            String?
-  txOrderId         String?
-  currency          String? @default("RWF")
-  clientIp          String?
-  deviceFingerprint String?
-  narration         String?
-
-  // Bank transfer specific fields
-  transferReference String?
-  transferAccount   String?
-  transferBank      String?
-  transferNote      String?
-  transferAmount    Float?
-
-  // Mobile money specific fields
-  network     String? // Network provider (MTN, Airtel, etc.)
-  voucherCode String?
-  voucherId   String?
-  voucher     String? // Voucher code
-
-  // Card payment specific fields
-  cardNumber      String?
-  cardCVV         String?
-  cardType        String?
-  cardExpiryMonth String?
-  cardExpiryYear  String?
-  cardPIN         String?
-
-  // Authorization and redirect information
-  redirectUrl       String?
-  authorizationMode String?
-
-  // Transaction status and references
-  transactionId String?
-  ebmReference  String?
-
-  // Response fields
-  flwStatus   String?
-  appFee      Float?
-  merchantFee Float?
-
-  // Timestamps
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  paidAt    DateTime?
-
-  // Relations
-  restaurant          Restaurant           @relation(fields: [restaurantId], references: [id])
-  affiliator          Affiliator?          @relation(fields: [orderedBy], references: [id])
-  orderItems          OrderItem[]
-  logistics           Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
-  cart                Cart?                @relation(fields: [cartId], references: [id])
-  VoucherTransaction  VoucherTransaction[]
-  Voucher             Voucher?             @relation(fields: [voucherId], references: [id])
+  id                  String               @id @default(uuid())
+  restaurantId        String
+  orderedBy           String?
+  logisticsId         String?
+  orderNumber         String               @unique
+  status              OrderStatus          @default(PENDING)
+  totalAmount         Float
+  originalAmount      Float?
+  cartId              String?
+  billingName         String?
+  billingEmail        String?
+  billingPhone        String?
+  billingAddress      String?
+  notes               String?
+  requestedDelivery   DateTime?
+  estimatedDelivery   DateTime?
+  actualDelivery      DateTime?
+  deliveryFee         Float                @default(0)
+  packagingFee        Float                @default(0)
+  paymentMethod       String?
+  paymentStatus       PaymentStatus        @default(PENDING)
+  paymentReference    String?
+  paymentProvider     String?              @default("FLUTTERWAVE")
+  paymentType         String?
+  txRef               String?              @unique
+  flwRef              String?
+  txOrderId           String?
+  currency            String?              @default("RWF")
+  clientIp            String?
+  deviceFingerprint   String?
+  narration           String?
+  transferReference   String?
+  transferAccount     String?
+  transferBank        String?
+  transferNote        String?
+  transferAmount      Float?
+  network             String?
+  voucherCode         String?
+  voucherId           String?
+  voucher             String?
+  cardNumber          String?
+  cardCVV             String?
+  cardType            String?
+  cardExpiryMonth     String?
+  cardExpiryYear      String?
+  cardPIN             String?
+  redirectUrl         String?
+  authorizationMode   String?
+  transactionId       String?
+  ebmReference        String?
+  flwStatus           String?
+  appFee              Float?
+  merchantFee         Float?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  paidAt              DateTime?
   DeliveryOTP         DeliveryOTP?
-  OrderDelivery       OrderDelivery?
+  cart                Cart?                @relation(fields: [cartId], references: [id])
+  logistics           Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
+  affiliator          Affiliator?          @relation(fields: [orderedBy], references: [id])
   paymentMethodConfig PaymentMethodConfig? @relation(fields: [paymentMethod], references: [name])
+  restaurant          Restaurant           @relation(fields: [restaurantId], references: [id])
+  Voucher             Voucher?             @relation(fields: [voucherId], references: [id])
+  OrderDelivery       OrderDelivery?
+  orderItems          OrderItem[]
+  VoucherTransaction  VoucherTransaction[]
 
   @@index([restaurantId])
   @@index([status])
@@ -595,24 +569,21 @@ model Order {
   @@index([cartId])
 }
 
-// OrderItem model
 model OrderItem {
   id          String   @id @default(uuid())
   orderId     String
-  productId   String? // Make this optional to allow SetNull
-  productName String // Store product name at time of order
+  productId   String?
+  productName String
   quantity    Float
-  unitPrice   Float // Store price at time of order
-  subtotal    Float // quantity * unitPrice
-  unit        String // Store unit at time of order
-  images      String[] // Store images array at time of order
-  category    String? // Store category name at time of order
+  unitPrice   Float
+  subtotal    Float
+  unit        String
+  images      String[]
+  category    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  // Relations
-  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@index([productId])
@@ -627,8 +598,7 @@ model DeliveryOTP {
   isUsed    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([expiresAt])
@@ -644,101 +614,88 @@ model OrderDelivery {
   notes        String?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
-
-  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  logistics Admin @relation(fields: [logisticsId], references: [id])
+  logistics    Admin          @relation(fields: [logisticsId], references: [id])
+  order        Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([logisticsId])
   @@index([status])
 }
 
-// Wallet model for managing user account balances
 model Wallet {
-  id                        String           @id @default(uuid())
-  restaurantId              String?          @unique
-  traderId                  String?          @unique
-  balance                   Float            @default(0)
-  pendingApprovedAmount     Float            @default(0) // Amount approved for active vouchers
-  commissionEarned          Float            @default(0) // Total commission earned (separate from balance)
-  commission                Float            @default(3.0) // Commission percentage (default 3% for NORMAL, 5% for FIXED)
-  commissionMode            CommissionMode   @default(NORMAL) // NORMAL (per voucher) or FIXED (monthly)
-  commissionModeChangedAt   DateTime? // When commission mode was last changed
-  lastMonthlyCommissionDate DateTime? // Last date monthly commission was processed
-  totalDeposited            Float            @default(0) // Total amount deposited (never decreases)
-  pendingWithdrawBalance    Float            @default(0) // Pending withdraw from balance
-  pendingWithdrawCommission Float            @default(0) // Pending withdraw from commission
-  totalWithdrawn            Float            @default(0) // Total amount withdrawn
-  canTradeOnBehalf          Boolean          @default(false) // Permission to trade on behalf
-  delegationStatus          DelegationStatus @default(NORMAL) // Current delegation status
-  delegationRequestedAt     DateTime? // When delegation was requested
-  delegationApprovedAt      DateTime? // When delegation was approved
-  delegationApprovedBy      String? // Admin ID who approved delegation
-  delegationAcceptedAt      DateTime? // When trader accepted delegation
-  currency                  String           @default("RWF")
-  isActive                  Boolean          @default(true)
-  createdAt                 DateTime         @default(now())
-  updatedAt                 DateTime         @updatedAt
-
-  // Relations
-  restaurant          Restaurant?         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  trader              Admin?              @relation("TraderWallet", fields: [traderId], references: [id], onDelete: Cascade)
-  transactions        WalletTransaction[]
-  delegationHistories DelegationHistory[]
+  id                        String              @id @default(uuid())
+  restaurantId              String?             @unique
+  traderId                  String?             @unique
+  balance                   Float               @default(0)
+  pendingApprovedAmount     Float               @default(0)
+  commissionEarned          Float               @default(0)
+  commission                Float               @default(3.0)
+  commissionMode            CommissionMode      @default(NORMAL)
+  commissionModeChangedAt   DateTime?
+  lastMonthlyCommissionDate DateTime?
+  totalDeposited            Float               @default(0)
+  pendingWithdrawBalance    Float               @default(0)
+  pendingWithdrawCommission Float               @default(0)
+  totalWithdrawn            Float               @default(0)
+  canTradeOnBehalf          Boolean             @default(false)
+  delegationStatus          DelegationStatus    @default(NORMAL)
+  delegationRequestedAt     DateTime?
+  delegationApprovedAt      DateTime?
+  delegationApprovedBy      String?
+  delegationAcceptedAt      DateTime?
+  currency                  String              @default("RWF")
+  isActive                  Boolean             @default(true)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  delegationHistories       DelegationHistory[]
+  restaurant                Restaurant?         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  trader                    Admin?              @relation("TraderWallet", fields: [traderId], references: [id], onDelete: Cascade)
+  transactions              WalletTransaction[]
 
   @@index([restaurantId])
   @@index([traderId])
   @@index([isActive])
 }
 
-// Wallet transaction model for tracking all wallet activities
 model WalletTransaction {
-  id              String                @id @default(uuid())
-  walletId        String
-  adminId         String?
-  restaurantId    String?
-  affiliatorId    String?
-  traderId        String?
-  type            WalletTransactionType
-  amount          Float // Positive for credit, negative for debit
-  previousBalance Float
-  newBalance      Float
-  description     String?
-  reference       String? // Reference to related entity (order, etc.)
-
-  // Integration fields for top-ups
-  flwTxRef      String? @unique
-  flwRef        String?
-  flwStatus     String?
-  flwMessage    String?
-  paymentMethod String?
-  externalTxId  String?
-
-  // Withdraw fields
-  withdrawType  WithdrawType?
-  accountNumber String?
-  accountName   String?
-  otp           String?
-  otpExpiresAt  DateTime?
-  otpVerified   Boolean?      @default(false)
-  approvedBy    String? // Admin ID who approved the withdraw
-  approvedAt        DateTime? // When withdraw was approved (for 45-day countdown)
-  paymentProofImage String? // Cloudinary URL of payment proof (screenshot/receipt)
-  isReversed    Boolean       @default(false) // Track if transaction is a reversal
-
-  status   TransactionStatus @default(PENDING)
-  metadata Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  wallet     Wallet      @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  admin      Admin?      @relation("WalletTransactionAdmin", fields: [adminId], references: [id], onDelete: Cascade)
-  restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  affiliator Affiliator? @relation(fields: [affiliatorId], references: [id], onDelete: Cascade)
-  trader     Admin?      @relation("TraderTransactions", fields: [traderId], references: [id], onDelete: Cascade)
-  approver   Admin?      @relation("WithdrawApprover", fields: [approvedBy], references: [id])
+  id                String                @id @default(uuid())
+  walletId          String
+  adminId           String?
+  restaurantId      String?
+  affiliatorId      String?
+  traderId          String?
+  type              WalletTransactionType
+  amount            Float
+  previousBalance   Float
+  newBalance        Float
+  description       String?
+  reference         String?
+  flwTxRef          String?               @unique
+  flwRef            String?
+  flwStatus         String?
+  flwMessage        String?
+  paymentMethod     String?
+  externalTxId      String?
+  withdrawType      WithdrawType?
+  accountNumber     String?
+  accountName       String?
+  otp               String?
+  otpExpiresAt      DateTime?
+  otpVerified       Boolean?              @default(false)
+  approvedBy        String?
+  approvedAt        DateTime?
+  paymentProofImage String?
+  isReversed        Boolean               @default(false)
+  status            TransactionStatus     @default(PENDING)
+  metadata          Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  admin             Admin?                @relation("WalletTransactionAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  affiliator        Affiliator?           @relation(fields: [affiliatorId], references: [id], onDelete: Cascade)
+  approver          Admin?                @relation("WithdrawApprover", fields: [approvedBy], references: [id])
+  restaurant        Restaurant?           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  trader            Admin?                @relation("TraderTransactions", fields: [traderId], references: [id], onDelete: Cascade)
+  wallet            Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([type])
@@ -761,61 +718,52 @@ model POSSale {
   restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
 }
 
-// Subscription Plan model
 model SubscriptionPlan {
-  id                 String   @id @default(uuid())
-  name               String   @unique
+  id                 String                   @id @default(uuid())
+  name               String                   @unique
   description        String?
   price              Float
-  voucherAccess      Boolean  @default(false)
-  voucherPaymentDays Int      @default(30) // Number of days for voucher payment
-  freeDelivery       Boolean  @default(false)
-  stablePricing      Boolean  @default(false)
-  receiveEBM         Boolean  @default(false)
-  advertisingAccess  Boolean  @default(false)
-  otherServices      Boolean  @default(false)
-  duration           Int // Duration in days
-  features           String[] // Array of features included in the plan
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  // Relations
-  subscriptions RestaurantSubscription[]
+  voucherAccess      Boolean                  @default(false)
+  voucherPaymentDays Int                      @default(30)
+  freeDelivery       Boolean                  @default(false)
+  stablePricing      Boolean                  @default(false)
+  receiveEBM         Boolean                  @default(false)
+  advertisingAccess  Boolean                  @default(false)
+  otherServices      Boolean                  @default(false)
+  duration           Int
+  features           String[]
+  isActive           Boolean                  @default(true)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  subscriptions      RestaurantSubscription[]
 
   @@index([isActive])
   @@index([name])
 }
 
-// Restaurant Subscription model
 model RestaurantSubscription {
-  id                String             @id @default(uuid())
+  id                String                @id @default(uuid())
   restaurantId      String?
   farmerId          String?
   planId            String
-  status            SubscriptionStatus @default(ACTIVE)
-  startDate         DateTime           @default(now())
+  status            SubscriptionStatus    @default(ACTIVE)
+  startDate         DateTime              @default(now())
   endDate           DateTime
-  autoRenew         Boolean            @default(true)
+  autoRenew         Boolean               @default(true)
   paymentMethod     String?
-  paymentStatus     PaymentStatus      @default(PENDING)
-  expiryWarningSent Boolean            @default(false)
-
-  // Payment tracking
-  txRef         String? @unique
-  flwRef        String?
-  transactionId String?
-  amountPaid    Float?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  restaurant Restaurant?           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  farmer     Farmer?               @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  plan       SubscriptionPlan      @relation(fields: [planId], references: [id])
-  payments   SubscriptionPayment[]
-  history    SubscriptionHistory[]
+  paymentStatus     PaymentStatus         @default(PENDING)
+  expiryWarningSent Boolean               @default(false)
+  txRef             String?               @unique
+  flwRef            String?
+  transactionId     String?
+  amountPaid        Float?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  farmer            Farmer?               @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  plan              SubscriptionPlan      @relation(fields: [planId], references: [id])
+  restaurant        Restaurant?           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  history           SubscriptionHistory[]
+  payments          SubscriptionPayment[]
 
   @@index([restaurantId])
   @@index([farmerId])
@@ -824,36 +772,29 @@ model RestaurantSubscription {
   @@index([endDate])
 }
 
-// Subscription Payment model
 model SubscriptionPayment {
-  id             String        @id @default(uuid())
+  id             String                 @id @default(uuid())
   subscriptionId String
   amount         Float
   paymentMethod  String
-  paymentStatus  PaymentStatus @default(PENDING)
-
-  // Payment integration fields
-  txRef         String? @unique
-  flwRef        String?
-  transactionId String?
-  flwStatus     String?
-  flwMessage    String?
-
-  paidAt    DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  // Relations
-  subscription RestaurantSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  paymentStatus  PaymentStatus          @default(PENDING)
+  txRef          String?                @unique
+  flwRef         String?
+  transactionId  String?
+  flwStatus      String?
+  flwMessage     String?
+  paidAt         DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  subscription   RestaurantSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   @@index([subscriptionId])
   @@index([paymentStatus])
   @@index([txRef])
 }
 
-// Subscription History model for tracking changes
 model SubscriptionHistory {
-  id             String              @id @default(uuid())
+  id             String                 @id @default(uuid())
   subscriptionId String
   action         SubscriptionAction
   oldStatus      SubscriptionStatus?
@@ -861,11 +802,9 @@ model SubscriptionHistory {
   oldPlanId      String?
   newPlanId      String?
   reason         String?
-  performedBy    String? // Admin ID who performed the action
-  createdAt      DateTime            @default(now())
-
-  // Relations
-  subscription RestaurantSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  performedBy    String?
+  createdAt      DateTime               @default(now())
+  subscription   RestaurantSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   @@index([subscriptionId])
   @@index([action])
@@ -873,58 +812,38 @@ model SubscriptionHistory {
 }
 
 model Voucher {
-  id                 String      @id @default(uuid())
-  voucherCode        String      @unique
+  id                 String               @id @default(uuid())
+  voucherCode        String               @unique
   voucherType        VoucherType
-  discountPercentage Float // 10, 20, 50, 80, 100
-
-  // Credit limits
-  creditLimit Float
-  currency    VoucherCurrency @default(RWF)
-
-  // Credit tracking
-  totalCredit     Float
-  usedCredit      Float @default(0)
-  remainingCredit Float
-
-  // Payment tracking
-  paidAmount      Float @default(0)
-  remainingAmount Float @default(0)
-
-  // Commission tracking
-  commission Float @default(0) // Commission amount saved when voucher is used
-
-  // Status and dates
-  status     VoucherStatus @default(ACTIVE)
-  expiryDate DateTime?
-  issuedDate DateTime      @default(now())
-  approvedBy String?
-
-  // Relations
-  restaurantId String?
-  farmerId     String?
-  loanId       String?
-
-  // Repayment days
-  repaymentDays Int @default(7)
-
-  // Service fee
-  serviceFeeRate Float @default(0) // 0% service fee
-
-  // Timestamps
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  // Relations
-  restaurant   Restaurant?          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  farmer       Farmer?              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  loan         LoanApplication?     @relation(fields: [loanId], references: [id])
-  approver     Admin?               @relation(fields: [approvedBy], references: [id])
-  transactions VoucherTransaction[]
-  repayments   VoucherRepayment[]
-  penalties    VoucherPenalty[]
-  orders       Order[]
+  discountPercentage Float
+  creditLimit        Float
+  currency           VoucherCurrency      @default(RWF)
+  totalCredit        Float
+  usedCredit         Float                @default(0)
+  remainingCredit    Float
+  paidAmount         Float                @default(0)
+  remainingAmount    Float                @default(0)
+  commission         Float                @default(0)
+  status             VoucherStatus        @default(ACTIVE)
+  expiryDate         DateTime?
+  issuedDate         DateTime             @default(now())
+  approvedBy         String?
+  restaurantId       String?
+  farmerId           String?
+  loanId             String?
+  repaymentDays      Int                  @default(7)
+  serviceFeeRate     Float                @default(0)
+  usedAt             DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  orders             Order[]
+  approver           Admin?               @relation(fields: [approvedBy], references: [id])
+  farmer             Farmer?              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  loan               LoanApplication?     @relation(fields: [loanId], references: [id])
+  restaurant         Restaurant?          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  penalties          VoucherPenalty[]
+  repayments         VoucherRepayment[]
+  transactions       VoucherTransaction[]
 
   @@index([restaurantId])
   @@index([farmerId])
@@ -934,40 +853,28 @@ model Voucher {
 }
 
 model LoanApplication {
-  id              String  @id @default(uuid())
-  restaurantId    String?
-  farmerId        String?
-  requestedAmount Float
-  purpose         String?
-
-  // Repayment days (from voucher or explicitly set)
-  repaymentDays Int?
-
-  // Approval workflow
-  status         LoanStatus @default(PENDING)
-  approvedAmount Float?
-  approvedBy     String? // Admin ID
-  managedBy      String? // Admin ID who manage trader's account
-
-  // Dates
+  id               String             @id @default(uuid())
+  restaurantId     String?
+  farmerId         String?
+  requestedAmount  Float
+  purpose          String?
+  repaymentDays    Int?
+  status           LoanStatus         @default(PENDING)
+  approvedAmount   Float?
+  approvedBy       String?
+  managedBy        String?
   disbursementDate DateTime?
-  repaymentDueDate DateTime? // Calculated based on repaymentDays
-
-  // Additional info
-  notes String?
-
-  // Timestamps
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  approvedAt DateTime?
-
-  // Relations
-  restaurant Restaurant?        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  farmer     Farmer?            @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  approver   Admin?             @relation("LoanApprover", fields: [approvedBy], references: [id])
-  manager    Admin?             @relation("LoanManager", fields: [managedBy], references: [id])
-  vouchers   Voucher[]
-  repayments VoucherRepayment[]
+  repaymentDueDate DateTime?
+  notes            String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  approvedAt       DateTime?
+  approver         Admin?             @relation("LoanApprover", fields: [approvedBy], references: [id])
+  farmer           Farmer?            @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  manager          Admin?             @relation("LoanManager", fields: [managedBy], references: [id])
+  restaurant       Restaurant?        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  vouchers         Voucher[]
+  repayments       VoucherRepayment[]
 
   @@index([restaurantId])
   @@index([farmerId])
@@ -976,29 +883,23 @@ model LoanApplication {
 }
 
 model VoucherTransaction {
-  id           String  @id @default(uuid())
-  voucherId    String
-  orderId      String
-  restaurantId String?
-  farmerId     String?
-
-  // Transaction amounts
+  id                 String      @id @default(uuid())
+  voucherId          String
+  orderId            String
+  restaurantId       String?
+  farmerId           String?
   originalAmount     Float
   discountPercentage Float
   discountAmount     Float
-  amountCharged      Float // After discount
-  serviceFee         Float // 10% of amountCharged
-  totalDeducted      Float // amountCharged + serviceFee
-
-  // Timestamps
-  transactionDate DateTime @default(now())
-  createdAt       DateTime @default(now())
-
-  // Relations
-  voucher    Voucher     @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  farmer     Farmer?     @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  amountCharged      Float
+  serviceFee         Float
+  totalDeducted      Float
+  transactionDate    DateTime    @default(now())
+  createdAt          DateTime    @default(now())
+  farmer             Farmer?     @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  order              Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurant         Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  voucher            Voucher     @relation(fields: [voucherId], references: [id], onDelete: Cascade)
 
   @@index([voucherId])
   @@index([orderId])
@@ -1008,32 +909,24 @@ model VoucherTransaction {
 }
 
 model VoucherRepayment {
-  id           String  @id @default(uuid())
-  voucherId    String?
-  restaurantId String?
-  farmerId     String?
-  loanId       String
-
-  // Payment details
-  amount           Float
-  paymentMethod    String
-  paymentReference String?
-
-  // Allocation breakdown
+  id                    String          @id @default(uuid())
+  voucherId             String?
+  restaurantId          String?
+  farmerId              String?
+  loanId                String
+  amount                Float
+  paymentMethod         String
+  paymentReference      String?
   allocatedToPrincipal  Float
   allocatedToServiceFee Float
   allocatedToPenalty    Float
-
-  // Timestamps
-  paymentDate DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  voucher    Voucher?        @relation(fields: [voucherId], references: [id])
-  restaurant Restaurant?     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  farmer     Farmer?         @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  paymentDate           DateTime        @default(now())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  farmer                Farmer?         @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  loan                  LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  restaurant            Restaurant?     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  voucher               Voucher?        @relation(fields: [voucherId], references: [id])
 
   @@index([voucherId])
   @@index([restaurantId])
@@ -1043,29 +936,21 @@ model VoucherRepayment {
 }
 
 model VoucherPenalty {
-  id           String  @id @default(uuid())
-  voucherId    String
-  restaurantId String?
-  farmerId     String?
-
-  // Penalty details
+  id            String        @id @default(uuid())
+  voucherId     String
+  restaurantId  String?
+  farmerId      String?
   penaltyAmount Float
   daysOverdue   Int
-  penaltyRate   Float // e.g., 2% per month
+  penaltyRate   Float
   reason        String?
-
-  // Status
-  status PenaltyStatus @default(PENDING)
-
-  // Timestamps
-  appliedDate DateTime  @default(now())
-  paidDate    DateTime?
-  createdAt   DateTime  @default(now())
-
-  // Relations
-  voucher    Voucher     @relation(fields: [voucherId], references: [id], onDelete: Cascade)
-  restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  farmer     Farmer?     @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  status        PenaltyStatus @default(PENDING)
+  appliedDate   DateTime      @default(now())
+  paidDate      DateTime?
+  createdAt     DateTime      @default(now())
+  farmer        Farmer?       @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  restaurant    Restaurant?   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  voucher       Voucher       @relation(fields: [voucherId], references: [id], onDelete: Cascade)
 
   @@index([voucherId])
   @@index([restaurantId])
@@ -1075,17 +960,15 @@ model VoucherPenalty {
 }
 
 model Post {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   restaurantId String
   content      String
   images       String[]
   videos       String[]
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // Relations
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
   @@index([isActive])
@@ -1113,10 +996,10 @@ model Notification {
   message    String
   eventType  NotificationEvent
   targetType NotificationTarget
-  targetId   String? // Specific user ID when targetType is SPECIFIC_USER
-  targetRole Role? // Role when targetType is ROLE_BASED
+  targetId   String?
+  targetRole Role?
   isRead     Boolean            @default(false)
-  metadata   Json? // Additional data related to the notification
+  metadata   Json?
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
 
@@ -1133,7 +1016,7 @@ model Invitation {
   email     String   @unique
   token     String   @unique
   role      Role
-  expiresAt DateTime // Valid for 24 hours
+  expiresAt DateTime
   isUsed    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1144,30 +1027,22 @@ model Invitation {
 }
 
 model TraderTransaction {
-  id       String                @id @default(uuid())
-  traderId String
-  type     TraderTransactionType
-  amount   Float
-
-  // Reference tracking
-  orderId   String?
-  voucherId String?
-  loanId    String?
-  reference String? // Generic reference field
-
-  // Commission tracking
-  isCommissionPaid Boolean @default(false)
-  commissionRate   Float? // e.g., 0.05 for 5%
-
-  description String?
-  metadata    Json?
-  status      TransactionStatus @default(COMPLETED)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  trader Admin @relation("TraderTransactionHistory", fields: [traderId], references: [id], onDelete: Cascade)
+  id               String                @id @default(uuid())
+  traderId         String
+  type             TraderTransactionType
+  amount           Float
+  orderId          String?
+  voucherId        String?
+  loanId           String?
+  reference        String?
+  isCommissionPaid Boolean               @default(false)
+  commissionRate   Float?
+  description      String?
+  metadata         Json?
+  status           TransactionStatus     @default(COMPLETED)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  trader           Admin                 @relation("TraderTransactionHistory", fields: [traderId], references: [id], onDelete: Cascade)
 
   @@index([traderId])
   @@index([type])
@@ -1178,21 +1053,12 @@ model TraderTransaction {
   @@index([createdAt])
 }
 
-enum TraderTransactionType {
-  LOAN_APPROVAL
-  LOAN_REVERSAL
-  COMMISSION_EARNED
-  COMMISSION_PAID
-  WALLET_TOPUP
-  WALLET_DEBIT
-}
-
 model ContactSubmission {
   id        String   @id @default(cuid())
   name      String
   email     String
   message   String
-  status    String   @default("unread") // unread, read, responded
+  status    String   @default("unread")
   response  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1200,89 +1066,34 @@ model ContactSubmission {
   @@map("contact_submissions")
 }
 
-// ============================================
-// SUPPORT REQUEST SCHEMA
-// ============================================
-
-model SupportRequest {
-  id               String   @id @default(uuid())
-  ticketNumber     String   @unique
-  name             String
-  email            String
-  subject          String
-  category         String // orders, delivery, payments, account, products, refunds, technical, other
-  severity         String? // low, medium, high, critical
-  preferredContact String   @default("email") // email, phone, whatsapp
-  description      String
-  screenshots      String[] @default([]) // URLs to uploaded images
-  status           String   @default("open") // open, in_progress, resolved, closed
-  response         String?
-  respondedAt      DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@map("support_requests")
-  @@index([email])
-  @@index([status])
-  @@index([ticketNumber])
-}
-
-// ============================================
-// PROMO CODE SCHEMA
-// ============================================
-
 model PromoCode {
-  id          String  @id @default(uuid())
-  code        String  @unique
-  name        String // Display name for the promo code
-  description String? // Description of what the promo offers
-
-  // Type and discount configuration
-  type          PromoCodeType
-  discountType  DiscountType  @default(PERCENTAGE)
-  discountValue Float // percentage (0-100) or fixed amount in RWF
-
-  // Usage limits and tracking
-  isReusable        Boolean @default(true)
-  maxUsageCount     Int? // null = unlimited global usage
-  currentUsageCount Int     @default(0)
-  maxUsagePerUser   Int? // null = unlimited per user
-
-  // Minimum requirements
-  minOrderAmount  Float? // Minimum total order amount to use promo
-  minItemQuantity Int? // Minimum quantity of items
-
-  // Application scope
-  applyToAllProducts    Boolean  @default(true)
-  applicableProductIds  String[] // Specific products (if not all)
-  applicableCategoryIds String[] // Specific categories (if not all)
-
-  // Validity period
-  isActive   Boolean   @default(true)
-  startDate  DateTime? // When promo becomes active
-  expiryDate DateTime? // When promo expires
-
-  // Usage tracking - stores JSON array of usage records
-  usageHistory Json? // [{restaurantId, orderId, originalAmount, discountAmount, finalAmount, itemsDiscounted, usedAt}]
-
-  // Exclusions - stores JSON array of excluded restaurants
-  excludedRestaurants Json? // [{restaurantId, reason, excludedBy, excludedAt}]
-
-  // Inclusions - stores JSON array of included restaurants for private promo codes
-  includedRestaurants Json? // [{restaurantId, reason, includedBy, includedAt}]
-
-  // Per-restaurant usage count tracking
-  restaurantUsageCount Json? // {restaurantId: count}
-
-  // Creator information
-  createdBy String? // Admin ID who created the promo
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  admin Admin? @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  id                    String        @id @default(uuid())
+  code                  String        @unique
+  name                  String
+  description           String?
+  type                  PromoCodeType
+  discountType          DiscountType  @default(PERCENTAGE)
+  discountValue         Float
+  isReusable            Boolean       @default(true)
+  maxUsageCount         Int?
+  currentUsageCount     Int           @default(0)
+  maxUsagePerUser       Int?
+  minOrderAmount        Float?
+  minItemQuantity       Int?
+  applyToAllProducts    Boolean       @default(true)
+  applicableProductIds  String[]
+  applicableCategoryIds String[]
+  isActive              Boolean       @default(true)
+  startDate             DateTime?
+  expiryDate            DateTime?
+  usageHistory          Json?
+  excludedRestaurants   Json?
+  includedRestaurants   Json?
+  restaurantUsageCount  Json?
+  createdBy             String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  admin                 Admin?        @relation(fields: [createdBy], references: [id])
 
   @@index([code])
   @@index([type])
@@ -1292,18 +1103,16 @@ model PromoCode {
   @@index([createdBy])
 }
 
-// Delegation History - tracks all delegation control changes
 model DelegationHistory {
   id         String    @id @default(uuid())
   walletId   String
-  action     String    @default("REQUESTED") // "AUTO_DELEGATED", "REVOKED", "REQUESTED", "APPROVED", "ACCEPTED"
+  action     String    @default("REQUESTED")
   startedAt  DateTime  @default(now())
   endedAt    DateTime?
   reason     String?
   approvedBy String?
   createdAt  DateTime  @default(now())
-
-  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  wallet     Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([startedAt])
@@ -1325,25 +1134,18 @@ model NotificationRecipient {
   @@index([phoneNumber])
 }
 
-// ============================================
-// MARKET PRICE TRACKING SCHEMA
-// ============================================
-
-// External markets for price comparison
 model Market {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  createdBy String
-  location  String? // Can be street address or GPS coordinates
-  province  String?
-  district  String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  priceHistory MarketPriceHistory[]
+  id           String               @id @default(uuid())
+  name         String               @unique
+  createdBy    String
+  location     String?
+  province     String?
+  district     String?
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
   admin        Admin                @relation(fields: [createdBy], references: [id])
+  priceHistory MarketPriceHistory[]
 
   @@index([name])
   @@index([province])
@@ -1351,27 +1153,67 @@ model Market {
   @@index([isActive])
 }
 
-// Market price history for product comparison
 model MarketPriceHistory {
   id           String   @id @default(uuid())
-  productId    String // Our product ID for comparison
+  productId    String
   marketId     String
-  ourPrice     Float // Price from our database at the time
-  marketPrice  Float // Price at the external market
+  ourPrice     Float
+  marketPrice  Float
   recordedBy   String
   recordedDate DateTime @default(now())
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-
-  // Relations
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  market  Market  @relation(fields: [marketId], references: [id], onDelete: Cascade)
-  admin   Admin   @relation(fields: [recordedBy], references: [id])
+  market       Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  admin        Admin    @relation(fields: [recordedBy], references: [id])
 
   @@index([productId])
   @@index([marketId])
   @@index([recordedDate])
   @@index([createdAt])
+}
+
+model NewsletterSubscriber {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String?
+  phone        String?
+  restaurantId String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([email])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model NewsletterCampaign {
+  id             String           @id @default(uuid())
+  subject        String
+  content        String
+  status         NewsletterStatus @default(DRAFT)
+  sentAt         DateTime?
+  sentBy         String
+  recipientCount Int              @default(0)
+  openCount      Int              @default(0)
+  clickCount     Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  admin          Admin            @relation(fields: [sentBy], references: [id])
+
+  @@index([status])
+  @@index([sentAt])
+  @@index([createdAt])
+}
+
+enum TraderTransactionType {
+  LOAN_APPROVAL
+  LOAN_REVERSAL
+  COMMISSION_EARNED
+  COMMISSION_PAID
+  WALLET_TOPUP
+  WALLET_DEBIT
 }
 
 enum Role {
@@ -1384,7 +1226,6 @@ enum Role {
   AFFILIATOR
   TRADER
   SUPERUSER
-  MARKET_PRICES
 }
 
 enum SubmissionStatus {
@@ -1395,10 +1236,10 @@ enum SubmissionStatus {
 }
 
 enum FarmerFeedbackStatus {
-  PENDING // Farmer hasn't provided feedback yet
-  ACCEPTED // Farmer accepted the purchase terms
-  REJECTED // Farmer rejected the purchase terms
-  EXTENDED // Farmer requested extension/negotiation
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXTENDED
 }
 
 enum ProductStatus {
@@ -1406,14 +1247,12 @@ enum ProductStatus {
   INACTIVE
 }
 
-// Cart status enum
 enum CartStatus {
-  ACTIVE // Cart is active and can be modified
-  CHECKED_OUT // Cart has been converted to an order
-  ABANDONED // Cart has been abandoned (optional for cleanup)
+  ACTIVE
+  CHECKED_OUT
+  ABANDONED
 }
 
-// Payment status enum
 enum PaymentStatus {
   PENDING
   PROCESSING
@@ -1424,16 +1263,15 @@ enum PaymentStatus {
   VOUCHER_CREDIT
 }
 
-// Order status enum
 enum OrderStatus {
-  PENDING // Order created, waiting for confirmation
-  CONFIRMED // Order confirmed, being prepared
-  PREPARING // Order is being prepared
-  READY // Order ready for pickup/delivery
-  IN_TRANSIT // Order out for delivery
-  DELIVERED // Order successfully delivered
-  CANCELLED // Order cancelled
-  REFUNDED // Order refunded
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+  REFUNDED
 }
 
 enum DeliveryStatus {
@@ -1446,15 +1284,14 @@ enum DeliveryStatus {
   CANCELLED
 }
 
-// Enum for wallet transaction types
 enum WalletTransactionType {
   TOP_UP
   PAYMENT
   REFUND
-  ADJUSTMENT // Manual adjustment by admin
+  ADJUSTMENT
   WITHDRAWAL
   TRADING
-  REVERSAL // For returning pending amounts from expired vouchers
+  REVERSAL
 }
 
 enum WithdrawType {
@@ -1462,7 +1299,6 @@ enum WithdrawType {
   COMMISSION
 }
 
-// Enum for transaction status
 enum TransactionStatus {
   PENDING
   PROCESSING
@@ -1534,6 +1370,7 @@ enum OTPPurpose {
   RESTAURANT_SIGNUP
   VOUCHER_CHECKOUT
   ADMIN_WALLET_OPERATION
+  PASSWORD_RESET
 }
 
 enum NotificationEvent {
@@ -1558,26 +1395,22 @@ enum NotificationTarget {
   ALL_USERS
 }
 
-// ============================================
-// PROMO CODE ENUMS
-// ============================================
-
 enum PromoCodeType {
-  PUBLIC // Available to all users
-  SUBSCRIBERS // Only for users with active subscriptions
-  EXCEPTIONAL // Available to all except explicitly excluded users
+  PUBLIC
+  SUBSCRIBERS
+  EXCEPTIONAL
 }
 
 enum DiscountType {
-  PERCENTAGE // Discount as percentage (e.g., 10% off)
-  FIXED_AMOUNT // Fixed amount discount (e.g., 5000 RWF off)
+  PERCENTAGE
+  FIXED_AMOUNT
 }
 
 enum DelegationStatus {
-  NORMAL // No delegation active or requested
-  PENDING // Trader requested delegation
-  APPROVED // Admin approved, waiting for trader acceptance
-  ACCEPTED // Trader accepted, delegation is active (used for both manual and auto-delegation)
+  NORMAL
+  PENDING
+  APPROVED
+  ACCEPTED
 }
 
 enum NotificationCategory {
@@ -1586,46 +1419,6 @@ enum NotificationCategory {
   LOW_STOCK
   PAYMENT_ISSUES
   SYSTEM_ALERTS
-}
-
-// ============================================
-// NEWSLETTER SCHEMA
-// ============================================
-
-model NewsletterSubscriber {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  name         String?
-  phone        String?
-  restaurantId String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@index([email])
-  @@index([isActive])
-  @@index([createdAt])
-}
-
-model NewsletterCampaign {
-  id             String           @id @default(uuid())
-  subject        String
-  content        String
-  status         NewsletterStatus @default(DRAFT)
-  sentAt         DateTime?
-  sentBy         String
-  recipientCount Int              @default(0)
-  openCount      Int              @default(0)
-  clickCount     Int              @default(0)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  // Relations
-  admin Admin @relation(fields: [sentBy], references: [id])
-
-  @@index([status])
-  @@index([sentAt])
-  @@index([createdAt])
 }
 
 enum NewsletterStatus {
