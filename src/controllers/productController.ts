@@ -22,8 +22,6 @@ export const createProduct = async (req: Request, res: Response) => {
       tableTronicProductId,
       productName,
       unitPrice,
-      restaurantPrice,
-      hotelPrice,
       purchasePrice,
       categoryId,
       bonus,
@@ -32,6 +30,7 @@ export const createProduct = async (req: Request, res: Response) => {
       expiryDate,
       unit,
       unitId,
+      customerTypePrices,
     } = req.body;
     const adminId = (req as any).user.id;
 
@@ -59,8 +58,6 @@ export const createProduct = async (req: Request, res: Response) => {
       unitId,
       productName,
       unitPrice,
-      restaurantPrice,
-      hotelPrice,
       purchasePrice,
       categoryId,
       bonus,
@@ -70,6 +67,11 @@ export const createProduct = async (req: Request, res: Response) => {
       expiryDate: expiryDate ? new Date(expiryDate) : null,
       unit,
       createdBy: adminId,
+      customerTypePrices: customerTypePrices
+        ? typeof customerTypePrices === "string"
+          ? JSON.parse(customerTypePrices)
+          : customerTypePrices
+        : [],
     });
 
     // BROADCAST NEW PRODUCT VIA WEBSOCKET
@@ -240,6 +242,10 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
 
     const result = await updateProductService(productId, updateData, adminId);
+
+    if (!result) {
+      return res.status(404).json({ message: "Product not found after update" });
+    }
 
     console.log("The updated result", result);
 
