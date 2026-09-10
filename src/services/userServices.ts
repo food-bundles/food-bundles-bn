@@ -20,6 +20,7 @@ import {
 import { PaginationService } from "./paginationService";
 import { LocationValidationService } from "./location.service";
 import { validateTIN } from "../utils/validateTin";
+import { getFriendlyPrismaError } from "../utils/prismaError";
 import { createNotificationService } from "./notification.services";
 import {
   generateFarmerPIN,
@@ -1051,6 +1052,174 @@ export const loginService = async (loginData: ILoginData) => {
     userType: foundUserType,
     message: "Login successful",
   };
+};
+
+// GOOGLE LOGIN SERVICE
+export const googleLoginService = async (googleUser: {
+  email: string;
+  name: string;
+  googleId: string;
+}) => {
+  const { email, name, googleId } = googleUser;
+
+  let user: any = null;
+  let foundUserType = "";
+
+  // Search by email across all user tables (same order as loginService)
+  user = await prisma.farmer.findFirst({
+    where: { email },
+  });
+  if (user) foundUserType = "farmer";
+
+  if (!user) {
+    user = await prisma.restaurant.findFirst({
+      where: { email },
+    });
+    if (user) {
+      foundUserType = "restaurant";
+      if (!user.verified) {
+        throw new Error("Your account is not verified yet.");
+      }
+      if (!user.agreed) {
+        throw new Error(
+          "You must agree to the Terms and Conditions before logging in.",
+        );
+      }
+    }
+  }
+
+  if (!user) {
+    user = await prisma.affiliator.findFirst({
+      where: { email },
+    });
+    if (user) foundUserType = "affiliator";
+  }
+
+  if (!user) {
+    user = await prisma.admin.findFirst({
+      where: { email },
+    });
+    if (user) foundUserType = "admin";
+  }
+
+  // If user not found, return indication for frontend to handle registration
+  if (!user) {
+    return {
+      userNotFound: true,
+      email,
+      name,
+      googleId,
+      message: "No account found. Please complete registration.",
+    };
+  }
+
+  const { password: _, ...userWithoutPassword } = user;
+
+  return {
+    user: userWithoutPassword,
+    userType: foundUserType,
+    userNotFound: false,
+    message: "Google login successful",
+  };
+};
+
+// GOOGLE SIGNUP SERVICE
+export const googleSignupService = async (data: {
+  email: string;
+  name: string;
+  role: string;
+  phone?: string;
+  tin?: string;
+  location?: string;
+}) => {
+  const { email, name, role, phone, tin, location } = data;
+
+  // Check if email already exists across all tables
+  const existingUser = await checkExistingUser(undefined, email);
+  if (existingUser) {
+    throw new Error("An account with this email already exists");
+  }
+
+  // Check if phone already exists across all tables
+  if (phone) {
+    const existingPhone = await checkExistingUser(phone);
+    if (existingPhone) {
+      throw new Error(
+        "This phone number is already registered. Please use a different phone number.",
+      );
+    }
+  }
+
+  if (role === "FARMER") {
+    try {
+      const farmer = await prisma.farmer.create({
+        data: {
+          email,
+          name: name || undefined,
+          phone: phone || undefined,
+          location: location || undefined,
+          role: "FARMER",
+          phoneVerified: false,
+        },
+      });
+
+      const { password: _, ...farmerWithoutPassword } = farmer;
+      return {
+        user: farmerWithoutPassword,
+        userType: "farmer",
+        message: "Account created successfully",
+      };
+    } catch (error: any) {
+      const friendlyMessage = getFriendlyPrismaError(error);
+      throw new Error(friendlyMessage || `Failed to create account: ${error.message}`);
+    }
+  } else if (role === "RESTAURANT" || role === "HOTEL") {
+    if (!tin) {
+      throw new Error("TIN number is required for restaurant/hotel accounts");
+    }
+
+    // Validate TIN
+    if (!validateTIN(tin)) {
+      throw new Error("TIN must be a valid 9-digit number");
+    }
+
+    // Check TIN uniqueness
+    const existingTin = await prisma.restaurant.findUnique({
+      where: { tin },
+    });
+    if (existingTin) {
+      throw new Error("This TIN is already registered");
+    }
+
+    try {
+      const restaurant = await prisma.restaurant.create({
+        data: {
+          name,
+          email,
+          phone: phone || undefined,
+          tin,
+          location: location || undefined,
+          role: role as any,
+          password: "", // No password for Google signups - they authenticate via Google
+          verified: false,
+          agreed: false,
+        },
+      });
+
+      const { password: _, ...restaurantWithoutPassword } = restaurant;
+      return {
+        user: restaurantWithoutPassword,
+        userType: "restaurant",
+        message:
+          "Account created successfully. Please verify your phone number.",
+      };
+    } catch (error: any) {
+      const friendlyMessage = getFriendlyPrismaError(error);
+      throw new Error(friendlyMessage || `Failed to create account: ${error.message}`);
+    }
+  } else {
+    throw new Error("Invalid role for Google signup");
+  }
 };
 
 // PASSWORD RESET SERVICES
