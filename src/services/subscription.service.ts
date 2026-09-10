@@ -74,6 +74,8 @@ interface CreateSubscriptionPlanData {
   features?: string[];
   voucherAccess?: boolean;
   voucherPaymentDays?: number;
+  loanAccess?: boolean;
+  loanProviderId?: string;
   freeDelivery?: boolean;
   stablePricing?: boolean;
   receiveEBM?: boolean;
@@ -90,6 +92,8 @@ interface UpdateSubscriptionPlanData {
   isActive?: boolean;
   voucherAccess?: boolean;
   voucherPaymentDays?: number;
+  loanAccess?: boolean;
+  loanProviderId?: string;
   freeDelivery?: boolean;
   stablePricing?: boolean;
   receiveEBM?: boolean;
@@ -128,6 +132,8 @@ export const createSubscriptionPlanService = async (
     features,
     voucherAccess,
     voucherPaymentDays,
+    loanAccess,
+    loanProviderId,
     freeDelivery,
     stablePricing,
     receiveEBM,
@@ -156,6 +162,16 @@ export const createSubscriptionPlanService = async (
     throw new Error("Voucher payment days must be greater than 0");
   }
 
+  // Validate loan provider if loanAccess is enabled
+  if (loanAccess && loanProviderId) {
+    const provider = await prisma.loanProvider.findUnique({
+      where: { id: loanProviderId },
+    });
+    if (!provider || !provider.isActive) {
+      throw new Error("Loan provider not found or is inactive");
+    }
+  }
+
   const plan = await prisma.subscriptionPlan.create({
     data: {
       name,
@@ -165,6 +181,8 @@ export const createSubscriptionPlanService = async (
       features,
       voucherAccess,
       voucherPaymentDays,
+      loanAccess,
+      loanProviderId,
       freeDelivery,
       stablePricing,
       receiveEBM,
@@ -374,6 +392,16 @@ export const updateSubscriptionPlanService = async (
     data.voucherPaymentDays <= 0
   ) {
     throw new Error("Voucher payment days must be greater than 0");
+  }
+
+  // Validate loan provider if loanAccess is being enabled
+  if (data.loanAccess && data.loanProviderId) {
+    const provider = await prisma.loanProvider.findUnique({
+      where: { id: data.loanProviderId },
+    });
+    if (!provider || !provider.isActive) {
+      throw new Error("Loan provider not found or is inactive");
+    }
   }
 
   const updatedPlan = await prisma.subscriptionPlan.update({
@@ -2096,4 +2124,491 @@ export const adminCreateRestaurantSubscriptionService = async (data: {
   });
 
   return { subscription, payment: paymentResult };
+};
+
+// ============================================
+// LOAN ACCESS (reuses the single subscription)
+// ============================================
+
+/**
+ * Create a loan provider (e.g. Kayko).
+ * Loan providers are referenced by subscription plans to grant loan access.
+ */
+export const createLoanProviderService = async (data: {
+  name: string;
+  description?: string;
+  unlockFeeEnabled?: boolean;
+  unlockFeePercentage?: number | null;
+  termsAndConditions?: string;
+}) => {
+  const existing = await prisma.loanProvider.findUnique({ where: { name: data.name } });
+  if (existing) throw new Error("Loan provider with this name already exists");
+
+  return prisma.loanProvider.create({
+    data: {
+      name: data.name,
+      description: data.description,
+      isActive: true,
+      unlockFeeEnabled: data.unlockFeeEnabled ?? false,
+      unlockFeePercentage:
+        data.unlockFeeEnabled && data.unlockFeePercentage ? data.unlockFeePercentage : null,
+      termsAndConditions: data.termsAndConditions,
+    },
+  });
+};
+
+export const getAllLoanProvidersService = async () => {
+  return prisma.loanProvider.findMany({
+    include: {
+      plans: {
+        select: { id: true, name: true, price: true, duration: true, isActive: true },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+};
+
+export const updateLoanProviderStatusService = async (
+  providerId: string,
+  data: {
+    isActive?: boolean;
+    unlockFeeEnabled?: boolean;
+    unlockFeePercentage?: number | null;
+    termsAndConditions?: string;
+  },
+) => {
+  const updateData: any = {};
+  if (data.isActive !== undefined) updateData.isActive = data.isActive;
+  if (data.unlockFeeEnabled !== undefined) updateData.unlockFeeEnabled = data.unlockFeeEnabled;
+  if (data.unlockFeePercentage !== undefined) {
+    updateData.unlockFeePercentage = data.unlockFeePercentage;
+  }
+  if (data.termsAndConditions !== undefined) {
+    updateData.termsAndConditions = data.termsAndConditions;
+  }
+  const provider = await prisma.loanProvider.update({
+    where: { id: providerId },
+    data: updateData,
+  });
+  return provider;
+};
+
+/**
+ * Request loan access via a subscription plan that includes loans.
+ * Creates/updates the restaurant's subscription to a loan-enabled plan as PENDING,
+ * awaiting admin approval (loans are funded by providers like Kayko, so an
+ * approval workflow is required before loan access is granted).
+ */
+export const requestLoanSubscriptionService = async (
+  restaurantId: string,
+  planId: string,
+  notes?: string,
+) => {
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+  });
+  if (!restaurant) throw new Error("Restaurant not found");
+
+  const plan = await prisma.subscriptionPlan.findUnique({
+    where: { id: planId },
+    include: { loanProvider: true },
+  });
+  if (!plan) throw new Error("Subscription plan not found");
+  if (!plan.isActive) throw new Error("Subscription plan is not active");
+  if (!plan.loanAccess) {
+    throw new Error("Selected plan does not include loan access");
+  }
+  if (!plan.loanProvider || !plan.loanProvider.isActive) {
+    throw new Error("Loan provider is not available for this plan");
+  }
+
+  // Ensure the restaurant does not already have an active loan-access subscription
+  const existingActive = await prisma.restaurantSubscription.findFirst({
+    where: {
+      restaurantId,
+      status: SubscriptionStatus.ACTIVE,
+      plan: { loanAccess: true },
+    },
+  });
+  if (existingActive) {
+    throw new Error("You already have an active subscription with loan access");
+  }
+
+  const existingPending = await prisma.restaurantSubscription.findFirst({
+    where: {
+      restaurantId,
+      status: SubscriptionStatus.PENDING,
+      plan: { loanAccess: true },
+    },
+  });
+  if (existingPending) {
+    throw new Error("Loan access request already pending approval");
+  }
+
+  const startDate = new Date();
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + plan.duration);
+
+  // Reuse the existing subscription record (single subscription per restaurant)
+  const existingSubscription = await prisma.restaurantSubscription.findFirst({
+    where: { restaurantId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (existingSubscription) {
+    const updated = await prisma.restaurantSubscription.update({
+      where: { id: existingSubscription.id },
+      data: {
+        planId,
+        status: SubscriptionStatus.PENDING,
+        startDate,
+        endDate,
+        paymentStatus: PaymentStatus.PENDING,
+        loanAccessApprovedAt: null,
+        loanAccessNotes: notes || null,
+      },
+      include: {
+        restaurant: { select: { id: true, name: true, email: true, phone: true } },
+        plan: { include: { loanProvider: true } },
+      },
+    });
+
+    await prisma.subscriptionHistory.create({
+      data: {
+        subscriptionId: updated.id,
+        action: "LOAN_ACCESS_REQUESTED",
+        oldStatus: existingSubscription.status,
+        newStatus: SubscriptionStatus.PENDING,
+        oldPlanId: existingSubscription.planId,
+        newPlanId: planId,
+        reason: notes || "Loan access requested",
+        performedBy: restaurantId,
+      },
+    });
+
+    await notifyAdminsOfLoanRequest(updated, restaurant);
+
+    return updated;
+  }
+
+  const subscription = await prisma.restaurantSubscription.create({
+    data: {
+      restaurantId,
+      planId,
+      status: SubscriptionStatus.PENDING,
+      startDate,
+      endDate,
+      autoRenew: true,
+      paymentMethod: "LOAN_PROVIDER",
+      paymentStatus: PaymentStatus.PENDING,
+      loanAccessNotes: notes || null,
+    },
+    include: {
+      restaurant: { select: { id: true, name: true, email: true, phone: true } },
+      plan: { include: { loanProvider: true } },
+    },
+  });
+
+  await prisma.subscriptionHistory.create({
+    data: {
+      subscriptionId: subscription.id,
+      action: "LOAN_ACCESS_REQUESTED",
+      newStatus: SubscriptionStatus.PENDING,
+      newPlanId: planId,
+      reason: notes || "Loan access requested",
+      performedBy: restaurantId,
+    },
+  });
+
+  await notifyAdminsOfLoanRequest(subscription, restaurant);
+
+  return subscription;
+};
+
+const notifyAdminsOfLoanRequest = async (
+  subscription: any,
+  restaurant: any,
+) => {
+  await createNotificationService({
+    title: "Loan Access Request",
+    message: `${restaurant.name} (${restaurant.role}) requested loan access via plan ${subscription.plan?.name || ""} (${subscription.plan?.loanProvider?.name || "Unknown provider"})`,
+    eventType: "VOUCHER_APPLIED",
+    targetType: "ROLE_BASED",
+    targetRole: "ADMIN",
+    metadata: {
+      subscriptionId: subscription.id,
+      restaurantId: restaurant.id,
+      planId: subscription.planId,
+      loanProviderId: subscription.plan?.loanProviderId || null,
+    },
+  });
+};
+
+/**
+ * Approve a pending loan access subscription request.
+ */
+export const approveLoanSubscriptionService = async (
+  subscriptionId: string,
+  adminId: string,
+) => {
+  const subscription = await prisma.restaurantSubscription.findUnique({
+    where: { id: subscriptionId },
+    include: {
+      restaurant: true,
+      plan: { include: { loanProvider: true } },
+    },
+  });
+  if (!subscription) throw new Error("Subscription not found");
+
+  if (!subscription.plan.loanAccess) {
+    throw new Error("This subscription is not a loan access subscription");
+  }
+
+  if (subscription.status !== SubscriptionStatus.PENDING) {
+    throw new Error(`Cannot approve subscription with status: ${subscription.status}`);
+  }
+
+  const updated = await prisma.restaurantSubscription.update({
+    where: { id: subscriptionId },
+    data: {
+      status: SubscriptionStatus.ACTIVE,
+      loanAccessApprovedAt: new Date(),
+      paymentStatus: PaymentStatus.COMPLETED,
+    },
+    include: {
+      restaurant: { select: { id: true, name: true, email: true, phone: true } },
+      plan: { include: { loanProvider: true } },
+    },
+  });
+
+  await prisma.subscriptionHistory.create({
+    data: {
+      subscriptionId,
+      action: "LOAN_ACCESS_APPROVED",
+      oldStatus: SubscriptionStatus.PENDING,
+      newStatus: SubscriptionStatus.ACTIVE,
+      reason: "Loan access approved by admin",
+      performedBy: adminId,
+    },
+  });
+
+  await createNotificationService({
+    title: "Loan Access Approved",
+    message: `Your loan access via ${updated.plan.name} (${updated.plan.loanProvider?.name || "provider"}) has been approved`,
+    eventType: "VOUCHER_ISSUED",
+    targetType: "SPECIFIC_USER",
+    targetId: updated.restaurantId,
+    metadata: { subscriptionId, planId: updated.planId },
+  });
+
+  return updated;
+};
+
+/**
+ * Reject a pending loan access subscription request.
+ */
+export const rejectLoanSubscriptionService = async (
+  subscriptionId: string,
+  adminId: string,
+  reason?: string,
+) => {
+  const subscription = await prisma.restaurantSubscription.findUnique({
+    where: { id: subscriptionId },
+  });
+  if (!subscription) throw new Error("Subscription not found");
+
+  if (subscription.status !== SubscriptionStatus.PENDING) {
+    throw new Error(`Cannot reject subscription with status: ${subscription.status}`);
+  }
+
+  const updated = await prisma.restaurantSubscription.update({
+    where: { id: subscriptionId },
+    data: {
+      status: SubscriptionStatus.CANCELLED,
+      loanAccessNotes: reason || "Rejected by admin",
+    },
+  });
+
+  await prisma.subscriptionHistory.create({
+    data: {
+      subscriptionId,
+      action: "LOAN_ACCESS_REJECTED",
+      oldStatus: SubscriptionStatus.PENDING,
+      newStatus: SubscriptionStatus.CANCELLED,
+      reason: reason || "Rejected by admin",
+      performedBy: adminId,
+    },
+  });
+
+  return updated;
+};
+
+/**
+ * Disable (suspend) an active loan access subscription.
+ */
+export const disableLoanSubscriptionService = async (
+  subscriptionId: string,
+  adminId: string,
+) => {
+  const subscription = await prisma.restaurantSubscription.findUnique({
+    where: { id: subscriptionId },
+    include: { plan: true, restaurant: true },
+  });
+  if (!subscription) throw new Error("Subscription not found");
+
+  if (subscription.status !== SubscriptionStatus.ACTIVE) {
+    throw new Error(`Cannot disable subscription with status: ${subscription.status}`);
+  }
+
+  const updated = await prisma.restaurantSubscription.update({
+    where: { id: subscriptionId },
+    data: { status: SubscriptionStatus.SUSPENDED },
+    include: {
+      restaurant: { select: { id: true, name: true } },
+      plan: { include: { loanProvider: true } },
+    },
+  });
+
+  await prisma.subscriptionHistory.create({
+    data: {
+      subscriptionId,
+      action: "LOAN_ACCESS_DISABLED",
+      oldStatus: SubscriptionStatus.ACTIVE,
+      newStatus: SubscriptionStatus.SUSPENDED,
+      reason: "Loan access disabled by admin",
+      performedBy: adminId,
+    },
+  });
+
+  await createNotificationService({
+    title: "Loan Access Disabled",
+    message: `Your loan access via ${updated.plan.name} has been disabled by an admin`,
+    eventType: "PAYMENT_FAILED",
+    targetType: "SPECIFIC_USER",
+    targetId: subscription.restaurantId,
+    metadata: { subscriptionId, planId: subscription.planId },
+  });
+
+  return updated;
+};
+
+/**
+ * Enable (reactivate) a suspended loan access subscription.
+ */
+export const enableLoanSubscriptionService = async (
+  subscriptionId: string,
+  adminId: string,
+) => {
+  const subscription = await prisma.restaurantSubscription.findUnique({
+    where: { id: subscriptionId },
+  });
+  if (!subscription) throw new Error("Subscription not found");
+
+  if (subscription.status !== SubscriptionStatus.SUSPENDED) {
+    throw new Error(`Cannot enable subscription with status: ${subscription.status}`);
+  }
+
+  const updated = await prisma.restaurantSubscription.update({
+    where: { id: subscriptionId },
+    data: { status: SubscriptionStatus.ACTIVE },
+    include: {
+      restaurant: { select: { id: true, name: true } },
+      plan: { include: { loanProvider: true } },
+    },
+  });
+
+  await prisma.subscriptionHistory.create({
+    data: {
+      subscriptionId,
+      action: "LOAN_ACCESS_ENABLED",
+      oldStatus: SubscriptionStatus.SUSPENDED,
+      newStatus: SubscriptionStatus.ACTIVE,
+      reason: "Loan access enabled by admin",
+      performedBy: adminId,
+    },
+  });
+
+  await createNotificationService({
+    title: "Loan Access Enabled",
+    message: `Your loan access via ${updated.plan.name} has been restored`,
+    eventType: "VOUCHER_ISSUED",
+    targetType: "SPECIFIC_USER",
+    targetId: subscription.restaurantId,
+    metadata: { subscriptionId, planId: subscription.planId },
+  });
+
+  return updated;
+};
+
+/**
+ * Get a restaurant's loan access subscriptions.
+ */
+export const getRestaurantLoanSubscriptionsService = async (restaurantId: string) => {
+  return prisma.restaurantSubscription.findMany({
+    where: {
+      restaurantId,
+      plan: { loanAccess: true },
+    },
+    include: {
+      plan: { include: { loanProvider: true } },
+      history: { orderBy: { createdAt: "desc" } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+/**
+ * Get all loan access subscriptions (admin) with filters.
+ * Filters: status, user type (restaurant role), loan provider.
+ */
+export const getAllLoanSubscriptionsService = async (filters?: {
+  status?: SubscriptionStatus;
+  userType?: string;
+  loanProviderId?: string;
+}) => {
+  const where: any = {
+    plan: { loanAccess: true },
+  };
+  if (filters?.status) where.status = filters.status;
+  if (filters?.loanProviderId) {
+    where.plan = { ...where.plan, loanProviderId: filters.loanProviderId };
+  }
+  if (filters?.userType) {
+    where.restaurant = { role: filters.userType };
+  }
+
+  return prisma.restaurantSubscription.findMany({
+    where,
+    include: {
+      restaurant: { select: { id: true, name: true, email: true, phone: true, role: true } },
+      plan: { include: { loanProvider: true } },
+      history: { orderBy: { createdAt: "desc" } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+/**
+ * Check if a restaurant has an active loan access subscription.
+ * Optionally restrict by loan provider name.
+ */
+export const checkRestaurantHasActiveLoanSubscriptionService = async (
+  restaurantId: string,
+  providerName?: string,
+) => {
+  const where: any = {
+    restaurantId,
+    status: SubscriptionStatus.ACTIVE,
+    endDate: { gte: new Date() },
+    plan: { loanAccess: true },
+  };
+  if (providerName) {
+    where.plan = { ...where.plan, loanProvider: { name: providerName } };
+  }
+
+  return prisma.restaurantSubscription.findFirst({
+    where,
+    include: { plan: { include: { loanProvider: true } } },
+    orderBy: { createdAt: "desc" },
+  });
 };

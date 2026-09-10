@@ -9,12 +9,22 @@ import {
   requestLoanSessionService,
   approveLoanSessionService,
   rejectLoanSessionService,
+  acceptLoanSessionService,
+  getLoanTradersService,
+  getLoanTermsService,
+  acceptLoanTermsService,
+  getTraderLoanSessionsService,
+  traderApproveLoanSessionService,
+  adminApproveLoanSessionOnBehalfService,
   payUnlockFeeService,
+  verifyUnlockFeePaymentService,
   getMyLoanSessionsService,
   getAllLoanSessionsService,
   getLoanSessionByIdService,
   getCardEnrollmentRequestsService,
   getVoucherCardStatsService,
+  updateVoucherCardUnlockFeeService,
+  getRecentActivitiesService,
 } from "../services/voucher-card.service";
 import { CardStatus, LoanSessionStatus } from "@prisma/client";
 
@@ -81,6 +91,34 @@ export const getVoucherCardByPan = async (req: Request, res: Response) => {
   }
 };
 
+export const updateVoucherCardUnlockFee = async (req: Request, res: Response) => {
+  try {
+    const { cardId } = req.params;
+    const { unlockFeeEnabled, unlockFeePercentage } = req.body;
+    if (unlockFeeEnabled === undefined) {
+      return res.status(400).json({ success: false, message: "unlockFeeEnabled is required" });
+    }
+    const card = await updateVoucherCardUnlockFeeService(cardId, {
+      unlockFeeEnabled: Boolean(unlockFeeEnabled),
+      unlockFeePercentage:
+        typeof unlockFeePercentage === "number" ? unlockFeePercentage : null,
+    });
+    res.json({ success: true, data: card, message: "Card unlock fee config updated" });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const getRecentActivities = async (req: Request, res: Response) => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+    const activities = await getRecentActivitiesService(limit);
+    res.json({ success: true, data: activities });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 export const getCardEnrollmentRequests = async (req: Request, res: Response) => {
   try {
     const requests = await getCardEnrollmentRequestsService();
@@ -118,7 +156,7 @@ export const getMyCardEnrollmentRequest = async (req: Request, res: Response) =>
 export const requestLoanSession = async (req: Request, res: Response) => {
   try {
     const restaurantId = (req as any).user?.id;
-    const { requestedAmount, purpose, repaymentDays } = req.body;
+    const { requestedAmount, purpose, repaymentDays, loanProviderType, fundingTraderId } = req.body;
     if (!requestedAmount) {
       return res.status(400).json({ success: false, message: "requestedAmount is required" });
     }
@@ -126,6 +164,8 @@ export const requestLoanSession = async (req: Request, res: Response) => {
       requestedAmount: parseFloat(requestedAmount),
       purpose,
       repaymentDays: repaymentDays ? parseInt(repaymentDays) : undefined,
+      loanProviderType,
+      fundingTraderId,
     });
     res.status(201).json({ success: true, data: session, message: "Loan request submitted" });
   } catch (error: any) {
@@ -137,18 +177,32 @@ export const approveLoanSession = async (req: Request, res: Response) => {
   try {
     const adminId = (req as any).user?.id;
     const { id } = req.params;
-    const { approvedAmount, approvalPercentage, repaymentDays, notes, fundingTraderId } = req.body;
-    if (!approvedAmount || !repaymentDays) {
-      return res.status(400).json({ success: false, message: "approvedAmount and repaymentDays are required" });
+    const { approvedAmount, approvalPercentage, repaymentDays, notes, fundingTraderId, requireUnlockFee, unlockFeePercentage } = req.body;
+    if (!approvedAmount && !approvalPercentage) {
+      return res.status(400).json({ success: false, message: "approvalPercentage (or approvedAmount) and repaymentDays are required" });
+    }
+    if (!repaymentDays) {
+      return res.status(400).json({ success: false, message: "repaymentDays is required" });
     }
     const session = await approveLoanSessionService(id, adminId, {
-      approvedAmount: parseFloat(approvedAmount),
-      approvalPercentage: approvalPercentage ? parseFloat(approvalPercentage) : undefined,
+      approvedAmount: approvedAmount !== undefined ? parseFloat(approvedAmount) : undefined,
+      approvalPercentage: approvalPercentage !== undefined ? parseFloat(approvalPercentage) : undefined,
       repaymentDays: parseInt(repaymentDays),
       notes,
       fundingTraderId,
+      requireUnlockFee: typeof requireUnlockFee === "boolean" ? requireUnlockFee : undefined,
+      unlockFeePercentage:
+        unlockFeePercentage !== undefined && unlockFeePercentage !== ""
+          ? parseFloat(unlockFeePercentage)
+          : undefined,
     });
-    res.json({ success: true, data: session, message: "Loan approved — restaurant must pay unlock fee" });
+    res.json({
+      success: true,
+      data: session,
+      message: session.unlockStatus === "LOCKED"
+        ? "Loan approved — restaurant must pay unlock fee to activate"
+        : "Loan approved — now active",
+    });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -161,6 +215,136 @@ export const rejectLoanSession = async (req: Request, res: Response) => {
     const { reason } = req.body;
     const session = await rejectLoanSessionService(id, adminId, reason || "Rejected by admin");
     res.json({ success: true, data: session, message: "Loan session rejected" });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Admin accepts a loan: makes it visible to the selected trader so they can approve.
+export const acceptLoanSession = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user?.id;
+    const { id } = req.params;
+    const { fundingTraderId } = req.body;
+    const session = await acceptLoanSessionService(id, adminId, fundingTraderId);
+    res.json({
+      success: true,
+      data: session,
+      message: fundingTraderId
+        ? "Loan accepted and sent to the selected trader for approval"
+        : "Loan accepted — trader can now approve it",
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Traders a restaurant can pick as loan provider
+export const getLoanTraders = async (req: Request, res: Response) => {
+  try {
+    const traders = await getLoanTradersService();
+    res.json({ success: true, data: traders });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// T&C payload for a provider + whether the restaurant accepted them yet
+export const getLoanTerms = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const { providerType, fundingTraderId, loanProviderId } = req.query;
+    if (!providerType) {
+      return res.status(400).json({ success: false, message: "providerType is required" });
+    }
+    const result = await getLoanTermsService(restaurantId, {
+      providerType: providerType as "TRADER" | "FOOD_BUNDLES",
+      fundingTraderId: fundingTraderId as string | undefined,
+      loanProviderId: loanProviderId as string | undefined,
+    });
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Record first-time T&C acceptance
+export const acceptLoanTerms = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const { providerType, providerId, providerName } = req.body;
+    if (!providerType || !providerId || !providerName) {
+      return res.status(400).json({ success: false, message: "providerType, providerId and providerName are required" });
+    }
+    await acceptLoanTermsService(restaurantId, { providerType, providerId, providerName });
+    res.json({ success: true, message: "Terms and conditions accepted" });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Trader inbox: loan sessions the trader was picked as provider for
+export const getTraderLoanSessions = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user?.id;
+    const sessions = await getTraderLoanSessionsService(traderId);
+    res.json({ success: true, data: sessions });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Trader approves a loan session they were selected as provider for
+export const traderApproveLoanSession = async (req: Request, res: Response) => {
+  try {
+    const traderId = (req as any).user?.id;
+    const { id } = req.params;
+    const { approvalPercentage, approvedAmount, repaymentDays, notes } = req.body;
+    if (approvalPercentage === undefined && approvedAmount === undefined) {
+      return res.status(400).json({ success: false, message: "approvalPercentage or approvedAmount is required" });
+    }
+    const session = await traderApproveLoanSessionService(traderId, id, {
+      approvalPercentage: approvalPercentage !== undefined ? parseFloat(approvalPercentage) : undefined,
+      approvedAmount: approvedAmount !== undefined ? parseFloat(approvedAmount) : undefined,
+      repaymentDays: repaymentDays ? parseInt(repaymentDays) : undefined,
+      notes,
+    });
+    res.json({
+      success: true,
+      data: session,
+      message: session.unlockStatus === "LOCKED"
+        ? "Loan approved — restaurant must pay unlock fee to activate"
+        : "Loan approved — now active",
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Admin approves a loan session on behalf of a delegation trader
+export const adminApproveLoanSessionOnBehalf = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user?.id;
+    const { id } = req.params;
+    const traderId = (req as any).params.traderId;
+    const { approvalPercentage, approvedAmount, repaymentDays, notes } = req.body;
+    if (!traderId) {
+      return res.status(400).json({ success: false, message: "traderId is required" });
+    }
+    if (approvalPercentage === undefined && approvedAmount === undefined) {
+      return res.status(400).json({ success: false, message: "approvalPercentage or approvedAmount is required" });
+    }
+    const session = await adminApproveLoanSessionOnBehalfService(adminId, traderId, id, {
+      approvalPercentage: approvalPercentage !== undefined ? parseFloat(approvalPercentage) : undefined,
+      approvedAmount: approvedAmount !== undefined ? parseFloat(approvedAmount) : undefined,
+      repaymentDays: repaymentDays ? parseInt(repaymentDays) : undefined,
+      notes,
+    });
+    res.json({
+      success: true,
+      data: session,
+      message: `Loan approved on behalf of trader`,
+    });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -179,7 +363,18 @@ export const payUnlockFee = async (req: Request, res: Response) => {
       paymentReference,
       phoneNumber,
     });
-    res.json({ success: true, data: result, message: "Unlock fee paid — loan is now active" });
+    res.json({ success: true, data: result, message: result.message });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const verifyUnlockFeePayment = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const { id } = req.params;
+    const result = await verifyUnlockFeePaymentService(id, restaurantId);
+    res.json({ success: true, data: result, message: "Payment status checked" });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }

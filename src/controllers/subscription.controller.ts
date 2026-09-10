@@ -18,6 +18,16 @@ import {
   changeSubscriptionPlanService,
   getRestaurantSubscriptionHistoryService,
   adminCreateRestaurantSubscriptionService,
+  requestLoanSubscriptionService,
+  approveLoanSubscriptionService,
+  rejectLoanSubscriptionService,
+  disableLoanSubscriptionService,
+  enableLoanSubscriptionService,
+  getRestaurantLoanSubscriptionsService,
+  getAllLoanSubscriptionsService,
+  createLoanProviderService,
+  getAllLoanProvidersService,
+  updateLoanProviderStatusService,
 } from "../services/subscription.service";
 import { SubscriptionStatus } from "@prisma/client";
 import prisma from "../prisma";
@@ -40,6 +50,8 @@ export const createSubscriptionPlan = async (req: Request, res: Response) => {
       features,
       voucherAccess,
       voucherPaymentDays,
+      loanAccess,
+      loanProviderId,
       freeDelivery,
       stablePricing,
       receiveEBM,
@@ -63,6 +75,8 @@ export const createSubscriptionPlan = async (req: Request, res: Response) => {
       voucherPaymentDays: voucherPaymentDays
         ? parseInt(voucherPaymentDays)
         : undefined,
+      loanAccess,
+      loanProviderId,
       freeDelivery,
       stablePricing,
       receiveEBM,
@@ -150,6 +164,8 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
       isActive,
       voucherAccess,
       voucherPaymentDays,
+      loanAccess,
+      loanProviderId,
       freeDelivery,
       stablePricing,
       receiveEBM,
@@ -167,6 +183,8 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
     if (voucherAccess !== undefined) updateData.voucherAccess = voucherAccess;
     if (voucherPaymentDays !== undefined)
       updateData.voucherPaymentDays = parseInt(voucherPaymentDays);
+    if (loanAccess !== undefined) updateData.loanAccess = loanAccess;
+    if (loanProviderId !== undefined) updateData.loanProviderId = loanProviderId;
     if (freeDelivery !== undefined) updateData.freeDelivery = freeDelivery;
     if (stablePricing !== undefined) updateData.stablePricing = stablePricing;
     if (receiveEBM !== undefined) updateData.receiveEBM = receiveEBM;
@@ -569,11 +587,289 @@ export const renewSubscription = async (req: Request, res: Response) => {
         ? "Subscription renewed and payment initiated"
         : "Subscription renewed successfully. Please complete payment.",
       data: result.subscription,
-      payment: result.payment,
+payment: result.payment,
     });
   } catch (error: any) {
     res.status(500).json({
-      message: error.message || "Failed to renew subscription",
+      message: error.message || "Failed to create subscription",
+    });
+  }
+};
+
+// ==================== LOAN ACCESS CONTROLLERS (single subscription reused) ====================
+
+/**
+ * Create a loan provider (Admin)
+ * POST /subscriptions/loan/providers
+ */
+export const createLoanProvider = async (req: Request, res: Response) => {
+  try {
+    const { name, description, unlockFeeEnabled, unlockFeePercentage, termsAndConditions } = req.body;
+
+    if (!name) {
+      return res.status(400).json({
+        message: "name is required",
+      });
+    }
+
+    const provider = await createLoanProviderService({
+      name,
+      description,
+      unlockFeeEnabled,
+      unlockFeePercentage:
+        typeof unlockFeePercentage === "number" ? unlockFeePercentage : null,
+      termsAndConditions,
+    });
+
+    res.status(201).json({
+      message: "Loan provider created successfully",
+      data: provider,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to create loan provider",
+    });
+  }
+};
+
+/**
+ * Get all loan providers
+ * GET /subscriptions/loan/providers
+ */
+export const getAllLoanProviders = async (req: Request, res: Response) => {
+  try {
+    const providers = await getAllLoanProvidersService();
+
+    res.status(200).json({
+      message: "Loan providers retrieved successfully",
+      data: providers,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan providers",
+    });
+  }
+};
+
+/**
+ * Update loan provider status (Admin)
+ * PATCH /subscriptions/loan/providers/:providerId
+ */
+export const updateLoanProviderStatus = async (req: Request, res: Response) => {
+  try {
+    const { providerId } = req.params;
+    const { isActive, unlockFeeEnabled, unlockFeePercentage, termsAndConditions } = req.body;
+
+    if (
+      isActive === undefined &&
+      unlockFeeEnabled === undefined &&
+      unlockFeePercentage === undefined &&
+      termsAndConditions === undefined
+    ) {
+      return res.status(400).json({
+        message: "At least one field (isActive, unlockFeeEnabled, unlockFeePercentage, termsAndConditions) is required",
+      });
+    }
+
+    const provider = await updateLoanProviderStatusService(providerId, {
+      isActive: isActive === undefined ? undefined : Boolean(isActive),
+      unlockFeeEnabled:
+        unlockFeeEnabled === undefined ? undefined : Boolean(unlockFeeEnabled),
+      unlockFeePercentage:
+        unlockFeePercentage === undefined ? undefined : unlockFeePercentage,
+      termsAndConditions:
+        termsAndConditions === undefined ? undefined : termsAndConditions,
+    });
+
+    res.status(200).json({
+      message: "Loan provider updated successfully",
+      data: provider,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to update loan provider",
+    });
+  }
+};
+
+/**
+ * Request loan access via a loan-enabled subscription plan
+ * POST /subscriptions/loan/request
+ */
+export const requestLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user.id;
+    const { planId, notes } = req.body;
+
+    if (!planId) {
+      return res.status(400).json({
+        message: "planId is required (a plan that includes loan access)",
+      });
+    }
+
+    const subscription = await requestLoanSubscriptionService(
+      restaurantId,
+      planId,
+      notes,
+    );
+
+    res.status(201).json({
+      message: "Loan access request submitted for approval",
+      data: subscription,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to request loan access",
+    });
+  }
+};
+
+/**
+ * Approve a pending loan access request (Admin)
+ * PATCH /subscriptions/loan/:subscriptionId/approve
+ */
+export const approveLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { subscriptionId } = req.params;
+
+    const subscription = await approveLoanSubscriptionService(
+      subscriptionId,
+      adminId,
+    );
+
+    res.status(200).json({
+      message: "Loan access approved",
+      data: subscription,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to approve loan access",
+    });
+  }
+};
+
+/**
+ * Reject a pending loan access request (Admin)
+ * PATCH /subscriptions/loan/:subscriptionId/reject
+ */
+export const rejectLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { subscriptionId } = req.params;
+    const { reason } = req.body;
+
+    const subscription = await rejectLoanSubscriptionService(
+      subscriptionId,
+      adminId,
+      reason,
+    );
+
+    res.status(200).json({
+      message: "Loan access request rejected",
+      data: subscription,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to reject loan access",
+    });
+  }
+};
+
+/**
+ * Disable loan access (Admin)
+ * PATCH /subscriptions/loan/:subscriptionId/disable
+ */
+export const disableLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { subscriptionId } = req.params;
+
+    const subscription = await disableLoanSubscriptionService(
+      subscriptionId,
+      adminId,
+    );
+
+    res.status(200).json({
+      message: "Loan access disabled",
+      data: subscription,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to disable loan access",
+    });
+  }
+};
+
+/**
+ * Enable loan access (Admin)
+ * PATCH /subscriptions/loan/:subscriptionId/enable
+ */
+export const enableLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { subscriptionId } = req.params;
+
+    const subscription = await enableLoanSubscriptionService(
+      subscriptionId,
+      adminId,
+    );
+
+    res.status(200).json({
+      message: "Loan access enabled",
+      data: subscription,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to enable loan access",
+    });
+  }
+};
+
+/**
+ * Get my loan access subscriptions (Restaurant)
+ * GET /subscriptions/loan/my-subscriptions
+ */
+export const getMyLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user.id;
+
+    const subscriptions = await getRestaurantLoanSubscriptionsService(
+      restaurantId,
+    );
+
+    res.status(200).json({
+      message: "Loan access subscriptions retrieved successfully",
+      data: subscriptions,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan access subscriptions",
+    });
+  }
+};
+
+/**
+ * Get all loan access subscriptions (Admin)
+ * GET /subscriptions/loan
+ */
+export const getAllLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const { status, userType, loanProviderId } = req.query;
+
+    const subscriptions = await getAllLoanSubscriptionsService({
+      status: status as SubscriptionStatus | undefined,
+      userType: userType as string | undefined,
+      loanProviderId: loanProviderId as string | undefined,
+    });
+
+    res.status(200).json({
+      message: "Loan access subscriptions retrieved successfully",
+      data: subscriptions,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan access subscriptions",
     });
   }
 };

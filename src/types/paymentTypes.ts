@@ -239,6 +239,13 @@ export interface VoucherPaymentResult {
   };
   requiresAdditionalPayment?: boolean;
   additionalPaymentAmount?: number;
+  loanSessionDetails?: {
+    sessionId: string;
+    rrn: string;
+    approvedAmount: number;
+    creditUsed: number;
+    remainingCredit: number;
+  };
   authorizationDetails?: {
     mode: string;
     redirectUrl: string;

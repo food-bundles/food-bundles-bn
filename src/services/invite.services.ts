@@ -16,6 +16,7 @@ interface AcceptInviteData {
   username: string;
   phone?: string;
   password: string;
+  termsAndConditions?: string;
 }
 
 export const inviteServices = {
@@ -104,7 +105,7 @@ export const inviteServices = {
 
   // Accept invitation (create user)
   async acceptInvite(data: AcceptInviteData) {
-    const { token, username, phone, password } = data;
+    const { token, username, phone, password, termsAndConditions } = data;
 
     const invitation = await this.verifyInviteToken(token);
 
@@ -128,6 +129,10 @@ export const inviteServices = {
           phone,
           password: hashedPassword,
           role: invitation.role,
+          termsAndConditions:
+            invitation.role === "TRADER" && termsAndConditions
+              ? termsAndConditions
+              : null,
         },
         select: {
           id: true,

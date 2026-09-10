@@ -1496,3 +1496,265 @@ paths:
           description: Bad request - Invalid payload
         500:
           description: Internal server error
+
+  /subscriptions/loan/providers:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Create a loan provider (Admin)
+      description: Create a new loan provider (e.g. Kayko). Loan providers are referenced by subscription plans to grant loan access.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  example: "Kayko"
+                description:
+                  type: string
+                  example: "Kapital loan provider"
+      responses:
+        201:
+          description: Loan provider created
+        400:
+          description: Invalid input or provider already exists
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+    get:
+      tags:
+        - Subscription Management API
+      summary: Get all loan providers
+      description: List all loan providers with their associated plans
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: List of loan providers
+        401:
+          description: Unauthorized
+
+  /subscriptions/loan/providers/{providerId}:
+    patch:
+      tags:
+        - Subscription Management API
+      summary: Update loan provider status (Admin)
+      description: Enable or disable a loan provider
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: providerId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - isActive
+              properties:
+                isActive:
+                  type: boolean
+                  example: true
+      responses:
+        200:
+          description: Loan provider status updated
+        400:
+          description: Invalid input
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+
+  /subscriptions/loan/request:
+    post:
+      tags:
+        - Subscription Management API
+      summary: Request loan access (Restaurant)
+      description: Submit a loan access request using a subscription plan that includes loans. The request is set to PENDING and awaits admin approval. This reuses the restaurant's single subscription.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - planId
+              properties:
+                planId:
+                  type: string
+                  example: "plan-123"
+                notes:
+                  type: string
+                  example: "Requesting loan access for expansion"
+      responses:
+        201:
+          description: Loan access request submitted for approval
+        400:
+          description: Plan has no loan access, already subscribed, or request already pending
+        401:
+          description: Unauthorized
+
+  /subscriptions/loan/my-subscriptions:
+    get:
+      tags:
+        - Subscription Management API
+      summary: Get my loan access subscriptions (Restaurant)
+      description: List the authenticated restaurant's subscription records that include loan access
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: List of loan access subscriptions
+        401:
+          description: Unauthorized
+
+  /subscriptions/loan:
+    get:
+      tags:
+        - Subscription Management API
+      summary: Get all loan access subscriptions (Admin)
+      description: List all loan access subscriptions with optional filters by status, user type, and loan provider
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, EXPIRED, CANCELLED, SUSPENDED, PENDING]
+        - name: userType
+          in: query
+          schema:
+            type: string
+            description: Restaurant role (e.g. RESTAURANT, HOTEL)
+        - name: loanProviderId
+          in: query
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of loan access subscriptions
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+
+  /subscriptions/loan/{subscriptionId}/approve:
+    patch:
+      tags:
+        - Subscription Management API
+      summary: Approve loan access (Admin)
+      description: Approve a pending loan access request. Records an immutable LOAN_ACCESS_APPROVED entry in the subscription history.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Loan access approved
+        400:
+          description: Subscription not pending or not a loan subscription
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+
+  /subscriptions/loan/{subscriptionId}/reject:
+    patch:
+      tags:
+        - Subscription Management API
+      summary: Reject loan access (Admin)
+      description: Reject a pending loan access request with an optional reason
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: "Not eligible for this loan provider"
+      responses:
+        200:
+          description: Loan access request rejected
+        400:
+          description: Subscription not pending
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+
+  /subscriptions/loan/{subscriptionId}/disable:
+    patch:
+      tags:
+        - Subscription Management API
+      summary: Disable loan access (Admin)
+      description: Suspend an active loan access subscription. Records a LOAN_ACCESS_DISABLED audit entry.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Loan access disabled
+        400:
+          description: Subscription not active
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required
+
+  /subscriptions/loan/{subscriptionId}/enable:
+    patch:
+      tags:
+        - Subscription Management API
+      summary: Enable loan access (Admin)
+      description: Reactivate a suspended loan access subscription. Records a LOAN_ACCESS_ENABLED audit entry.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Loan access enabled
+        400:
+          description: Subscription not suspended
+        401:
+          description: Unauthorized
+        403:
+          description: Admin access required

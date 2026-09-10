@@ -22,6 +22,18 @@ import {
 } from "../controllers/subscription.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 import { handleSubscriptionWebhook } from "../controllers/subscription.webhook";
+import {
+  requestLoanAccess,
+  approveLoanAccess,
+  rejectLoanAccess,
+  disableLoanAccess,
+  enableLoanAccess,
+  getMyLoanAccess,
+  getAllLoanAccess,
+  createLoanProvider,
+  getAllLoanProviders,
+  updateLoanProviderStatus,
+} from "../controllers/subscription.controller";
 
 const subscriptionRoutes = Router();
 
@@ -104,6 +116,126 @@ subscriptionRoutes.get(
   isAuthenticated,
   checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
   getMyCurrentSubscription
+);
+
+// ========================================
+// LOAN ACCESS ROUTES (reuse single subscription)
+// NOTE: these static /loan paths must be registered BEFORE the dynamic
+// /:subscriptionId routes below so they are matched correctly.
+// ========================================
+
+/**
+ * Create a loan provider (Admin)
+ * POST /subscriptions/loan/providers
+ * Access: Admin only
+ */
+subscriptionRoutes.post(
+  "/loan/providers",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  createLoanProvider
+);
+
+/**
+ * Get all loan providers
+ * GET /subscriptions/loan/providers
+ */
+subscriptionRoutes.get("/loan/providers", isAuthenticated, getAllLoanProviders);
+
+/**
+ * Update loan provider status (Admin)
+ * PATCH /subscriptions/loan/providers/:providerId
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/providers/:providerId",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  updateLoanProviderStatus
+);
+
+/**
+ * Request loan access via a loan-enabled plan
+ * POST /subscriptions/loan/request
+ * Access: Restaurant / Hotel / Affiliator
+ */
+subscriptionRoutes.post(
+  "/loan/request",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  requestLoanAccess
+);
+
+/**
+ * Get my loan access subscriptions
+ * GET /subscriptions/loan/my-subscriptions
+ * Access: Restaurant / Hotel / Affiliator
+ */
+subscriptionRoutes.get(
+  "/loan/my-subscriptions",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR", "ADMIN"),
+  getMyLoanAccess
+);
+
+/**
+ * Get all loan access subscriptions with filters
+ * GET /subscriptions/loan
+ * Access: Admin only
+ */
+subscriptionRoutes.get(
+  "/loan",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllLoanAccess
+);
+
+/**
+ * Approve a pending loan access request
+ * PATCH /subscriptions/loan/:subscriptionId/approve
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/:subscriptionId/approve",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  approveLoanAccess
+);
+
+/**
+ * Reject a pending loan access request
+ * PATCH /subscriptions/loan/:subscriptionId/reject
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/:subscriptionId/reject",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  rejectLoanAccess
+);
+
+/**
+ * Disable loan access
+ * PATCH /subscriptions/loan/:subscriptionId/disable
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/:subscriptionId/disable",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  disableLoanAccess
+);
+
+/**
+ * Enable loan access
+ * PATCH /subscriptions/loan/:subscriptionId/enable
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/:subscriptionId/enable",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  enableLoanAccess
 );
 
 /**

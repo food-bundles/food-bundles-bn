@@ -11,6 +11,7 @@ import {
   updateOrderService,
 } from "../services/order.services";
 import { validateVoucherForCheckoutService } from "../services/voucher.service";
+import { validateLoanSessionForCheckoutService } from "../services/voucher-card.service";
 import prisma from "../prisma";
 import { OTPService } from "../services/otp.service";
 import { getPaymentMethodByIdService } from "../services/payment-method.service";
@@ -36,6 +37,7 @@ export const createCheckout = async (req: Request, res: Response) => {
       narration,
       currency,
       voucherCode,
+      loanSessionRrn,
       promoCode,
       fallbackPaymentMethod,
       cardDetails,
@@ -79,13 +81,13 @@ export const createCheckout = async (req: Request, res: Response) => {
           await getPaymentMethodByIdService(paymentMethodId);
         const paymentMethodName = paymentMethodConfig.name.toUpperCase();
 
-        if (paymentMethodName === "VOUCHER" && !voucherCode) {
+        if (paymentMethodName === "VOUCHER" && !voucherCode && !loanSessionRrn) {
           return res.status(400).json({
-            message: "Voucher code is required for voucher payments",
+            message: "Voucher code or loan session RRN is required for voucher payments",
           });
         }
 
-        // For voucher payments, validate voucher first before sending OTP
+        // For voucher payments, validate voucher/loan session first before sending OTP
         if (paymentMethodName === "VOUCHER") {
           // Get cart to calculate total
           const cart = await prisma.cart.findUnique({
@@ -102,16 +104,37 @@ export const createCheckout = async (req: Request, res: Response) => {
             0,
           );
 
-          // Validate voucher for checkout
-          const voucherValidation = await validateVoucherForCheckoutService(
-            voucherCode,
-            cartTotal,
-            restaurantId,
-            affiliatorId,
-            promoCode,
-          );
+          let loanSessionValidation: Awaited<
+            ReturnType<typeof validateLoanSessionForCheckoutService>
+          > | null = null;
 
-          if (!voucherValidation.valid) {
+          // If paying with a loan session (PAN-based voucher card), validate it
+          if (loanSessionRrn) {
+            const validation = await validateLoanSessionForCheckoutService(
+              loanSessionRrn,
+              cartTotal,
+              restaurantId,
+            );
+            if (!validation.valid) {
+              return res.status(400).json({
+                message: validation.error,
+              });
+            }
+            loanSessionValidation = validation;
+          }
+
+          // Validate regular voucher (only when not paying via loan session)
+          const voucherValidation = !loanSessionRrn
+            ? await validateVoucherForCheckoutService(
+                voucherCode!,
+                cartTotal,
+                restaurantId,
+                affiliatorId,
+                promoCode,
+              )
+            : null;
+
+          if (!loanSessionRrn && voucherValidation && !voucherValidation.valid) {
             return res.status(400).json({
               message: voucherValidation.error,
             });
@@ -148,13 +171,16 @@ export const createCheckout = async (req: Request, res: Response) => {
             narration,
             currency,
             voucherCode,
+            loanSessionRrn,
             promoCode,
             fallbackPaymentMethod,
             cardDetails,
             bankDetails,
             otherServices,
             originalCartAmount: cartTotal,
-            promoDetails: voucherValidation.promoDetails,
+            promoDetails: loanSessionValidation?.valid
+              ? loanSessionValidation.coverage
+              : voucherValidation?.promoDetails,
             verificationType: verifyType,
           };
 
@@ -419,6 +445,7 @@ export const processPayment = async (req: Request, res: Response) => {
       cardDetails,
       bankDetails,
       voucherCode,
+      loanSessionRrn,
       fallbackPaymentMethod,
       processDirectly = true,
     } = req.body;
@@ -439,6 +466,7 @@ export const processPayment = async (req: Request, res: Response) => {
       cardDetails,
       bankDetails,
       voucherCode,
+      loanSessionRrn,
       fallbackPaymentMethod,
       processDirectly,
     });
@@ -477,6 +505,11 @@ export const processPayment = async (req: Request, res: Response) => {
             checkout: paymentResult.checkout,
             transactionId: paymentResult.transactionId,
             status: paymentResult.status,
+            requiresAdditionalPayment:
+              paymentResult.requiresAdditionalPayment,
+            additionalPaymentAmount: paymentResult.additionalPaymentAmount,
+            loanSessionDetails: paymentResult.loanSessionDetails,
+            voucherDetails: paymentResult.voucherDetails,
           },
         });
       }

@@ -1,0 +1,35 @@
+[dotenv@17.2.3] injecting env (42) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+WebSocket server initialized on /api/ws
+
+====================================
+🚀 FoodBundles API Server running on port 4000
+📡 WebSocket endpoint: ws://localhost:4000/api/ws
+📚 API Documentation: http://localhost:4000/api-docs
+====================================
+  
+Voucher reminder scheduler initialized - runs daily at 7:00 AM
+Weekly price update scheduler initialized - runs every Monday at 7:00 AM
+New WebSocket client connected: ek8mpprbtzmtstm4p0
+Client disconnected: ek8mpprbtzmtstm4p0
+New WebSocket client connected: upjv81jejfmmtsukrts
+Client disconnected: upjv81jejfmmtsukrts
+New WebSocket client connected: nh3xqoxv2mmtt1wxgv
+Client disconnected: nh3xqoxv2mmtt1wxgv
+New WebSocket client connected: yj4o83t9zadmtt2vp0j
+Client disconnected: yj4o83t9zadmtt2vp0j
+New WebSocket client connected: i1406tjzvcpmtt4l1mi
+Client disconnected: i1406tjzvcpmtt4l1mi
+New WebSocket client connected: klj6atc9v1mtt5wz2c
+Client disconnected: klj6atc9v1mtt5wz2c
+New WebSocket client connected: oz9pm6ky11hmtt6avss
+Client disconnected: oz9pm6ky11hmtt6avss
+New WebSocket client connected: ldxh6azpimqmtt6llb3
+Client disconnected: ldxh6azpimqmtt6llb3
+New WebSocket client connected: 4r1emalbiqxmtt8qmx9
+Client disconnected: 4r1emalbiqxmtt8qmx9
+New WebSocket client connected: 9p7en3o79qqmtt96w2c
+Client disconnected: 9p7en3o79qqmtt96w2c

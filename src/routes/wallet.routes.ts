@@ -20,6 +20,9 @@ import {
   verifyAdminDepositOTP,
   requestWalletAdjustmentOTP,
   verifyWalletAdjustmentOTP,
+  transferToWallet,
+  getAllWalletTransfers,
+  getMyWalletTransfers,
 } from "../controllers/wallet.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
@@ -98,6 +101,46 @@ walletRoutes.get(
   "/transactions/:transactionId",
   isAuthenticated,
   getWalletTransactionById
+);
+
+// ========================================
+// WALLET TRANSFER ROUTES (voucher amounts / Kayko)
+// ========================================
+
+/**
+ * Transfer voucher amount to restaurant wallet (Admin/Kayko)
+ * POST /wallets/transfers
+ * Access: Admin only
+ */
+walletRoutes.post(
+  "/transfers",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  transferToWallet
+);
+
+/**
+ * Get all wallet transfers (Admin)
+ * GET /wallets/transfers
+ * Access: Admin only
+ */
+walletRoutes.get(
+  "/transfers",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllWalletTransfers
+);
+
+/**
+ * Get my wallet transfers (Restaurant)
+ * GET /wallets/my-transfers
+ * Access: Restaurant / Hotel / Affiliator
+ */
+walletRoutes.get(
+  "/my-transfers",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  getMyWalletTransfers
 );
 
 // ========================================
