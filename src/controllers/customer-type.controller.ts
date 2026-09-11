@@ -5,6 +5,7 @@ import {
   getCustomerTypeByIdService,
   updateCustomerTypeService,
   deleteCustomerTypeService,
+  toggleCustomerTypeStatusService,
 } from "../services/customer-type.service";
 
 export const createCustomerType = async (req: Request, res: Response) => {
@@ -55,5 +56,17 @@ export const deleteCustomerType = async (req: Request, res: Response) => {
   } catch (error: any) {
     if (error.message === "Customer type not found") return res.status(404).json({ message: error.message });
     res.status(500).json({ message: error.message || "Failed to delete customer type" });
+  }
+};
+
+export const toggleCustomerTypeStatus = async (req: Request, res: Response) => {
+  try {
+    const data = await toggleCustomerTypeStatusService(req.params.customerTypeId, (req as any).user.id);
+    const status = data.isActive ? "activated" : "deactivated";
+    res.status(200).json({ message: `Customer type ${status} successfully`, data });
+  } catch (error: any) {
+    if (error.message === "Customer type not found") return res.status(404).json({ message: error.message });
+    if (error.message === "Only ADMIN users can toggle customer type status") return res.status(403).json({ message: error.message });
+    res.status(500).json({ message: error.message || "Failed to toggle customer type status" });
   }
 };

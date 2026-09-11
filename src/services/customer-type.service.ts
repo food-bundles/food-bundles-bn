@@ -22,9 +22,21 @@ export const createCustomerTypeService = async (data: CustomerTypeData) => {
 
 export const getAllCustomerTypesService = async () => {
   return prisma.customerType.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, description: true },
+    select: { id: true, name: true, description: true, isActive: true, createdAt: true },
     orderBy: { name: "asc" },
+  });
+};
+
+export const toggleCustomerTypeStatusService = async (id: string, adminId: string) => {
+  const existing = await prisma.customerType.findUnique({ where: { id } });
+  if (!existing) throw new Error("Customer type not found");
+
+  const admin = await prisma.admin.findUnique({ where: { id: adminId } });
+  if (!admin || admin.role !== "ADMIN") throw new Error("Only ADMIN users can toggle customer type status");
+
+  return prisma.customerType.update({
+    where: { id },
+    data: { isActive: !existing.isActive },
   });
 };
 
