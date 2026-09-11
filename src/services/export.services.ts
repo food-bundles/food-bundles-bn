@@ -260,7 +260,7 @@ const EXPORT_HEADERS: Record<ExportType, ExportHeader> = {
 };
 
 interface ExportConfig {
-  modelName: keyof typeof prisma;
+  modelName: string;
   buildWhere: (options: ExportFilterOptions | undefined, dateFilter: any) => any;
   select: any;
   formatRecord: (record: any) => any;
