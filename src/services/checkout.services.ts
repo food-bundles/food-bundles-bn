@@ -10,6 +10,7 @@ import {
   processVoucherPaymentService,
   rollbackVoucherPaymentService,
 } from "./voucher.service";
+import { processLoanSessionPaymentService } from "./voucher-card.service";
 import { getPaymentMethodByIdService } from "./payment-method.service";
 import {
   sendPaymentNotificationEmail,
@@ -79,6 +80,7 @@ export interface CreateCheckoutData {
   billingPhone?: string;
   billingAddress?: string;
   voucherCode?: string;
+  loanSessionRrn?: string;
   promoCode?: string;
   fallbackPaymentMethod?: string;
   cardDetails?: {
@@ -187,6 +189,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     cardDetails: data.cardDetails,
     bankDetails: data.bankDetails,
     voucherCode: data.voucherCode,
+    loanSessionRrn: data.loanSessionRrn,
     fallbackPaymentMethod: data.fallbackPaymentMethod,
     processDirectly: true,
     restaurantId,
@@ -236,6 +239,7 @@ export const processPaymentService = async (
       clientIp?: string;
     };
     voucherCode?: string;
+    loanSessionRrn?: string;
     fallbackPaymentMethod?: string;
     processDirectly?: boolean;
     restaurantId?: string;
@@ -406,16 +410,38 @@ export const processPaymentService = async (
         break;
 
       case "VOUCHER":
-        if (!paymentData.voucherCode) {
-          throw new Error("Voucher code is required for voucher payments");
+        if (!paymentData.voucherCode && !paymentData.loanSessionRrn) {
+          throw new Error(
+            "Voucher code or loan session RRN is required for voucher payments",
+          );
         }
 
-        paymentResult = await processVoucherPayment({
-          voucherCode: paymentData.voucherCode,
-          orderId: order.id!,
-          restaurantId: paymentData.restaurantId || order.restaurantId,
-          originalAmount: order.totalAmount,
-        });
+        // Paying with a PAN-based loan session (new voucher card system)
+        if (paymentData.loanSessionRrn) {
+          const loanSession = await prisma.loanSession.findFirst({
+            where: {
+              rrn: paymentData.loanSessionRrn,
+              restaurantId: paymentData.restaurantId || order.restaurantId,
+            },
+          });
+          if (!loanSession || !loanSession.id) {
+            throw new Error("Loan session not found");
+          }
+
+          paymentResult = await processLoanSessionPaymentService({
+            sessionId: loanSession.id,
+            orderId: order.id!,
+            restaurantId: paymentData.restaurantId || order.restaurantId,
+            originalAmount: order.totalAmount,
+          });
+        } else {
+          paymentResult = await processVoucherPayment({
+            voucherCode: paymentData.voucherCode!,
+            orderId: order.id!,
+            restaurantId: paymentData.restaurantId || order.restaurantId,
+            originalAmount: order.totalAmount,
+          });
+        }
         break;
 
       default:
@@ -589,6 +615,10 @@ export const processPaymentService = async (
         voucherDetails:
           "voucherDetails" in paymentResult
             ? paymentResult.voucherDetails
+            : undefined,
+        loanSessionDetails:
+          "loanSessionDetails" in paymentResult
+            ? paymentResult.loanSessionDetails
             : undefined,
         requiresAdditionalPayment:
           "requiresAdditionalPayment" in paymentResult

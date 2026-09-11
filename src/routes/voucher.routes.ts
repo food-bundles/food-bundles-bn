@@ -18,6 +18,8 @@ import {
   deleteLoanApplication,
   processVoucherPayment,
   makeRepayment,
+  makeVoucherTopUp,
+  verifyVoucherTopUp,
   getOutstandingBalance,
   calculatePenalties,
   getVoucherPenalties,
@@ -28,6 +30,33 @@ import {
   markLoanApplicationAsAccepted,
   sendVoucherReminders,
 } from "../controllers/voucher.controller";
+import {
+  requestVoucherCard,
+  issueVoucherCard,
+  getMyVoucherCard,
+  getAllVoucherCards,
+  getVoucherCardByPan,
+  getCardEnrollmentRequests,
+  getMyCardEnrollmentRequest,
+  requestLoanSession,
+  approveLoanSession,
+  rejectLoanSession,
+  acceptLoanSession,
+  getLoanTraders,
+  getLoanTerms,
+  acceptLoanTerms,
+  getTraderLoanSessions,
+  traderApproveLoanSession,
+  adminApproveLoanSessionOnBehalf,
+  payUnlockFee,
+  verifyUnlockFeePayment,
+  getMyLoanSessions,
+  getAllLoanSessions,
+  getLoanSessionById,
+  getVoucherCardStats,
+  updateVoucherCardUnlockFee,
+  getRecentActivities,
+} from "../controllers/voucher-card.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
 const voucherRoutes = Router();
@@ -68,12 +97,6 @@ voucherRoutes.get(
   checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
   getMyVouchers,
 );
-
-/**
- * Get voucher by ID
- * GET /vouchers/:id
- */
-voucherRoutes.get("/:id", isAuthenticated, getVoucherById);
 
 /**
  * Get restaurant's vouchers
@@ -237,6 +260,28 @@ voucherRoutes.post(
 );
 
 /**
+ * Initiate voucher credit top-up (Restaurant)
+ * POST /vouchers/:id/top-up
+ */
+voucherRoutes.post(
+  "/:id/top-up",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL", "ADMIN"),
+  makeVoucherTopUp,
+);
+
+/**
+ * Verify voucher credit top-up status (Restaurant)
+ * POST /vouchers/top-ups/:topUpId/verify
+ */
+voucherRoutes.post(
+  "/top-ups/:topUpId/verify",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL", "ADMIN"),
+  verifyVoucherTopUp,
+);
+
+/**
  * Get outstanding balance
  * GET /vouchers/:id/outstanding
  */
@@ -309,5 +354,213 @@ voucherRoutes.post(
   sendVoucherReminders,
 );
 
+// ========================================
+// NEW VOUCHER CARD SYSTEM (PAN-based)
+// ========================================
+
+// Card enrollment (restaurant requests a card)
+voucherRoutes.post(
+  "/card/request",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL"),
+  requestVoucherCard,
+);
+
+// Get my voucher card (restaurant)
+voucherRoutes.get(
+  "/card/my-card",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  getMyVoucherCard,
+);
+
+// Get my card enrollment request status (restaurant)
+voucherRoutes.get(
+  "/card/my-request",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL"),
+  getMyCardEnrollmentRequest,
+);
+
+// Issue a card to a restaurant (admin)
+voucherRoutes.post(
+  "/card/issue",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  issueVoucherCard,
+);
+
+// Get all voucher cards (admin)
+voucherRoutes.get(
+  "/cards",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllVoucherCards,
+);
+
+// Get card enrollment requests (admin)
+voucherRoutes.get(
+  "/card/enrollment-requests",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getCardEnrollmentRequests,
+);
+
+// Get card by PAN (admin)
+voucherRoutes.get(
+  "/card/pan/:pan",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getVoucherCardByPan,
+);
+
+// Configure a card's unlock fee (admin) — no default fee; admin decides if/when it applies
+voucherRoutes.patch(
+  "/card/:cardId/unlock-fee",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  updateVoucherCardUnlockFee,
+);
+
+// Recent activities feed (admin) — new card applications + new loan requests
+voucherRoutes.get(
+  "/activities",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getRecentActivities,
+);
+
+// Loan sessions — restaurant requests a loan
+voucherRoutes.post(
+  "/sessions/request",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL"),
+  requestLoanSession,
+);
+
+// Traders a restaurant can pick as loan provider (static route — must be before /sessions/:id)
+voucherRoutes.get(
+  "/sessions/loan-traders",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  getLoanTraders,
+);
+
+// T&C for a provider + acceptance status (static route — must be before /sessions/:id)
+voucherRoutes.get(
+  "/sessions/loan-terms",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  getLoanTerms,
+);
+
+// First-time T&C acceptance (static route — must be before /sessions/:id)
+voucherRoutes.post(
+  "/sessions/loan-terms/accept",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  acceptLoanTerms,
+);
+
+// Trader loan session inbox (static route — must be before /sessions/:id)
+voucherRoutes.get(
+  "/sessions/trader/inbox",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  getTraderLoanSessions,
+);
+
+// Get my loan sessions (restaurant)
+voucherRoutes.get(
+  "/sessions/my-sessions",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  getMyLoanSessions,
+);
+
+// Get all loan sessions (admin)
+voucherRoutes.get(
+  "/sessions",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllLoanSessions,
+);
+
+// Get session by ID
+voucherRoutes.get(
+  "/sessions/:id",
+  isAuthenticated,
+  getLoanSessionById,
+);
+
+// Approve loan session (admin)
+voucherRoutes.patch(
+  "/sessions/:id/approve",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  approveLoanSession,
+);
+
+// Reject loan session (admin)
+voucherRoutes.patch(
+  "/sessions/:id/reject",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  rejectLoanSession,
+);
+
+// Accept loan session — makes it visible to the selected trader so they can approve (admin)
+voucherRoutes.patch(
+  "/sessions/:id/accept",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  acceptLoanSession,
+);
+
+// Approve loan session as the selected trader / provider (trader)
+voucherRoutes.post(
+  "/sessions/:id/trader-approve",
+  isAuthenticated,
+  checkPermission("TRADER"),
+  traderApproveLoanSession,
+);
+
+// Approve loan session on behalf of a delegation trader (admin)
+voucherRoutes.post(
+  "/sessions/:id/trader-approve-on-behalf/:traderId",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  adminApproveLoanSessionOnBehalf,
+);
+
+// Pay unlock fee (restaurant)
+voucherRoutes.post(
+  "/sessions/:id/pay-unlock-fee",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL"),
+  payUnlockFee,
+);
+
+// Verify unlock fee payment status (restaurant)
+voucherRoutes.post(
+  "/sessions/:id/unlock-fee/verify",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL"),
+  verifyUnlockFeePayment,
+);
+
+// Voucher card system stats (admin)
+voucherRoutes.get(
+  "/card-stats",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getVoucherCardStats,
+);
+
+/**
+ * Get voucher by ID — MUST be last to avoid swallowing static paths
+ * GET /vouchers/:id
+ */
+voucherRoutes.get("/:id", isAuthenticated, getVoucherById);
 
 export default voucherRoutes;

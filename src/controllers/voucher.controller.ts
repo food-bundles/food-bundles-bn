@@ -26,6 +26,8 @@ import {
   getMyVouchersService,
   getAllVouchersService,
   markLoanApplicationAsAcceptedService,
+  initiateVoucherCreditTopUpService,
+  verifyVoucherCreditTopUpService,
 } from "../services/voucher.service";
 import { sendVoucherMaturityRemindersService } from "../services/voucher-reminder.service";
 import { VoucherStatus, LoanStatus } from "@prisma/client";
@@ -776,6 +778,90 @@ export const makeRepayment = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to process repayment",
+    });
+  }
+};
+
+/**
+ * Initiate a voucher credit top-up (pay the extra = requested - approved)
+ * POST /vouchers/:id/top-up
+ */
+export const makeVoucherTopUp = async (req: Request, res: Response) => {
+  try {
+    const { id: voucherId } = req.params;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
+
+    const { amount, paymentMethod, paymentReference, phoneNumber } = req.body;
+
+    if (!paymentMethod) {
+      return res.status(400).json({ message: "Payment method is required" });
+    }
+
+    if (!amount || amount <= 0) {
+      return res
+        .status(400)
+        .json({ message: "A valid top-up amount is required" });
+    }
+
+    const result = await initiateVoucherCreditTopUpService({
+      voucherId,
+      restaurantId,
+      amount,
+      paymentMethod,
+      paymentReference,
+      phoneNumber,
+    });
+
+    if (result.redirectUrl) {
+      return res.status(200).json({
+        message: "Payment initiated - redirect required",
+        data: {
+          topUpId: result.topUpId,
+          transactionId: (result as any).transactionId,
+          redirectUrl: result.redirectUrl,
+          status: result.status,
+          requiresRedirect: true,
+        },
+      });
+    }
+
+    res.status(200).json({
+      message: result.message || "Voucher top-up processed successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to process voucher top-up",
+    });
+  }
+};
+
+/**
+ * Verify an in-flight voucher credit top-up
+ * POST /vouchers/top-ups/:topUpId/verify
+ */
+export const verifyVoucherTopUp = async (req: Request, res: Response) => {
+  try {
+    const { topUpId } = req.params;
+    const result = await verifyVoucherCreditTopUpService(topUpId);
+    return res.status(200).json(result);
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to verify voucher top-up",
     });
   }
 };

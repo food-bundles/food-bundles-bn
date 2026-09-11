@@ -134,7 +134,7 @@ export const inviteController = {
   // Accept invitation
   async acceptInvite(req: Request, res: Response) {
     try {
-      const { token, username, phone, password } = req.body;
+      const { token, username, phone, password, termsAndConditions } = req.body;
 
       if (!token || !username || !password) {
         return res.status(400).json({
@@ -155,6 +155,7 @@ export const inviteController = {
         username,
         phone,
         password,
+        termsAndConditions,
       });
 
       // Notify admin: SMS, email, and system notification (fire-and-forget)

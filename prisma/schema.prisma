@@ -103,6 +103,12 @@ model Restaurant {
   posts              Post[]
   affiliators        Affiliator[]
   walletTransactions WalletTransaction[]
+  VoucherCard        VoucherCard?
+  LoanSession        LoanSession[]
+  CardEnrollmentRequest CardEnrollmentRequest?
+  WalletTransfer     WalletTransfer[]
+  VoucherCreditTopUp VoucherCreditTopUp[]
+  LoanTermsAcceptance LoanTermsAcceptance[]
 }
 
 model Affiliator {
@@ -324,6 +330,8 @@ model Admin {
 
   agreed   Boolean  @default(false)
 
+  termsAndConditions String? @db.Text // Trader's loan terms & conditions
+
   location String?
   province String?
   district String?
@@ -355,6 +363,9 @@ model Admin {
   Market                   Market[]
   MarketPriceHistory       MarketPriceHistory[]
   NewsletterCampaign       NewsletterCampaign[]
+  issuedCards              VoucherCard[]         @relation("CardIssuer")
+  approvedSessions         LoanSession[]         @relation("SessionApprover")
+  fundedSessions           LoanSession[]         @relation("SessionFundingTrader")
 }
 
 model Product {
@@ -770,6 +781,8 @@ model SubscriptionPlan {
   price              Float
   voucherAccess      Boolean  @default(false)
   voucherPaymentDays Int      @default(30) // Number of days for voucher payment
+  loanAccess         Boolean  @default(false) // Whether plan includes loan access
+  loanProviderId     String? // Which loan provider this plan works with (for loans)
   freeDelivery       Boolean  @default(false)
   stablePricing      Boolean  @default(false)
   receiveEBM         Boolean  @default(false)
@@ -784,8 +797,11 @@ model SubscriptionPlan {
   // Relations
   subscriptions RestaurantSubscription[]
 
+  loanProvider LoanProvider? @relation(fields: [loanProviderId], references: [id], onDelete: SetNull)
+
   @@index([isActive])
   @@index([name])
+  @@index([loanProviderId])
 }
 
 // Restaurant Subscription model
@@ -801,6 +817,10 @@ model RestaurantSubscription {
   paymentMethod     String?
   paymentStatus     PaymentStatus      @default(PENDING)
   expiryWarningSent Boolean            @default(false)
+
+  // Loan access approval tracking (loan access is part of this single subscription)
+  loanAccessApprovedAt DateTime?
+  loanAccessNotes      String?
 
   // Payment tracking
   txRef         String? @unique
@@ -926,6 +946,8 @@ model Voucher {
   repayments   VoucherRepayment[]
   penalties    VoucherPenalty[]
   orders       Order[]
+  walletTransfers WalletTransfer[]
+  creditTopUps  VoucherCreditTopUp[]
 
   @@index([restaurantId])
   @@index([farmerId])
@@ -1041,6 +1063,34 @@ model VoucherRepayment {
   @@index([farmerId])
   @@index([loanId])
   @@index([paymentDate])
+}
+
+model VoucherCreditTopUp {
+  id            String  @id @default(uuid())
+  voucherId     String
+  restaurantId  String
+
+  amount          Float
+  paymentMethod   String
+  paymentReference String?
+  phoneNumber     String?
+
+  status   PaymentStatus @default(PENDING)
+  txRef    String?       @unique
+  flwRef   String?
+  flwStatus String?
+  transactionId String?
+  confirmedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  voucher    Voucher    @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([voucherId])
+  @@index([restaurantId])
+  @@index([status])
 }
 
 model VoucherPenalty {
@@ -1492,6 +1542,12 @@ enum SubscriptionAction {
   REACTIVATED
   EXPIRED
   ROLLBACK
+  // Loan access actions (reuse single subscription for loans)
+  LOAN_ACCESS_REQUESTED
+  LOAN_ACCESS_APPROVED
+  LOAN_ACCESS_REJECTED
+  LOAN_ACCESS_DISABLED
+  LOAN_ACCESS_ENABLED
 }
 
 enum VoucherType {
@@ -1523,6 +1579,166 @@ enum LoanStatus {
   APPROVED
   REJECTED
   SETTLED
+}
+
+// ============================================
+// NEW VOUCHER CARD SYSTEM (PAN-based)
+// ============================================
+
+model VoucherCard {
+  id                   String     @id @default(uuid())
+  pan                  String     @unique // 16-digit permanent card number
+  restaurantId         String     @unique // one card per restaurant
+  status               CardStatus @default(ACTIVE)
+  loanLimit            Float      @default(500000)
+  unlockFeeEnabled     Boolean    @default(false) // Admin decides whether an unlock fee applies for this restaurant
+  unlockFeePercentage  Float?     // Fee percent when unlockFeeEnabled is true (no default)
+  riskScore            Float?
+  issuedDate           DateTime   @default(now())
+  issuedBy             String? // Admin ID who issued the card
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  restaurant   Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  issuer       Admin?       @relation("CardIssuer", fields: [issuedBy], references: [id])
+  loanSessions LoanSession[]
+
+  @@index([pan])
+  @@index([restaurantId])
+  @@index([status])
+}
+
+model CardEnrollmentRequest {
+  id           String                  @id @default(uuid())
+  restaurantId String                  @unique
+  status       CardEnrollmentStatus    @default(PENDING)
+  requestedAt  DateTime                @default(now())
+  reviewedAt   DateTime?
+  reviewedBy   String?
+  notes        String?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([status])
+}
+
+model LoanSession {
+  id                  String            @id @default(uuid())
+  rrn                 String            @unique // Retrieval Reference Number
+  cardId              String
+  restaurantId        String
+  requestedAmount     Float
+  approvedAmount      Float?
+  approvalPercentage  Float?            @default(100)
+  unlockFeePercentage Float?            // Effective fee percent snapshot at approval (null = no fee)
+  unlockFee           Float?
+  unlockStatus        UnlockStatus      @default(LOCKED)
+  unlockPaidAt        DateTime?
+  amountUsed          Float             @default(0)
+  amountRepaid        Float             @default(0)
+  outstandingAmount   Float             @default(0)
+  status              LoanSessionStatus @default(REQUESTED)
+  purpose             String?
+  notes               String?
+  repaymentDays       Int?
+  dueDate             DateTime?
+  approvedBy          String?
+  fundingTraderId     String?
+  loanProviderType    String?            // TRADER | FOOD_BUNDLES — provider chosen by the restaurant
+  requestedAt         DateTime          @default(now())
+  approvedAt          DateTime?
+  unlockedAt          DateTime?
+  closedAt            DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  card           VoucherCard          @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  restaurant     Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  approver       Admin?               @relation("SessionApprover", fields: [approvedBy], references: [id])
+  fundingTrader  Admin?               @relation("SessionFundingTrader", fields: [fundingTraderId], references: [id])
+  unlockPayments UnlockFeePayment[]
+  authorizations SessionAuthorization[]
+  walletTransfers WalletTransfer[]
+
+  @@index([rrn])
+  @@index([cardId])
+  @@index([restaurantId])
+  @@index([status])
+  @@index([unlockStatus])
+}
+
+model UnlockFeePayment {
+  id              String        @id @default(uuid())
+  sessionId       String
+  amount          Float
+  paymentMethod   String
+  paymentReference String?
+  phoneNumber     String?
+  txRef           String?       @unique
+  flwRef          String?
+  flwStatus       String?
+  transactionId   String?
+  status          PaymentStatus @default(PENDING)
+  confirmedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  session LoanSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([status])
+  @@index([txRef])
+}
+
+model SessionAuthorization {
+  id                String   @id @default(uuid())
+  stan              String   @unique // System Trace Audit Number
+  sessionId         String
+  transactionAmount Float
+  posTerminal       String?
+  responseStatus    String   @default("APPROVED")
+  createdAt         DateTime @default(now())
+
+  session LoanSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([stan])
+  @@index([sessionId])
+}
+
+enum CardStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  DEACTIVATED
+}
+
+enum CardEnrollmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LoanSessionStatus {
+  REQUESTED
+  ACCEPTED
+  APPROVED_LOCKED
+  UNLOCK_FEE_PENDING
+  ACTIVE
+  PARTIALLY_USED
+  FULLY_USED
+  CLOSED
+  SETTLED
+  REJECTED
+  OVERDUE
+}
+
+enum UnlockStatus {
+  LOCKED
+  PENDING_PAYMENT
+  UNLOCKED
 }
 
 enum PenaltyStatus {
@@ -1639,4 +1855,80 @@ enum NewsletterStatus {
 enum CommissionMode {
   NORMAL
   FIXED
+}
+
+// ============================================
+// LOAN SUBSCRIPTION & PROVIDER MODELS
+// ============================================
+
+// ============================================
+// LOAN PROVIDER MODEL (for loan subscription plans)
+// ============================================
+
+model LoanProvider {
+  id                   String   @id @default(uuid())
+  name                 String   @unique
+  description          String?
+  isActive             Boolean  @default(true)
+  unlockFeeEnabled     Boolean  @default(false) // Admin decides whether an unlock fee applies
+  unlockFeePercentage  Float?   // Fee percent when unlockFeeEnabled is true (no default)
+  termsAndConditions   String?  @db.Text // Food Bundles loan terms & conditions
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // Relations
+  plans SubscriptionPlan[]
+
+  @@index([name])
+  @@index([isActive])
+}
+
+// ============================================
+// LOAN TERMS ACCEPTANCE — first-time T&C per restaurant × provider
+// ============================================
+
+model LoanTermsAcceptance {
+  id           String   @id @default(uuid())
+  restaurantId String
+  providerType String // TRADER | FOOD_BUNDLES
+  providerId   String? // trader (Admin) id or loan provider id
+  providerName String
+  acceptedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, providerType, providerId])
+  @@index([restaurantId])
+}
+
+// ============================================
+// WALLET TRANSFER MODEL (for Kayko voucher amounts)
+// ============================================
+
+model WalletTransfer {
+  id              String           @id @default(uuid())
+  restaurantId    String
+  voucherId       String?
+  loanSessionId   String?
+  amount          Float
+  source          String           @default("VOUCHER_EXPIRY") // VOUCHER_EXPIRY, VOUCHER_UNUSED, MANUAL
+  status          TransactionStatus @default(PENDING)
+  transferredAt   DateTime?
+  notes           String?
+  metadata        Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  restaurant   Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  voucher      Voucher?        @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+  loanSession  LoanSession?    @relation(fields: [loanSessionId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId])
+  @@index([voucherId])
+  @@index([loanSessionId])
+  @@index([status])
+  @@index([createdAt])
 }

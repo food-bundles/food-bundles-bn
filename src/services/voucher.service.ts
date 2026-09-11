@@ -30,10 +30,24 @@ import {
   processAllTradersCommissionService,
 } from "./trader.service";
 import { applyPromoCodeService } from "./promo.service";
+import { transferVoucherAmountToWalletService } from "./wallet-transfer.service";
+import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
 
 // Payment processing functions
 const flw = require("flutterwave-node-v3");
-const paypack = require("paypack-js");
+
+// PayPack client — lazy initialized to ensure env vars are loaded
+let _paypack: any = null;
+function getPaypack() {
+  if (!_paypack) {
+    const PaypackJs = require("paypack-js").default;
+    _paypack = PaypackJs.config({
+      client_id: process.env.PAYPACK_APPLICATION_ID,
+      client_secret: process.env.PAYPACK_APPLICATION_SECRET,
+    });
+  }
+  return _paypack;
+}
 
 // ============================================
 // TYPES AND INTERFACES
@@ -3130,6 +3144,36 @@ export const processExpiredVouchersService = async () => {
         approvedAmount,
         success: true,
       });
+
+      // Kayko wallet transfer: transfer unused voucher amount to restaurant wallet
+      // Kayko provides real money, so unspent funds must be credited to merchant wallet (not ignored)
+      if (voucher.restaurantId) {
+        const unusedAmount = Math.max(0, voucher.creditLimit - voucher.usedCredit);
+        if (unusedAmount > 0) {
+          try {
+            const walletTransfer = await transferVoucherAmountToWalletService({
+              restaurantId: voucher.restaurantId,
+              amount: unusedAmount,
+              voucherId: voucher.id,
+              source: "VOUCHER_EXPIRY",
+              notes: `Unused amount from expired voucher ${voucher.voucherCode} transferred to restaurant wallet`,
+            });
+            results[results.length - 1] = {
+              ...results[results.length - 1],
+              walletTransfer: {
+                amount: unusedAmount,
+                transferId: walletTransfer.transfer.id,
+                status: "COMPLETED",
+              },
+            };
+          } catch (walletError: any) {
+            console.error(
+              `Failed to transfer unused voucher amount to wallet for voucher ${voucher.voucherCode}:`,
+              walletError.message,
+            );
+          }
+        }
+      }
     }
 
     return results;
@@ -3137,4 +3181,426 @@ export const processExpiredVouchersService = async () => {
     console.error("Error processing expired vouchers:", error.message);
     return [];
   }
+};
+
+// ============================================
+// VOUCHER CREDIT TOP-UP (pay extra = requested - approved)
+// ============================================
+
+/**
+ * Initiate a voucher credit top-up.
+ * Restaurant pays the difference between the requested and approved loan
+ * amount using another payment method; once paid, the voucher's available
+ * credit (remainingCredit) increases so checkout can use it.
+ */
+export const initiateVoucherCreditTopUpService = async (data: {
+  voucherId: string;
+  restaurantId: string;
+  amount: number;
+  paymentMethod: string;
+  phoneNumber?: string;
+  paymentReference?: string;
+}) => {
+  const { voucherId, restaurantId, amount } = data;
+
+  if (!amount || amount <= 0) {
+    throw new Error("Top-up amount must be greater than zero");
+  }
+
+  const voucher = await prisma.voucher.findFirst({
+    where: { id: voucherId, restaurantId },
+  });
+  if (!voucher) throw new Error("Voucher not found for this restaurant");
+  if (voucher.status !== VoucherStatus.ACTIVE) {
+    throw new Error("Only active vouchers can be topped up");
+  }
+
+  const method = data.paymentMethod?.toUpperCase() || "";
+  const txRef = data.paymentReference || `TOPUP_${voucherId.slice(0, 8)}_${Date.now()}`;
+
+  const topUp = await prisma.voucherCreditTopUp.create({
+    data: {
+      voucherId,
+      restaurantId,
+      amount,
+      paymentMethod: method,
+      txRef,
+      phoneNumber: data.phoneNumber || null,
+    },
+  });
+
+  if (method === "MOBILE_MONEY") {
+    const cleanedPhone = cleanPhoneNumber(data.phoneNumber || "");
+    if (!isValidRwandaPhone(cleanedPhone)) {
+      throw new Error(
+        "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX",
+      );
+    }
+
+    // Primary: PayPack cashin (pushes payment request to customer phone)
+    try {
+      const response = await getPaypack().cashin({
+        number: cleanedPhone,
+        amount,
+        environment:
+          process.env.NODE_ENV === "production" ? "production" : "development",
+      });
+
+      if (response?.data) {
+        await prisma.voucherCreditTopUp.update({
+          where: { id: topUp.id },
+          data: { flwRef: response.data.ref, flwStatus: "pending" },
+        });
+
+        return {
+          success: true,
+          status: "pending",
+          topUpId: topUp.id,
+          txRef,
+          message: "Payment request sent to your phone number, please confirm it.",
+          redirectUrl: "",
+          requiresRedirect: false,
+        };
+      }
+      throw new Error("PayPack response invalid or missing reference");
+    } catch (error: any) {
+      console.log("PayPack top-up cashin failed, falling back to Flutterwave:", error.message);
+
+      const flwResult = await initiateFlutterwaveTopUpPayment({
+        txRef,
+        amount,
+        email: "",
+        fullname: "",
+        currency: "RWF",
+        paymentOptions: "mobilemoney",
+        phoneNumber: cleanedPhone,
+      });
+
+      await prisma.voucherCreditTopUp.update({
+        where: { id: topUp.id },
+        data: { flwStatus: "pending_flutterwave" },
+      });
+
+      return { ...flwResult, topUpId: topUp.id, txRef };
+    }
+  }
+
+  if (method === "CARD") {
+    const flwResult = await initiateFlutterwaveTopUpPayment({
+      txRef,
+      amount,
+      email: "",
+      fullname: "",
+      currency: "RWF",
+      paymentOptions: "card",
+      phoneNumber: "",
+    });
+
+    await prisma.voucherCreditTopUp.update({
+      where: { id: topUp.id },
+      data: { flwStatus: "pending_flutterwave" },
+    });
+
+    return { ...flwResult, topUpId: topUp.id, txRef };
+  }
+
+  if (method === "CASH") {
+    const wallet = await getWalletByRestaurantIdService(restaurantId);
+    if (!wallet.isActive) {
+      throw new Error("Wallet is inactive. Please contact support.");
+    }
+    if (wallet.balance < amount) {
+      throw new Error(
+        `Insufficient wallet balance. Available: ${wallet.balance} ${wallet.currency}, Required: ${amount} RWF`,
+      );
+    }
+
+    await debitWalletService({
+      walletId: wallet.id,
+      amount,
+      description: `Voucher credit top-up for ${voucher.voucherCode}`,
+      reference: txRef,
+      voucherId: txRef,
+    });
+
+    const confirmed = await confirmVoucherCreditTopUpService(topUp.id, {
+      flwStatus: "successful",
+      transactionId: `WALLET_${Date.now()}`,
+    });
+
+    return {
+      success: true,
+      status: "completed",
+      topUpId: topUp.id,
+      txRef,
+      data: confirmed,
+      message: "Voucher credit topped up using wallet balance",
+    };
+  }
+
+  if (method === "BANK_TRANSFER") {
+    return {
+      success: true,
+      status: "pending",
+      topUpId: topUp.id,
+      txRef,
+      message:
+        "Bank transfer reference recorded. Payment will be confirmed after verification.",
+      redirectUrl: "",
+      requiresRedirect: false,
+    };
+  }
+
+  throw new Error(`Unsupported payment method: ${method}`);
+};
+
+async function initiateFlutterwaveTopUpPayment(params: {
+  txRef: string;
+  amount: number;
+  email: string;
+  fullname: string;
+  currency?: string;
+  paymentOptions?: string;
+  phoneNumber?: string;
+}) {
+  const {
+    txRef,
+    amount,
+    email,
+    fullname,
+    currency = "RWF",
+    paymentOptions = "card",
+    phoneNumber,
+  } = params;
+
+  const payload: any = {
+    tx_ref: txRef,
+    amount: amount.toString(),
+    currency,
+    redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/vouchers`,
+    customer: { email, name: fullname, phone_number: phoneNumber },
+    customizations: {
+      title: "Voucher Credit Top-up - Food Bundles",
+      description: `Voucher credit top-up`,
+      logo: `https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png`,
+    },
+    payment_options: paymentOptions,
+    meta: {
+      transaction_type: "VOUCHER_CREDIT_TOPUP",
+      top_up_ref: txRef,
+    },
+  };
+
+  const response = await axios.post(
+    "https://api.flutterwave.com/v3/payments",
+    payload,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (response.data?.status === "success" && response.data?.data?.link) {
+    return {
+      success: true,
+      transactionId: txRef,
+      reference: txRef,
+      status: "pending",
+      message: "Redirect to complete payment",
+      redirectUrl: response.data.data.link,
+    };
+  }
+  throw new Error("Flutterwave payment initiation failed");
+}
+
+/**
+ * Confirm a voucher credit top-up and increase the voucher's remaining credit.
+ * Idempotent — safe to call multiple times for the same top-up.
+ */
+export const confirmVoucherCreditTopUpService = async (
+  topUpId: string,
+  opts?: { flwRef?: string; flwStatus?: string; transactionId?: string },
+) => {
+  const topUp = await prisma.voucherCreditTopUp.findUnique({
+    where: { id: topUpId },
+  });
+  if (!topUp) throw new Error("Voucher top-up not found");
+  if (topUp.status === PaymentStatus.COMPLETED) return topUp;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const voucher = await tx.voucher.findUnique({
+      where: { id: topUp.voucherId },
+    });
+    if (!voucher) throw new Error("Voucher not found");
+
+    const updatedVoucher = await tx.voucher.update({
+      where: { id: voucher.id },
+      data: {
+        remainingCredit: (voucher.remainingCredit ?? 0) + topUp.amount,
+        totalCredit: (voucher.totalCredit ?? 0) + topUp.amount,
+      },
+    });
+
+    const updatedTopUp = await tx.voucherCreditTopUp.update({
+      where: { id: topUp.id },
+      data: {
+        status: PaymentStatus.COMPLETED,
+        confirmedAt: new Date(),
+        flwRef: opts?.flwRef ?? topUp.flwRef,
+        flwStatus: opts?.flwStatus ?? "successful",
+        transactionId: opts?.transactionId ?? topUp.transactionId,
+      },
+    });
+
+    return { updatedVoucher, updatedTopUp };
+  });
+
+  await createNotificationService({
+    title: "Voucher Credit Topped Up",
+    message: `Your voucher ${result.updatedVoucher.voucherCode} was topped up by ${topUp.amount.toLocaleString()} RWF.`,
+    eventType: "VOUCHER_ISSUED",
+    targetType: "SPECIFIC_USER",
+    targetId: topUp.restaurantId,
+    metadata: { voucherId: topUp.voucherId, amount: topUp.amount },
+  }).catch((e: any) => console.error("Top-up notification failed:", e.message));
+
+  return result.updatedTopUp;
+};
+
+/**
+ * Verify an in-flight voucher credit top-up (after PayPack phone confirmation
+ * or Flutterwave hosted checkout return). Confirms ONLY when the provider
+ * reports the payment successful.
+ */
+export const verifyVoucherCreditTopUpService = async (topUpId: string) => {
+  const topUp = await prisma.voucherCreditTopUp.findUnique({
+    where: { id: topUpId },
+  });
+
+  if (!topUp) {
+    return { success: false, verified: false, message: "Top-up not found." };
+  }
+
+  if (topUp.status === PaymentStatus.COMPLETED) {
+    return { success: true, verified: true, data: topUp };
+  }
+
+  if (topUp.paymentMethod?.toUpperCase() === "CASH") {
+    return {
+      success: false,
+      verified: false,
+      status: "pending",
+      message: "Wallet top-up is not confirmed yet. Please try again.",
+    };
+  }
+
+  if (topUp.paymentMethod?.toUpperCase() === "BANK_TRANSFER") {
+    return {
+      success: false,
+      verified: false,
+      status: "pending",
+      message:
+        "Bank transfer payment is awaiting manual verification by the admin. You'll be notified once confirmed.",
+    };
+  }
+
+  // Flutterwave hosted checkout — verify by tx_ref
+  if (!topUp.flwRef || topUp.flwStatus === "pending_flutterwave") {
+    try {
+      const response = await axios.get(
+        `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${topUp.txRef}`,
+        {
+          headers: { Authorization: `Bearer ${process.env.FLW_SECRET_KEY}` },
+        },
+      );
+
+      if (
+        response.data?.status === "success" &&
+        response.data?.data?.status === "successful"
+      ) {
+        await prisma.voucherCreditTopUp.update({
+          where: { id: topUp.id },
+          data: {
+            flwRef: response.data.data.flw_ref,
+            flwStatus: "successful",
+            transactionId: response.data.data.id?.toString(),
+          },
+        });
+        const confirmed = await confirmVoucherCreditTopUpService(topUp.id);
+        return { success: true, verified: true, data: confirmed };
+      }
+
+      return {
+        success: false,
+        verified: false,
+        status: "pending",
+        message:
+          "Payment not yet confirmed. Please complete the payment and try again.",
+      };
+    } catch (error: any) {
+      console.log("Flutterwave top-up verify error:", error.message);
+      return {
+        success: false,
+        verified: false,
+        status: "pending",
+        message: "Could not verify payment status. Please try again.",
+      };
+    }
+  }
+
+  // PayPack: verify the cashin directly against the PayPack API
+  if (topUp.flwRef) {
+    try {
+      const tx = await getPaypack().transaction(topUp.flwRef);
+      const paypackStatus = tx?.data?.status;
+
+      if (
+        paypackStatus === "successful" ||
+        paypackStatus === "success" ||
+        paypackStatus === "completed"
+      ) {
+        await prisma.voucherCreditTopUp.update({
+          where: { id: topUp.id },
+          data: { flwStatus: "successful", transactionId: tx.data.ref },
+        });
+        const confirmed = await confirmVoucherCreditTopUpService(topUp.id);
+        return { success: true, verified: true, data: confirmed };
+      }
+
+      if (paypackStatus === "failed" || paypackStatus === "cancelled") {
+        await prisma.voucherCreditTopUp.update({
+          where: { id: topUp.id },
+          data: { status: PaymentStatus.FAILED, flwStatus: paypackStatus },
+        });
+        return {
+          success: false,
+          verified: false,
+          status: "failed",
+          message: "The payment was not completed. Please try again.",
+        };
+      }
+
+      return {
+        success: false,
+        verified: false,
+        status: "pending",
+        message:
+          paypackStatus === "processing"
+            ? "Payment is still processing. Please confirm it on your phone."
+            : "Payment is still pending. Please confirm the payment on your phone.",
+      };
+    } catch (error: any) {
+      console.log("PayPack top-up verify error:", error.message);
+      return {
+        success: false,
+        verified: false,
+        status: "pending",
+        message: "Could not verify payment status. Please try again.",
+      };
+    }
+  }
+
+  return { success: false, verified: false, status: "pending" };
 };
