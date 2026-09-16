@@ -12,10 +12,14 @@ import {
   getOrderByNumber,
   reOrderFromExistingOrder,
   testWebSocket,
-  editOrder,
+editOrder,
   sendPaymentLink,
+  generatePaymentLink,
+  getOrderByPaymentLink,
+  payViaPaymentLink,
 } from "../controllers/order.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { paymentLinkRateLimiter } from "../middleware/rateLimiters";
 
 const orderRoutes = Router();
 
@@ -89,6 +93,24 @@ orderRoutes.get(
 orderRoutes.get("/number/:orderNumber", isAuthenticated, getOrderByNumber);
 
 // ========================================
+// PUBLIC PAYMENT LINK ROUTES (must come before /:orderId)
+// ========================================
+
+/**
+ * Fetch a public-safe order summary by payment link token
+ * GET /orders/pay/:token
+ * Access: Public (no authentication) — rate limited
+ */
+orderRoutes.get("/pay/:token", paymentLinkRateLimiter, getOrderByPaymentLink);
+
+/**
+ * Submit a payment via a public payment link
+ * POST /orders/pay/:token
+ * Access: Public (no authentication) — rate limited
+ */
+orderRoutes.post("/pay/:token", paymentLinkRateLimiter, payViaPaymentLink);
+
+// ========================================
 // ORDER MANAGEMENT ROUTES
 // ========================================
 
@@ -138,6 +160,17 @@ orderRoutes.post(
   "/:orderId/send-payment-link",
   isAuthenticated,
   sendPaymentLink
+);
+
+/**
+ * Generate (or regenerate) a shareable public payment link for an order
+ * POST /orders/:orderId/payment-link
+ * Access: Restaurant/Affiliator (own orders) or Admin (any order)
+ */
+orderRoutes.post(
+  "/:orderId/payment-link",
+  isAuthenticated,
+  generatePaymentLink
 );
 
 /**

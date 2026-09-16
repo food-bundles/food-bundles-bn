@@ -578,6 +578,10 @@ model Order {
   appFee      Float?
   merchantFee Float?
 
+  // Shareable payment link
+  paymentLinkToken  String?   @unique
+  paymentLinkExpiry DateTime?
+
   // Timestamps
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -603,6 +607,7 @@ model Order {
   @@index([txRef])
   @@index([flwRef])
   @@index([transactionId])
+  @@index([paymentLinkToken])
   @@index([flwStatus])
   @@index([cartId])
 }
@@ -1767,6 +1772,9 @@ enum NotificationEvent {
   SUBSCRIPTION_EXPIRED
   LOW_STOCK_ALERT
   SYSTEM_MAINTENANCE
+  SUBMISSION_VERIFIED
+  SUBMISSION_FEEDBACK_RECEIVED
+  SUBMISSION_REOPENED
 }
 
 enum NotificationTarget {
