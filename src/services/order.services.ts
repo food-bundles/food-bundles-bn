@@ -353,7 +353,7 @@ export const createOrderFromCartService = async (
   }
 
   // Add delivery fee and packaging fee to final amount (after promo discount)
-  const totalAmount = order.totalAmount + deliveryFee + packagingFee;
+  const totalAmount = order.totalAmount  + packagingFee;
 
   // Update order with delivery fee and packaging fee
   await prisma.order.update({
