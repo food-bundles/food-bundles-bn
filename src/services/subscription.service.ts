@@ -2194,6 +2194,60 @@ export const updateLoanProviderStatusService = async (
 };
 
 /**
+ * List all traders (loan providers) for the admin subscriptions dashboard.
+ * Each trader exposes whether an active subscription is required to get a
+ * loan from them, plus the terms & conditions restaurants must sign.
+ */
+export const getAllLoanTradersService = async () => {
+  return prisma.admin.findMany({
+    where: { role: "TRADER" },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      phone: true,
+      termsAndConditions: true,
+      loanTermsAndConditions: true,
+      requiresSubscription: true,
+      traderWallet: {
+        select: {
+          id: true,
+          balance: true,
+          isActive: true,
+          delegationStatus: true,
+        },
+      },
+    },
+    orderBy: { username: "asc" },
+  });
+};
+
+/**
+ * Toggle whether a trader requires restaurants to hold an active
+ * subscription before requesting a loan from them.
+ */
+export const updateTraderRequiresSubscriptionService = async (
+  traderId: string,
+  requiresSubscription: boolean,
+) => {
+  const trader = await prisma.admin.findFirst({
+    where: { id: traderId, role: "TRADER" },
+  });
+  if (!trader) throw new Error("Trader not found");
+
+  return prisma.admin.update({
+    where: { id: traderId },
+    data: { requiresSubscription },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      requiresSubscription: true,
+    },
+  });
+};
+
+/**
  * Request loan access via a subscription plan that includes loans.
  * Creates/updates the restaurant's subscription to a loan-enabled plan as PENDING,
  * awaiting admin approval (loans are funded by providers like Kayko, so an

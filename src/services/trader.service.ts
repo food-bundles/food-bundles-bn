@@ -2897,11 +2897,14 @@ export const getTradersWithAcceptedDelegationsService = async () => {
     where: {
       traderId: { not: null },
       canTradeOnBehalf: true,
+      delegationStatus: "ACCEPTED",
       isActive: true,
     },
     select: {
       traderId: true,
       balance: true,
+      pendingApprovedAmount: true,
+      pendingWithdrawBalance: true,
       trader: {
         select: {
           id: true,
@@ -2915,7 +2918,7 @@ export const getTradersWithAcceptedDelegationsService = async () => {
   return traders.map((wallet) => ({
     id: wallet.traderId,
     name: wallet.trader?.username || wallet.trader?.email,
-    availableBalance: wallet.balance,
+    availableBalance: wallet.balance - wallet.pendingApprovedAmount - wallet.pendingWithdrawBalance,
   }));
 };
 

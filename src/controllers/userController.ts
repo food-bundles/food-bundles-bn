@@ -594,6 +594,60 @@ export class UserController {
     }
   };
 
+  static myProfile = async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ message: "No token provided" });
+      }
+      const token = authHeader.substring(7);
+      const payload = verifyToken(token);
+      if (!payload) {
+        return res.status(401).json({ message: "Invalid token" });
+      }
+
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: payload.id },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          tin: true,
+          location: true,
+          province: true,
+          district: true,
+          sector: true,
+          cell: true,
+          village: true,
+          role: true,
+          verified: true,
+          createdAt: true,
+          KycConsent: {
+            select: {
+              ownerName: true,
+              ownerNationalId: true,
+              yearsInOperation: true,
+              businessType: true,
+              consentVubaBuba: true,
+              consentKayko: true,
+              consentRRA: true,
+              submittedAt: true,
+            },
+          },
+        },
+      });
+
+      if (!restaurant) {
+        return res.status(404).json({ success: false, message: "Restaurant not found" });
+      }
+
+      return res.json({ success: true, data: restaurant });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  };
+
   static me = async (req: Request, res: Response) => {
     try {
       // Get token from Authorization header
