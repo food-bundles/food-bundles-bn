@@ -15,6 +15,7 @@ interface AcceptInviteData {
   phone?: string;
   password: string;
   termsAndConditions?: string;
+  loanTermsAndConditions?: string;
 }
 
 export const inviteServices = {
@@ -103,9 +104,20 @@ export const inviteServices = {
 
   // Accept invitation (create user)
   async acceptInvite(data: AcceptInviteData) {
-    const { token, username, phone, password, termsAndConditions } = data;
+    const { token, username, phone, password, termsAndConditions, loanTermsAndConditions } = data;
 
     const invitation = await this.verifyInviteToken(token);
+
+    // Traders must provide the loan terms & conditions restaurants sign
+    // when requesting a loan from them.
+    if (
+      invitation.role === "TRADER" &&
+      (!loanTermsAndConditions || !loanTermsAndConditions.trim())
+    ) {
+      throw new Error(
+        "Traders must provide loan terms & conditions that restaurants will sign when requesting a loan",
+      );
+    }
 
     // Check if user already exists
     const existingUser = await prisma.admin.findFirst({
@@ -130,6 +142,10 @@ export const inviteServices = {
           termsAndConditions:
             invitation.role === "TRADER" && termsAndConditions
               ? termsAndConditions
+              : null,
+          loanTermsAndConditions:
+            invitation.role === "TRADER" && loanTermsAndConditions
+              ? loanTermsAndConditions
               : null,
         },
         select: {

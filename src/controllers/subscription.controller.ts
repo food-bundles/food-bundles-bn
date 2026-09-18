@@ -28,6 +28,8 @@ import {
   createLoanProviderService,
   getAllLoanProvidersService,
   updateLoanProviderStatusService,
+  getAllLoanTradersService,
+  updateTraderRequiresSubscriptionService,
 } from "../services/subscription.service";
 import { SubscriptionStatus } from "@prisma/client";
 import prisma from "../prisma";
@@ -688,6 +690,59 @@ export const updateLoanProviderStatus = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(400).json({
       message: error.message || "Failed to update loan provider",
+    });
+  }
+};
+
+/**
+ * Get all traders (loan providers) with their subscription requirement
+ * GET /subscriptions/loan/traders
+ */
+export const getAllLoanTraders = async (req: Request, res: Response) => {
+  try {
+    const traders = await getAllLoanTradersService();
+
+    res.status(200).json({
+      message: "Loan traders retrieved successfully",
+      data: traders,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan traders",
+    });
+  }
+};
+
+/**
+ * Toggle whether a trader requires an active subscription
+ * PATCH /subscriptions/loan/traders/:traderId
+ */
+export const updateTraderRequiresSubscription = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { traderId } = req.params;
+    const { requiresSubscription } = req.body;
+
+    if (typeof requiresSubscription !== "boolean") {
+      return res.status(400).json({
+        message: "requiresSubscription (boolean) is required",
+      });
+    }
+
+    const trader = await updateTraderRequiresSubscriptionService(
+      traderId,
+      requiresSubscription,
+    );
+
+    res.status(200).json({
+      message: "Trader subscription requirement updated successfully",
+      data: trader,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to update trader subscription requirement",
     });
   }
 };

@@ -106,6 +106,7 @@ model Restaurant {
   VoucherCard        VoucherCard?
   LoanSession        LoanSession[]
   CardEnrollmentRequest CardEnrollmentRequest?
+  KycConsent            KycConsent?
   WalletTransfer     WalletTransfer[]
   VoucherCreditTopUp VoucherCreditTopUp[]
   LoanTermsAcceptance LoanTermsAcceptance[]
@@ -331,6 +332,8 @@ model Admin {
   agreed   Boolean  @default(false)
 
   termsAndConditions String? @db.Text // Trader's loan terms & conditions
+  loanTermsAndConditions String? @db.Text // Trader's own loan terms that restaurants sign when requesting a loan
+  requiresSubscription Boolean @default(false) // Restaurants need an active subscription to get a loan from this trader
 
   location String?
   province String?
@@ -1623,6 +1626,31 @@ model CardEnrollmentRequest {
 
   @@index([restaurantId])
   @@index([status])
+}
+
+model KycConsent {
+  id                  String   @id @default(uuid())
+  restaurantId        String   @unique
+  restaurantName      String
+  tinNumber           String
+  phoneNumber         String
+  businessAddress     String
+  district            String
+  sector              String?
+  ownerName           String
+  ownerNationalId     String
+  businessType        String
+  yearsInOperation    Int
+  consentVubaBuba     Boolean  @default(false)
+  consentKayko        Boolean  @default(false)
+  consentRRA          Boolean  @default(false)
+  submittedAt         DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
 }
 
 model LoanSession {

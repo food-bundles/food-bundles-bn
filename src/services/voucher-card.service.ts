@@ -1,5 +1,5 @@
 import prisma from "../prisma";
-import { CardStatus, LoanSessionStatus, UnlockStatus, PaymentStatus, TransactionStatus, WalletTransactionType } from "@prisma/client";
+import { CardStatus, LoanSessionStatus, UnlockStatus, PaymentStatus, TransactionStatus, WalletTransactionType, SubscriptionStatus } from "@prisma/client";
 import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
 import { wsManager } from "../index";
@@ -531,6 +531,16 @@ export const requestLoanSessionService = async (
     if (!trader || trader.role !== "TRADER") {
       throw new Error("Selected trader does not exist");
     }
+    if (trader.requiresSubscription) {
+      const activeSubscription = await prisma.restaurantSubscription.findFirst({
+        where: { restaurantId, status: SubscriptionStatus.ACTIVE },
+      });
+      if (!activeSubscription) {
+        throw new Error(
+          `${trader.username} requires an active subscription to provide a loan. Please subscribe first.`,
+        );
+      }
+    }
     providerId = fundingTraderId;
     providerName = trader.username;
   } else if (providerType === "FOOD_BUNDLES" || !providerType) {
@@ -810,6 +820,8 @@ export const getLoanTradersService = async () => {
       email: true,
       phone: true,
       termsAndConditions: true,
+      loanTermsAndConditions: true,
+      requiresSubscription: true,
       traderWallet: {
         select: {
           id: true,
@@ -837,12 +849,53 @@ export const getLoanTradersService = async () => {
         name: t.username,
         email: t.email,
         phone: t.phone,
-        termsAndConditions: t.termsAndConditions,
+        termsAndConditions: t.loanTermsAndConditions || t.termsAndConditions,
+        requiresSubscription: t.requiresSubscription,
         availableBalance,
         canTradeOnBehalf: wallet?.canTradeOnBehalf ?? false,
         delegationStatus: wallet?.delegationStatus ?? "NORMAL",
       };
     });
+};
+
+// Live check of a trader's loan capacity vs a requested amount (fresh from DB).
+// Used by the admin before accepting a loan and sending it to a trader, so the
+// admin knows right away whether the trader can fund the amount.
+export const checkTraderLoanCapacityService = async (
+  traderId: string,
+  amount?: number,
+) => {
+  const trader = await prisma.admin.findUnique({
+    where: { id: traderId, role: "TRADER" },
+    select: { id: true, username: true, email: true },
+  });
+  if (!trader) throw new Error("Trader not found");
+
+  const wallet = await prisma.wallet.findUnique({ where: { traderId } });
+  if (!wallet) {
+    throw new Error(`Trader ${trader.username} does not have a wallet yet`);
+  }
+
+  const availableBalance = Math.max(
+    0,
+    wallet.balance - wallet.pendingApprovedAmount - wallet.pendingWithdrawBalance,
+  );
+
+  const requiredAmount = amount && amount > 0 ? amount : null;
+  const canFund =
+    requiredAmount === null || availableBalance >= requiredAmount;
+  const shortfall =
+    requiredAmount === null ? 0 : Math.max(0, requiredAmount - availableBalance);
+
+  return {
+    traderId,
+    name: trader.username,
+    email: trader.email,
+    availableBalance,
+    requiredAmount,
+    canFund,
+    shortfall,
+  };
 };
 
 // Resolve a restaurant's Food Bundles loan provider (optional — may not exist)
@@ -872,6 +925,7 @@ export const getLoanTermsService = async (
   let providerId = "";
   let providerName = "";
   let terms = "";
+  let requiresSubscription = false;
 
   if (options.providerType === "TRADER") {
     if (!options.fundingTraderId) throw new Error("fundingTraderId is required for a trader provider");
@@ -879,7 +933,8 @@ export const getLoanTermsService = async (
     if (!trader || trader.role !== "TRADER") throw new Error("Selected trader does not exist");
     providerId = trader.id;
     providerName = trader.username;
-    terms = trader.termsAndConditions || "";
+    terms = trader.loanTermsAndConditions || trader.termsAndConditions || "";
+    requiresSubscription = trader.requiresSubscription;
   } else {
     const provider = options.loanProviderId
       ? await prisma.loanProvider.findUnique({ where: { id: options.loanProviderId } })
@@ -893,12 +948,18 @@ export const getLoanTermsService = async (
     where: { restaurantId, providerType: options.providerType, providerId },
   });
 
+  const hasActiveSubscription = !!(await prisma.restaurantSubscription.findFirst({
+    where: { restaurantId, status: SubscriptionStatus.ACTIVE },
+  }));
+
   return {
     providerType: options.providerType,
     providerId,
     providerName,
     terms,
     accepted: !!accepted,
+    requiresSubscription,
+    hasActiveSubscription,
   };
 };
 
@@ -930,11 +991,19 @@ export const acceptLoanTermsService = async (
 };
 
 // Admin accepts a loan: makes it visible to the selected trader so they can approve.
+// The admin may also set the credit to grant (approval % / amount) and the repayment
+// days here, which are stored as defaults the trader sees when approving. When a
+// trader is involved, the trader's available balance is verified BEFORE accepting.
 // Food Bundles admin may also accept then approve directly.
 export const acceptLoanSessionService = async (
   sessionId: string,
   adminId: string,
   fundingTraderId?: string,
+  options?: {
+    approvalPercentage?: number;
+    approvedAmount?: number;
+    repaymentDays?: number;
+  },
 ) => {
   const session = await prisma.loanSession.findUnique({
     where: { id: sessionId },
@@ -947,12 +1016,53 @@ export const acceptLoanSessionService = async (
 
   const traderId = fundingTraderId || session.fundingTraderId;
 
+  // Resolve credit/repayment defaults and verify the trader can fund the amount.
+  let approvalPct: number | undefined;
+  let targetAmount: number | undefined;
+  let repaymentDays: number | undefined;
+  let dueDate: Date | undefined;
+  if (options) {
+    const basePct =
+      options.approvalPercentage ??
+      (options.approvedAmount && session.requestedAmount > 0
+        ? (options.approvedAmount / session.requestedAmount) * 100
+        : 100);
+    approvalPct = Math.max(0, Math.min(100, basePct));
+    targetAmount = Math.round(session.requestedAmount * (approvalPct / 100));
+
+    if (traderId) {
+      const traderWallet = await prisma.wallet.findUnique({ where: { traderId } });
+      if (!traderWallet) throw new Error("Trader wallet not found");
+      const availableBalance =
+        traderWallet.balance -
+        traderWallet.pendingApprovedAmount -
+        traderWallet.pendingWithdrawBalance;
+      if (availableBalance < targetAmount) {
+        throw new Error(
+          `Insufficient available balance. Available: ${availableBalance} RWF, Required: ${targetAmount} RWF`,
+        );
+      }
+    }
+
+    if (options.repaymentDays && options.repaymentDays > 0) {
+      repaymentDays = options.repaymentDays;
+      dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + options.repaymentDays);
+    }
+  }
+
   const updated = await prisma.loanSession.update({
     where: { id: sessionId },
     data: {
       status: LoanSessionStatus.ACCEPTED,
       ...(traderId ? { fundingTraderId: traderId } : {}),
-      notes: session.notes ? `${session.notes}\nAccepted by admin.` : "Accepted by admin.",
+      ...(approvalPct !== undefined ? { approvalPercentage: approvalPct } : {}),
+      ...(targetAmount !== undefined ? { approvedAmount: targetAmount } : {}),
+      ...(repaymentDays !== undefined ? { repaymentDays } : {}),
+      ...(dueDate ? { dueDate } : {}),
+      notes: session.notes
+        ? `${session.notes}\nAccepted by admin.`
+        : "Accepted by admin.",
     },
   });
 
@@ -1087,11 +1197,14 @@ export const adminApproveLoanSessionOnBehalfService = async (
 
   const session = await prisma.loanSession.findUnique({ where: { id: sessionId } });
   if (!session) throw new Error("Loan session not found");
-  if (session.fundingTraderId !== traderId) {
-    throw new Error("This loan was not requested with this trader as the provider");
+  if (session.fundingTraderId && session.fundingTraderId !== traderId) {
+    throw new Error("This loan was already assigned to another trader as the provider");
   }
-  if (session.status !== LoanSessionStatus.ACCEPTED) {
-    throw new Error(`Can only approve loans with ACCEPTED status (current: ${session.status})`);
+  if (
+    session.status !== LoanSessionStatus.REQUESTED &&
+    session.status !== LoanSessionStatus.ACCEPTED
+  ) {
+    throw new Error(`Can only approve loans with REQUESTED or ACCEPTED status (current: ${session.status})`);
   }
 
   const basePct = data.approvalPercentage ?? (data.approvedAmount && session.requestedAmount > 0 ? (data.approvedAmount / session.requestedAmount) * 100 : 100);

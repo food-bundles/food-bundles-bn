@@ -7,6 +7,7 @@ userRoutes.post("/login", UserController.login);
 userRoutes.post("/google-login", UserController.googleLogin);
 userRoutes.post("/google-signup", UserController.googleSignup);
 userRoutes.get("/me", UserController.me);
+userRoutes.get("/my-profile", UserController.myProfile);
 
 // Password reset routes
 userRoutes.post("/forgot-password", UserController.requestPasswordReset);

@@ -38,11 +38,14 @@ import {
   getVoucherCardByPan,
   getCardEnrollmentRequests,
   getMyCardEnrollmentRequest,
+  submitKycConsent,
+  getMyKycConsent,
   requestLoanSession,
   approveLoanSession,
   rejectLoanSession,
   acceptLoanSession,
   getLoanTraders,
+  checkTraderLoanCapacity,
   getLoanTerms,
   acceptLoanTerms,
   getTraderLoanSessions,
@@ -358,6 +361,21 @@ voucherRoutes.post(
 // NEW VOUCHER CARD SYSTEM (PAN-based)
 // ========================================
 
+// KYC consent — restaurant submits before requesting a card
+voucherRoutes.post(
+  "/card/kyc-consent",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL"),
+  submitKycConsent,
+);
+
+voucherRoutes.get(
+  "/card/kyc-consent",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL"),
+  getMyKycConsent,
+);
+
 // Card enrollment (restaurant requests a card)
 voucherRoutes.post(
   "/card/request",
@@ -442,7 +460,7 @@ voucherRoutes.post(
 voucherRoutes.get(
   "/sessions/loan-traders",
   isAuthenticated,
-  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  checkPermission("ADMIN", "RESTAURANT", "HOTEL", "AFFILIATOR"),
   getLoanTraders,
 );
 
@@ -515,6 +533,14 @@ voucherRoutes.patch(
   isAuthenticated,
   checkPermission("ADMIN"),
   acceptLoanSession,
+);
+
+// Live trader loan-capacity check (admin) — verify a trader can fund an amount before accepting
+voucherRoutes.get(
+  "/sessions/trader-capacity/:traderId",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  checkTraderLoanCapacity,
 );
 
 // Approve loan session as the selected trader / provider (trader)

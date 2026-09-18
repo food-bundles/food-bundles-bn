@@ -33,6 +33,8 @@ import {
   createLoanProvider,
   getAllLoanProviders,
   updateLoanProviderStatus,
+  getAllLoanTraders,
+  updateTraderRequiresSubscription,
 } from "../controllers/subscription.controller";
 
 const subscriptionRoutes = Router();
@@ -152,6 +154,30 @@ subscriptionRoutes.patch(
   isAuthenticated,
   checkPermission("ADMIN"),
   updateLoanProviderStatus
+);
+
+/**
+ * Get all loan traders (Admin)
+ * GET /subscriptions/loan/traders
+ * Access: Admin only
+ */
+subscriptionRoutes.get(
+  "/loan/traders",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllLoanTraders
+);
+
+/**
+ * Toggle trader subscription requirement (Admin)
+ * PATCH /subscriptions/loan/traders/:traderId
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/traders/:traderId",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  updateTraderRequiresSubscription
 );
 
 /**
