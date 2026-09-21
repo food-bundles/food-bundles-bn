@@ -56,8 +56,10 @@ import {
   getMyLoanSessions,
   getAllLoanSessions,
   getLoanSessionById,
+  convertLoanSessionToWallet,
+  repayLoanSession,
+  verifyLoanRepayment,
   getVoucherCardStats,
-  updateVoucherCardUnlockFee,
   getRecentActivities,
 } from "../controllers/voucher-card.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
@@ -432,14 +434,6 @@ voucherRoutes.get(
   getVoucherCardByPan,
 );
 
-// Configure a card's unlock fee (admin) — no default fee; admin decides if/when it applies
-voucherRoutes.patch(
-  "/card/:cardId/unlock-fee",
-  isAuthenticated,
-  checkPermission("ADMIN"),
-  updateVoucherCardUnlockFee,
-);
-
 // Recent activities feed (admin) — new card applications + new loan requests
 voucherRoutes.get(
   "/activities",
@@ -573,6 +567,31 @@ voucherRoutes.post(
   isAuthenticated,
   checkPermission("RESTAURANT", "HOTEL"),
   verifyUnlockFeePayment,
+);
+
+// Convert a loan session's remaining credit to the restaurant's prepaid wallet
+// (consumes the voucher — user flow when the order total exceeds the loan).
+voucherRoutes.post(
+  "/sessions/:rrn/convert-to-wallet",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  convertLoanSessionToWallet,
+);
+
+// Repay the outstanding credit on a voucher loan session ("Pay Voucher")
+voucherRoutes.post(
+  "/sessions/:sessionId/repay",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR", "ADMIN"),
+  repayLoanSession,
+);
+
+// Verify a pending voucher repayment status (restaurant)
+voucherRoutes.get(
+  "/sessions/:sessionId/repay/verify",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR", "ADMIN"),
+  verifyLoanRepayment,
 );
 
 // Voucher card system stats (admin)

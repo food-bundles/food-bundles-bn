@@ -120,6 +120,12 @@ export const getTraderWalletService = async (traderId: string) => {
     throw new Error("Trader wallet not found");
   }
 
+  // Count only confirmed transactions so pending/failed attempts are not shown
+  // as real wallet activity.
+  const completedTransactions = await prisma.walletTransaction.count({
+    where: { walletId: wallet.id, status: "COMPLETED" },
+  });
+
   // Calculate correct pending approved amount based on voucher usage
   const activeVouchers = await prisma.voucher.findMany({
     where: {
@@ -158,6 +164,9 @@ export const getTraderWalletService = async (traderId: string) => {
 
   return {
     ...wallet,
+    _count: {
+      transactions: completedTransactions,
+    },
     totalVouchersAmount: totalVouchersApproved._sum.creditLimit || 0,
     totalVouchersCount: totalVouchersApproved._count || 0,
     availableBalance:

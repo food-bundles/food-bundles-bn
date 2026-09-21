@@ -5,6 +5,11 @@ import { sendMessage } from "../utils/sms.utility";
 import { wsManager } from "../index";
 import { transferVoucherAmountToWalletService } from "./wallet-transfer.service";
 import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
+import { retryDatabaseOperation } from "../utils/db-retry.utls";
+import {
+  debitWalletService,
+  getWalletByRestaurantIdService,
+} from "./wallet.service";
 import axios from "axios";
 
 // Payment clients — lazy initialized to ensure env vars are loaded
@@ -28,6 +33,47 @@ function getFlw() {
     _flw = new Flutterwave(process.env.FLW_PUBLIC_KEY, process.env.FLW_SECRET_KEY);
   }
   return _flw;
+}
+
+/**
+ * Resolve the authoritative PayPack transaction status.
+ * NOTE: PayPack's `transaction(ref)` (transactions/find) response does NOT
+ * include a `status` field, so it must never be used to decide success.
+ * The status only exists in the events feed (`events({ ref })`).
+ */
+async function getPaypackTransactionStatus(flwRef: string) {
+  try {
+    const res: any = await getPaypack().events({ ref: flwRef });
+    const txs: any[] = res?.data?.transactions;
+    if (Array.isArray(txs) && txs.length) {
+      const applicable = txs
+        .filter((t) => t && t.data && typeof t.data.status === "string")
+        .sort(
+          (a, b) =>
+            new Date(b.created_at || 0).getTime() -
+            new Date(a.created_at || 0).getTime(),
+        );
+      const latest = applicable[0];
+      if (latest?.data) {
+        return {
+          status: latest.data.status,
+          ref: latest.data.ref || flwRef,
+          userRef: latest.data.user_ref,
+          processedAt: latest.data.processed_at,
+        };
+      }
+    }
+  } catch (e: any) {
+    console.log("PayPack events lookup failed:", e.message);
+  }
+  // Fall back to the raw transaction (existence check only — no status here)
+  try {
+    const tx: any = await getPaypack().transaction(flwRef);
+    if (tx?.data?.ref) return { status: tx.data.status, ref: tx.data.ref };
+  } catch (e: any) {
+    console.log("PayPack transaction lookup failed:", e.message);
+  }
+  return { status: undefined, ref: flwRef };
 }
 
 async function initiateFlutterwaveUnlockFeePayment(params: {
@@ -407,32 +453,6 @@ export const getVoucherCardByPanService = async (pan: string) => {
 };
 
 // ============================================
-// CARD UNLOCK FEE CONFIG (Admin)
-// ============================================
-
-export const updateVoucherCardUnlockFeeService = async (
-  cardId: string,
-  data: { unlockFeeEnabled: boolean; unlockFeePercentage?: number | null },
-) => {
-  const card = await prisma.voucherCard.findUnique({ where: { id: cardId } });
-  if (!card) throw new Error("Card not found");
-
-  return prisma.voucherCard.update({
-    where: { id: cardId },
-    data: {
-      unlockFeeEnabled: data.unlockFeeEnabled,
-      unlockFeePercentage:
-        data.unlockFeeEnabled && data.unlockFeePercentage && data.unlockFeePercentage > 0
-          ? data.unlockFeePercentage
-          : null,
-    },
-    include: {
-      restaurant: { select: { id: true, name: true, email: true } },
-    },
-  });
-};
-
-// ============================================
 // RECENT ACTIVITIES FEED (Admin)
 // ============================================
 
@@ -454,7 +474,10 @@ export const getRecentActivitiesService = async (limit = 10) => {
 
   const loanActivities = await Promise.all(
     loanSessions.map(async (s) => {
-      const cfg = await resolveUnlockFeeConfig(s.cardId, s.restaurantId);
+      const cfg = await resolveUnlockFeeConfig(s.restaurantId, {
+        loanProviderType: s.loanProviderType,
+        fundingTraderId: s.fundingTraderId,
+      });
       return { ...s, effectiveUnlockFeeEnabled: cfg.enabled, effectiveUnlockFeePercentage: cfg.percentage };
     }),
   );
@@ -484,6 +507,8 @@ export const getRecentActivitiesService = async (limit = 10) => {
       purpose: s.purpose,
       repaymentDays: s.repaymentDays,
       rrn: s.rrn,
+      loanProviderType: s.loanProviderType,
+      fundingTraderId: s.fundingTraderId,
       effectiveUnlockFeeEnabled: s.effectiveUnlockFeeEnabled,
       effectiveUnlockFeePercentage: s.effectiveUnlockFeePercentage,
       message: "Requested a loan",
@@ -634,21 +659,67 @@ export const requestLoanSessionService = async (
 // UNLOCK FEE CONFIG — admin decides; no default
 // ============================================
 
-export const resolveUnlockFeeConfig = async (cardId: string, restaurantId: string) => {
-  const card = await prisma.voucherCard.findUnique({ where: { id: cardId } });
-  if (card?.unlockFeeEnabled && (card.unlockFeePercentage ?? 0) > 0) {
-    return { enabled: true, percentage: card.unlockFeePercentage ?? 0 };
+// The unlock fee is configured on the loan provider account selected for the session:
+//   - TRADER: the funding trader's wallet (set by an admin in the Loan Access tab).
+//   - FOOD_BUNDLES: the Food Bundles platform loan provider.
+// There is no per-restaurant (card) unlock fee and no default fee.
+export const resolveUnlockFeeConfig = async (
+  restaurantId: string,
+  options?: {
+    loanProviderType?: string | null;
+    fundingTraderId?: string | null;
+  },
+) => {
+  if (options?.loanProviderType === "TRADER" && options.fundingTraderId) {
+    const wallet = await prisma.wallet.findUnique({
+      where: { traderId: options.fundingTraderId },
+    });
+    if (wallet?.unlockFeeEnabled && (wallet.unlockFeePercentage ?? 0) > 0) {
+      return { enabled: true, percentage: wallet.unlockFeePercentage ?? 0 };
+    }
+    return { enabled: false, percentage: 0 };
   }
-  const subscription = await prisma.restaurantSubscription.findFirst({
-    where: { restaurantId },
-    include: { plan: { include: { loanProvider: true } } },
-    orderBy: { updatedAt: "desc" },
-  });
-  const provider = subscription?.plan?.loanProvider;
-  if (provider?.unlockFeeEnabled && (provider.unlockFeePercentage ?? 0) > 0) {
-    return { enabled: true, percentage: provider.unlockFeePercentage ?? 0 };
+
+  // Platform-funded loans use the Food Bundles platform provider configured in the
+  // Loan Access tab; fall back to the legacy plan-linked provider if none exists.
+  const platform =
+    (await prisma.loanProvider.findFirst({
+      where: { name: { contains: "food", mode: "insensitive" } },
+      orderBy: { createdAt: "asc" },
+    })) ?? (await resolveFoodBundlesProvider(restaurantId));
+  if (platform?.unlockFeeEnabled && (platform.unlockFeePercentage ?? 0) > 0) {
+    return { enabled: true, percentage: platform.unlockFeePercentage ?? 0 };
   }
   return { enabled: false, percentage: 0 };
+};
+
+// Resolve what happens to a loan session's leftover amount (approved - used)
+// after it has been consumed at checkout. Configured per provider in the Loan
+// Access tab, same pattern as resolveUnlockFeeConfig:
+//   - TRADER: the funding trader's wallet.
+//   - FOOD_BUNDLES: the Food Bundles platform loan provider.
+// Values: "USELESS" (default — leftover is recorded but never usable again) or
+// "TOPUP_WALLET" (leftover is credited to the restaurant's wallet balance).
+export const resolveLoanLeftoverPolicy = async (
+  restaurantId: string,
+  options?: {
+    loanProviderType?: string | null;
+    fundingTraderId?: string | null;
+  },
+): Promise<"TOPUP_WALLET" | "USELESS"> => {
+  if (options?.loanProviderType === "TRADER" && options.fundingTraderId) {
+    const wallet = await prisma.wallet.findUnique({
+      where: { traderId: options.fundingTraderId },
+    });
+    return wallet?.leftoverPolicy === "TOPUP_WALLET" ? "TOPUP_WALLET" : "USELESS";
+  }
+
+  const platform =
+    (await prisma.loanProvider.findFirst({
+      where: { name: { contains: "food", mode: "insensitive" } },
+      orderBy: { createdAt: "asc" },
+    })) ?? (await resolveFoodBundlesProvider(restaurantId));
+  return platform?.leftoverPolicy === "TOPUP_WALLET" ? "TOPUP_WALLET" : "USELESS";
 };
 
 export const approveLoanSessionService = async (
@@ -659,7 +730,7 @@ export const approveLoanSessionService = async (
     approvalPercentage?: number;
     repaymentDays: number;
     notes?: string;
-    fundingTraderId?: string;
+    fundingTraderId?: string | null;
     requireUnlockFee?: boolean;
     unlockFeePercentage?: number;
   },
@@ -684,11 +755,23 @@ export const approveLoanSessionService = async (
   const approvalPct = Math.max(0, Math.min(100, basePct));
   const approvedAmount = Math.round(session.requestedAmount * (approvalPct / 100));
 
-  // Resolve the effective unlock fee config — admin-selected per restaurant (card) or per loan provider.
-  // There is no default fee: if neither the card nor the provider has an unlock fee enabled, no fee applies.
+  // The provider that will actually fund this approval. An explicit admin choice
+  // wins — including an explicit platform selection (null) — otherwise we follow
+  // the provider the restaurant picked when requesting (session.fundingTraderId).
+  const effectiveTraderId =
+    data.fundingTraderId !== undefined
+      ? data.fundingTraderId
+      : session.fundingTraderId;
+
+  // Resolve the effective unlock fee config — set on the selected loan provider (trader wallet
+  // for TRADER, or the Food Bundles platform provider for FOOD_BUNDLES).
+  // There is no default fee: if the selected provider has no unlock fee enabled, no fee applies.
   // Admin may override at approval time via requireUnlockFee (undefined → follow resolved config).
   // The unlock fee percentage is not static — the admin may override it at approval time too.
-  const config = await resolveUnlockFeeConfig(session.cardId, session.restaurantId);
+  const config = await resolveUnlockFeeConfig(session.restaurantId, {
+    loanProviderType: effectiveTraderId ? "TRADER" : "FOOD_BUNDLES",
+    fundingTraderId: effectiveTraderId,
+  });
   const applyFee =
     data.requireUnlockFee !== undefined ? data.requireUnlockFee : config.enabled;
   const configuredPct =
@@ -710,7 +793,7 @@ export const approveLoanSessionService = async (
       repaymentDays: data.repaymentDays,
       dueDate,
       notes: data.notes,
-      fundingTraderId: data.fundingTraderId,
+      fundingTraderId: effectiveTraderId ?? null,
       approvedBy: adminId,
       approvedAt: new Date(),
       status: unlockFeePct > 0 ? LoanSessionStatus.APPROVED_LOCKED : LoanSessionStatus.ACTIVE,
@@ -831,6 +914,8 @@ export const getLoanTradersService = async () => {
           isActive: true,
           canTradeOnBehalf: true,
           delegationStatus: true,
+          unlockFeeEnabled: true,
+          unlockFeePercentage: true,
         },
       },
     },
@@ -854,6 +939,8 @@ export const getLoanTradersService = async () => {
         availableBalance,
         canTradeOnBehalf: wallet?.canTradeOnBehalf ?? false,
         delegationStatus: wallet?.delegationStatus ?? "NORMAL",
+        unlockFeeEnabled: wallet?.unlockFeeEnabled ?? false,
+        unlockFeePercentage: wallet?.unlockFeePercentage ?? null,
       };
     });
 };
@@ -1329,7 +1416,13 @@ export const payUnlockFeeService = async (
       if (response?.data) {
         await prisma.unlockFeePayment.update({
           where: { id: payment.id },
-          data: { flwRef: response.data.ref, flwStatus: "pending" },
+          data: {
+            flwRef:
+              response.data.ref ||
+              response.data.transaction_id ||
+              response.data.id,
+            flwStatus: "pending",
+          },
         });
 
         return {
@@ -1451,12 +1544,14 @@ export const verifyUnlockFeePaymentService = async (
     return verifyFlutterwaveUnlockFeeByTxRef(payment, sessionId);
   }
 
-  // PayPack: verify the cashin directly against the PayPack API so the loan is
+  // PayPack: verify the cashin against the PayPack API so the loan is
   // unlocked even if the webhook is delayed or missed.
   if (payment.flwRef) {
     try {
-      const tx = await getPaypack().transaction(payment.flwRef);
-      const paypackStatus = tx?.data?.status;
+      const {
+        status: paypackStatus,
+        ref: paypackRef,
+      } = await getPaypackTransactionStatus(payment.flwRef);
 
       if (
         paypackStatus === "successful" ||
@@ -1465,7 +1560,7 @@ export const verifyUnlockFeePaymentService = async (
       ) {
         await prisma.unlockFeePayment.update({
           where: { id: payment.id },
-          data: { flwStatus: "successful", transactionId: tx.data.ref },
+          data: { flwStatus: "successful", transactionId: paypackRef },
         });
         const confirmed = await confirmUnlockFeePaymentService(payment.id, sessionId);
         return { success: true, verified: true, data: confirmed };
@@ -1569,15 +1664,41 @@ export const confirmUnlockFeePaymentService = async (
   paymentId: string,
   sessionId: string,
 ) => {
-  const payment = await prisma.unlockFeePayment.findUnique({ where: { id: paymentId } });
+  const payment = await prisma.unlockFeePayment.findUnique({
+    where: { id: paymentId },
+    include: {
+      session: {
+        include: {
+          restaurant: { select: { id: true, name: true, phone: true } },
+        },
+      },
+    },
+  });
   if (!payment) throw new Error("Payment record not found");
-  if (payment.status === PaymentStatus.COMPLETED) throw new Error("Already confirmed");
+
+  // Idempotent: the payment (and loan) may already have been confirmed by a
+  // webhook or a previous verify call. Never throw — return the current state so
+  // both the webhook and manual verification can safely race.
+  if (payment.status === PaymentStatus.COMPLETED) {
+    return { payment, session: payment.session };
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     // Confirm payment
     const confirmedPayment = await tx.unlockFeePayment.update({
       where: { id: paymentId },
       data: { status: PaymentStatus.COMPLETED, confirmedAt: new Date() },
+    });
+
+    // Any other pending unlock payments for this session are now obsolete —
+    // mark them failed so they can never be confirmed later.
+    await tx.unlockFeePayment.updateMany({
+      where: {
+        sessionId,
+        id: { not: paymentId },
+        status: PaymentStatus.PENDING,
+      },
+      data: { status: PaymentStatus.FAILED, flwStatus: "superseded" },
     });
 
     // Activate loan session
@@ -1680,8 +1801,6 @@ export const getAllLoanSessionsService = async (filters?: {
           select: {
             id: true,
             pan: true,
-            unlockFeeEnabled: true,
-            unlockFeePercentage: true,
           },
         },
         unlockPayments: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -1693,11 +1812,14 @@ export const getAllLoanSessionsService = async (filters?: {
     prisma.loanSession.count({ where }),
   ]);
 
-  // Attach the effective unlock fee config (card-first, provider-fallback) so the admin
+  // Attach the effective unlock fee config (resolved from the selected loan provider) so the admin
   // sees exactly what will apply at approval — no default fee.
   const decorated = await Promise.all(
     sessions.map(async (s) => {
-      const config = await resolveUnlockFeeConfig(s.cardId, s.restaurantId);
+      const config = await resolveUnlockFeeConfig(s.restaurantId, {
+        loanProviderType: s.loanProviderType,
+        fundingTraderId: s.fundingTraderId,
+      });
       return {
         ...s,
         effectiveUnlockFeeEnabled: config.enabled,
@@ -1728,8 +1850,6 @@ export const getLoanSessionByIdService = async (sessionId: string) => {
         select: {
           id: true,
           pan: true,
-          unlockFeeEnabled: true,
-          unlockFeePercentage: true,
         },
       },
       unlockPayments: { orderBy: { createdAt: "desc" } },
@@ -1737,7 +1857,10 @@ export const getLoanSessionByIdService = async (sessionId: string) => {
     },
   });
   if (!session) throw new Error("Loan session not found");
-  const config = await resolveUnlockFeeConfig(session.cardId, session.restaurantId);
+  const config = await resolveUnlockFeeConfig(session.restaurantId, {
+    loanProviderType: session.loanProviderType,
+    fundingTraderId: session.fundingTraderId,
+  });
   return { ...session, effectiveUnlockFeeEnabled: config.enabled, effectiveUnlockFeePercentage: config.percentage };
 };
 
@@ -1798,8 +1921,11 @@ export const createAuthorizationService = async (
 // LOAN SESSION — CHECKOUT INTEGRATION
 // ============================================
 
-// Validate an active loan session for checkout (partial coverage allowed — the
-// restaurant pays the shortfall). Accepts either the session id or the RRN.
+// Validate an active loan session for checkout. Strict rule: a voucher/loan may
+// ONLY be used when it can cover the ENTIRE order total. If the order total
+// exceeds the loan's usable credit, the voucher is NOT usable — the restaurant
+// must pay another way. No partial/split payment is allowed. Accepts either the
+// session id or the RRN.
 export const validateLoanSessionForCheckoutService = async (
   identifier: string,
   orderAmount: number,
@@ -1828,9 +1954,12 @@ export const validateLoanSessionForCheckoutService = async (
   if (orderAmount <= 0) {
     return { valid: false, error: "Order amount must be greater than zero" };
   }
-
-  const loanCovers = Math.min(availableCredit, orderAmount);
-  const additionalPaymentNeeded = Math.max(0, orderAmount - availableCredit);
+  if (orderAmount > availableCredit) {
+    return {
+      valid: false,
+      error: `This loan's usable credit is ${availableCredit.toLocaleString()} RWF, which is less than the order total of ${orderAmount.toLocaleString()} RWF. You cannot use a voucher for this order — please choose another payment method.`,
+    };
+  }
 
   return {
     valid: true,
@@ -1845,19 +1974,17 @@ export const validateLoanSessionForCheckoutService = async (
     },
     coverage: {
       orderAmount,
-      loanCovered: loanCovers,
-      additionalPaymentNeeded,
-      canCoverFullAmount: additionalPaymentNeeded === 0,
+      loanCovered: orderAmount,
+      additionalPaymentNeeded: 0,
+      canCoverFullAmount: true,
     },
-    message: additionalPaymentNeeded > 0
-      ? `This loan covers ${loanCovers.toLocaleString()} RWF. The customer must pay the remaining ${additionalPaymentNeeded.toLocaleString()} RWF at checkout/delivery.`
-      : `This loan covers the full order amount of ${orderAmount.toLocaleString()} RWF.`,
+    message: `This loan covers the full order amount of ${orderAmount.toLocaleString()} RWF.`,
   };
 };
 
 // Deduct credit from an active loan session toward an order at checkout.
-// Partial coverage is allowed — only the available credit is consumed and the
-// order records the shortfall as the amount the customer must pay directly.
+// Strict rule: the loan must cover the ENTIRE order — if the order total
+// exceeds the loan's usable credit the payment is rejected (no split payment).
 export const processLoanSessionPaymentService = async ({
   sessionId,
   orderId,
@@ -1881,10 +2008,14 @@ export const processLoanSessionPaymentService = async ({
 
   const availableCredit = Math.max(0, (session.approvedAmount ?? 0) - session.amountUsed);
   if (availableCredit <= 0) throw new Error("Loan session has no remaining credit");
+  if (originalAmount > availableCredit) {
+    throw new Error(
+      `This loan's usable credit is ${availableCredit.toLocaleString()} RWF, which is less than the order total of ${originalAmount.toLocaleString()} RWF. You cannot use a voucher for this order — please choose another payment method.`,
+    );
+  }
 
-  const loanCovered = Math.min(availableCredit, originalAmount);
-  const additionalPaymentNeeded = Math.max(0, originalAmount - availableCredit);
-  if (loanCovered <= 0) throw new Error("Loan session has no credit to cover this order");
+  const loanCovered = originalAmount;
+  const additionalPaymentNeeded = 0;
 
   const { authorization } = await createAuthorizationService(
     sessionId,
@@ -1901,11 +2032,51 @@ export const processLoanSessionPaymentService = async ({
       voucherCode: session.rrn,
       status: "CONFIRMED",
       paymentStatus: PaymentStatus.VOUCHER_CREDIT,
-      notes: additionalPaymentNeeded > 0
-        ? `Loan covered ${loanCovered.toLocaleString()} RWF. Customer pays extra ${additionalPaymentNeeded.toLocaleString()} RWF.`
-        : undefined,
     },
   });
+
+  // A loan session is consumed the moment it is used at checkout. Any credit
+  // still left (approved - used) is settled per the provider's leftover policy:
+  //   - TOPUP_WALLET: the leftover is credited to the restaurant's wallet.
+  //   - USELESS (default): the leftover is recorded on the session but cannot be
+  //     used again.
+  const nextUsed = session.amountUsed + loanCovered;
+  const leftover = Math.max(0, (session.approvedAmount ?? 0) - nextUsed);
+
+  let leftoverApplied = "USELESS";
+  let transferredToWallet = 0;
+  if (leftover > 0) {
+    try {
+      const policy = await resolveLoanLeftoverPolicy(session.restaurantId, {
+        loanProviderType: session.loanProviderType,
+        fundingTraderId: session.fundingTraderId,
+      });
+      if (policy === "TOPUP_WALLET") {
+        await transferVoucherAmountToWalletService({
+          restaurantId: session.restaurantId,
+          amount: leftover,
+          loanSessionId: session.id,
+          source: "LOAN_LEFTOVER",
+          notes: `Leftover from loan session ${session.rrn} credited to wallet (voucher used once)`,
+        });
+        leftoverApplied = "TOPUP_WALLET";
+        transferredToWallet = leftover;
+      }
+    } catch (leftoverError) {
+      // Leftover settlement must never undo a successful payment.
+      console.log("Failed to settle loan leftover policy:", leftoverError);
+      leftoverApplied = "USELESS";
+    }
+
+    // Since the voucher is used once, mark the session consumed so the leftover
+    // cannot be re-used in a later checkout/POS transaction.
+    await prisma.loanSession
+      .update({
+        where: { id: session.id },
+        data: { status: LoanSessionStatus.FULLY_USED },
+      })
+      .catch(console.error);
+  }
 
   return {
     success: true,
@@ -1913,26 +2084,625 @@ export const processLoanSessionPaymentService = async ({
     reference: authorization.id,
     flwRef: `LOAN_${session.rrn}`,
     status: "successful",
-    message: additionalPaymentNeeded > 0
-      ? `Loan covered ${loanCovered.toLocaleString()} RWF of the order. Customer pays ${additionalPaymentNeeded.toLocaleString()} RWF extra.`
-      : `Payment completed using loan session ${session.rrn}`,
+    message: `Payment completed using loan session ${session.rrn}`,
     voucherDetails: {
       voucherCode: session.rrn,
       amountCovered: loanCovered,
-      remainingAmount: additionalPaymentNeeded,
+      remainingAmount: 0,
       creditUsed: loanCovered,
-      remainingCredit: availableCredit - loanCovered,
+      remainingCredit: 0,
     },
     loanSessionDetails: {
       sessionId,
       rrn: session.rrn,
       approvedAmount: session.approvedAmount ?? 0,
       creditUsed: loanCovered,
-      remainingCredit: availableCredit - loanCovered,
+      remainingCredit: 0,
+      leftover,
+      leftoverApplied,
+      transferredToWallet,
     },
-    requiresAdditionalPayment: additionalPaymentNeeded > 0,
-    additionalPaymentAmount: additionalPaymentNeeded,
+    requiresAdditionalPayment: false,
+    additionalPaymentAmount: 0,
   };
+};
+
+// ============================================
+// LOAN CONVERSION — voucher credit to wallet
+// ============================================
+
+// Convert a loan session's remaining usable credit into the restaurant's
+// prepaid wallet. The voucher is consumed (status -> FULLY_USED) so it can never
+// be used at checkout again; the wallet is credited with the full remaining
+// amount so the restaurant can pay for its order from the wallet instead. This
+// is the flow when the order total exceeds the loan's credit — instead of a
+// dead end, the voucher's remaining value is moved to the wallet (and the user
+// can top up the wallet further if still short of the order total).
+export const convertLoanSessionToWalletService = async (
+  rrn: string,
+  restaurantId: string,
+) => {
+  const session = await prisma.loanSession.findFirst({
+    where: { rrn, restaurantId },
+  });
+  if (!session) throw new Error("Loan session not found");
+
+  if (
+    session.status !== LoanSessionStatus.ACTIVE &&
+    session.status !== LoanSessionStatus.PARTIALLY_USED
+  ) {
+    throw new Error(
+      `Loan session cannot be converted (status: ${session.status})`,
+    );
+  }
+  if (session.unlockStatus !== UnlockStatus.UNLOCKED) {
+    throw new Error("Loan session is locked — pay the unlock fee first");
+  }
+
+  const remainingCredit = Math.max(
+    0,
+    (session.approvedAmount ?? 0) - session.amountUsed,
+  );
+  if (remainingCredit <= 0) {
+    throw new Error("Loan session has no remaining credit to convert");
+  }
+
+  const result = await transferVoucherAmountToWalletService({
+    restaurantId,
+    amount: remainingCredit,
+    loanSessionId: session.id,
+    source: "LOAN_CONVERSION",
+    notes: `Restaurant converted loan session ${session.rrn} to prepaid wallet (voucher used once)`,
+  });
+
+  // The voucher is now consumed — it can never be used at checkout again. The
+  // full credit counts as "used" (whether spent on an order or moved to the
+  // prepaid wallet) and the restaurant owes it, so outstanding grows too.
+  await prisma.loanSession
+    .update({
+      where: { id: session.id },
+      data: {
+        status: LoanSessionStatus.FULLY_USED,
+        amountUsed: session.approvedAmount ?? 0,
+        outstandingAmount: (session.approvedAmount ?? 0) - session.amountRepaid,
+      },
+    })
+    .catch(console.error);
+
+  return {
+    rrn: session.rrn,
+    convertedAmount: remainingCredit,
+    ...result,
+  };
+};
+
+// ============================================
+// LOAN REPAYMENT — "Pay Voucher"
+// ============================================
+
+/**
+ * Initiate a Flutterwave hosted checkout for a loan-session repayment.
+ * Mirrors the unlock-fee hosted payment flow.
+ */
+async function initiateFlutterwaveLoanRepayment(params: {
+  txRef: string;
+  amount: number;
+  email: string;
+  fullname: string;
+  currency?: string;
+  paymentOptions?: string;
+  phoneNumber?: string;
+}) {
+  const {
+    txRef,
+    amount,
+    email,
+    fullname,
+    currency = "RWF",
+    paymentOptions = "card",
+    phoneNumber,
+  } = params;
+
+  const payload: any = {
+    tx_ref: txRef,
+    amount: amount.toString(),
+    currency,
+    redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/vouchers`,
+    customer: { email, name: fullname, phone_number: phoneNumber },
+    customizations: {
+      title: "Voucher Loan Repayment - Food Bundles",
+      description: `Voucher loan repayment for ${fullname}`,
+      logo: `https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png`,
+    },
+    payment_options: paymentOptions,
+    meta: {
+      transaction_type: "LOAN_REPAYMENT",
+      loan_repayment_ref: txRef,
+    },
+  };
+
+  const response = await axios.post(
+    "https://api.flutterwave.com/v3/payments",
+    payload,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (response.data?.status === "success" && response.data?.data?.link) {
+    return {
+      success: true,
+      status: "pending",
+      message: "Redirect to complete voucher repayment",
+      redirectUrl: response.data.data.link,
+      requiresRedirect: true,
+      authorizationDetails: {
+        mode: paymentOptions === "card" ? "card" : "mobile_money",
+        redirectUrl: response.data.data.link,
+      },
+    };
+  }
+  throw new Error("Flutterwave payment link generation failed");
+}
+
+/**
+ * Apply a confirmed repayment amount to a loan session (idempotent per payment):
+ * increment amountRepaid, recompute outstanding = amountUsed - amountRepaid,
+ * and settle the session (SETTLED) once zero outstanding remains.
+ */
+async function settleLoanRepayment(
+  tx: any,
+  sessionId: string,
+  amount: number,
+) {
+  const session = await tx.loanSession.findUnique({ where: { id: sessionId } });
+  if (!session) return;
+  const newRepaid = (session.amountRepaid ?? 0) + amount;
+  const newOutstanding = Math.max(0, (session.amountUsed ?? 0) - newRepaid);
+  await tx.loanSession.update({
+    where: { id: sessionId },
+    data: {
+      amountRepaid: newRepaid,
+      outstandingAmount: newOutstanding,
+      ...(newOutstanding <= 0
+        ? { status: LoanSessionStatus.SETTLED, closedAt: new Date() }
+        : {}),
+    },
+  });
+}
+
+async function notifyLoanRepaymentConfirmed(session: any, amount: number) {
+  try {
+    await createNotificationService({
+      title: "Voucher Repayment Received",
+      message: `Repayment of ${(amount ?? 0).toLocaleString()} RWF received for voucher. RRN: ${
+        session?.rrn ?? ""
+      }`,
+      eventType: "PAYMENT_PROCESSED",
+      targetType: "SPECIFIC_USER",
+      targetId: session?.restaurantId ?? "",
+      metadata: { sessionId: session?.id, amount },
+    });
+  } catch (e) {
+    console.error("Repayment notification failed:", e);
+  }
+  try {
+    if (session?.restaurant?.phone) {
+      await sendMessage(
+        `Repayment of ${(amount ?? 0).toLocaleString()} RWF received for your voucher. RRN: ${
+          session?.rrn ?? ""
+        }`,
+        session.restaurant.phone,
+      );
+    }
+  } catch (e) {
+    console.error("Repayment SMS failed:", e);
+  }
+}
+
+/**
+ * Confirming a repayment: idempotent — marks the LoanRepayment COMPLETED,
+ * supersedes any other pending repayments for the session, and applies the
+ * amount to the loan session.
+ */
+export const confirmLoanRepaymentService = async (
+  paymentId: string,
+  sessionId: string,
+) => {
+  const payment = await prisma.loanRepayment.findUnique({
+    where: { id: paymentId },
+    include: {
+      session: {
+        include: {
+          restaurant: { select: { id: true, name: true, phone: true } },
+        },
+      },
+    },
+  });
+  if (!payment) throw new Error("Repayment record not found");
+
+  if (payment.status === PaymentStatus.COMPLETED) {
+    return { repayment: payment, session: payment.session };
+  }
+
+  const result = await prisma.$transaction(async (tx: any) => {
+    const confirmed = await tx.loanRepayment.update({
+      where: { id: paymentId },
+      data: {
+        status: PaymentStatus.COMPLETED,
+        confirmedAt: new Date(),
+      },
+    });
+
+    await tx.loanRepayment.updateMany({
+      where: { sessionId, id: { not: paymentId } },
+      data: { status: PaymentStatus.FAILED, flwStatus: "superseded" },
+    });
+
+    await settleLoanRepayment(tx, sessionId, payment.amount);
+
+    const updated = await tx.loanSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        restaurant: { select: { id: true, name: true, phone: true } },
+      },
+    });
+
+    return { repayment: confirmed, session: updated };
+  });
+
+  await notifyLoanRepaymentConfirmed(result.session, payment.amount);
+
+  return result;
+};
+
+/**
+ * Verify a pending loan repayment. For PayPack (MoMo) it checks the events feed;
+ * for the Flutterwave hosted checkout it verifies by tx_ref. Confirms on success.
+ */
+export const verifyLoanRepaymentService = async (
+  sessionId: string,
+  restaurantId: string,
+) => {
+  const session = await prisma.loanSession.findUnique({
+    where: { id: sessionId },
+    select: {
+      id: true,
+      restaurantId: true,
+      outstandingAmount: true,
+      status: true,
+    },
+  });
+  if (!session) throw new Error("Loan session not found");
+  if (session.restaurantId !== restaurantId) {
+    throw new Error("Unauthorized access to this loan session");
+  }
+  if (session.outstandingAmount <= 0) {
+    return {
+      success: true,
+      verified: true,
+      alreadySettled: true,
+      message: "This voucher is already fully repaid.",
+    };
+  }
+
+  const payment = await prisma.loanRepayment.findFirst({
+    where: { sessionId, status: PaymentStatus.PENDING },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!payment) {
+    throw new Error("No pending repayment payment found for this voucher.");
+  }
+
+  // Flutterwave hosted checkout (no provider ref yet) — verify by tx_ref
+  if (!payment.flwRef || payment.flwStatus === "pending_flutterwave") {
+    try {
+      const response = await axios.get(
+        `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${payment.txRef}`,
+        {
+          headers: { Authorization: `Bearer ${process.env.FLW_SECRET_KEY}` },
+        },
+      );
+      if (
+        response.data?.status === "success" &&
+        response.data?.data?.status === "successful"
+      ) {
+        await retryDatabaseOperation(async () => {
+          return await prisma.loanRepayment.update({
+            where: { id: payment.id },
+            data: {
+              flwRef: response.data.data.flw_ref,
+              flwStatus: "successful",
+              transactionId: response.data.data.id?.toString(),
+            },
+          });
+        });
+        const confirmed = await confirmLoanRepaymentService(
+          payment.id,
+          sessionId,
+        );
+        return { success: true, verified: true, data: confirmed };
+      }
+      return {
+        success: false,
+        verified: false,
+        status: "pending",
+        message: "Payment not yet confirmed. Please complete the payment and try again.",
+      };
+    } catch (error: any) {
+      console.log("Flutterwave repayment verify error:", error.message);
+      return {
+        success: false,
+        verified: false,
+        status: "pending",
+        message: "Could not verify payment status. Please try again.",
+      };
+    }
+  }
+
+  // PayPack mobile money — check the events feed for real status
+  try {
+    const { status: ppStatus, ref: ppRef } = await getPaypackTransactionStatus(
+      payment.flwRef,
+    );
+    if (
+      ppStatus === "successful" ||
+      ppStatus === "success" ||
+      ppStatus === "completed"
+    ) {
+      await retryDatabaseOperation(async () => {
+        return await prisma.loanRepayment.update({
+          where: { id: payment.id },
+          data: { flwStatus: "successful", transactionId: ppRef },
+        });
+      });
+      const confirmed = await confirmLoanRepaymentService(payment.id, sessionId);
+      return { success: true, verified: true, data: confirmed };
+    }
+    if (ppStatus === "failed" || ppStatus === "cancelled") {
+      await retryDatabaseOperation(async () => {
+        return await prisma.loanRepayment.update({
+          where: { id: payment.id },
+          data: { status: PaymentStatus.FAILED, flwStatus: ppStatus },
+        });
+      });
+      return {
+        success: false,
+        verified: false,
+        status: "failed",
+        message: "The payment was not completed. Please try again.",
+      };
+    }
+    return {
+      success: false,
+      verified: false,
+      status: "pending",
+      message:
+        ppStatus === "processing"
+          ? "Payment is still processing. Please confirm it on your phone."
+          : "Payment is still pending. Please confirm the payment on your phone.",
+    };
+  } catch (error: any) {
+    console.log("PayPack repayment verify error:", error.message);
+    return {
+      success: false,
+      verified: false,
+      status: "pending",
+      message: "Could not verify payment status. Please try again.",
+    };
+  }
+};
+
+/**
+ * Repay the outstanding credit on a voucher loan session ("Pay Voucher").
+ * The repayment amount is the session's outstanding = amountUsed - amountRepaid.
+ * Payment methods: CASH (prepaid wallet) debits immediately and confirms;
+ * MOBILE_MONEY / CARD create a pending repayment and initiate payment
+ * (PayPack cashin with Flutterwave fallback, or Flutterwave hosted checkout).
+ */
+export const repayLoanSessionService = async (
+  sessionId: string,
+  restaurantId: string,
+  paymentData: {
+    paymentMethod: string;
+    paymentReference?: string;
+    phoneNumber?: string;
+  },
+) => {
+  const session = await prisma.loanSession.findUnique({
+    where: { id: sessionId },
+    include: {
+      restaurant: { select: { id: true, name: true, email: true, phone: true } },
+    },
+  });
+  if (!session) throw new Error("Loan session not found");
+  if (session.restaurantId !== restaurantId) {
+    throw new Error("Unauthorized access to this loan session");
+  }
+  if (
+    session.status !== LoanSessionStatus.ACTIVE &&
+    session.status !== LoanSessionStatus.PARTIALLY_USED &&
+    session.status !== LoanSessionStatus.FULLY_USED &&
+    session.status !== LoanSessionStatus.OVERDUE
+  ) {
+    throw new Error(
+      `This voucher cannot be repaid (status: ${session.status})`,
+    );
+  }
+  if (session.outstandingAmount <= 0) {
+    throw new Error("This voucher has no outstanding balance to pay");
+  }
+
+  const method = (paymentData.paymentMethod || "").toUpperCase();
+  if (!["CASH", "MOBILE_MONEY", "CARD"].includes(method)) {
+    throw new Error(`Unsupported payment method: ${method}`);
+  }
+
+  const amount = session.outstandingAmount;
+  const txRef = `LR_${sessionId.slice(0, 8)}_${Date.now()}_${Math.floor(
+    Math.random() * 1000,
+  )}`;
+
+  // PREPAID WALLET — debit immediately and confirm right away.
+  if (method === "CASH") {
+    const wallet = await getWalletByRestaurantIdService(restaurantId);
+    if (!wallet.isActive) {
+      throw new Error("Wallet is inactive. Please contact support.");
+    }
+    if (wallet.balance < amount) {
+      throw new Error(
+        `Insufficient wallet balance. Available: ${wallet.balance} ${wallet.currency}, Required: ${amount} RWF`,
+      );
+    }
+
+    const walletDebitResult = await debitWalletService({
+      walletId: wallet.id,
+      amount,
+      description: `Voucher repayment for session ${session.rrn}`,
+      reference: txRef,
+      restaurantId,
+    });
+
+    const payment = await prisma.$transaction(async (tx: any) => {
+      const record = await tx.loanRepayment.create({
+        data: {
+          sessionId,
+          amount,
+          paymentMethod: method,
+          paymentReference: txRef,
+          phoneNumber: paymentData.phoneNumber,
+          txRef,
+          flwRef: `WALLET_${Date.now()}`,
+          flwStatus: "successful",
+          status: PaymentStatus.COMPLETED,
+          confirmedAt: new Date(),
+        },
+      });
+      await tx.loanRepayment.updateMany({
+        where: { sessionId, id: { not: record.id } },
+        data: { status: PaymentStatus.FAILED, flwStatus: "superseded" },
+      });
+      await settleLoanRepayment(tx, sessionId, amount);
+      return record;
+    });
+
+    await notifyLoanRepaymentConfirmed(session, amount);
+
+    return {
+      success: true,
+      status: "completed",
+      payment,
+      message: "Voucher repayment completed using your prepaid wallet",
+      walletDetails: {
+        previousBalance: walletDebitResult.transaction.previousBalance,
+        newBalance: walletDebitResult.newBalance,
+        transactionId: walletDebitResult.transaction.id,
+      },
+    };
+  }
+
+  // MOBILE_MONEY / CARD — record a pending repayment then initiate payment.
+  const payment = await prisma.loanRepayment.create({
+    data: {
+      sessionId,
+      amount,
+      paymentMethod: method,
+      paymentReference: paymentData.paymentReference,
+      phoneNumber: paymentData.phoneNumber,
+      txRef,
+      status: PaymentStatus.PENDING,
+    },
+  });
+
+  const email = session.restaurant?.email || "";
+  const fullname = session.restaurant?.name || "";
+
+  if (method === "MOBILE_MONEY") {
+    const cleanedPhone = cleanPhoneNumber(paymentData.phoneNumber || "");
+    if (!isValidRwandaPhone(cleanedPhone)) {
+      throw new Error(
+        "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX",
+      );
+    }
+    try {
+      const response = await getPaypack().cashin({
+        number: cleanedPhone,
+        amount,
+        environment:
+          process.env.NODE_ENV === "production" ? "production" : "development",
+      });
+      if (response?.data) {
+        await retryDatabaseOperation(async () => {
+          return await prisma.loanRepayment.update({
+            where: { id: payment.id },
+            data: {
+              flwRef:
+                response.data.ref ||
+                response.data.transaction_id ||
+                response.data.id,
+              flwStatus: "pending",
+            },
+          });
+        });
+        return {
+          success: true,
+          status: "pending",
+          paymentId: payment.id,
+          txRef,
+          message: "Payment request sent to your phone number, please confirm it.",
+          redirectUrl: "",
+          requiresRedirect: false,
+          authorizationDetails: { mode: "mobile_money", redirectUrl: "" },
+        };
+      }
+      throw new Error("PayPack response invalid or missing reference");
+    } catch (error: any) {
+      console.log(
+        "PayPack repayment cashin failed, falling back to Flutterwave:",
+        error.message,
+      );
+      const flwResult = await initiateFlutterwaveLoanRepayment({
+        txRef,
+        amount,
+        email,
+        fullname,
+        currency: "RWF",
+        paymentOptions: "mobilemoney",
+        phoneNumber: cleanedPhone,
+      });
+      await retryDatabaseOperation(async () => {
+        return await prisma.loanRepayment.update({
+          where: { id: payment.id },
+          data: { flwStatus: "pending_flutterwave" },
+        });
+      });
+      return { ...flwResult, paymentId: payment.id, txRef };
+    }
+  }
+
+  if (method === "CARD") {
+    const flwResult = await initiateFlutterwaveLoanRepayment({
+      txRef,
+      amount,
+      email,
+      fullname,
+      currency: "RWF",
+      paymentOptions: "card",
+      phoneNumber: session.restaurant?.phone || "",
+    });
+    await retryDatabaseOperation(async () => {
+      return await prisma.loanRepayment.update({
+        where: { id: payment.id },
+        data: { flwStatus: "pending_flutterwave" },
+      });
+    });
+    return { ...flwResult, paymentId: payment.id, txRef };
+  }
+
+  throw new Error(`Unsupported payment method: ${method}`);
 };
 
 // ============================================

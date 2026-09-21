@@ -3,6 +3,7 @@ import {
   createCheckout,
   processPayment,
   verifyPayment,
+  getCheckoutStatus,
   verifyVoucherOTPAndCreateOrder,
   createAdminOrder,
 } from "../controllers/checkout.controller";
@@ -39,6 +40,13 @@ checkoutRoutes.post("/:orderId/payment", isAuthenticated, processPayment);
  * Access: Restaurant (own checkouts) or Admin (any checkout)
  */
 checkoutRoutes.get("/:orderId/verify-payment", isAuthenticated, verifyPayment);
+
+/**
+ * Get payment status for tracking (polling)
+ * GET /checkouts/:orderId/status
+ * Access: Restaurant (own checkouts) or Admin (any checkout)
+ */
+checkoutRoutes.get("/:orderId/status", isAuthenticated, getCheckoutStatus);
 
 /**
  * Verify OTP and create order for voucher payment

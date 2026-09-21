@@ -417,6 +417,9 @@ export const processPaymentService = async (
         }
 
         // Paying with a PAN-based loan session (new voucher card system)
+        // Strict rule: the loan must cover the ENTIRE order total. If the order
+        // is larger than the loan's usable credit, the payment is rejected — no
+        // split payment with the prepaid wallet is allowed.
         if (paymentData.loanSessionRrn) {
           const loanSession = await prisma.loanSession.findFirst({
             where: {

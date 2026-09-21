@@ -16,6 +16,7 @@ import { OrderStatus, PaymentStatus, SubscriptionStatus, LoanSessionStatus, Unlo
 import { createNotificationService } from "../services/notification.services";
 import { rollbackSubscriptionPaymentService } from "../services/subscription.service";
 import { confirmUnlockFeePaymentService } from "../services/voucher-card.service";
+import { confirmLoanRepaymentService } from "../services/voucher-card.service";
 import { confirmVoucherCreditTopUpService } from "../services/voucher.service";
 
 // Process wallet transactions with WebSocket notification
@@ -829,6 +830,15 @@ const handleChargeCompleted = async (data: any) => {
         "FLUTTERWAVE",
         data,
       );
+    } else if (txRef.includes("LR_")) {
+      console.log("Processing voucher loan repayment via charge.completed");
+      await processLoanRepaymentPayment(
+        txRef,
+        flwRef,
+        status,
+        "FLUTTERWAVE",
+        data,
+      );
     } else if (txRef.includes("repay_")) {
       console.log("Processing voucher repayment via charge.completed");
       await processVoucherRepaymentPayment(
@@ -1126,7 +1136,14 @@ async function processUnlockFeePayment(
   const unlockPayment = await retryDatabaseOperation(async () => {
     return await prisma.unlockFeePayment.findFirst({
       where: {
-        OR: [{ txRef }, { flwRef: txRef }, { paymentReference: txRef }],
+        OR: [
+          { txRef },
+          { flwRef: txRef },
+          { paymentReference: txRef },
+          { txRef: { contains: txRef } },
+          { flwRef: { contains: txRef } },
+          { paymentReference: { contains: txRef } },
+        ],
       },
     });
   });
@@ -1179,6 +1196,71 @@ async function processUnlockFeePayment(
   }
 
   return unlockPayment;
+}
+
+/**
+ * Process a voucher loan repayment ("Pay Voucher") payment (Flutterwave or PayPack).
+ * Only a successful provider webhook confirms the repayment and settles the session.
+ */
+async function processLoanRepaymentPayment(
+  txRef: string,
+  flwRef: string,
+  status: string,
+  paymentProvider: "FLUTTERWAVE" | "PAYPACK" = "FLUTTERWAVE",
+  data?: any,
+) {
+  console.log("Processing loan repayment for reference:", {
+    txRef,
+    flwRef,
+    status,
+  });
+
+  const repayment = await retryDatabaseOperation(async () => {
+    return await prisma.loanRepayment.findFirst({
+      where: {
+        OR: [
+          { txRef },
+          { flwRef: txRef },
+          { paymentReference: txRef },
+          { txRef: { contains: txRef } },
+          { flwRef: { contains: txRef } },
+          { paymentReference: { contains: txRef } },
+        ],
+      },
+    });
+  });
+
+  if (!repayment) {
+    console.log("No matching loan repayment found for:", txRef);
+    return null;
+  }
+
+  console.log("Found matching loan repayment:", repayment.id);
+
+  const isSuccess =
+    status === "successful" || status === "success" || status === "completed";
+
+  if (isSuccess && repayment.status !== "COMPLETED") {
+    await confirmLoanRepaymentService(repayment.id, repayment.sessionId);
+    console.log(
+      `Loan repayment confirmed: ${repayment.id} (${paymentProvider})`,
+    );
+  } else if (
+    (status === "failed" || status === "cancelled") &&
+    repayment.status === "PENDING"
+  ) {
+    await retryDatabaseOperation(async () => {
+      return await prisma.loanRepayment.update({
+        where: { id: repayment.id },
+        data: { status: PaymentStatus.FAILED, flwStatus: status },
+      });
+    });
+    console.log(
+      `Loan repayment marked FAILED: ${repayment.id} (${paymentProvider})`,
+    );
+  }
+
+  return repayment;
 }
 
 /**
@@ -1391,13 +1473,40 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
 
       const unlockFeePayment = await prisma.unlockFeePayment.findFirst({
         where: {
-          OR: [{ txRef }, { flwRef: txRef }, { paymentReference: txRef }],
+          OR: [
+            { txRef },
+            { flwRef: txRef },
+            { paymentReference: txRef },
+            { txRef: { contains: txRef } },
+            { flwRef: { contains: txRef } },
+            { paymentReference: { contains: txRef } },
+          ],
+        },
+      });
+
+      const loanRepaymentRecord = await prisma.loanRepayment.findFirst({
+        where: {
+          OR: [
+            { txRef },
+            { flwRef: txRef },
+            { paymentReference: txRef },
+            { txRef: { contains: txRef } },
+            { flwRef: { contains: txRef } },
+            { paymentReference: { contains: txRef } },
+          ],
         },
       });
 
       const voucherTopUp = await prisma.voucherCreditTopUp.findFirst({
         where: {
-          OR: [{ txRef }, { flwRef: txRef }, { paymentReference: txRef }],
+          OR: [
+            { txRef },
+            { flwRef: txRef },
+            { paymentReference: txRef },
+            { txRef: { contains: txRef } },
+            { flwRef: { contains: txRef } },
+            { paymentReference: { contains: txRef } },
+          ],
         },
       });
 
@@ -1413,6 +1522,15 @@ export const handlePaymentWebhook = async (req: Request, res: Response) => {
       } else if (unlockFeePayment || txRef.includes("UNLOCK_")) {
         console.log("Processing PayPack unlock fee payment");
         await processUnlockFeePayment(
+          txRef || "",
+          flwRef || "",
+          paymentStatus || "",
+          "PAYPACK",
+          payload,
+        );
+      } else if (loanRepaymentRecord || txRef.includes("LR_")) {
+        console.log("Processing PayPack voucher loan repayment");
+        await processLoanRepaymentPayment(
           txRef || "",
           flwRef || "",
           paymentStatus || "",
