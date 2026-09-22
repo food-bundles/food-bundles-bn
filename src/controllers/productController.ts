@@ -205,6 +205,11 @@ export const updateProduct = async (req: Request, res: Response) => {
     const updateData = req.body;
     const adminId = (req as any).user.id;
 
+    // Parse customerTypePrices if it's a JSON string
+    if (updateData.customerTypePrices && typeof updateData.customerTypePrices === "string") {
+      updateData.customerTypePrices = JSON.parse(updateData.customerTypePrices);
+    }
+
     let finalImageUrls: string[] = [];
 
     if (updateData.images) {

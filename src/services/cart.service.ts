@@ -99,13 +99,18 @@ export const addToCartService = async (data: AddToCartData) => {
     userRoleForPricing = restaurantData?.role || "RESTAURANT";
   }
 
-  // Determine the correct price based on user role via customerTypePrices
+  // Determine the correct price: the buyer's assigned customer type wins, otherwise the
+  // customer type named after their role
   let effectivePrice = product.unitPrice; // Default price
-  const matchingPrice = product.customerTypePrices.find(
-    (ctp) => ctp.customerType.name.toUpperCase() === userRoleForPricing.toUpperCase()
-  );
+  let effectivePurchasePrice = product.purchasePrice; // Default purchase price
+  const matchingPrice = restaurant.customerTypeId
+    ? product.customerTypePrices.find((ctp) => ctp.customerTypeId === restaurant.customerTypeId)
+    : product.customerTypePrices.find(
+        (ctp) => ctp.customerType.name.toUpperCase() === userRoleForPricing.toUpperCase()
+      );
   if (matchingPrice) {
     effectivePrice = matchingPrice.price;
+    effectivePurchasePrice = matchingPrice.purchasePrice;
   }
 
   const subtotal =

@@ -61,7 +61,7 @@ export const createSupportRequest = async (req: Request, res: Response) => {
     // Try to reserve a unique ticket number with a few attempts
     let ticketNumber = generateTicketNumber();
     try {
-      const existing = await prisma.supportRequest.findUnique({
+      const existing = await prisma.support_requests.findUnique({
         where: { ticketNumber },
       });
       if (existing) {
@@ -71,7 +71,7 @@ export const createSupportRequest = async (req: Request, res: Response) => {
       // ignore lookup errors, fall through to create
     }
 
-    const request = await prisma.supportRequest.create({
+    const request = await prisma.support_requests.create({
       data: {
         ticketNumber,
         name,
@@ -140,7 +140,7 @@ export const getSupportRequests = async (req: Request, res: Response) => {
   try {
     const { search, status } = req.query;
 
-    const requests = await prisma.supportRequest.findMany({
+    const requests = await prisma.support_requests.findMany({
       where: {
         ...(status
           ? { status: status as string }
@@ -169,7 +169,7 @@ export const getSupportRequests = async (req: Request, res: Response) => {
 export const getSupportRequest = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const request = await prisma.supportRequest.findUnique({
+    const request = await prisma.support_requests.findUnique({
       where: { id },
     });
 
@@ -189,12 +189,12 @@ export const updateSupportRequest = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { status, response } = req.body;
 
-    const existing = await prisma.supportRequest.findUnique({ where: { id } });
+    const existing = await prisma.support_requests.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ error: "Support request not found" });
     }
 
-    const request = await prisma.supportRequest.update({
+    const request = await prisma.support_requests.update({
       where: { id },
       data: {
         ...(status ? { status } : {}),
@@ -238,10 +238,11 @@ export const updateSupportRequest = async (req: Request, res: Response) => {
 export const deleteSupportRequest = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    await prisma.supportRequest.delete({ where: { id } });
+    await prisma.support_requests.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
     console.error("Delete support request error:", error);
     res.status(500).json({ error: "Failed to delete support request" });
   }
 };
+

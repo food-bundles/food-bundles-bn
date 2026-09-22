@@ -6,12 +6,24 @@ import {
   updateCustomerType,
   deleteCustomerType,
   toggleCustomerTypeStatus,
+  getCustomerTypeUsage,
+  getPriceUsage,
+  assignCustomerType,
+  swapCustomerTypePricing,
 } from "../controllers/customer-type.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 
 const customerTypeRoutes = Router();
 
 customerTypeRoutes.get("/", getAllCustomerTypes);
+
+customerTypeRoutes.get("/usage", isAuthenticated, checkPermission("ADMIN"), getCustomerTypeUsage);
+
+customerTypeRoutes.get("/price-usage", isAuthenticated, checkPermission("ADMIN"), getPriceUsage);
+
+customerTypeRoutes.patch("/assign-customer-type", isAuthenticated, checkPermission("ADMIN"), assignCustomerType);
+
+customerTypeRoutes.post("/swap-pricing", isAuthenticated, checkPermission("ADMIN"), swapCustomerTypePricing);
 
 customerTypeRoutes.post("/", isAuthenticated, checkPermission("ADMIN"), createCustomerType);
 
