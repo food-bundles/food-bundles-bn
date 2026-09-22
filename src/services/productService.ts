@@ -17,7 +17,7 @@ export interface ProductData {
   expiryDate: Date | null;
   unit: string;
   createdBy: string;
-  customerTypePrices?: { customerTypeId: string; price: number; purchasePrice: number }[];
+  customerTypePrices?: { customerTypeId: string; price: number }[];
 }
 
 interface Category {
@@ -84,7 +84,6 @@ export const createProductService = async (productData: ProductData) => {
           productId: created.id,
           customerTypeId: ctp.customerTypeId,
           price: Number(ctp.price),
-          purchasePrice: Number(ctp.purchasePrice),
         })),
       });
     }
@@ -287,7 +286,6 @@ export const updateProductService = async (
             productId,
             customerTypeId: ctp.customerTypeId,
             price: Number(ctp.price),
-            purchasePrice: Number(ctp.purchasePrice),
           })),
         });
       }
@@ -584,7 +582,6 @@ export const getAllProductsService = async ({
           select: {
             id: true,
             price: true,
-            purchasePrice: true,
             customerType: {
               select: { id: true, name: true },
             },
@@ -719,7 +716,6 @@ export const getProductsByRoleService = async ({
           select: {
             id: true,
             price: true,
-            purchasePrice: true,
             customerType: {
               select: { id: true, name: true },
             },
@@ -748,7 +744,6 @@ export const getProductsByRoleService = async ({
           select: {
             id: true,
             price: true,
-            purchasePrice: true,
             customerType: {
               select: { id: true, name: true },
             },
@@ -774,7 +769,6 @@ export const getProductsByRoleService = async ({
           select: {
             id: true,
             price: true,
-            purchasePrice: true,
             customerType: {
               select: { id: true, name: true },
             },
@@ -800,7 +794,6 @@ export const getProductsByRoleService = async ({
           select: {
             id: true,
             price: true,
-            purchasePrice: true,
             customerType: {
               select: { id: true, name: true },
             },

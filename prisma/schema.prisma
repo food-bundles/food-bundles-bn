@@ -272,6 +272,28 @@ model SupportResponse {
   @@index([ticketId])
 }
 
+model SupportRequest {
+  id               String    @id @default(uuid())
+  ticketNumber     String    @unique
+  name             String
+  email            String
+  subject          String
+  category         String
+  severity         String?
+  preferredContact String    @default("email")
+  description      String
+  screenshots      String[]
+  status           String    @default("open")
+  response         String?
+  respondedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([ticketNumber])
+  @@index([status])
+  @@index([email])
+}
+
 model CallbackRequest {
   id            String   @id @default(uuid())
   farmerId      String
@@ -1471,7 +1493,6 @@ enum Role {
   AFFILIATOR
   TRADER
   SUPERUSER
-  MARKET_PRICES
 }
 
 enum SubmissionStatus {
@@ -1654,6 +1675,7 @@ enum OTPPurpose {
   RESTAURANT_SIGNUP
   VOUCHER_CHECKOUT
   ADMIN_WALLET_OPERATION
+  PASSWORD_RESET
 }
 
 enum NotificationEvent {
