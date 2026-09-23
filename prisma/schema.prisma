@@ -411,7 +411,7 @@ model ProductCustomerPrice {
   productId      String
   customerTypeId String
   price          Float
-  purchasePrice  Float
+  purchasePrice  Float        @default(0)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   customerType   CustomerType @relation(fields: [customerTypeId], references: [id], onDelete: Cascade)
@@ -1493,6 +1493,7 @@ enum Role {
   AFFILIATOR
   TRADER
   SUPERUSER
+  MARKET_PRICES
 }
 
 enum SubmissionStatus {

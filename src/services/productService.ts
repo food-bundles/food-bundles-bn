@@ -17,7 +17,7 @@ export interface ProductData {
   expiryDate: Date | null;
   unit: string;
   createdBy: string;
-  customerTypePrices?: { customerTypeId: string; price: number }[];
+  customerTypePrices?: { customerTypeId: string; price: number; purchasePrice?: number }[];
 }
 
 interface Category {
@@ -84,6 +84,7 @@ export const createProductService = async (productData: ProductData) => {
           productId: created.id,
           customerTypeId: ctp.customerTypeId,
           price: Number(ctp.price),
+          purchasePrice: Number(ctp.purchasePrice ?? productData.purchasePrice ?? 0),
         })),
       });
     }
@@ -286,6 +287,7 @@ export const updateProductService = async (
             productId,
             customerTypeId: ctp.customerTypeId,
             price: Number(ctp.price),
+            purchasePrice: Number(ctp.purchasePrice ?? product.purchasePrice ?? 0),
           })),
         });
       }
