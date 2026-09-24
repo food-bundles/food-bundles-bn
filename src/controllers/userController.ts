@@ -594,6 +594,7 @@ export class UserController {
     }
   };
 
+
   static myProfile = async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization;

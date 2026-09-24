@@ -36,6 +36,7 @@ import smsNotifyRouter from "./notification-recipient.routes";
 import marketRoutes from "./market.routes";
 import newsletterRoutes from "./newsletter.routes";
 import authenticatorRoutes from "./authenticator.routes";
+import customerTypeRoutes from "./customer-type.routes";
 
 const routes = Router();
 
@@ -72,6 +73,7 @@ routes.use("/notification-recipients", smsNotifyRouter);
 routes.use("/markets", marketRoutes);
 routes.use("/newsletter", newsletterRoutes);
 routes.use("/authenticator", authenticatorRoutes);
+routes.use("/customer-types", customerTypeRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);
