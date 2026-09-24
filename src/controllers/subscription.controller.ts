@@ -30,6 +30,9 @@ import {
   updateLoanProviderStatusService,
   getAllLoanTradersService,
   updateTraderRequiresSubscriptionService,
+  getLoanAccessProvidersService,
+  updateTraderUnlockFeeService,
+  updateTraderLeftoverPolicyService,
 } from "../services/subscription.service";
 import { SubscriptionStatus } from "@prisma/client";
 import prisma from "../prisma";
@@ -660,16 +663,27 @@ export const getAllLoanProviders = async (req: Request, res: Response) => {
 export const updateLoanProviderStatus = async (req: Request, res: Response) => {
   try {
     const { providerId } = req.params;
-    const { isActive, unlockFeeEnabled, unlockFeePercentage, termsAndConditions } = req.body;
+    const { isActive, unlockFeeEnabled, unlockFeePercentage, leftoverPolicy, termsAndConditions } = req.body;
 
     if (
       isActive === undefined &&
       unlockFeeEnabled === undefined &&
       unlockFeePercentage === undefined &&
+      leftoverPolicy === undefined &&
       termsAndConditions === undefined
     ) {
       return res.status(400).json({
-        message: "At least one field (isActive, unlockFeeEnabled, unlockFeePercentage, termsAndConditions) is required",
+        message: "At least one field (isActive, unlockFeeEnabled, unlockFeePercentage, leftoverPolicy, termsAndConditions) is required",
+      });
+    }
+
+    if (
+      leftoverPolicy !== undefined &&
+      leftoverPolicy !== "USELESS" &&
+      leftoverPolicy !== "TOPUP_WALLET"
+    ) {
+      return res.status(400).json({
+        message: "leftoverPolicy must be 'USELESS' or 'TOPUP_WALLET'",
       });
     }
 
@@ -679,6 +693,8 @@ export const updateLoanProviderStatus = async (req: Request, res: Response) => {
         unlockFeeEnabled === undefined ? undefined : Boolean(unlockFeeEnabled),
       unlockFeePercentage:
         unlockFeePercentage === undefined ? undefined : unlockFeePercentage,
+      leftoverPolicy:
+        leftoverPolicy === undefined ? undefined : leftoverPolicy,
       termsAndConditions:
         termsAndConditions === undefined ? undefined : termsAndConditions,
     });
@@ -743,6 +759,102 @@ export const updateTraderRequiresSubscription = async (
   } catch (error: any) {
     res.status(400).json({
       message: error.message || "Failed to update trader subscription requirement",
+    });
+  }
+};
+
+/**
+ * Overview of all configurable loan providers — traders + Food Bundles platform
+ * GET /subscriptions/loan/access-providers
+ */
+export const getLoanAccessProviders = async (req: Request, res: Response) => {
+  try {
+    const providers = await getLoanAccessProvidersService();
+
+    res.status(200).json({
+      message: "Loan access providers retrieved successfully",
+      data: providers,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan access providers",
+    });
+  }
+};
+
+/**
+ * Set/clear the unlock fee for a trader-funded loan
+ * PATCH /subscriptions/loan/traders/:traderId/unlock-fee
+ */
+export const updateTraderUnlockFee = async (req: Request, res: Response) => {
+  try {
+    const { traderId } = req.params;
+    const { unlockFeeEnabled, unlockFeePercentage } = req.body;
+
+    if (typeof unlockFeeEnabled !== "boolean") {
+      return res.status(400).json({
+        message: "unlockFeeEnabled (boolean) is required",
+      });
+    }
+
+    if (
+      unlockFeeEnabled &&
+      (typeof unlockFeePercentage !== "number" || unlockFeePercentage <= 0)
+    ) {
+      return res.status(400).json({
+        message: "unlockFeePercentage (number > 0) is required when the fee is enabled",
+      });
+    }
+
+    const wallet = await updateTraderUnlockFeeService(traderId, {
+      unlockFeeEnabled,
+      unlockFeePercentage:
+        typeof unlockFeePercentage === "number" ? unlockFeePercentage : null,
+    });
+
+    res.status(200).json({
+      message: unlockFeeEnabled
+        ? "Trader unlock fee activated"
+        : "Trader unlock fee paused",
+      data: wallet,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to update trader unlock fee",
+    });
+  }
+};
+
+/**
+ * Set the leftover policy for a trader-funded loan
+ * PATCH /subscriptions/loan/traders/:traderId/leftover-policy
+ */
+export const updateTraderLeftoverPolicy = async (req: Request, res: Response) => {
+  try {
+    const { traderId } = req.params;
+    const { leftoverPolicy } = req.body;
+
+    if (leftoverPolicy !== "USELESS" && leftoverPolicy !== "TOPUP_WALLET") {
+      return res.status(400).json({
+        message: "leftoverPolicy must be 'USELESS' or 'TOPUP_WALLET'",
+      });
+    }
+
+    const wallet = await updateTraderLeftoverPolicyService(
+      traderId,
+      leftoverPolicy,
+    );
+
+    res.status(200).json({
+      message:
+        leftoverPolicy === "TOPUP_WALLET"
+          ? "Leftover will be topped up to the restaurant's wallet"
+          : "Leftover will be useless (recorded but not reusable)",
+      data: wallet,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to update trader leftover policy",
     });
   }
 };

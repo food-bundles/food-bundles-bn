@@ -24,8 +24,10 @@ import {
   getLoanSessionByIdService,
   getCardEnrollmentRequestsService,
   getVoucherCardStatsService,
-  updateVoucherCardUnlockFeeService,
   getRecentActivitiesService,
+  convertLoanSessionToWalletService,
+  repayLoanSessionService,
+  verifyLoanRepaymentService,
 } from "../services/voucher-card.service";
 import { CardStatus, LoanSessionStatus } from "@prisma/client";
 
@@ -89,24 +91,6 @@ export const getVoucherCardByPan = async (req: Request, res: Response) => {
     res.json({ success: true, data: card });
   } catch (error: any) {
     res.status(404).json({ success: false, message: error.message });
-  }
-};
-
-export const updateVoucherCardUnlockFee = async (req: Request, res: Response) => {
-  try {
-    const { cardId } = req.params;
-    const { unlockFeeEnabled, unlockFeePercentage } = req.body;
-    if (unlockFeeEnabled === undefined) {
-      return res.status(400).json({ success: false, message: "unlockFeeEnabled is required" });
-    }
-    const card = await updateVoucherCardUnlockFeeService(cardId, {
-      unlockFeeEnabled: Boolean(unlockFeeEnabled),
-      unlockFeePercentage:
-        typeof unlockFeePercentage === "number" ? unlockFeePercentage : null,
-    });
-    res.json({ success: true, data: card, message: "Card unlock fee config updated" });
-  } catch (error: any) {
-    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -491,5 +475,70 @@ export const getLoanSessionById = async (req: Request, res: Response) => {
     res.json({ success: true, data: session });
   } catch (error: any) {
     res.status(404).json({ success: false, message: error.message });
+  }
+};
+
+export const convertLoanSessionToWallet = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const { rrn } = req.params;
+    if (!rrn) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Loan session RRN is required" });
+    }
+    const result = await convertLoanSessionToWalletService(rrn, restaurantId);
+    res.json({
+      success: true,
+      data: result,
+      message: `${result.convertedAmount.toLocaleString()} RWF added to your prepaid wallet. Voucher used.`,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const repayLoanSession = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const { sessionId } = req.params;
+    const { paymentMethod, paymentReference, phoneNumber } = req.body ?? {};
+    if (!sessionId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Session id is required" });
+    }
+    if (!paymentMethod) {
+      return res
+        .status(400)
+        .json({ success: false, message: "paymentMethod is required" });
+    }
+    const result = await repayLoanSessionService(sessionId, restaurantId, {
+      paymentMethod,
+      paymentReference,
+      phoneNumber,
+    });
+    res.json({ success: true, data: result, message: result.message });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const verifyLoanRepayment = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const { sessionId } = req.params;
+    if (!sessionId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Session id is required" });
+    }
+    const result = await verifyLoanRepaymentService(sessionId, restaurantId);
+    res.json({ success: true, data: result, message: "Payment status checked" });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
   }
 };

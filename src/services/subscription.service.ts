@@ -2174,6 +2174,7 @@ export const updateLoanProviderStatusService = async (
     isActive?: boolean;
     unlockFeeEnabled?: boolean;
     unlockFeePercentage?: number | null;
+    leftoverPolicy?: string;
     termsAndConditions?: string;
   },
 ) => {
@@ -2182,6 +2183,9 @@ export const updateLoanProviderStatusService = async (
   if (data.unlockFeeEnabled !== undefined) updateData.unlockFeeEnabled = data.unlockFeeEnabled;
   if (data.unlockFeePercentage !== undefined) {
     updateData.unlockFeePercentage = data.unlockFeePercentage;
+  }
+  if (data.leftoverPolicy !== undefined) {
+    updateData.leftoverPolicy = data.leftoverPolicy;
   }
   if (data.termsAndConditions !== undefined) {
     updateData.termsAndConditions = data.termsAndConditions;
@@ -2215,6 +2219,9 @@ export const getAllLoanTradersService = async () => {
           balance: true,
           isActive: true,
           delegationStatus: true,
+          unlockFeeEnabled: true,
+          unlockFeePercentage: true,
+          leftoverPolicy: true,
         },
       },
     },
@@ -2243,6 +2250,148 @@ export const updateTraderRequiresSubscriptionService = async (
       username: true,
       email: true,
       requiresSubscription: true,
+    },
+  });
+};
+
+/**
+ * Get (or lazily create) the Food Bundles platform lender — the LoanProvider
+ * used when a loan is funded by the platform rather than a trader.
+ */
+export const getOrCreateFoodBundlesProviderService = async () => {
+  const existing = await prisma.loanProvider.findFirst({
+    where: { name: { contains: "food", mode: "insensitive" } },
+    orderBy: { createdAt: "asc" },
+  });
+  if (existing) return existing;
+
+  return prisma.loanProvider.create({
+    data: {
+      name: "Food Bundles",
+      description: "Food Bundles platform lender",
+      isActive: true,
+    },
+  });
+};
+
+/**
+ * Overview of every loan provider an admin can configure in the Loan Access tab:
+ * all traders (their unlock fee lives on the trader wallet) plus the Food Bundles
+ * platform lender (its unlock fee lives on the platform LoanProvider).
+ */
+export const getLoanAccessProvidersService = async () => {
+  const [traders, platform] = await Promise.all([
+    prisma.admin.findMany({
+      where: { role: "TRADER" },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        phone: true,
+        requiresSubscription: true,
+        traderWallet: {
+          select: {
+            id: true,
+            balance: true,
+            isActive: true,
+            unlockFeeEnabled: true,
+            unlockFeePercentage: true,
+            leftoverPolicy: true,
+          },
+        },
+      },
+      orderBy: { username: "asc" },
+    }),
+    getOrCreateFoodBundlesProviderService(),
+  ]);
+
+  return {
+    platform: {
+      id: platform.id,
+      name: platform.name,
+      isActive: platform.isActive,
+      unlockFeeEnabled: platform.unlockFeeEnabled,
+      unlockFeePercentage: platform.unlockFeePercentage,
+      leftoverPolicy: platform.leftoverPolicy,
+    },
+    traders: traders.map((t) => ({
+      id: t.id,
+      username: t.username,
+      email: t.email,
+      phone: t.phone,
+      requiresSubscription: t.requiresSubscription,
+      walletId: t.traderWallet?.id ?? null,
+      balance: t.traderWallet?.balance ?? 0,
+      walletActive: t.traderWallet?.isActive ?? true,
+      unlockFeeEnabled: t.traderWallet?.unlockFeeEnabled ?? false,
+      unlockFeePercentage: t.traderWallet?.unlockFeePercentage ?? null,
+      leftoverPolicy: t.traderWallet?.leftoverPolicy ?? "USELESS",
+    })),
+  };
+};
+
+/**
+ * Set the unlock fee an admin applies when this trader funds a loan.
+ * Stored on the trader's wallet; paused (disabled) is the default.
+ */
+export const updateTraderUnlockFeeService = async (
+  traderId: string,
+  data: { unlockFeeEnabled: boolean; unlockFeePercentage?: number | null },
+) => {
+  const trader = await prisma.admin.findFirst({
+    where: { id: traderId, role: "TRADER" },
+  });
+  if (!trader) throw new Error("Trader not found");
+
+  const enabled = Boolean(data.unlockFeeEnabled);
+  const percentage =
+    enabled && data.unlockFeePercentage && data.unlockFeePercentage > 0
+      ? data.unlockFeePercentage
+      : null;
+
+  return prisma.wallet.upsert({
+    where: { traderId },
+    update: { unlockFeeEnabled: enabled, unlockFeePercentage: percentage },
+    create: {
+      traderId,
+      unlockFeeEnabled: enabled,
+      unlockFeePercentage: percentage,
+    },
+    select: {
+      id: true,
+      traderId: true,
+      unlockFeeEnabled: true,
+      unlockFeePercentage: true,
+    },
+  });
+};
+
+/**
+ * Set the leftover policy an admin applies when a loan funded by this trader is
+ * used once at checkout. Stored on the trader's wallet, same as the unlock fee.
+ * Values: "USELESS" (leftover recorded but never usable again) or
+ * "TOPUP_WALLET" (leftover credited to the restaurant's wallet).
+ */
+export const updateTraderLeftoverPolicyService = async (
+  traderId: string,
+  leftoverPolicy: string,
+) => {
+  const trader = await prisma.admin.findFirst({
+    where: { id: traderId, role: "TRADER" },
+  });
+  if (!trader) throw new Error("Trader not found");
+
+  const policy =
+    leftoverPolicy === "TOPUP_WALLET" ? "TOPUP_WALLET" : "USELESS";
+
+  return prisma.wallet.upsert({
+    where: { traderId },
+    update: { leftoverPolicy: policy },
+    create: { traderId, leftoverPolicy: policy },
+    select: {
+      id: true,
+      traderId: true,
+      leftoverPolicy: true,
     },
   });
 };

@@ -83,12 +83,12 @@ walletRoutes.get(
 /**
  * Verify wallet top-up payment
  * GET /wallets/verify-topup/:transactionId
- * Access: Restaurant only
+ * Access: Restaurant, Affiliator, Hotel, Trader or Admin (owner-scoped by transaction id)
  */
 walletRoutes.get(
   "/verify-topup/:transactionId",
   isAuthenticated,
-  checkPermission("RESTAURANT"),
+  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL", "TRADER", "ADMIN"),
   verifyWalletTopUp
 );
 

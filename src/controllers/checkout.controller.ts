@@ -377,26 +377,12 @@ export const verifyVoucherOTPAndCreateOrder = async (
 
     console.log("paymentResult ", paymentResult);
 
-    if (paymentResult.success) {
+if (paymentResult.success) {
       // Handle voucher payment response
       if ("voucherDetails" in paymentResult) {
         const voucherInfo = paymentResult.voucherDetails;
 
-        if (voucherInfo && paymentResult.requiresAdditionalPayment) {
-          res.status(200).json({
-            message: paymentResult.message,
-            data: {
-              checkout: paymentResult.checkout,
-              transactionId: paymentResult.transactionId,
-              status: paymentResult.status,
-              voucherApplied: true,
-              voucherDetails: voucherInfo,
-              requiresAdditionalPayment: true,
-              additionalPaymentAmount: paymentResult.additionalPaymentAmount,
-              redirectUrl: paymentResult.redirectUrl,
-            },
-          });
-        } else if (voucherInfo) {
+        if (voucherInfo) {
           res.status(200).json({
             message: paymentResult.message,
             data: {
@@ -415,10 +401,15 @@ export const verifyVoucherOTPAndCreateOrder = async (
             },
           });
         }
+      } else {
+        res.status(400).json({
+          message: paymentResult.error || "Payment failed",
+          error: paymentResult.error,
+        });
       }
     } else {
       res.status(400).json({
-        message: paymentResult.error || "Voucher payment failed",
+        message: paymentResult.error || "Payment failed",
         error: paymentResult.error,
       });
     }
@@ -586,6 +577,63 @@ export const verifyPayment = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to verify payment",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * GET /checkouts/:orderId/status
+ * Lightweight payment-tracking endpoint: returns the order's current payment
+ * status so the checkout UI can poll until the payment is confirmed by the
+ * payment provider's webhook (MoMo/PayPack or card/Flutterwave).
+ */
+export const getCheckoutStatus = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const userId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+
+    if (!orderId) {
+      return res
+        .status(400)
+        .json({ message: "Order id is required" });
+    }
+
+    const order = await getOrderByIdService(orderId);
+
+    // Scope to the order owner, unless an admin/affiliator of the restaurant.
+    if (userRole !== "ADMIN" && order.restaurantId !== userId) {
+      let restaurantId = userId;
+      if (userRole === "AFFILIATOR") {
+        const restaurant = await getRestaurantFromAffiliatorService(userId);
+        restaurantId = restaurant.id;
+      }
+      if (order.restaurantId !== restaurantId) {
+        return res
+          .status(403)
+          .json({ message: "You do not have access to this order" });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.status,
+        paymentMethod: order.paymentMethod,
+        totalAmount: order.totalAmount,
+        txRef: order.txRef || order.paymentReference,
+        flwRef: order.flwRef,
+        updatedAt: order.updatedAt,
+      },
+    });
+  } catch (error: any) {
+    res.status(404).json({
+      success: false,
+      message: error.message || "Order not found",
       error: error.message,
     });
   }
