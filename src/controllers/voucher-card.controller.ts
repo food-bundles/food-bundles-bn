@@ -505,7 +505,7 @@ export const repayLoanSession = async (req: Request, res: Response) => {
   try {
     const restaurantId = (req as any).user?.id;
     const { sessionId } = req.params;
-    const { paymentMethod, paymentReference, phoneNumber } = req.body ?? {};
+    const { paymentMethod, paymentReference, phoneNumber, amount } = req.body ?? {};
     if (!sessionId) {
       return res
         .status(400)
@@ -520,6 +520,7 @@ export const repayLoanSession = async (req: Request, res: Response) => {
       paymentMethod,
       paymentReference,
       phoneNumber,
+      amount: amount ? parseFloat(amount) : undefined,
     });
     res.json({ success: true, data: result, message: result.message });
   } catch (error: any) {

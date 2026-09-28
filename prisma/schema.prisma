@@ -1241,6 +1241,7 @@ model LoanSession {
   unlockPaidAt        DateTime?
   amountUsed          Float                  @default(0)
   amountRepaid        Float                  @default(0)
+  amountTransferredToWallet Float             @default(0)
   outstandingAmount   Float                  @default(0)
   status              LoanSessionStatus      @default(REQUESTED)
   purpose             String?
