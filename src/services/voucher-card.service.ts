@@ -522,8 +522,85 @@ export const getRecentActivitiesService = async (limit = 10) => {
 };
 
 // ============================================
+// LOAN AMOUNT ACCOUNTING — single source of truth
+// ============================================
+
+/**
+ * A loan session tracks two separate quantities and they must never be confused:
+ *
+ *   amountUsed               — credit spent on restaurant orders.
+ *   amountTransferredToWallet — credit moved into the restaurant's prepaid wallet,
+ *                               either the leftover after the voucher was spent at
+ *                               checkout (TOPUP_WALLET policy) or a full conversion
+ *                               because the order was bigger than the loan.
+ *   amountRepaid             — what the restaurant has paid back.
+ *
+ * `outstandingAmount` is the single amount owed to the loan provider: everything the
+ * restaurant actually received (spent + moved to wallet) minus what it has repaid.
+ * Credit still sitting unused on the voucher is NOT owed and is excluded.
+ *
+ * This gives one consistent number for every leftover policy:
+ *   - TOPUP_WALLET, voucher spent with a leftover  -> received all of it, outstanding = approved
+ *   - full conversion to wallet                   -> received all of it, outstanding = approved
+ *   - USELESS leftover (default)                  -> leftover never delivered,
+ *                                                     outstanding = amountUsed (approved may exceed it)
+ */
+export const computeOutstandingAmount = (session: {
+  amountUsed?: number | null;
+  amountTransferredToWallet?: number | null;
+  amountRepaid?: number | null;
+}) =>
+  Math.max(
+    0,
+    (session.amountUsed ?? 0) +
+      (session.amountTransferredToWallet ?? 0) -
+      (session.amountRepaid ?? 0),
+  );
+
+/** Credit granted but not yet delivered to the restaurant (still on the voucher). */
+export const computeUnconsumedCredit = (session: {
+  approvedAmount?: number | null;
+  amountUsed?: number | null;
+}) => Math.max(0, (session.approvedAmount ?? 0) - (session.amountUsed ?? 0));
+
+// ============================================
 // LOAN SESSION — REQUEST
 // ============================================
+
+// Sentinel provider id used when no Food Bundles LoanProvider record is configured.
+const PLATFORM_PROVIDER_FALLBACK_ID = "food-bundles";
+
+/**
+ * Canonical identity of the Food Bundles platform loan provider.
+ *
+ * The terms acceptance recorded by acceptLoanTermsService is keyed on the real
+ * LoanProvider id when one exists (that is what getLoanTermsService returns to the
+ * client), so every consumer of the acceptance record must resolve the same id.
+ * Otherwise the terms the restaurant just accepted are never found on the request.
+ * Acceptances stored before the LoanProvider record existed use the sentinel id, which
+ * is why the acceptance lookups below also match it.
+ */
+const resolvePlatformProvider = async (restaurantId: string) => {
+  const provider = await resolveFoodBundlesProvider(restaurantId);
+  return {
+    providerId: provider?.id ?? PLATFORM_PROVIDER_FALLBACK_ID,
+    providerName: provider?.name ?? "Food Bundles",
+  };
+};
+
+// A restaurant has accepted this provider's terms if it recorded the resolved provider
+// id or, for legacy acceptances, the "food-bundles" sentinel.
+const termsAcceptanceWhere = (
+  restaurantId: string,
+  providerType: "TRADER" | "FOOD_BUNDLES",
+  providerId: string,
+) => ({
+  restaurantId,
+  providerType,
+  ...(providerType === "FOOD_BUNDLES"
+    ? { providerId: { in: [providerId, PLATFORM_PROVIDER_FALLBACK_ID] } }
+    : { providerId }),
+});
 
 export const requestLoanSessionService = async (
   restaurantId: string,
@@ -570,15 +647,20 @@ export const requestLoanSessionService = async (
     providerName = trader.username;
   } else if (providerType === "FOOD_BUNDLES" || !providerType) {
     providerType = "FOOD_BUNDLES";
-    providerId = "food-bundles";
-    providerName = "Food Bundles";
+    const platform = await resolvePlatformProvider(restaurantId);
+    providerId = platform.providerId;
+    providerName = platform.providerName;
   } else {
     throw new Error("Invalid loan provider type");
   }
 
   // Terms & conditions must be accepted before a loan can be requested (first time per provider).
   const termsAccepted = await prisma.loanTermsAcceptance.findFirst({
-    where: { restaurantId, providerType, providerId },
+    where: termsAcceptanceWhere(
+      restaurantId,
+      providerType as "TRADER" | "FOOD_BUNDLES",
+      providerId,
+    ),
   });
   if (!termsAccepted) {
     throw new Error(
@@ -594,14 +676,21 @@ export const requestLoanSessionService = async (
     throw new Error("You have an overdue loan. Settle it before requesting a new loan.");
   }
 
-  // Check exposure limit
+  // Check exposure limit.
+  // The card limit is about credit the provider is still exposed to, so it counts the
+  // credit still undelivered on live sessions (approved - used) — not the debt owed,
+  // which shrinks as the restaurant repays and would otherwise let exposure run away.
   const activeSessions = await prisma.loanSession.findMany({
     where: {
       restaurantId,
       status: { notIn: [LoanSessionStatus.CLOSED, LoanSessionStatus.SETTLED, LoanSessionStatus.REJECTED] },
     },
+    select: { approvedAmount: true, amountUsed: true },
   });
-  const currentExposure = activeSessions.reduce((sum, s) => sum + s.outstandingAmount, 0);
+  const currentExposure = activeSessions.reduce(
+    (sum, s) => sum + computeUnconsumedCredit(s),
+    0,
+  );
   if (currentExposure + requestedAmount > card.loanLimit) {
     throw new Error(
       `Request exceeds loan limit. Available: ${card.loanLimit - currentExposure} RWF`,
@@ -799,7 +888,8 @@ export const approveLoanSessionService = async (
       status: unlockFeePct > 0 ? LoanSessionStatus.APPROVED_LOCKED : LoanSessionStatus.ACTIVE,
       unlockStatus: unlockFeePct > 0 ? UnlockStatus.LOCKED : UnlockStatus.UNLOCKED,
       unlockedAt: unlockFeePct > 0 ? null : new Date(),
-      outstandingAmount: approvedAmount,
+      // Approval grants credit but delivers nothing yet, so nothing is owed yet.
+      outstandingAmount: 0,
     },
     include: {
       restaurant: { select: { id: true, name: true, email: true, phone: true } },
@@ -1026,13 +1116,13 @@ export const getLoanTermsService = async (
     const provider = options.loanProviderId
       ? await prisma.loanProvider.findUnique({ where: { id: options.loanProviderId } })
       : await resolveFoodBundlesProvider(restaurantId);
-    providerId = provider?.id ?? "food-bundles";
+    providerId = provider?.id ?? PLATFORM_PROVIDER_FALLBACK_ID;
     providerName = provider?.name ?? "Food Bundles";
     terms = provider?.termsAndConditions || "";
   }
 
   const accepted = await prisma.loanTermsAcceptance.findFirst({
-    where: { restaurantId, providerType: options.providerType, providerId },
+    where: termsAcceptanceWhere(restaurantId, options.providerType, providerId),
   });
 
   const hasActiveSubscription = !!(await prisma.restaurantSubscription.findFirst({
@@ -1363,6 +1453,51 @@ export const payUnlockFeeService = async (
   if (!session.unlockFee) throw new Error("Unlock fee not set");
 
   const method = paymentData.paymentMethod.toUpperCase();
+
+  // ── PREPAID WALLET (CASH) — debit immediately and confirm right away ──
+  if (method === "CASH") {
+    const wallet = await getWalletByRestaurantIdService(restaurantId);
+    if (!wallet.isActive) throw new Error("Wallet is inactive. Please contact support.");
+    if (wallet.balance < session.unlockFee) {
+      throw new Error(
+        `Insufficient wallet balance. Available: ${wallet.balance} ${wallet.currency}, Required: ${session.unlockFee} RWF`,
+      );
+    }
+
+    const txRef = `UNLOCK_WALLET_${sessionId.slice(0, 8)}_${Date.now()}`;
+
+    await debitWalletService({
+      walletId: wallet.id,
+      amount: session.unlockFee,
+      description: `Unlock fee for loan session ${session.rrn}`,
+      reference: txRef,
+      restaurantId,
+    });
+
+    const payment = await prisma.unlockFeePayment.create({
+      data: {
+        sessionId,
+        amount: session.unlockFee,
+        paymentMethod: method,
+        txRef,
+        flwRef: `WALLET_${Date.now()}`,
+        flwStatus: "successful",
+        status: PaymentStatus.COMPLETED,
+        confirmedAt: new Date(),
+      },
+    });
+
+    const confirmed = await confirmUnlockFeePaymentService(payment.id, sessionId);
+
+    return {
+      success: true,
+      status: "completed",
+      message: "Unlock fee paid from your prepaid wallet. Loan is now active.",
+      data: confirmed,
+      requiresRedirect: false,
+    };
+  }
+
   if (method === "MOBILE_MONEY" && !paymentData.phoneNumber) {
     throw new Error("Phone number is required for mobile money payments");
   }
@@ -1679,8 +1814,19 @@ export const confirmUnlockFeePaymentService = async (
   // Idempotent: the payment (and loan) may already have been confirmed by a
   // webhook or a previous verify call. Never throw — return the current state so
   // both the webhook and manual verification can safely race.
+  // Re-fetch the session fresh so we never return stale data (e.g. when the
+  // payment record was created as COMPLETED in the same request before the
+  // session update ran inside the transaction).
   if (payment.status === PaymentStatus.COMPLETED) {
-    return { payment, session: payment.session };
+    const freshSession = await prisma.loanSession.findUnique({
+      where: { id: sessionId },
+      include: { restaurant: { select: { id: true, name: true, phone: true } } },
+    });
+    // If the session is still not ACTIVE, the transaction hasn't run yet for this
+    // payment — fall through so the $transaction below activates it now.
+    if (freshSession?.status === LoanSessionStatus.ACTIVE) {
+      return { payment, session: freshSession };
+    }
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -1794,9 +1940,9 @@ export const getAllLoanSessionsService = async (filters?: {
     prisma.loanSession.findMany({
       where,
       include: {
-        restaurant: { select: { id: true, name: true, email: true } },
+        restaurant: { select: { id: true, name: true, phone: true } },
         approver: { select: { id: true, username: true } },
-        fundingTrader: { select: { id: true, username: true, email: true } },
+        fundingTrader: { select: { id: true, username: true, phone: true } },
         card: {
           select: {
             id: true,
@@ -1843,9 +1989,9 @@ export const getLoanSessionByIdService = async (sessionId: string) => {
   const session = await prisma.loanSession.findUnique({
     where: { id: sessionId },
     include: {
-      restaurant: { select: { id: true, name: true, email: true } },
+      restaurant: { select: { id: true, name: true, phone: true } },
       approver: { select: { id: true, username: true } },
-      fundingTrader: { select: { id: true, username: true, email: true } },
+      fundingTrader: { select: { id: true, username: true, phone: true } },
       card: {
         select: {
           id: true,
@@ -1906,7 +2052,11 @@ export const createAuthorizationService = async (
       where: { id: sessionId },
       data: {
         amountUsed: newAmountUsed,
-        outstandingAmount: newAmountUsed - session.amountRepaid,
+        outstandingAmount: computeOutstandingAmount({
+          amountUsed: newAmountUsed,
+          amountTransferredToWallet: session.amountTransferredToWallet,
+          amountRepaid: session.amountRepaid,
+        }),
         status: newStatus,
       },
     });
@@ -2069,11 +2219,24 @@ export const processLoanSessionPaymentService = async ({
     }
 
     // Since the voucher is used once, mark the session consumed so the leftover
-    // cannot be re-used in a later checkout/POS transaction.
+    // cannot be re-used in a later checkout/POS transaction. When the leftover went
+    // to the wallet the restaurant received the whole credit, so outstanding must
+    // grow to cover it; with the USELESS policy the leftover was never delivered
+    // and outstanding stays at the amount actually spent on the order.
     await prisma.loanSession
       .update({
         where: { id: session.id },
-        data: { status: LoanSessionStatus.FULLY_USED },
+        data: {
+          status: LoanSessionStatus.FULLY_USED,
+          amountTransferredToWallet:
+            (session.amountTransferredToWallet ?? 0) + transferredToWallet,
+          outstandingAmount: computeOutstandingAmount({
+            amountUsed: nextUsed,
+            amountTransferredToWallet:
+              (session.amountTransferredToWallet ?? 0) + transferredToWallet,
+            amountRepaid: session.amountRepaid,
+          }),
+        },
       })
       .catch(console.error);
   }
@@ -2156,15 +2319,21 @@ export const convertLoanSessionToWalletService = async (
   });
 
   // The voucher is now consumed — it can never be used at checkout again. The
-  // full credit counts as "used" (whether spent on an order or moved to the
-  // prepaid wallet) and the restaurant owes it, so outstanding grows too.
+  // credit moved to the wallet counts as delivered (so the restaurant owes it) but
+  // is NOT an order purchase, so it is recorded in amountTransferredToWallet and
+  // amountUsed is left alone.
+  const nextTransferred = (session.amountTransferredToWallet ?? 0) + remainingCredit;
   await prisma.loanSession
     .update({
       where: { id: session.id },
       data: {
         status: LoanSessionStatus.FULLY_USED,
-        amountUsed: session.approvedAmount ?? 0,
-        outstandingAmount: (session.approvedAmount ?? 0) - session.amountRepaid,
+        amountTransferredToWallet: nextTransferred,
+        outstandingAmount: computeOutstandingAmount({
+          amountUsed: session.amountUsed,
+          amountTransferredToWallet: nextTransferred,
+          amountRepaid: session.amountRepaid,
+        }),
       },
     })
     .catch(console.error);
@@ -2250,8 +2419,9 @@ async function initiateFlutterwaveLoanRepayment(params: {
 
 /**
  * Apply a confirmed repayment amount to a loan session (idempotent per payment):
- * increment amountRepaid, recompute outstanding = amountUsed - amountRepaid,
- * and settle the session (SETTLED) once zero outstanding remains.
+ * increment amountRepaid, recompute outstanding from what was delivered
+ * (spent + moved to wallet) minus repayments, and settle the session (SETTLED)
+ * once zero outstanding remains.
  */
 async function settleLoanRepayment(
   tx: any,
@@ -2261,7 +2431,11 @@ async function settleLoanRepayment(
   const session = await tx.loanSession.findUnique({ where: { id: sessionId } });
   if (!session) return;
   const newRepaid = (session.amountRepaid ?? 0) + amount;
-  const newOutstanding = Math.max(0, (session.amountUsed ?? 0) - newRepaid);
+  const newOutstanding = computeOutstandingAmount({
+    amountUsed: session.amountUsed,
+    amountTransferredToWallet: session.amountTransferredToWallet,
+    amountRepaid: newRepaid,
+  });
   await tx.loanSession.update({
     where: { id: sessionId },
     data: {
@@ -2325,7 +2499,11 @@ export const confirmLoanRepaymentService = async (
   if (!payment) throw new Error("Repayment record not found");
 
   if (payment.status === PaymentStatus.COMPLETED) {
-    return { repayment: payment, session: payment.session };
+    const freshSession = await prisma.loanSession.findUnique({
+      where: { id: sessionId },
+      include: { restaurant: { select: { id: true, name: true, phone: true } } },
+    });
+    return { repayment: payment, session: freshSession ?? payment.session };
   }
 
   const result = await prisma.$transaction(async (tx: any) => {
@@ -2510,6 +2688,7 @@ export const repayLoanSessionService = async (
     paymentMethod: string;
     paymentReference?: string;
     phoneNumber?: string;
+    amount?: number;
   },
 ) => {
   const session = await prisma.loanSession.findUnique({
@@ -2541,7 +2720,9 @@ export const repayLoanSessionService = async (
     throw new Error(`Unsupported payment method: ${method}`);
   }
 
-  const amount = session.outstandingAmount;
+  // Cap at outstanding — never charge more than what is owed.
+  const requested = paymentData.amount && paymentData.amount > 0 ? paymentData.amount : session.outstandingAmount;
+  const amount = Math.min(requested, session.outstandingAmount);
   const txRef = `LR_${sessionId.slice(0, 8)}_${Date.now()}_${Math.floor(
     Math.random() * 1000,
   )}`;
@@ -2595,7 +2776,9 @@ export const repayLoanSessionService = async (
       success: true,
       status: "completed",
       payment,
-      message: "Voucher repayment completed using your prepaid wallet",
+      message: amount < session.outstandingAmount
+        ? `Partial payment of ${amount.toLocaleString()} RWF applied. Remaining: ${(session.outstandingAmount - amount).toLocaleString()} RWF`
+        : "Voucher repayment completed using your prepaid wallet",
       walletDetails: {
         previousBalance: walletDebitResult.transaction.previousBalance,
         newBalance: walletDebitResult.newBalance,
