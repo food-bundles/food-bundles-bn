@@ -207,7 +207,9 @@ export const getRestaurantVouchers = async (req: Request, res: Response) => {
       (userRole === "RESTAURANT" && restaurantId === userId) ||
       (userRole === "AFFILIATOR" &&
         restaurantId === (req as any).user.restaurantId) ||
-      userRole === "ADMIN";
+      userRole === "ADMIN" ||
+      // LOGISTICS can place orders on behalf of restaurants and pick their voucher
+      userRole === "LOGISTICS";
 
     if (!isAuthorized) {
       return res.status(403).json({

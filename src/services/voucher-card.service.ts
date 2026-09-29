@@ -2132,6 +2132,38 @@ export const validateLoanSessionForCheckoutService = async (
   };
 };
 
+// Loan sessions a restaurant can currently pay an order with — same rules as
+// validateLoanSessionForCheckoutService (active/partially used, unlocked, credit left).
+export const getUsableLoanSessionsForRestaurantService = async (
+  restaurantId: string,
+) => {
+  const sessions = await prisma.loanSession.findMany({
+    where: {
+      restaurantId,
+      status: { in: [LoanSessionStatus.ACTIVE, LoanSessionStatus.PARTIALLY_USED] },
+      unlockStatus: UnlockStatus.UNLOCKED,
+    },
+    select: {
+      id: true,
+      rrn: true,
+      approvedAmount: true,
+      amountUsed: true,
+      outstandingAmount: true,
+      status: true,
+      dueDate: true,
+      loanProviderType: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return sessions
+    .map((s) => ({
+      ...s,
+      availableCredit: Math.max(0, (s.approvedAmount ?? 0) - s.amountUsed),
+    }))
+    .filter((s) => s.availableCredit > 0);
+};
+
 // Deduct credit from an active loan session toward an order at checkout.
 // Strict rule: the loan must cover the ENTIRE order — if the order total
 // exceeds the loan's usable credit the payment is rejected (no split payment).
