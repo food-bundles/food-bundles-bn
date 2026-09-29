@@ -224,12 +224,15 @@ export class UserController {
 
   static getAllRestaurants = async (req: Request, res: Response) => {
     try {
-      const { page, limit } = req.query;
+      const { page, limit, search } = req.query;
       const paginationQuery = PaginationService.validatePaginationParams(
         page as string,
         limit as string,
       );
-      const restaurants = await getAllRestaurantsService(paginationQuery);
+      const restaurants = await getAllRestaurantsService(
+        paginationQuery,
+        typeof search === "string" ? search : undefined,
+      );
 
       res.status(200).json({
         success: true,

@@ -116,6 +116,7 @@ export interface CreateAdminOrderData {
   }[];
   paymentMethod: string;
   voucherCode?: string;
+  loanSessionRrn?: string;
   promoCode?: string;
   phoneNumber?: string;
   notes?: string;
@@ -1244,6 +1245,7 @@ export const createAdminOrderService = async (data: CreateAdminOrderData) => {
     products,
     paymentMethod,
     voucherCode,
+    loanSessionRrn,
     phoneNumber,
     notes,
     deliveryDate,
@@ -1352,6 +1354,7 @@ export const createAdminOrderService = async (data: CreateAdminOrderData) => {
     paymentMethod,
     phoneNumber: phoneNumber || restaurant.phone || undefined,
     voucherCode,
+    loanSessionRrn,
     processDirectly: true,
   });
 
