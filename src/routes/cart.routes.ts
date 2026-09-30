@@ -9,7 +9,7 @@ import {
   getAllCarts,
   getCartSummary,
 } from "../controllers/cart.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 
 const cartRoutes = Router();
 
@@ -98,7 +98,7 @@ cartRoutes.delete(
  * GET /carts
  * Access: Admin only
  */
-cartRoutes.get("/", isAuthenticated, checkPermission("ADMIN"), getAllCarts);
+cartRoutes.get("/", isAuthenticated, allow("orders"), getAllCarts);
 
 /**
  * Get cart by ID
@@ -108,7 +108,7 @@ cartRoutes.get("/", isAuthenticated, checkPermission("ADMIN"), getAllCarts);
 cartRoutes.get(
   "/:cartId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("orders"),
   getCartById,
 );
 

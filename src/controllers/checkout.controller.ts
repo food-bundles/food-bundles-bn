@@ -21,6 +21,7 @@ import { getPaymentMethodByIdService } from "../services/payment-method.service"
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 import { AuthenticatorService } from "../services/authenticator.service";
 
+import { isDashboardRole } from "../config/permissions";
 /**
  * Enhanced controller to create a new order from cart
  * POST /checkouts
@@ -606,7 +607,7 @@ export const getCheckoutStatus = async (req: Request, res: Response) => {
     const order = await getOrderByIdService(orderId);
 
     // Scope to the order owner, unless an admin/affiliator of the restaurant.
-    if (userRole !== "ADMIN" && order.restaurantId !== userId) {
+    if (!isDashboardRole(userRole) && order.restaurantId !== userId) {
       let restaurantId = userId;
       if (userRole === "AFFILIATOR") {
         const restaurant = await getRestaurantFromAffiliatorService(userId);
@@ -842,7 +843,7 @@ export const createAdminOrder = async (req: Request, res: Response) => {
     const userRole = (req as any).user.role;
 
     // Check if user is ADMIN or LOGISTICS
-    if (!["ADMIN", "LOGISTICS"].includes(userRole)) {
+    if (!(isDashboardRole(userRole) || userRole === "LOGISTICS")) {
       return res.status(403).json({
         message:
           "Access denied. Only ADMIN or LOGISTICS can create orders on behalf of restaurants",

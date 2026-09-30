@@ -7,7 +7,7 @@ import {
   updateAffiliator,
   deleteAffiliator,
 } from "../controllers/affiliator.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 
 const affiliatorRoutes = Router();
 
@@ -29,7 +29,7 @@ affiliatorRoutes.post(
 affiliatorRoutes.get(
   "/my-affiliators",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
+  allow("affiliators", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   getMyAffiliators
 );
 
@@ -40,7 +40,7 @@ affiliatorRoutes.get(
 affiliatorRoutes.get(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("affiliators"),
   getAllAffiliators
 );
 
@@ -51,7 +51,7 @@ affiliatorRoutes.get(
 affiliatorRoutes.get(
   "/:id",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
+  allow("affiliators", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   getAffiliatorById
 );
 
@@ -62,7 +62,7 @@ affiliatorRoutes.get(
 affiliatorRoutes.patch(
   "/:id",
   isAuthenticated,
-  checkPermission("RESTAURANT", "HOTEL", "ADMIN"),
+  allow("affiliators", "RESTAURANT", "HOTEL"),
   updateAffiliator
 );
 
@@ -73,7 +73,7 @@ affiliatorRoutes.patch(
 affiliatorRoutes.delete(
   "/:id",
   isAuthenticated,
-  checkPermission("RESTAURANT", "HOTEL", "ADMIN"),
+  allow("affiliators", "RESTAURANT", "HOTEL"),
   deleteAffiliator
 );
 

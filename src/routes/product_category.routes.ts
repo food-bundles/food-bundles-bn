@@ -8,7 +8,7 @@ import {
   deleteProductCategory,
   updateCategoryStatus,
 } from "../controllers/product_category.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 
 const productCategoryRoutes = Router();
 
@@ -19,7 +19,7 @@ productCategoryRoutes.get("/active", getActiveProductCategories);
 productCategoryRoutes.patch(
   "/bulk-status",
   isAuthenticated,
-  checkPermission("ADMIN", "MARKET_PRICES"),
+  allow(["categories", "markets"]),
   updateCategoryStatus
 );
 
@@ -27,7 +27,7 @@ productCategoryRoutes.patch(
 productCategoryRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN", "MARKET_PRICES"),
+  allow(["categories", "markets"]),
   createProductCategory
 );
 
@@ -35,7 +35,7 @@ productCategoryRoutes.post(
 productCategoryRoutes.get(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN", "MARKET_PRICES", "AGGREGATOR", "LOGISTICS"),
+  allow(["categories", "markets", "products"], "AGGREGATOR", "LOGISTICS"),
   getAllProductCategories
 );
 
@@ -46,7 +46,7 @@ productCategoryRoutes.get("/:categoryId", getProductCategoryById);
 productCategoryRoutes.patch(
   "/:categoryId",
   isAuthenticated,
-  checkPermission("ADMIN", "MARKET_PRICES"),
+  allow(["categories", "markets"]),
   updateProductCategory
 );
 
@@ -54,7 +54,7 @@ productCategoryRoutes.patch(
 productCategoryRoutes.delete(
   "/:categoryId",
   isAuthenticated,
-  checkPermission("ADMIN", "MARKET_PRICES"),
+  allow(["categories", "markets"]),
   deleteProductCategory
 );
 

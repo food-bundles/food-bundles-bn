@@ -24,6 +24,7 @@ import { getRestaurantFromAffiliatorService } from "../services/affiliator.servi
 import { OTPService } from "../services/otp.service";
 import { getPaymentMethodByIdService } from "../services/payment-method.service";
 
+import { isDashboardRole } from "../config/permissions";
 /**
  * Create wallet for restaurant
  * POST /wallets
@@ -304,7 +305,7 @@ export const getWalletTransactionById = async (req: Request, res: Response) => {
     // Check if user owns this transaction or is admin
     if (
       transaction.wallet.restaurantId !== restaurantId &&
-      (req as any).user.role !== "ADMIN"
+      !isDashboardRole((req as any).user.role)
     ) {
       return res.status(403).json({
         message: "Unauthorized access to transaction",

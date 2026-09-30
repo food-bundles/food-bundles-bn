@@ -20,7 +20,7 @@ import {
   getSubscriptionHistory,
   adminCreateRestaurantSubscription,
 } from "../controllers/subscription.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 import { handleSubscriptionWebhook } from "../controllers/subscription.webhook";
 import {
   requestLoanAccess,
@@ -54,7 +54,7 @@ const subscriptionRoutes = Router();
 subscriptionRoutes.post(
   "/plans",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   createSubscriptionPlan
 );
 
@@ -80,7 +80,7 @@ subscriptionRoutes.get("/plans/:planId", getSubscriptionPlanById);
 subscriptionRoutes.patch(
   "/plans/:planId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   updateSubscriptionPlan
 );
 
@@ -92,7 +92,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.delete(
   "/plans/:planId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   deleteSubscriptionPlan
 );
 
@@ -119,7 +119,7 @@ subscriptionRoutes.post(
 subscriptionRoutes.get(
   "/my-subscriptions",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
+  allow("subscriptions", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   getMyCurrentSubscription
 );
 
@@ -137,7 +137,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.post(
   "/loan/providers",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   createLoanProvider
 );
 
@@ -155,7 +155,7 @@ subscriptionRoutes.get("/loan/providers", isAuthenticated, getAllLoanProviders);
 subscriptionRoutes.patch(
   "/loan/providers/:providerId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   updateLoanProviderStatus
 );
 
@@ -167,7 +167,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.get(
   "/loan/traders",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   getAllLoanTraders
 );
 
@@ -179,7 +179,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.patch(
   "/loan/traders/:traderId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   updateTraderRequiresSubscription
 );
 
@@ -191,7 +191,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.get(
   "/loan/access-providers",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   getLoanAccessProviders
 );
 
@@ -203,7 +203,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.patch(
   "/loan/traders/:traderId/unlock-fee",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   updateTraderUnlockFee
 );
 
@@ -215,7 +215,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.patch(
   "/loan/traders/:traderId/leftover-policy",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   updateTraderLeftoverPolicy
 );
 
@@ -239,7 +239,7 @@ subscriptionRoutes.post(
 subscriptionRoutes.get(
   "/loan/my-subscriptions",
   isAuthenticated,
-  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR", "ADMIN"),
+  allow(["subscriptions", "vouchers"], "RESTAURANT", "HOTEL", "AFFILIATOR"),
   getMyLoanAccess
 );
 
@@ -251,7 +251,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.get(
   "/loan",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   getAllLoanAccess
 );
 
@@ -263,7 +263,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.patch(
   "/loan/:subscriptionId/approve",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   approveLoanAccess
 );
 
@@ -275,7 +275,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.patch(
   "/loan/:subscriptionId/reject",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   rejectLoanAccess
 );
 
@@ -287,7 +287,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.patch(
   "/loan/:subscriptionId/disable",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   disableLoanAccess
 );
 
@@ -299,7 +299,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.patch(
   "/loan/:subscriptionId/enable",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow(["subscriptions", "vouchers"]),
   enableLoanAccess
 );
 
@@ -403,7 +403,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.post(
   "/admin/create",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   adminCreateRestaurantSubscription
 );
 
@@ -415,7 +415,7 @@ subscriptionRoutes.post(
 subscriptionRoutes.post(
   "/check-expired",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   checkExpiredSubscriptions
 );
 
@@ -427,7 +427,7 @@ subscriptionRoutes.post(
 subscriptionRoutes.get(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   getAllSubscriptions
 );
 

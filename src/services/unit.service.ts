@@ -1,5 +1,6 @@
 import prisma from "../prisma";
 
+import { isDashboardRole } from "../config/permissions";
 export interface ProductUnitData {
   tableTronicUnitId?: number;
   name: string;
@@ -15,8 +16,8 @@ export const createProductUnitService = async (unitData: ProductUnitData) => {
     where: { id: unitData.createdBy },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can create product units");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can create product units");
   }
 
   // Check if unit name already exists (case insensitive)
@@ -155,8 +156,8 @@ export const updateProductUnitService = async (
     where: { id: adminId },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can update product units");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can update product units");
   }
 
   // Check name uniqueness if name is being updated
@@ -258,8 +259,8 @@ export const updateUnitStatusService = async (
     where: { id: adminId },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can update product units");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can update product units");
   }
 
   // Update multiple units

@@ -23,6 +23,7 @@ export interface ICreateAdminData extends Partial<UserLocationData> {
   phone?: string;
   password: string;
   role: Role;
+  adminRoleId?: string | null;
 }
 
 export interface IUpdateFarmerData extends Partial<UserLocationData> {
@@ -47,6 +48,7 @@ export interface IUpdateAdminData extends Partial<UserLocationData> {
   email?: string;
   password?: string;
   role?: Role;
+  adminRoleId?: string | null;
 }
 
 export interface IPaginationQuery {

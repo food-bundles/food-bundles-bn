@@ -8,7 +8,7 @@ import {
   deletePaymentMethod,
   updateMethodStatus,
 } from "../controllers/payment-method.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 
 const paymentMethodRoutes = Router();
 
@@ -19,7 +19,7 @@ paymentMethodRoutes.get("/active", getActivePaymentMethods);
 paymentMethodRoutes.patch(
   "/bulk-status",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("payment_methods"),
   updateMethodStatus
 );
 
@@ -27,7 +27,7 @@ paymentMethodRoutes.patch(
 paymentMethodRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("payment_methods"),
   createPaymentMethod
 );
 
@@ -35,7 +35,7 @@ paymentMethodRoutes.post(
 paymentMethodRoutes.get(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN", "AGGREGATOR", "LOGISTICS"),
+  allow(["payment_methods", "orders"], "AGGREGATOR", "LOGISTICS"),
   getAllPaymentMethods
 );
 
@@ -46,7 +46,7 @@ paymentMethodRoutes.get("/:methodId", getPaymentMethodById);
 paymentMethodRoutes.patch(
   "/:methodId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("payment_methods"),
   updatePaymentMethod
 );
 
@@ -54,7 +54,7 @@ paymentMethodRoutes.patch(
 paymentMethodRoutes.delete(
   "/:methodId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("payment_methods"),
   deletePaymentMethod
 );
 

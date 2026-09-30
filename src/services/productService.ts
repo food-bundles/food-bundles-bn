@@ -2,6 +2,7 @@ import prisma from "../prisma";
 import { createNotificationService } from "./notification.services";
 import { getProductUnitByIdService } from "./unit.service";
 
+import { isDashboardRole } from "../config/permissions";
 export interface ProductData {
   tableTronicProductId?: number | null;
   unitId?: string | null;
@@ -32,8 +33,8 @@ export const createProductService = async (productData: ProductData) => {
     where: { id: productData.createdBy },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can create products");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can create products");
   }
 
   // Check if SKU already exists
@@ -213,8 +214,8 @@ export const updateProductService = async (
 
   console.log("admin:", admin);
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can update products");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can update products");
   }
 
   // Check SKU uniqueness if SKU is being updated
@@ -367,8 +368,8 @@ export const createProductFromSubmissionService = async ({
     where: { id: productData.createdBy },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can create products");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can create products");
   }
 
   // Check if SKU already exists

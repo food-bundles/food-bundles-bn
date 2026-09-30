@@ -10,7 +10,7 @@ import {
   deleteNotification,
   getUnreadCount,
 } from "../controllers/notification.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 
 const notificationRoutes = Router();
 
@@ -31,7 +31,7 @@ notificationRoutes.patch("/mark-all-read", isAuthenticated, markAllAsRead);
 notificationRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("sms_recipients"),
   createNotification
 );
 
@@ -39,7 +39,7 @@ notificationRoutes.post(
 notificationRoutes.get(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("sms_recipients"),
   getAllNotifications
 );
 
@@ -57,14 +57,14 @@ notificationRoutes.patch("/:notificationId/read", isAuthenticated, markAsRead);
 notificationRoutes.delete(
   "/:notificationId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("sms_recipients"),
   deleteNotification
 );
 
 notificationRoutes.post(
   "/price-update",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   sendPriceUpdateNotifications
 );
 

@@ -742,6 +742,7 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
     phone,
     password,
     role,
+    adminRoleId,
     location,
     province,
     district,
@@ -788,6 +789,7 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
         phone: phone || null,
         password: hashedPassword,
         role,
+        adminRoleId: adminRoleId || null,
         location,
         province,
         district,
@@ -855,6 +857,7 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
       cell: true,
       village: true,
       createdAt: true,
+      adminRole: { select: { id: true, name: true } },
     },
     orderBy: {
       createdAt: "desc",
@@ -881,6 +884,7 @@ export const getAdminByIdService = async (id: string) => {
       username: true,
       email: true,
       role: true,
+      adminRole: { select: { id: true, name: true } },
       phone: true,
       location: true,
       province: true,
@@ -1255,7 +1259,7 @@ export const requestPasswordResetService = async (email: string) => {
     userName = user.phone || "Farmer";
   } else if (user.userType === "RESTAURANT") {
     userName = (user as any).name || "Restaurant Owner";
-  } else if (user.userType === "ADMIN") {
+  } else if (user.userType === "ADMIN" || user.userType === "STAFF" || user.userType === "MARKET_PRICES" || user.userType === "SUPERUSER") {
     userName = (user as any).username || "Admin";
   }
 
@@ -1306,7 +1310,7 @@ export const resetPasswordService = async (
         where: { id: userId },
         data: { password: hashedPassword },
       });
-    } else if (userType === "ADMIN" || userType === "TRADER" || userType === "AGGREGATOR" || userType === "LOGISTICS" || userType === "FOOD_BUNDLE" || userType === "SUPERUSER") {
+    } else if (userType === "ADMIN" || userType === "TRADER" || userType === "AGGREGATOR" || userType === "LOGISTICS" || userType === "FOOD_BUNDLE" || userType === "SUPERUSER" || userType === "MARKET_PRICES" || userType === "STAFF") {
       await prisma.admin.update({
         where: { id: userId },
         data: { password: hashedPassword },

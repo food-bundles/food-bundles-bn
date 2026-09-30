@@ -19,7 +19,7 @@ import {
   payViaPaymentLink,
   generateEBMInvoice,
 } from "../controllers/order.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 import { paymentLinkRateLimiter } from "../middleware/rateLimiters";
 
 const orderRoutes = Router();
@@ -43,7 +43,7 @@ orderRoutes.get("/statistics", isAuthenticated, getOrderStatistics);
 orderRoutes.post(
   "/test-websocket",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("orders"),
   testWebSocket
 );
 
@@ -78,7 +78,7 @@ orderRoutes.post("/direct", isAuthenticated, createDirectOrder);
 orderRoutes.get(
   "/my-orders",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
+  allow("orders", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   getMyOrders
 );
 
@@ -148,7 +148,7 @@ orderRoutes.post(
 orderRoutes.patch(
   "/:orderId/edit",
   isAuthenticated,
-  checkPermission("ADMIN", "RESTAURANT", "AFFILIATOR"),
+  allow("orders", "RESTAURANT", "AFFILIATOR"),
   editOrder
 );
 
@@ -202,7 +202,7 @@ orderRoutes.get("/:orderId", isAuthenticated, getOrderById);
  * GET /orders
  * Access: Admin only
  */
-orderRoutes.get("/", isAuthenticated, checkPermission("ADMIN"), getAllOrders);
+orderRoutes.get("/", isAuthenticated, allow("orders"), getAllOrders);
 
 /**
  * Delete order permanently (cancelled orders only)
@@ -212,7 +212,7 @@ orderRoutes.get("/", isAuthenticated, checkPermission("ADMIN"), getAllOrders);
 orderRoutes.delete(
   "/:orderId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("orders"),
   deleteOrder
 );
 

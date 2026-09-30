@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage, Server } from "http";
 
+import { isDashboardRole } from "../config/permissions";
 interface WebSocketClient {
   ws: WebSocket;
   userId?: string;
@@ -264,7 +265,7 @@ class WebSocketManager {
 
       // Subscribe to all loans (Admin only)
       case "SUBSCRIBE_ALL_LOANS":
-        if (client.role === "ADMIN") {
+        if (isDashboardRole(client.role)) {
           client.subscriptions.add("loans:all");
 
           this.sendMessage(client.ws, {

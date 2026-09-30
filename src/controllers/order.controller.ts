@@ -22,6 +22,7 @@ import prisma from "../prisma";
 import { wsManager } from "../index";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 
+import { isDashboardRole } from "../config/permissions";
 /**
  * Controller to create order from cart
  * POST /orders/from-cart
@@ -242,7 +243,7 @@ export const getMyOrders = async (req: Request, res: Response) => {
       restaurantId = user.id;
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
-    } else if (user.role === "ADMIN") {
+    } else if (isDashboardRole(user.role)) {
       restaurantId =
         (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
@@ -356,7 +357,7 @@ export const updateOrder = async (req: Request, res: Response) => {
     }
 
     // Only admins can update payment-related fields
-    if ((paymentStatus || paymentReference) && userRole !== "ADMIN") {
+    if ((paymentStatus || paymentReference) && !isDashboardRole(userRole)) {
       return res.status(403).json({
         message: "Only admins can update payment information",
       });
@@ -702,7 +703,7 @@ export const editOrder = async (req: Request, res: Response) => {
     const userRole = user.role;
 
     // Only owners (restaurant/affiliator) or admins can edit orders
-    if (userRole !== "ADMIN" && userRole !== "RESTAURANT" && userRole !== "AFFILIATOR") {
+    if (!isDashboardRole(userRole) && userRole !== "RESTAURANT" && userRole !== "AFFILIATOR") {
       return res.status(403).json({
         message: "You do not have permission to edit orders",
       });

@@ -8,7 +8,7 @@ import {
   deleteProductUnit,
   updateUnitStatus,
 } from "../controllers/unit.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 
 const unitRoutes = Router();
 
@@ -19,7 +19,7 @@ unitRoutes.get("/active", getActiveProductUnits);
 unitRoutes.patch(
   "/bulk-status",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("units"),
   updateUnitStatus
 );
 
@@ -27,7 +27,7 @@ unitRoutes.patch(
 unitRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("units"),
   createProductUnit
 );
 
@@ -35,7 +35,7 @@ unitRoutes.post(
 unitRoutes.get(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN", "AGGREGATOR", "LOGISTICS"),
+  allow(["units", "products"], "AGGREGATOR", "LOGISTICS"),
   getAllProductUnits
 );
 
@@ -46,7 +46,7 @@ unitRoutes.get("/:unitId", getProductUnitById);
 unitRoutes.patch(
   "/:unitId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("units"),
   updateProductUnit
 );
 
@@ -54,7 +54,7 @@ unitRoutes.patch(
 unitRoutes.delete(
   "/:unitId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("units"),
   deleteProductUnit
 );
 

@@ -1,5 +1,6 @@
 import prisma from "../prisma";
 
+import { isDashboardRole } from "../config/permissions";
 export interface PaymentMethodData {
   tableTronicPaymentMethodId?: number;
   name: string;
@@ -33,8 +34,8 @@ export const createPaymentMethodService = async (
     where: { id: methodData.createdBy },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can create payment methods");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can create payment methods");
   }
 
   // Check if method name already exists (case insensitive)
@@ -173,8 +174,8 @@ export const updatePaymentMethodService = async (
     where: { id: adminId },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can update payment methods");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can update payment methods");
   }
 
   // Check name uniqueness if name is being updated
@@ -292,8 +293,8 @@ export const updateMethodStatusService = async (
     where: { id: adminId },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can update payment methods");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can update payment methods");
   }
 
   // Update multiple methods

@@ -5,7 +5,7 @@ import {
   getSalesSummary,
   getSalesAnalytics,
 } from "../controllers/sales.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 
 const salesRoutes = Router();
 
@@ -13,7 +13,7 @@ const salesRoutes = Router();
 salesRoutes.get(
   "/revenue",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("sales_reports"),
   getRevenue
 );
 
@@ -21,7 +21,7 @@ salesRoutes.get(
 salesRoutes.get(
   "/expense",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("sales_reports"),
   getExpense
 );
 
@@ -29,7 +29,7 @@ salesRoutes.get(
 salesRoutes.get(
   "/summary",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("sales_reports"),
   getSalesSummary
 );
 
@@ -37,7 +37,7 @@ salesRoutes.get(
 salesRoutes.get(
   "/analytics",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("sales_reports"),
   getSalesAnalytics
 );
 

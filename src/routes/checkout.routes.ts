@@ -9,7 +9,7 @@ import {
   requestAdminOrderOTP,
   getAdminOrderLoanSessions,
 } from "../controllers/checkout.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 
 const checkoutRoutes = Router();
 
@@ -70,7 +70,7 @@ checkoutRoutes.post(
 checkoutRoutes.get(
   "/admin-order/loan-sessions/:restaurantId",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS"),
+  allow("orders", "LOGISTICS"),
   getAdminOrderLoanSessions
 );
 
@@ -82,7 +82,7 @@ checkoutRoutes.get(
 checkoutRoutes.post(
   "/admin-order/request-otp",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS"),
+  allow("orders", "LOGISTICS"),
   requestAdminOrderOTP
 );
 
@@ -94,7 +94,7 @@ checkoutRoutes.post(
 checkoutRoutes.post(
   "/admin-order",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS"),
+  allow("orders", "LOGISTICS"),
   createAdminOrder
 );
 

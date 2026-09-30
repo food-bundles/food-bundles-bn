@@ -13,6 +13,7 @@ import WebSocketManager from "./utils/websocket_manager";
 import { DeliveryService } from "./services/delivery.service";
 import { scheduleVoucherReminders } from "./jobs/voucher-reminder.job";
 import { scheduleWeeklyPriceUpdate } from "./services/newsletter.service";
+import { ensureSystemRoles } from "./services/access.service";
 
 interface CustomIncomingMessage extends IncomingMessage {
   rawBody: Buffer;
@@ -111,6 +112,11 @@ httpServer.listen(PORT, () => {
   // Initialize cron jobs
   scheduleVoucherReminders();
   scheduleWeeklyPriceUpdate();
+
+  // Create/sync system roles and give existing admins their default role
+  ensureSystemRoles().catch((error) =>
+    console.error("[roles] Failed to sync system roles:", error),
+  );
 });
 
 // Graceful shutdown

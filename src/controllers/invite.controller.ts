@@ -4,29 +4,38 @@ import { sendInvitationEmail, sendAdminUserCreatedEmail } from "../utils/emailTe
 import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "../services/notification.services";
 import { Role } from "@prisma/client";
+import { AccessError, resolveRoleAssignment } from "../services/access.service";
 import prisma from "../prisma";
 
 export const inviteController = {
   // Create invitation
   async createInvite(req: Request, res: Response) {
     try {
-      const { email, role } = req.body;
+      const { email } = req.body;
 
       // Validate required fields
-      if (!email || !role) {
+      if (!email || (!req.body.role && !req.body.adminRoleId)) {
         return res.status(400).json({
           success: false,
           message: "Email and role are required",
         });
       }
 
-      // Validate role
-      if (!Object.values(Role).includes(role)) {
-        return res.status(400).json({
+      // Validates the role and blocks privilege escalation (only super admins
+      // can invite super admins or give a dashboard role)
+      let assignment;
+      try {
+        assignment = await resolveRoleAssignment((req as any).user, {
+          role: req.body.role,
+          adminRoleId: req.body.adminRoleId,
+        });
+      } catch (error: any) {
+        return res.status(error instanceof AccessError ? error.status : 400).json({
           success: false,
-          message: "Invalid role specified",
+          message: error.message,
         });
       }
+      const { role, adminRoleId } = assignment;
 
       // Check env vars BEFORE creating invitation
       if (!process.env.GOOGLE_EMAIL || !process.env.GOOGLE_PASSWORD) {
@@ -39,6 +48,7 @@ export const inviteController = {
       const result = await inviteServices.createInvite({
         email,
         role,
+        adminRoleId,
       });
 
       // Send invitation email and track result

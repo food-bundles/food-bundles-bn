@@ -35,6 +35,12 @@ import { Role } from "@prisma/client";
 import { generateToken, verifyToken } from "../utils/jwt";
 import prisma from "../prisma";
 import { OTPService } from "../services/otp.service";
+import {
+  AccessError,
+  getEffectivePermissions,
+  resolveRoleAssignment,
+} from "../services/access.service";
+import { isDashboardRole } from "../config/permissions";
 
 export class UserController {
   static createFarmer = async (req: Request, res: Response) => {
@@ -173,7 +179,12 @@ export class UserController {
 
   static createAdmin = async (req: Request, res: Response) => {
     try {
-      const adminData = req.body;
+      // Validates the role and blocks privilege escalation
+      const assignment = await resolveRoleAssignment((req as any).user, {
+        role: req.body.role,
+        adminRoleId: req.body.adminRoleId,
+      });
+      const adminData = { ...req.body, ...assignment };
       const result = await createAdminService(adminData);
       const isAdmin = result.role === Role.ADMIN;
       let sms;
@@ -194,7 +205,7 @@ export class UserController {
         data: result,
       });
     } catch (error: any) {
-      res.status(400).json({
+      res.status(error instanceof AccessError ? error.status : 400).json({
         success: false,
         message: error.message,
       });
@@ -381,8 +392,21 @@ export class UserController {
 
   static updateAdmin = async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
-      const updateData = req.body;
+      const id = req.params.id as string;
+      const actor = (req as any).user;
+      const { role, adminRoleId, ...updateData } = req.body;
+
+      const target = await prisma.admin.findUnique({ where: { id }, select: { role: true } });
+      if (!target) throw new AccessError("Admin not found", 404);
+      if (target.role === Role.SUPERUSER && actor.role !== Role.SUPERUSER) {
+        throw new AccessError("Only a super admin can edit a super admin");
+      }
+
+      // Role changes go through the same escalation checks as creation
+      if (role !== undefined || adminRoleId !== undefined) {
+        if (id === actor.id) throw new AccessError("You cannot change your own role", 400);
+        Object.assign(updateData, await resolveRoleAssignment(actor, { role, adminRoleId }));
+      }
 
       const updatedAdmin = await updateAdminService(id, updateData);
 
@@ -392,7 +416,7 @@ export class UserController {
         data: updatedAdmin,
       });
     } catch (error: any) {
-      res.status(400).json({
+      res.status(error instanceof AccessError ? error.status : 400).json({
         success: false,
         message: error.message,
       });
@@ -435,7 +459,15 @@ export class UserController {
 
   static deleteAdmin = async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
+      const actor = (req as any).user;
+      if (id === actor.id) throw new AccessError("You cannot delete your own account", 400);
+
+      const target = await prisma.admin.findUnique({ where: { id }, select: { role: true } });
+      if (target?.role === Role.SUPERUSER && actor.role !== Role.SUPERUSER) {
+        throw new AccessError("Only a super admin can delete a super admin");
+      }
+
       await deleteAdminService(id);
 
       res.status(200).json({
@@ -443,7 +475,7 @@ export class UserController {
         message: "Admin deleted successfully",
       });
     } catch (error: any) {
-      res.status(400).json({
+      res.status(error instanceof AccessError ? error.status : 400).json({
         success: false,
         message: error.message,
       });
@@ -681,7 +713,10 @@ export class UserController {
       }
 
       if (!user) {
-        user = await prisma.admin.findUnique({ where: { id: payload.id } });
+        user = await prisma.admin.findUnique({
+          where: { id: payload.id },
+          include: { adminRole: { select: { id: true, name: true } } },
+        });
         if (user) userRole = "admin";
       }
 
@@ -689,7 +724,18 @@ export class UserController {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const { password, ...userWithoutPassword } = user;
+      // Never send secrets to the browser
+      const {
+        password,
+        twoFactorSecret,
+        twoFactorBackupCodes,
+        ...userWithoutPassword
+      } = user;
+
+      // Dashboard users get their effective permissions (drives the sidebar)
+      if (isDashboardRole(user.role)) {
+        userWithoutPassword.permissions = await getEffectivePermissions(user);
+      }
 
       return res.json({
         success: true,
