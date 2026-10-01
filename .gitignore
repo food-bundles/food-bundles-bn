@@ -17,3 +17,9 @@ download_fonts.js
 inspect_excel.js
 seed_from_excel.js
 prisma_test
+
+# Runtime/dev logs
+*.log
+server.log
+backend-dev.log
+backend-dev.err.log

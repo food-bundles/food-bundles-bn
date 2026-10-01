@@ -513,13 +513,26 @@ export const acceptTermsService = async (identifier: string) => {
   return updatedRestaurant;
 };
 
-export const getAllRestaurantsService = async (query: IPaginationQuery) => {
+export const getAllRestaurantsService = async (
+  query: IPaginationQuery,
+  search?: string,
+) => {
   const normalizedQuery = PaginationService.validatePaginationParams(
     query.page,
     query.limit,
   );
 
+  const term = search?.trim();
   const options = {
+    where: term
+      ? {
+          OR: [
+            { name: { contains: term, mode: "insensitive" } },
+            { email: { contains: term, mode: "insensitive" } },
+            { phone: { contains: term } },
+          ],
+        }
+      : undefined,
     select: {
       id: true,
       name: true,

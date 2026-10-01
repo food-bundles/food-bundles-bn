@@ -116,6 +116,7 @@ export interface CreateAdminOrderData {
   }[];
   paymentMethod: string;
   voucherCode?: string;
+  loanSessionRrn?: string;
   promoCode?: string;
   phoneNumber?: string;
   notes?: string;
@@ -417,6 +418,9 @@ export const processPaymentService = async (
         }
 
         // Paying with a PAN-based loan session (new voucher card system)
+        // Strict rule: the loan must cover the ENTIRE order total. If the order
+        // is larger than the loan's usable credit, the payment is rejected — no
+        // split payment with the prepaid wallet is allowed.
         if (paymentData.loanSessionRrn) {
           const loanSession = await prisma.loanSession.findFirst({
             where: {
@@ -1241,6 +1245,7 @@ export const createAdminOrderService = async (data: CreateAdminOrderData) => {
     products,
     paymentMethod,
     voucherCode,
+    loanSessionRrn,
     phoneNumber,
     notes,
     deliveryDate,
@@ -1349,6 +1354,7 @@ export const createAdminOrderService = async (data: CreateAdminOrderData) => {
     paymentMethod,
     phoneNumber: phoneNumber || restaurant.phone || undefined,
     voucherCode,
+    loanSessionRrn,
     processDirectly: true,
   });
 

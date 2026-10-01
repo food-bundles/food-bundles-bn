@@ -49,6 +49,47 @@ function getPaypack() {
   return _paypack;
 }
 
+/**
+ * Resolve the authoritative PayPack transaction status.
+ * NOTE: PayPack's `transaction(ref)` (transactions/find) response does NOT
+ * include a `status` field, so it must never be used to decide success.
+ * The status only exists in the events feed (`events({ ref })`).
+ */
+async function getPaypackTransactionStatus(flwRef: string) {
+  try {
+    const res: any = await getPaypack().events({ ref: flwRef });
+    const txs: any[] = res?.data?.transactions;
+    if (Array.isArray(txs) && txs.length) {
+      const applicable = txs
+        .filter((t) => t && t.data && typeof t.data.status === "string")
+        .sort(
+          (a, b) =>
+            new Date(b.created_at || 0).getTime() -
+            new Date(a.created_at || 0).getTime(),
+        );
+      const latest = applicable[0];
+      if (latest?.data) {
+        return {
+          status: latest.data.status,
+          ref: latest.data.ref || flwRef,
+          userRef: latest.data.user_ref,
+          processedAt: latest.data.processed_at,
+        };
+      }
+    }
+  } catch (e: any) {
+    console.log("PayPack events lookup failed:", e.message);
+  }
+  // Fall back to the raw transaction (existence check only — no status here)
+  try {
+    const tx: any = await getPaypack().transaction(flwRef);
+    if (tx?.data?.ref) return { status: tx.data.status, ref: tx.data.ref };
+  } catch (e: any) {
+    console.log("PayPack transaction lookup failed:", e.message);
+  }
+  return { status: undefined, ref: flwRef };
+}
+
 // ============================================
 // TYPES AND INTERFACES
 // ============================================
@@ -3249,7 +3290,13 @@ export const initiateVoucherCreditTopUpService = async (data: {
       if (response?.data) {
         await prisma.voucherCreditTopUp.update({
           where: { id: topUp.id },
-          data: { flwRef: response.data.ref, flwStatus: "pending" },
+          data: {
+            flwRef:
+              response.data.ref ||
+              response.data.transaction_id ||
+              response.data.id,
+            flwStatus: "pending",
+          },
         });
 
         return {
@@ -3550,11 +3597,13 @@ export const verifyVoucherCreditTopUpService = async (topUpId: string) => {
     }
   }
 
-  // PayPack: verify the cashin directly against the PayPack API
+  // PayPack: verify the cashin against the PayPack API
   if (topUp.flwRef) {
     try {
-      const tx = await getPaypack().transaction(topUp.flwRef);
-      const paypackStatus = tx?.data?.status;
+      const {
+        status: paypackStatus,
+        ref: paypackRef,
+      } = await getPaypackTransactionStatus(topUp.flwRef);
 
       if (
         paypackStatus === "successful" ||
@@ -3563,7 +3612,7 @@ export const verifyVoucherCreditTopUpService = async (topUpId: string) => {
       ) {
         await prisma.voucherCreditTopUp.update({
           where: { id: topUp.id },
-          data: { flwStatus: "successful", transactionId: tx.data.ref },
+          data: { flwStatus: "successful", transactionId: paypackRef },
         });
         const confirmed = await confirmVoucherCreditTopUpService(topUp.id);
         return { success: true, verified: true, data: confirmed };

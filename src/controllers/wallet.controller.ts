@@ -601,8 +601,12 @@ export const verifyWalletTopUp = async (req: Request, res: Response) => {
         data: result,
       });
     } else {
+      const errorMessage =
+        (result as any).error ||
+        (result as any).message ||
+        "Payment verification failed";
       res.status(400).json({
-        message: result.error || "Payment verification failed",
+        message: errorMessage,
         data: result,
       });
     }

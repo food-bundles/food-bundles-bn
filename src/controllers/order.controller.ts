@@ -10,11 +10,12 @@ import {
   deleteOrderService,
   getOrderStatisticsService,
   createOrderFromCartService,
-editOrderService,
+  editOrderService,
   sendPaymentLinkService,
   generatePaymentLinkService,
   getOrderByPaymentLinkService,
   payViaPaymentLinkService,
+  generateEBMInvoiceService,
 } from "../services/order.services";
 import { OrderStatus, PaymentStatus } from "@prisma/client";
 import prisma from "../prisma";
@@ -805,6 +806,35 @@ export const sendPaymentLink = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to send payment link",
+    });
+  }
+};
+
+/**
+ * Controller to generate EBM invoice for an order
+ * POST /orders/:orderId/generate-ebm-invoice
+ */
+export const generateEBMInvoice = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const userRole = (req as any).user.role;
+
+    // Only admins can generate EBM invoices
+    if (userRole !== "ADMIN") {
+      return res.status(403).json({
+        message: "Only admins can generate EBM invoices",
+      });
+    }
+
+    const result = await generateEBMInvoiceService(orderId);
+
+    res.status(200).json({
+      message: "EBM invoice generated successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to generate EBM invoice",
     });
   }
 };

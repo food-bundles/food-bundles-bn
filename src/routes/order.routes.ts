@@ -12,11 +12,12 @@ import {
   getOrderByNumber,
   reOrderFromExistingOrder,
   testWebSocket,
-editOrder,
+  editOrder,
   sendPaymentLink,
   generatePaymentLink,
   getOrderByPaymentLink,
   payViaPaymentLink,
+  generateEBMInvoice,
 } from "../controllers/order.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
 import { paymentLinkRateLimiter } from "../middleware/rateLimiters";
@@ -171,6 +172,18 @@ orderRoutes.post(
   "/:orderId/payment-link",
   isAuthenticated,
   generatePaymentLink
+);
+
+/**
+ * Generate EBM invoice for an order
+ * POST /orders/:orderId/generate-ebm-invoice
+ * Access: Admin only
+ */
+orderRoutes.post(
+  "/:orderId/generate-ebm-invoice",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  generateEBMInvoice
 );
 
 /**

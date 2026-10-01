@@ -7,6 +7,8 @@ import { decryptSecretData, encryptSecretData } from "../utils/password";
 import { wsManager } from "../index";
 import { createNotificationService } from "./notification.services";
 import { applyPromoCodeService } from "./promo.service";
+import { sendMessage } from "../utils/sms.utility";
+import { sendOrderPendingPaymentEmail } from "../utils/emailTemplates";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -366,6 +368,38 @@ export const createOrderFromCartService = async (
     },
   });
 
+  // Notify the restaurant that the order was placed and is awaiting payment.
+  // Fire-and-forget: notification failures must never affect order creation.
+  const recipientEmail = order.billingEmail || cart.restaurant.email;
+  const recipientPhone = order.billingPhone || cart.restaurant.phone;
+
+  if (recipientEmail) {
+    sendOrderPendingPaymentEmail({
+      orderNumber: order.orderNumber,
+      restaurantName: cart.restaurant.name,
+      totalAmount,
+      products: cart.cartItems.map((item) => ({
+        name: item.product.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      customer: {
+        name: order.billingName || cart.restaurant.name,
+        email: recipientEmail,
+      },
+      paymentMethod: order.paymentMethod || "CASH",
+    }).catch((err) =>
+      console.error("Failed to send order-pending email:", err),
+    );
+  }
+
+  if (recipientPhone) {
+    sendMessage(
+      `Your FoodBundles order ${order.orderNumber} (${totalAmount.toLocaleString()} RWF) has been received and is awaiting payment.`,
+      recipientPhone,
+    ).catch((err) => console.error("Failed to send order-pending SMS:", err));
+  }
+
   return await getOrderByIdService(order.id);
 };
 
@@ -456,10 +490,10 @@ export const createDirectOrderService = async (data: CreateDirectOrderData) => {
         paymentStatus: "PENDING",
         notes,
         requestedDelivery,
-        billingName,
-        billingEmail,
-        billingPhone,
-        billingAddress,
+        billingName: billingName || restaurant.name,
+        billingEmail: billingEmail || restaurant.email,
+        billingPhone: billingPhone || restaurant.phone,
+        billingAddress: billingAddress || restaurant.location,
         txRef,
         txOrderId,
         currency: "RWF",
@@ -497,6 +531,38 @@ export const createDirectOrderService = async (data: CreateDirectOrderData) => {
 
     return newOrder;
   });
+
+  // Notify the restaurant that the order was placed and is awaiting payment.
+  // Fire-and-forget: notification failures must never affect order creation.
+  const recipientEmail = order.billingEmail || restaurant.email;
+  const recipientPhone = order.billingPhone || restaurant.phone;
+
+  if (recipientEmail) {
+    sendOrderPendingPaymentEmail({
+      orderNumber: order.orderNumber,
+      restaurantName: restaurant.name,
+      totalAmount: order.totalAmount,
+      products: validatedItems.map((item) => ({
+        name: item.product.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      customer: {
+        name: order.billingName || restaurant.name,
+        email: recipientEmail,
+      },
+      paymentMethod: order.paymentMethod || "CASH",
+    }).catch((err) =>
+      console.error("Failed to send order-pending email:", err),
+    );
+  }
+
+  if (recipientPhone) {
+    sendMessage(
+      `Your FoodBundles order ${order.orderNumber} (${order.totalAmount.toLocaleString()} RWF) has been received and is awaiting payment.`,
+      recipientPhone,
+    ).catch((err) => console.error("Failed to send order-pending SMS:", err));
+  }
 
   return await getOrderByIdService(order.id);
 };
@@ -797,6 +863,140 @@ export const cancelOrderService = async (
   }
 
   return { message: "Order cancelled successfully" };
+};
+
+/**
+ * Service to generate EBM invoice for an order
+ */
+export const generateEBMInvoiceService = async (orderId: string) => {
+  try {
+    // Get order with all required details
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            tin: true,
+          },
+        },
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                tableTronicProductId: true,
+                productName: true,
+                unitPrice: true,
+                unit: true,
+              },
+            },
+          },
+        },
+        paymentMethodConfig: {
+          select: {
+            tableTronicPaymentMethodId: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      console.log("EBM Invoice Generation: Order not found");
+      return { success: false, error: "Order not found" };
+    }
+
+    if (!order.restaurant.tin) {
+      console.log("EBM Invoice Generation: Restaurant TIN is required");
+      return { success: false, error: "Restaurant TIN is required" };
+    }
+
+    // Prepare TableTronic API payload
+    const payload = {
+      customerId: null,
+      customerName: order.billingName || order.restaurant.name,
+      customerPhone: order.billingPhone || order.restaurant.phone,
+      customerTin: order.restaurant.tin,
+      date: new Date().toISOString(),
+      discount: 0,
+      invoiceNumber: Date.now(),
+      items: order.orderItems.map((item) => ({
+        name: item.productName,
+        id: item.product?.tableTronicProductId || 0,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      paidAmount: order.totalAmount,
+      payments: [
+        {
+          method: order.paymentMethodConfig?.tableTronicPaymentMethodId || 17,
+          amount: order.totalAmount,
+        },
+      ],
+      purchaseCode: "",
+      status: "completed",
+      terms:
+        "Thank you for your order. Please keep this invoice for your records.",
+    };
+
+    console.log("Sent EBM payload", payload);
+
+    // Make API call to TableTronic
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_TABLE_TRONIC_BASE_URL}/api/sales`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.NEXT_PUBLIC_TABLE_TRONIC_API_KEY!,
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    console.log("Received EBM Response", response);
+
+    if (!response.ok) {
+      console.log(
+        `EBM Invoice Generation: TableTronic API error: ${response.status} ${response.statusText}`,
+      );
+      return {
+        success: false,
+        error: `TableTronic API error: ${response.status} ${response.statusText}`,
+      };
+    }
+
+    const invoiceData = await response.json();
+
+    console.log("Received EBM invoiceData", invoiceData);
+
+    // Update order with EBM reference
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        ebmReference: invoiceData.ebmInvoiceUrl,
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log("Received EBM updatedOrder", updatedOrder);
+
+    return {
+      success: true,
+      ebmInvoiceUrl: invoiceData.ebmInvoiceUrl,
+      invoiceData,
+      order: updatedOrder,
+    };
+  } catch (error: any) {
+    console.error("EBM invoice generation failed:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to generate EBM invoice",
+    };
+  }
 };
 
 /**

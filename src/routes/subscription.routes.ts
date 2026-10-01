@@ -33,6 +33,11 @@ import {
   createLoanProvider,
   getAllLoanProviders,
   updateLoanProviderStatus,
+  getAllLoanTraders,
+  updateTraderRequiresSubscription,
+  getLoanAccessProviders,
+  updateTraderUnlockFee,
+  updateTraderLeftoverPolicy,
 } from "../controllers/subscription.controller";
 
 const subscriptionRoutes = Router();
@@ -152,6 +157,66 @@ subscriptionRoutes.patch(
   isAuthenticated,
   checkPermission("ADMIN"),
   updateLoanProviderStatus
+);
+
+/**
+ * Get all loan traders (Admin)
+ * GET /subscriptions/loan/traders
+ * Access: Admin only
+ */
+subscriptionRoutes.get(
+  "/loan/traders",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getAllLoanTraders
+);
+
+/**
+ * Toggle trader subscription requirement (Admin)
+ * PATCH /subscriptions/loan/traders/:traderId
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/traders/:traderId",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  updateTraderRequiresSubscription
+);
+
+/**
+ * Overview of all configurable loan providers — traders + platform (Admin)
+ * GET /subscriptions/loan/access-providers
+ * Access: Admin only
+ */
+subscriptionRoutes.get(
+  "/loan/access-providers",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  getLoanAccessProviders
+);
+
+/**
+ * Set/clear a trader's loan unlock fee (Admin)
+ * PATCH /subscriptions/loan/traders/:traderId/unlock-fee
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/traders/:traderId/unlock-fee",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  updateTraderUnlockFee
+);
+
+/**
+ * Set a trader-funded loan's leftover policy (Admin)
+ * PATCH /subscriptions/loan/traders/:traderId/leftover-policy
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/traders/:traderId/leftover-policy",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  updateTraderLeftoverPolicy
 );
 
 /**

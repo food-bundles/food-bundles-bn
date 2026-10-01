@@ -11,7 +11,10 @@ import {
   updateOrderService,
 } from "../services/order.services";
 import { validateVoucherForCheckoutService } from "../services/voucher.service";
-import { validateLoanSessionForCheckoutService } from "../services/voucher-card.service";
+import {
+  validateLoanSessionForCheckoutService,
+  getUsableLoanSessionsForRestaurantService,
+} from "../services/voucher-card.service";
 import prisma from "../prisma";
 import { OTPService } from "../services/otp.service";
 import { getPaymentMethodByIdService } from "../services/payment-method.service";
@@ -377,26 +380,12 @@ export const verifyVoucherOTPAndCreateOrder = async (
 
     console.log("paymentResult ", paymentResult);
 
-    if (paymentResult.success) {
+if (paymentResult.success) {
       // Handle voucher payment response
       if ("voucherDetails" in paymentResult) {
         const voucherInfo = paymentResult.voucherDetails;
 
-        if (voucherInfo && paymentResult.requiresAdditionalPayment) {
-          res.status(200).json({
-            message: paymentResult.message,
-            data: {
-              checkout: paymentResult.checkout,
-              transactionId: paymentResult.transactionId,
-              status: paymentResult.status,
-              voucherApplied: true,
-              voucherDetails: voucherInfo,
-              requiresAdditionalPayment: true,
-              additionalPaymentAmount: paymentResult.additionalPaymentAmount,
-              redirectUrl: paymentResult.redirectUrl,
-            },
-          });
-        } else if (voucherInfo) {
+        if (voucherInfo) {
           res.status(200).json({
             message: paymentResult.message,
             data: {
@@ -415,10 +404,15 @@ export const verifyVoucherOTPAndCreateOrder = async (
             },
           });
         }
+      } else {
+        res.status(400).json({
+          message: paymentResult.error || "Payment failed",
+          error: paymentResult.error,
+        });
       }
     } else {
       res.status(400).json({
-        message: paymentResult.error || "Voucher payment failed",
+        message: paymentResult.error || "Payment failed",
         error: paymentResult.error,
       });
     }
@@ -592,6 +586,63 @@ export const verifyPayment = async (req: Request, res: Response) => {
 };
 
 /**
+ * GET /checkouts/:orderId/status
+ * Lightweight payment-tracking endpoint: returns the order's current payment
+ * status so the checkout UI can poll until the payment is confirmed by the
+ * payment provider's webhook (MoMo/PayPack or card/Flutterwave).
+ */
+export const getCheckoutStatus = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const userId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+
+    if (!orderId) {
+      return res
+        .status(400)
+        .json({ message: "Order id is required" });
+    }
+
+    const order = await getOrderByIdService(orderId);
+
+    // Scope to the order owner, unless an admin/affiliator of the restaurant.
+    if (userRole !== "ADMIN" && order.restaurantId !== userId) {
+      let restaurantId = userId;
+      if (userRole === "AFFILIATOR") {
+        const restaurant = await getRestaurantFromAffiliatorService(userId);
+        restaurantId = restaurant.id;
+      }
+      if (order.restaurantId !== restaurantId) {
+        return res
+          .status(403)
+          .json({ message: "You do not have access to this order" });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        paymentStatus: order.paymentStatus,
+        orderStatus: order.status,
+        paymentMethod: order.paymentMethod,
+        totalAmount: order.totalAmount,
+        txRef: order.txRef || order.paymentReference,
+        flwRef: order.flwRef,
+        updatedAt: order.updatedAt,
+      },
+    });
+  } catch (error: any) {
+    res.status(404).json({
+      success: false,
+      message: error.message || "Order not found",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * POST /checkouts/validate-voucher
  */
 export const validateVoucherForCheckout = async (
@@ -649,6 +700,127 @@ export const validateVoucherForCheckout = async (
   }
 };
 
+// Payment methods where the restaurant must confirm an admin-placed order via OTP
+const ADMIN_ORDER_OTP_METHODS = ["VOUCHER", "CASH"];
+
+const calculateAdminOrderTotal = async (
+  products: { productId: string; quantity: number }[],
+) => {
+  const dbProducts = await prisma.product.findMany({
+    where: { id: { in: products.map((p) => p.productId) } },
+    select: { id: true, unitPrice: true },
+  });
+  return products.reduce((sum, item) => {
+    const product = dbProducts.find((p) => p.id === item.productId);
+    return sum + (product ? product.unitPrice * item.quantity : 0);
+  }, 0);
+};
+
+/**
+ * Loan sessions (vouchers) a restaurant can pay an admin-placed order with
+ * GET /checkouts/admin-order/loan-sessions/:restaurantId
+ */
+export const getAdminOrderLoanSessions = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = req.params.restaurantId as string;
+    const sessions = await getUsableLoanSessionsForRestaurantService(restaurantId);
+    res.status(200).json({
+      message: "Usable loan sessions retrieved successfully",
+      data: sessions,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan sessions",
+    });
+  }
+};
+
+/**
+ * Send OTP to restaurant before an admin places a voucher/prepaid order for it
+ * POST /checkouts/admin-order/request-otp
+ */
+export const requestAdminOrderOTP = async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, products, paymentMethod, voucherCode, loanSessionRrn } =
+      req.body;
+
+    if (
+      !restaurantId ||
+      !Array.isArray(products) ||
+      products.length === 0 ||
+      !ADMIN_ORDER_OTP_METHODS.includes(paymentMethod)
+    ) {
+      return res.status(400).json({
+        message:
+          "Restaurant ID, products and a VOUCHER or CASH payment method are required",
+      });
+    }
+
+    const amount = await calculateAdminOrderTotal(products);
+
+    // Validate the payment source before bothering the restaurant with an OTP
+    if (paymentMethod === "VOUCHER") {
+      if (!voucherCode && !loanSessionRrn) {
+        return res
+          .status(400)
+          .json({ message: "Select a voucher (loan session) to pay with" });
+      }
+      const validation = loanSessionRrn
+        ? await validateLoanSessionForCheckoutService(
+            loanSessionRrn,
+            amount,
+            restaurantId,
+          )
+        : await validateVoucherForCheckoutService(
+            voucherCode,
+            amount,
+            restaurantId,
+          );
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.error });
+      }
+    } else {
+      const wallet = await prisma.wallet.findUnique({
+        where: { restaurantId },
+        select: { balance: true, isActive: true, currency: true },
+      });
+      if (!wallet || !wallet.isActive) {
+        return res
+          .status(400)
+          .json({ message: "Restaurant has no active prepaid wallet" });
+      }
+      if (wallet.balance < amount) {
+        return res.status(400).json({
+          message: `Insufficient wallet balance. Available: ${wallet.balance.toLocaleString()} ${wallet.currency}, Required: ${amount.toLocaleString()} RWF`,
+        });
+      }
+    }
+
+    const otpResult = await OTPService.sendAdminOrderOTPToRestaurant(
+      restaurantId,
+      paymentMethod,
+      amount,
+    );
+
+    if (!otpResult.success) {
+      return res.status(400).json({ message: otpResult.message });
+    }
+
+    res.status(200).json({
+      message: "OTP sent to the restaurant's phone number",
+      data: {
+        // Mask all but the last 3 digits so the admin knows which phone received it
+        phone: otpResult.phone?.replace(/.(?=.{3})/g, "*"),
+        amount,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to send OTP",
+    });
+  }
+};
+
 /**
  * Create order on behalf of restaurant by ADMIN/LOGISTICS
  * POST /checkouts/admin-order
@@ -660,10 +832,12 @@ export const createAdminOrder = async (req: Request, res: Response) => {
       products,
       paymentMethod,
       voucherCode,
+      loanSessionRrn,
       promoCode,
       phoneNumber,
       notes,
       deliveryDate,
+      otp,
     } = req.body;
     const userRole = (req as any).user.role;
 
@@ -699,10 +873,46 @@ export const createAdminOrder = async (req: Request, res: Response) => {
     }
 
     // Validate voucher for voucher payments
-    if (paymentMethod === "VOUCHER" && !voucherCode) {
+    if (paymentMethod === "VOUCHER" && !voucherCode && !loanSessionRrn) {
       return res.status(400).json({
         message: "Voucher ID or voucher code is required for voucher payments",
       });
+    }
+
+    if (paymentMethod === "BANK_TRANSFER") {
+      return res.status(400).json({
+        message: "Bank transfer is not yet supported",
+      });
+    }
+
+    // Voucher and prepaid wallet payments must be confirmed by the restaurant via OTP
+    if (ADMIN_ORDER_OTP_METHODS.includes(paymentMethod)) {
+      if (!otp) {
+        return res.status(400).json({
+          message: "OTP from the restaurant is required for this payment method",
+        });
+      }
+
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: restaurantId },
+        select: { phone: true },
+      });
+
+      if (!restaurant?.phone) {
+        return res.status(400).json({
+          message: "Restaurant phone number not found",
+        });
+      }
+
+      const otpResult = await OTPService.verifyOTP(
+        restaurant.phone,
+        otp,
+        "VOUCHER_CHECKOUT",
+      );
+
+      if (!otpResult.success) {
+        return res.status(400).json({ message: otpResult.message });
+      }
     }
 
     const paymentResult = await createAdminOrderService({
@@ -710,6 +920,7 @@ export const createAdminOrder = async (req: Request, res: Response) => {
       products,
       paymentMethod,
       voucherCode,
+      loanSessionRrn,
       promoCode,
       phoneNumber,
       notes,

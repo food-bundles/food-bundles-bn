@@ -11,6 +11,7 @@ import {
   rejectLoanSessionService,
   acceptLoanSessionService,
   getLoanTradersService,
+  checkTraderLoanCapacityService,
   getLoanTermsService,
   acceptLoanTermsService,
   getTraderLoanSessionsService,
@@ -23,8 +24,10 @@ import {
   getLoanSessionByIdService,
   getCardEnrollmentRequestsService,
   getVoucherCardStatsService,
-  updateVoucherCardUnlockFeeService,
   getRecentActivitiesService,
+  convertLoanSessionToWalletService,
+  repayLoanSessionService,
+  verifyLoanRepaymentService,
 } from "../services/voucher-card.service";
 import { CardStatus, LoanSessionStatus } from "@prisma/client";
 
@@ -91,24 +94,6 @@ export const getVoucherCardByPan = async (req: Request, res: Response) => {
   }
 };
 
-export const updateVoucherCardUnlockFee = async (req: Request, res: Response) => {
-  try {
-    const { cardId } = req.params;
-    const { unlockFeeEnabled, unlockFeePercentage } = req.body;
-    if (unlockFeeEnabled === undefined) {
-      return res.status(400).json({ success: false, message: "unlockFeeEnabled is required" });
-    }
-    const card = await updateVoucherCardUnlockFeeService(cardId, {
-      unlockFeeEnabled: Boolean(unlockFeeEnabled),
-      unlockFeePercentage:
-        typeof unlockFeePercentage === "number" ? unlockFeePercentage : null,
-    });
-    res.json({ success: true, data: card, message: "Card unlock fee config updated" });
-  } catch (error: any) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
-
 export const getRecentActivities = async (req: Request, res: Response) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
@@ -144,6 +129,60 @@ export const getMyCardEnrollmentRequest = async (req: Request, res: Response) =>
       where: { restaurantId },
     });
     res.json({ success: true, data: request ?? null });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const submitKycConsent = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const {
+      restaurantName, tinNumber, phoneNumber, businessAddress,
+      district, sector, ownerName, ownerNationalId, businessType,
+      yearsInOperation, consentVubaBuba, consentKayko, consentRRA,
+    } = req.body;
+
+    if (!restaurantName || !tinNumber || !phoneNumber || !businessAddress ||
+        !district || !ownerName || !ownerNationalId || !businessType || yearsInOperation === undefined) {
+      return res.status(400).json({ success: false, message: "All required fields must be provided" });
+    }
+    if (!consentVubaBuba && !consentKayko && !consentRRA) {
+      return res.status(400).json({ success: false, message: "At least one data-sharing consent must be granted" });
+    }
+
+    const consent = await prisma.kycConsent.upsert({
+      where: { restaurantId },
+      update: {
+        restaurantName, tinNumber, phoneNumber, businessAddress,
+        district, sector: sector || null, ownerName, ownerNationalId,
+        businessType, yearsInOperation: parseInt(yearsInOperation),
+        consentVubaBuba: Boolean(consentVubaBuba),
+        consentKayko: Boolean(consentKayko),
+        consentRRA: Boolean(consentRRA),
+        submittedAt: new Date(),
+      },
+      create: {
+        restaurantId, restaurantName, tinNumber, phoneNumber, businessAddress,
+        district, sector: sector || null, ownerName, ownerNationalId,
+        businessType, yearsInOperation: parseInt(yearsInOperation),
+        consentVubaBuba: Boolean(consentVubaBuba),
+        consentKayko: Boolean(consentKayko),
+        consentRRA: Boolean(consentRRA),
+      },
+    });
+
+    res.status(201).json({ success: true, data: consent, message: "KYC consent submitted successfully" });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const getMyKycConsent = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const consent = await prisma.kycConsent.findUnique({ where: { restaurantId } });
+    res.json({ success: true, data: consent ?? null });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -225,8 +264,14 @@ export const acceptLoanSession = async (req: Request, res: Response) => {
   try {
     const adminId = (req as any).user?.id;
     const { id } = req.params;
-    const { fundingTraderId } = req.body;
-    const session = await acceptLoanSessionService(id, adminId, fundingTraderId);
+    const { fundingTraderId, approvalPercentage, approvedAmount, repaymentDays } = req.body;
+    const session = await acceptLoanSessionService(id, adminId, fundingTraderId, {
+      approvalPercentage:
+        approvalPercentage !== undefined ? parseFloat(approvalPercentage) : undefined,
+      approvedAmount:
+        approvedAmount !== undefined ? parseFloat(approvedAmount) : undefined,
+      repaymentDays: repaymentDays ? parseInt(repaymentDays) : undefined,
+    });
     res.json({
       success: true,
       data: session,
@@ -234,6 +279,23 @@ export const acceptLoanSession = async (req: Request, res: Response) => {
         ? "Loan accepted and sent to the selected trader for approval"
         : "Loan accepted — trader can now approve it",
     });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Live check whether a trader can fund a requested loan amount (admin).
+export const checkTraderLoanCapacity = async (req: Request, res: Response) => {
+  try {
+    const { traderId } = req.params;
+    if (!traderId) {
+      return res.status(400).json({ success: false, message: "traderId is required" });
+    }
+    const amount = req.query.amount
+      ? parseFloat(req.query.amount as string)
+      : undefined;
+    const result = await checkTraderLoanCapacityService(traderId, amount);
+    res.json({ success: true, data: result });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -413,5 +475,71 @@ export const getLoanSessionById = async (req: Request, res: Response) => {
     res.json({ success: true, data: session });
   } catch (error: any) {
     res.status(404).json({ success: false, message: error.message });
+  }
+};
+
+export const convertLoanSessionToWallet = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const { rrn } = req.params;
+    if (!rrn) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Loan session RRN is required" });
+    }
+    const result = await convertLoanSessionToWalletService(rrn, restaurantId);
+    res.json({
+      success: true,
+      data: result,
+      message: `${result.convertedAmount.toLocaleString()} RWF added to your prepaid wallet. Voucher used.`,
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const repayLoanSession = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const { sessionId } = req.params;
+    const { paymentMethod, paymentReference, phoneNumber, amount } = req.body ?? {};
+    if (!sessionId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Session id is required" });
+    }
+    if (!paymentMethod) {
+      return res
+        .status(400)
+        .json({ success: false, message: "paymentMethod is required" });
+    }
+    const result = await repayLoanSessionService(sessionId, restaurantId, {
+      paymentMethod,
+      paymentReference,
+      phoneNumber,
+      amount: amount ? parseFloat(amount) : undefined,
+    });
+    res.json({ success: true, data: result, message: result.message });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const verifyLoanRepayment = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user?.id;
+    const { sessionId } = req.params;
+    if (!sessionId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Session id is required" });
+    }
+    const result = await verifyLoanRepaymentService(sessionId, restaurantId);
+    res.json({ success: true, data: result, message: "Payment status checked" });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
   }
 };

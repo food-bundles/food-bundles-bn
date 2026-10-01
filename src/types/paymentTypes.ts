@@ -245,7 +245,14 @@ export interface VoucherPaymentResult {
     approvedAmount: number;
     creditUsed: number;
     remainingCredit: number;
+    leftover?: number;
+    leftoverApplied?: string;
+    transferredToWallet?: number;
   };
+  requiresTopUp?: boolean;
+  topUpRequired?: number;
+  walletBalance?: number;
+  loanCovered?: number;
   authorizationDetails?: {
     mode: string;
     redirectUrl: string;

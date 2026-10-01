@@ -8,6 +8,8 @@ import {
   clearCartService,
   getAllCartsService,
 } from "../services/cart.service";
+import { SubscriptionStatus } from "@prisma/client";
+import prisma from "../prisma";
 
 /**
  * Controller to add item to cart

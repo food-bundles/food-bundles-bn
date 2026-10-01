@@ -38,11 +38,14 @@ import {
   getVoucherCardByPan,
   getCardEnrollmentRequests,
   getMyCardEnrollmentRequest,
+  submitKycConsent,
+  getMyKycConsent,
   requestLoanSession,
   approveLoanSession,
   rejectLoanSession,
   acceptLoanSession,
   getLoanTraders,
+  checkTraderLoanCapacity,
   getLoanTerms,
   acceptLoanTerms,
   getTraderLoanSessions,
@@ -53,8 +56,10 @@ import {
   getMyLoanSessions,
   getAllLoanSessions,
   getLoanSessionById,
+  convertLoanSessionToWallet,
+  repayLoanSession,
+  verifyLoanRepayment,
   getVoucherCardStats,
-  updateVoucherCardUnlockFee,
   getRecentActivities,
 } from "../controllers/voucher-card.controller";
 import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
@@ -358,6 +363,21 @@ voucherRoutes.post(
 // NEW VOUCHER CARD SYSTEM (PAN-based)
 // ========================================
 
+// KYC consent — restaurant submits before requesting a card
+voucherRoutes.post(
+  "/card/kyc-consent",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL"),
+  submitKycConsent,
+);
+
+voucherRoutes.get(
+  "/card/kyc-consent",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL"),
+  getMyKycConsent,
+);
+
 // Card enrollment (restaurant requests a card)
 voucherRoutes.post(
   "/card/request",
@@ -414,14 +434,6 @@ voucherRoutes.get(
   getVoucherCardByPan,
 );
 
-// Configure a card's unlock fee (admin) — no default fee; admin decides if/when it applies
-voucherRoutes.patch(
-  "/card/:cardId/unlock-fee",
-  isAuthenticated,
-  checkPermission("ADMIN"),
-  updateVoucherCardUnlockFee,
-);
-
 // Recent activities feed (admin) — new card applications + new loan requests
 voucherRoutes.get(
   "/activities",
@@ -442,7 +454,7 @@ voucherRoutes.post(
 voucherRoutes.get(
   "/sessions/loan-traders",
   isAuthenticated,
-  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  checkPermission("ADMIN", "RESTAURANT", "HOTEL", "AFFILIATOR"),
   getLoanTraders,
 );
 
@@ -517,6 +529,14 @@ voucherRoutes.patch(
   acceptLoanSession,
 );
 
+// Live trader loan-capacity check (admin) — verify a trader can fund an amount before accepting
+voucherRoutes.get(
+  "/sessions/trader-capacity/:traderId",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  checkTraderLoanCapacity,
+);
+
 // Approve loan session as the selected trader / provider (trader)
 voucherRoutes.post(
   "/sessions/:id/trader-approve",
@@ -547,6 +567,31 @@ voucherRoutes.post(
   isAuthenticated,
   checkPermission("RESTAURANT", "HOTEL"),
   verifyUnlockFeePayment,
+);
+
+// Convert a loan session's remaining credit to the restaurant's prepaid wallet
+// (consumes the voucher — user flow when the order total exceeds the loan).
+voucherRoutes.post(
+  "/sessions/:rrn/convert-to-wallet",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  convertLoanSessionToWallet,
+);
+
+// Repay the outstanding credit on a voucher loan session ("Pay Voucher")
+voucherRoutes.post(
+  "/sessions/:sessionId/repay",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR", "ADMIN"),
+  repayLoanSession,
+);
+
+// Verify a pending voucher repayment status (restaurant)
+voucherRoutes.get(
+  "/sessions/:sessionId/repay/verify",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR", "ADMIN"),
+  verifyLoanRepayment,
 );
 
 // Voucher card system stats (admin)

@@ -40,6 +40,11 @@ export const addToCartService = async (data: AddToCartData) => {
   // Validate product exists and is active
   const product = await prisma.product.findUnique({
     where: { id: productId },
+    include: {
+      customerTypePrices: {
+        include: { customerType: { select: { id: true, name: true } } },
+      },
+    },
   });
 
   if (!product) {
@@ -94,12 +99,18 @@ export const addToCartService = async (data: AddToCartData) => {
     userRoleForPricing = restaurantData?.role || "RESTAURANT";
   }
 
-  // Determine the correct price based on user role
+  // Determine the correct price: the buyer's assigned customer type wins, otherwise the
+  // customer type named after their role
   let effectivePrice = product.unitPrice; // Default price
-  if (userRoleForPricing === "RESTAURANT" && product.restaurantPrice) {
-    effectivePrice = product.restaurantPrice;
-  } else if (userRoleForPricing === "HOTEL" && product.hotelPrice) {
-    effectivePrice = product.hotelPrice;
+  let effectivePurchasePrice = product.purchasePrice; // Default purchase price
+  const matchingPrice = restaurant.customerTypeId
+    ? product.customerTypePrices.find((ctp) => ctp.customerTypeId === restaurant.customerTypeId)
+    : product.customerTypePrices.find(
+        (ctp) => ctp.customerType.name.toUpperCase() === userRoleForPricing.toUpperCase()
+      );
+  if (matchingPrice) {
+    effectivePrice = matchingPrice.price;
+    effectivePurchasePrice = matchingPrice.purchasePrice;
   }
 
   const subtotal =
@@ -131,8 +142,6 @@ export const addToCartService = async (data: AddToCartData) => {
             tableTronicProductId: true,
             productName: true,
             unitPrice: true,
-            restaurantPrice: true,
-            hotelPrice: true,
             images: true,
             unit: true,
           },
@@ -156,8 +165,6 @@ export const addToCartService = async (data: AddToCartData) => {
             tableTronicProductId: true,
             productName: true,
             unitPrice: true,
-            restaurantPrice: true,
-            hotelPrice: true,
             images: true,
             unit: true,
           },
@@ -219,8 +226,6 @@ export const getCartByRestaurantIdService = async (
               tableTronicProductId: true,
               productName: true,
               unitPrice: true,
-              restaurantPrice: true,
-              hotelPrice: true,
               images: true,
               unit: true,
               category: true,
