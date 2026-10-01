@@ -582,9 +582,9 @@ model Order {
   @@index([txRef])
   @@index([flwRef])
   @@index([transactionId])
+  @@index([paymentLinkToken])
   @@index([flwStatus])
   @@index([cartId])
-  @@index([paymentLinkToken])
 }
 
 model OrderItem {

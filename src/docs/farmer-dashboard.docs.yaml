@@ -1,0 +1,681 @@
+components:
+  schemas:
+    EarningsSummary:
+      type: object
+      properties:
+        thisMonth:
+          type: number
+        lastMonth:
+          type: number
+        yearToDate:
+          type: number
+        avgPerSubmission:
+          type: number
+
+    TopProduct:
+      type: object
+      properties:
+        productName:
+          type: string
+        totalEarnings:
+          type: number
+        submissionCount:
+          type: integer
+
+    SeasonalTrendPoint:
+      type: object
+      properties:
+        month:
+          type: number
+        year:
+          type: number
+        earnings:
+          type: number
+
+    PerformanceMetrics:
+      type: object
+      properties:
+        acceptanceRate:
+          type: number
+          description: Percentage (0-100) of submissions accepted or paid
+        avgPrice:
+          type: number
+        topProducts:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopProduct"
+        seasonalTrends:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeasonalTrendPoint"
+
+    PreviousYearComparison:
+      type: object
+      properties:
+        currentYear:
+          type: number
+        previousYear:
+          type: number
+        growthRate:
+          type: number
+
+    ComparisonAnalytics:
+      type: object
+      properties:
+        regionalAverage:
+          type: number
+        previousYear:
+          $ref: "#/components/schemas/PreviousYearComparison"
+        marketPosition:
+          type: integer
+          description: 1-based rank among farmers in the same district
+
+    PaymentHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        productName:
+          type: string
+        acceptedQty:
+          type: number
+          nullable: true
+        acceptedPrice:
+          type: number
+          nullable: true
+        totalAmount:
+          type: number
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        paymentMethod:
+          type: string
+          nullable: true
+
+    PaymentHistoryResponse:
+      type: object
+      properties:
+        recentPayments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentHistoryItem"
+        pendingAmount:
+          type: number
+        pendingCount:
+          type: integer
+
+    EarningsTimeSeriesPoint:
+      type: object
+      properties:
+        month:
+          type: string
+          description: "ISO year-month, e.g. 2026-01"
+        submissions:
+          type: integer
+        earnings:
+          type: number
+
+    RecentActivityItem:
+      type: object
+      properties:
+        id:
+          type: string
+        successful:
+          type: boolean
+        attemptTime:
+          type: string
+          format: date-time
+        deviceInfo:
+          type: string
+          nullable: true
+
+    FarmerProfileDetails:
+      type: object
+      properties:
+        farmSize:
+          type: number
+          nullable: true
+        farmSizeUnit:
+          type: string
+          enum: [HECTARES, ACRES]
+          nullable: true
+        experienceYears:
+          type: integer
+          nullable: true
+        cooperativeMember:
+          type: boolean
+        cooperativeName:
+          type: string
+          nullable: true
+        certifications:
+          type: array
+          items:
+            type: string
+        farmingMethod:
+          type: string
+          enum: [ORGANIC, CONVENTIONAL, MIXED]
+          nullable: true
+        preferredPaymentMethod:
+          type: string
+          enum: [MOBILE_MONEY, BANK_TRANSFER, CASH]
+          nullable: true
+        minimumOrderQuantity:
+          type: number
+          nullable: true
+        deliveryPreference:
+          type: string
+          enum: [FARM_PICKUP, COOPERATIVE_CENTER, MARKET_DELIVERY]
+          nullable: true
+        maxDeliveryDistance:
+          type: number
+          nullable: true
+
+    FarmingProfileResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        province:
+          type: string
+          nullable: true
+        district:
+          type: string
+          nullable: true
+        sector:
+          type: string
+          nullable: true
+        cell:
+          type: string
+          nullable: true
+        village:
+          type: string
+          nullable: true
+        FarmerProfile:
+          $ref: "#/components/schemas/FarmerProfileDetails"
+        FarmerPrimaryCrop:
+          type: array
+          items:
+            type: object
+
+    FarmerProfileUpdateRequest:
+      type: object
+      description: Partial update; any subset of these fields may be provided
+      properties:
+        farmSize:
+          type: number
+        farmSizeUnit:
+          type: string
+          enum: [HECTARES, ACRES]
+        experienceYears:
+          type: integer
+        cooperativeMember:
+          type: boolean
+        cooperativeName:
+          type: string
+        certifications:
+          type: array
+          items:
+            type: string
+        farmingMethod:
+          type: string
+          enum: [ORGANIC, CONVENTIONAL, MIXED]
+        preferredPaymentMethod:
+          type: string
+          enum: [MOBILE_MONEY, BANK_TRANSFER, CASH]
+        minimumOrderQuantity:
+          type: number
+        deliveryPreference:
+          type: string
+          enum: [FARM_PICKUP, COOPERATIVE_CENTER, MARKET_DELIVERY]
+        maxDeliveryDistance:
+          type: number
+
+    VoucherSummary:
+      type: object
+      properties:
+        totalApplications:
+          type: integer
+        totalRequested:
+          type: number
+        totalApproved:
+          type: number
+        activeVouchers:
+          type: integer
+        totalRemainingCredit:
+          type: number
+        pendingApplications:
+          type: integer
+        approvedApplications:
+          type: integer
+        rejectedApplications:
+          type: integer
+
+    VoucherEligibility:
+      type: object
+      properties:
+        isEligible:
+          type: boolean
+        reason:
+          type: string
+        maxAmount:
+          type: number
+        maxDays:
+          type: integer
+
+    DashboardSummary:
+      type: object
+      properties:
+        earnings:
+          $ref: "#/components/schemas/EarningsSummary"
+          nullable: true
+        vouchers:
+          $ref: "#/components/schemas/VoucherSummary"
+        profileComplete:
+          type: boolean
+
+paths:
+  /farmers/dashboard/summary:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get a combined dashboard landing-page summary
+      description: Returns earnings summary, voucher summary, and profile-completion status in one call for the dashboard's initial paint.
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Dashboard summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/DashboardSummary"
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden - farmer role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/dashboard/earnings-summary:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get earnings summary (this month, last month, year to date)
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Earnings summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/EarningsSummary"
+        400:
+          description: Phone number not set on account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        404:
+          description: Unable to compute earnings summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/dashboard/performance:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get performance metrics (acceptance rate, average price, top products, seasonal trends)
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Performance metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/PerformanceMetrics"
+        400:
+          description: Phone number not set on account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/dashboard/comparison:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get comparison analytics (regional average, year-over-year growth, market position)
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Comparison analytics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/ComparisonAnalytics"
+        400:
+          description: Phone number not set on account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/dashboard/payment-history:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get recent payment history and pending payouts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Max number of recent payments to return (1-100, default 10)
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Payment history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/PaymentHistoryResponse"
+        400:
+          description: Phone number not set on account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/dashboard/earnings-timeseries:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get month-bucketed submissions and earnings for charting
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: months
+          in: query
+          required: false
+          description: Number of trailing months to include (1-12, default 12)
+          schema:
+            type: integer
+            default: 12
+      responses:
+        200:
+          description: Earnings time series retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EarningsTimeSeriesPoint"
+        400:
+          description: Phone number not set on account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/dashboard/recent-activity:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get recent login activity
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Recent activity retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RecentActivityItem"
+        400:
+          description: Phone number not set on account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/dashboard/farming-profile:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get farming profile details (farm size, cooperative, farming method, business preferences)
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Farming profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/FarmingProfileResponse"
+        404:
+          description: Farming profile not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      tags:
+        - Farmer Dashboard API
+      summary: Update farming profile / business preferences (partial update)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FarmerProfileUpdateRequest"
+            examples:
+              update_farm_info:
+                summary: Update farm size and farming method only
+                value:
+                  farmSize: 2.5
+                  farmSizeUnit: "HECTARES"
+                  farmingMethod: "ORGANIC"
+              update_business_preferences:
+                summary: Update delivery and payment preferences only
+                value:
+                  preferredPaymentMethod: "MOBILE_MONEY"
+                  deliveryPreference: "FARM_PICKUP"
+                  maxDeliveryDistance: 20
+      responses:
+        200:
+          description: Farming profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/FarmingProfileResponse"
+        400:
+          description: No fields provided, invalid enum value, or update failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /farmers/dashboard/voucher-summary:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get voucher/loan summary totals
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Voucher summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/VoucherSummary"
+
+  /farmers/dashboard/vouchers:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get the farmer's vouchers with transaction history
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Vouchers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /farmers/dashboard/loan-applications:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Get the farmer's loan/voucher applications
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Loan applications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /farmers/dashboard/voucher-eligibility:
+    get:
+      tags:
+        - Farmer Dashboard API
+      summary: Check whether the farmer is currently eligible for a new voucher
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Voucher eligibility checked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/VoucherEligibility"

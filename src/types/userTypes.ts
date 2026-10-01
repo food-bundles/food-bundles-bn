@@ -30,6 +30,9 @@ export interface IUpdateFarmerData extends Partial<UserLocationData> {
   email?: string;
   name?: string;
   password?: string;
+  smsNotifications?: boolean;
+  notificationFrequency?: string;
+  preferredLanguage?: string;
 }
 
 export interface IUpdateRestaurantData extends Partial<UserLocationData> {

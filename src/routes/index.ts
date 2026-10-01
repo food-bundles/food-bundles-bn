@@ -9,6 +9,7 @@ import submissionsRoutes from "./submissionsRoutes";
 import adminsRoutes from "./adminsRoutes";
 import restaurantsRoutes from "./restaurantsRoutes";
 import farmersRoutes from "./farmersRoutes";
+import farmerDashboardRoutes from "./farmerDashboardRoutes";
 import cartRoutes from "./cart.routes";
 import checkoutRoutes from "./checkout.routes";
 import orderRoutes from "./order.routes";
@@ -41,6 +42,7 @@ import customerTypeRoutes from "./customer-type.routes";
 const routes = Router();
 
 // Order matters! Most specific routes should come first
+routes.use("/farmers/dashboard", farmerDashboardRoutes);
 routes.use("/farmers", farmersRoutes);
 routes.use("/restaurants", restaurantsRoutes);
 routes.use("/affiliators", affiliatorRoutes);
