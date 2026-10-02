@@ -74,10 +74,10 @@ model Restaurant {
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
   customerTypeId        String?
-  KycConsent            KycConsent?
   affiliators           Affiliator[]
   CardEnrollmentRequest CardEnrollmentRequest?
   Cart                  Cart[]
+  KycConsent            KycConsent?
   LoanApplication       LoanApplication[]
   LoanSession           LoanSession[]
   LoanTermsAcceptance   LoanTermsAcceptance[]
@@ -327,9 +327,11 @@ model Admin {
   twoFactorSecret          String?
   twoFactorEnabled         Boolean               @default(false)
   twoFactorBackupCodes     String[]              @default([])
-  termsAndConditions       String?               @db.Text
-  loanTermsAndConditions   String?               @db.Text
+  termsAndConditions       String?
+  loanTermsAndConditions   String?
   requiresSubscription     Boolean               @default(false)
+  adminRoleId              String?
+  AdminRole                AdminRole?            @relation(fields: [adminRoleId], references: [id])
   aggregatorAssignments    FarmerSubmission[]    @relation("Aggregator")
   approvedLoans            LoanApplication[]     @relation("LoanApprover")
   managedLoans             LoanApplication[]     @relation("LoanManager")
@@ -605,6 +607,7 @@ model Order {
   @@index([paymentLinkToken])
   @@index([flwStatus])
   @@index([cartId])
+  @@index([paymentLinkToken])
 }
 
 model OrderItem {
@@ -1085,16 +1088,15 @@ model Notification {
 }
 
 model Invitation {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  token     String   @unique
-  role      Role
-  /// Dynamic dashboard role to give the invited user (role is then STAFF)
+  id          String   @id @default(uuid())
+  email       String   @unique
+  token       String   @unique
+  role        Role
+  expiresAt   DateTime
+  isUsed      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   adminRoleId String?
-  expiresAt DateTime
-  isUsed    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   @@index([email])
   @@index([token])
@@ -1139,6 +1141,29 @@ model ContactSubmission {
   updatedAt DateTime @updatedAt
 
   @@map("contact_submissions")
+}
+
+model SupportRequest {
+  id               String    @id @default(uuid())
+  ticketNumber     String    @unique
+  name             String
+  email            String
+  subject          String
+  category         String
+  severity         String?
+  preferredContact String    @default("email")
+  description      String
+  screenshots      String[]  @default([])
+  status           String    @default("open")
+  response         String?
+  respondedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([ticketNumber])
+  @@map("support_requests")
 }
 
 model PromoCode {
@@ -1248,165 +1273,35 @@ model MarketPriceHistory {
   @@index([createdAt])
 }
 
+model CustomerType {
+  id                   String                 @id @default(uuid())
+  name                 String                 @unique
+  description          String?
+  isActive             Boolean                @default(true)
+  createdBy            String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  ProductCustomerPrice ProductCustomerPrice[]
+  Restaurant           Restaurant[]
 
-model LoanSession {
-  id                  String                 @id @default(uuid())
-  rrn                 String                 @unique
-  cardId              String
-  restaurantId        String
-  requestedAmount     Float
-  approvedAmount      Float?
-  approvalPercentage  Float?                 @default(100)
-  unlockFeePercentage Float?
-  unlockFee           Float?
-  unlockStatus        UnlockStatus           @default(LOCKED)
-  unlockPaidAt        DateTime?
-  amountUsed          Float                  @default(0)
-  amountRepaid        Float                  @default(0)
-  amountTransferredToWallet Float             @default(0)
-  outstandingAmount   Float                  @default(0)
-  status              LoanSessionStatus      @default(REQUESTED)
-  purpose             String?
-  notes               String?
-  repaymentDays       Int?
-  dueDate             DateTime?
-  approvedBy          String?
-  fundingTraderId     String?
-  loanProviderType    String?
-  requestedAt         DateTime               @default(now())
-  approvedAt          DateTime?
-  unlockedAt          DateTime?
-  closedAt            DateTime?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  approver            Admin?                 @relation("SessionApprover", fields: [approvedBy], references: [id])
-  card                VoucherCard            @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  fundingTrader       Admin?                 @relation("SessionFundingTrader", fields: [fundingTraderId], references: [id])
-  restaurant          Restaurant             @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  authorizations      SessionAuthorization[]
-  unlockPayments      UnlockFeePayment[]
-  repayments          LoanRepayment[]
-  walletTransfers     WalletTransfer[]
-
-  @@index([rrn])
-  @@index([cardId])
-  @@index([restaurantId])
-  @@index([status])
-  @@index([unlockStatus])
-}
-
-model UnlockFeePayment {
-  id               String        @id @default(uuid())
-  sessionId        String
-  amount           Float
-  paymentMethod    String
-  paymentReference String?
-  phoneNumber      String?
-  txRef            String?       @unique
-  flwRef           String?
-  flwStatus        String?
-  transactionId    String?
-  status           PaymentStatus @default(PENDING)
-  confirmedAt      DateTime?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  session          LoanSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId])
-  @@index([status])
-  @@index([txRef])
-}
-
-model SessionAuthorization {
-  id                String      @id @default(uuid())
-  stan              String      @unique
-  sessionId         String
-  transactionAmount Float
-  posTerminal       String?
-  responseStatus    String      @default("APPROVED")
-  createdAt         DateTime    @default(now())
-  session           LoanSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([stan])
-  @@index([sessionId])
-}
-
-model LoanRepayment {
-  id               String        @id @default(uuid())
-  sessionId        String
-  amount           Float
-  paymentMethod    String
-  paymentReference String?
-  phoneNumber      String?
-  txRef            String?       @unique
-  flwRef           String?
-  flwStatus        String?
-  transactionId    String?
-  status           PaymentStatus @default(PENDING)
-  confirmedAt      DateTime?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  session          LoanSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId])
-  @@index([status])
-  @@index([txRef])
-}
-
-model NewsletterSubscriber {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  name         String?
-  phone        String?
-  restaurantId String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@index([email])
   @@index([isActive])
-  @@index([createdAt])
+  @@index([name])
 }
 
-model NewsletterCampaign {
-  id             String           @id @default(uuid())
-  subject        String
-  content        String
-  status         NewsletterStatus @default(DRAFT)
-  sentAt         DateTime?
-  sentBy         String
-  recipientCount Int              @default(0)
-  openCount      Int              @default(0)
-  clickCount     Int              @default(0)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  admin          Admin            @relation(fields: [sentBy], references: [id])
+model ProductCustomerPrice {
+  id             String       @id @default(uuid())
+  productId      String
+  customerTypeId String
+  price          Float
+  purchasePrice  Float        @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  CustomerType   CustomerType @relation(fields: [customerTypeId], references: [id], onDelete: Cascade)
+  Product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@index([status])
-  @@index([sentAt])
-  @@index([createdAt])
-}
-
-model support_requests {
-  id               String    @id @default(uuid())
-  ticketNumber     String    @unique
-  name             String
-  email            String
-  subject          String
-  category         String
-  severity         String?
-  preferredContact String    @default("email")
-  description      String
-  screenshots      String[]  @default([])
-  status           String    @default("open")
-  response         String?
-  respondedAt      DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  @@index([email])
-  @@index([status])
-  @@index([ticketNumber])
+  @@unique([productId, customerTypeId])
+  @@index([customerTypeId])
+  @@index([productId])
 }
 
 model VoucherCard {
@@ -1448,28 +1343,143 @@ model CardEnrollmentRequest {
 }
 
 model KycConsent {
-  id                  String   @id @default(uuid())
-  restaurantId        String   @unique
-  restaurantName      String
-  tinNumber           String
-  phoneNumber         String
-  businessAddress     String
-  district            String
-  sector              String?
-  ownerName           String
-  ownerNationalId     String
-  businessType        String
-  yearsInOperation    Int
-  consentVubaBuba     Boolean  @default(false)
-  consentKayko        Boolean  @default(false)
-  consentRRA          Boolean  @default(false)
-  submittedAt         DateTime @default(now())
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  restaurant          Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  id               String     @id @default(uuid())
+  restaurantId     String     @unique
+  restaurantName   String
+  tinNumber        String
+  phoneNumber      String
+  businessAddress  String
+  district         String
+  sector           String?
+  ownerName        String
+  ownerNationalId  String
+  businessType     String
+  yearsInOperation Int
+  consentVubaBuba  Boolean    @default(false)
+  consentKayko     Boolean    @default(false)
+  consentRRA       Boolean    @default(false)
+  submittedAt      DateTime   @default(now())
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  restaurant       Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
+}
+
+model LoanSession {
+  id                        String                 @id @default(uuid())
+  rrn                       String                 @unique
+  cardId                    String
+  restaurantId              String
+  requestedAmount           Float
+  approvedAmount            Float?
+  approvalPercentage        Float?                 @default(100)
+  unlockFeePercentage       Float?
+  unlockFee                 Float?
+  unlockStatus              UnlockStatus           @default(LOCKED)
+  unlockPaidAt              DateTime?
+  amountUsed                Float                  @default(0)
+  amountRepaid              Float                  @default(0)
+  outstandingAmount         Float                  @default(0)
+  status                    LoanSessionStatus      @default(REQUESTED)
+  purpose                   String?
+  notes                     String?
+  repaymentDays             Int?
+  dueDate                   DateTime?
+  approvedBy                String?
+  fundingTraderId           String?
+  requestedAt               DateTime               @default(now())
+  approvedAt                DateTime?
+  unlockedAt                DateTime?
+  closedAt                  DateTime?
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+  loanProviderType          String?
+  amountTransferredToWallet Float                  @default(0)
+  LoanRepayment             LoanRepayment[]
+  approver                  Admin?                 @relation("SessionApprover", fields: [approvedBy], references: [id])
+  card                      VoucherCard            @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  fundingTrader             Admin?                 @relation("SessionFundingTrader", fields: [fundingTraderId], references: [id])
+  restaurant                Restaurant             @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  authorizations            SessionAuthorization[]
+  unlockPayments            UnlockFeePayment[]
+  walletTransfers           WalletTransfer[]
+
+  @@index([rrn])
+  @@index([cardId])
+  @@index([restaurantId])
+  @@index([status])
+  @@index([unlockStatus])
+}
+
+model UnlockFeePayment {
+  id               String        @id @default(uuid())
+  sessionId        String
+  amount           Float
+  paymentMethod    String
+  paymentReference String?
+  phoneNumber      String?
+  status           PaymentStatus @default(PENDING)
+  confirmedAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  flwRef           String?
+  flwStatus        String?
+  transactionId    String?
+  txRef            String?       @unique
+  session          LoanSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([status])
+  @@index([txRef])
+}
+
+model SessionAuthorization {
+  id                String      @id @default(uuid())
+  stan              String      @unique
+  sessionId         String
+  transactionAmount Float
+  posTerminal       String?
+  responseStatus    String      @default("APPROVED")
+  createdAt         DateTime    @default(now())
+  session           LoanSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([stan])
+  @@index([sessionId])
+}
+
+model NewsletterSubscriber {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String?
+  phone        String?
+  restaurantId String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([email])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model NewsletterCampaign {
+  id             String           @id @default(uuid())
+  subject        String
+  content        String
+  status         NewsletterStatus @default(DRAFT)
+  sentAt         DateTime?
+  sentBy         String
+  recipientCount Int              @default(0)
+  openCount      Int              @default(0)
+  clickCount     Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  admin          Admin            @relation(fields: [sentBy], references: [id])
+
+  @@index([status])
+  @@index([sentAt])
+  @@index([createdAt])
 }
 
 model LoanProvider {
@@ -1479,10 +1489,10 @@ model LoanProvider {
   isActive            Boolean            @default(true)
   unlockFeeEnabled    Boolean            @default(false)
   unlockFeePercentage Float?
-  leftoverPolicy      String             @default("USELESS")
   termsAndConditions  String?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
+  leftoverPolicy      String             @default("USELESS")
   plans               SubscriptionPlan[]
 
   @@index([name])
@@ -1528,6 +1538,62 @@ model WalletTransfer {
   @@index([createdAt])
 }
 
+model AdminRole {
+  id          String   @id
+  name        String   @unique
+  description String?
+  permissions String[] @default([])
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  Admin       Admin[]
+}
+
+model LoanRepayment {
+  id               String        @id
+  sessionId        String
+  amount           Float
+  paymentMethod    String
+  paymentReference String?
+  phoneNumber      String?
+  txRef            String?       @unique
+  flwRef           String?
+  flwStatus        String?
+  transactionId    String?
+  status           PaymentStatus @default(PENDING)
+  confirmedAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime
+  LoanSession      LoanSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([status])
+  @@index([txRef])
+}
+
+model public_SupportRequest {
+  id               String    @id
+  ticketNumber     String    @unique
+  name             String
+  email            String
+  subject          String
+  category         String
+  severity         String?
+  preferredContact String    @default("email")
+  description      String
+  screenshots      String[]
+  status           String    @default("open")
+  response         String?
+  respondedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime
+
+  @@index([email])
+  @@index([status])
+  @@index([ticketNumber])
+  @@map("SupportRequest")
+}
+
 enum TraderTransactionType {
   LOAN_APPROVAL
   LOAN_REVERSAL
@@ -1548,7 +1614,6 @@ enum Role {
   TRADER
   SUPERUSER
   MARKET_PRICES
-  /// Dashboard user whose access comes only from their AdminRole permissions
   STAFF
 }
 

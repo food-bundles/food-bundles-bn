@@ -16,11 +16,43 @@ import {
   exportComparison,
   getLowestPriceComparison,
 } from "../controllers/market.controller";
-import { isAuthenticated, allow } from "../middleware/authMiddleware";
+import {
+  uploadWfpCsv,
+  getWfpPrices,
+  getWfpAnalytics,
+  getWfpFilterOptions,
+  clearWfpPrices,
+} from "../controllers/wfp-market.controller";
+import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { csvUpload } from "../middleware/csvUpload";
 
 const marketRoutes = Router();
 
-// Market CRUD operations
+// ============================================
+// WFP HISTORICAL DATASET & LIVE VISUALIZATION
+// ============================================
+marketRoutes.post(
+  "/wfp/upload",
+  isAuthenticated,
+  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  csvUpload.single("file"),
+  uploadWfpCsv
+);
+
+marketRoutes.get("/wfp/prices", getWfpPrices);
+marketRoutes.get("/wfp/analytics", getWfpAnalytics);
+marketRoutes.get("/wfp/filter-options", getWfpFilterOptions);
+
+marketRoutes.delete(
+  "/wfp/clear",
+  isAuthenticated,
+  checkPermission("ADMIN"),
+  clearWfpPrices
+);
+
+// ============================================
+// MARKET CRUD OPERATIONS
+// ============================================
 marketRoutes.post(
   "/",
   isAuthenticated,
@@ -46,7 +78,9 @@ marketRoutes.delete(
   deleteMarket,
 );
 
-// Price tracking operations
+// ============================================
+// PRICE TRACKING OPERATIONS
+// ============================================
 marketRoutes.post(
   "/prices",
   isAuthenticated,
@@ -81,7 +115,9 @@ marketRoutes.delete(
   deleteMarketPriceHistory,
 );
 
-// Export endpoints
+// ============================================
+// EXPORT ENDPOINTS
+// ============================================
 marketRoutes.get(
   "/export/markets",
   isAuthenticated,
