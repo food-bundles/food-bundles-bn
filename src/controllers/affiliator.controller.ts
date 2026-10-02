@@ -8,6 +8,7 @@ import {
   getAllAffiliatorsService,
 } from "../services/affiliator.service";
 
+import { isDashboardRole } from "../config/permissions";
 /**
  * Create new affiliator (Restaurant only)
  * POST /affiliators
@@ -60,7 +61,7 @@ export const getMyAffiliators = async (req: Request, res: Response) => {
       restaurantId = user.id;
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
-    } else if (user.role === "ADMIN") {
+    } else if (isDashboardRole(user.role)) {
       restaurantId = (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
         return res.status(400).json({
@@ -128,7 +129,7 @@ export const getAffiliatorById = async (req: Request, res: Response) => {
     // Check authorization
     const isOwner = (userRole === "RESTAURANT" && affiliator.restaurantId === userId) ||
       (userRole === "AFFILIATOR" && affiliator.restaurantId === (req as any).user.restaurantId) ||
-      (userRole === "ADMIN");
+      (isDashboardRole(userRole));
 
     if (!isOwner) {
       return res.status(403).json({

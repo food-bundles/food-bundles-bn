@@ -12,6 +12,7 @@ import { PaginationService } from "../services/paginationService";
 import { Role } from "@prisma/client";
 import prisma from "../prisma";
 
+import { isDashboardRole } from "../config/permissions";
 export default class ProductVerifyController {
   static purchaseProduct = async (req: Request, res: Response) => {
     try {
@@ -123,7 +124,8 @@ export default class ProductVerifyController {
 
       const result = await getAllSubmissionsService({
         userId: user.id,
-        userRole: user.role as Role,
+        // Dashboard staff roles see farmer submissions like ADMIN
+        userRole: (isDashboardRole(user.role) ? Role.ADMIN : user.role) as Role,
         options: {
           page: paginationQuery.page,
           limit: paginationQuery.limit,
@@ -157,7 +159,7 @@ export default class ProductVerifyController {
       const { page = 1, limit = 10 } = req.query;
 
       // Only aggregators and admins can see this
-      if (user.role !== Role.AGGREGATOR && user.role !== Role.ADMIN) {
+      if (user.role !== Role.AGGREGATOR && !isDashboardRole(user.role)) {
         return res.status(403).json({
           success: false,
           message: "Access denied",
@@ -309,7 +311,8 @@ export default class ProductVerifyController {
 
       const result = await getSubmissionsByStatusService({
         userId: user.id,
-        userRole: user.role as Role,
+        // Dashboard staff roles see farmer submissions like ADMIN
+        userRole: (isDashboardRole(user.role) ? Role.ADMIN : user.role) as Role,
         status: status.toUpperCase(),
         options: {
           page: paginationQuery.page,
@@ -383,7 +386,8 @@ export default class ProductVerifyController {
 
       const result = await getAllSubmissionsService({
         userId: user.id,
-        userRole: user.role as Role,
+        // Dashboard staff roles see farmer submissions like ADMIN
+        userRole: (isDashboardRole(user.role) ? Role.ADMIN : user.role) as Role,
         options: {
           page: paginationQuery.page,
           limit: paginationQuery.limit,

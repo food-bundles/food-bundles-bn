@@ -352,6 +352,26 @@ model Admin {
   walletTransactions       WalletTransaction[]   @relation("WalletTransactionAdmin")
   approvedWithdrawals      WalletTransaction[]   @relation("WithdrawApprover")
   traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
+  // Dynamic dashboard role (permissions). Null = legacy behaviour from `role`.
+  adminRoleId              String?
+  adminRole                AdminRole?            @relation(fields: [adminRoleId], references: [id], onDelete: SetNull)
+
+  @@index([adminRoleId])
+}
+
+/// Dashboard role created by a super admin. `permissions` holds keys from the
+/// backend permission catalog (src/config/permissions.ts), e.g. "orders.view".
+model AdminRole {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  permissions String[] @default([])
+  /// System roles are created by the backfill (Administrator, Market Prices
+  /// Manager) and cannot be deleted.
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  admins      Admin[]
 }
 
 model Product {
@@ -1069,6 +1089,8 @@ model Invitation {
   email     String   @unique
   token     String   @unique
   role      Role
+  /// Dynamic dashboard role to give the invited user (role is then STAFF)
+  adminRoleId String?
   expiresAt DateTime
   isUsed    Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -1526,6 +1548,8 @@ enum Role {
   TRADER
   SUPERUSER
   MARKET_PRICES
+  /// Dashboard user whose access comes only from their AdminRole permissions
+  STAFF
 }
 
 enum SubmissionStatus {

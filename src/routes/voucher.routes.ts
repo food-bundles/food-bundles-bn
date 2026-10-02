@@ -62,7 +62,7 @@ import {
   getVoucherCardStats,
   getRecentActivities,
 } from "../controllers/voucher-card.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 
 const voucherRoutes = Router();
 
@@ -77,7 +77,7 @@ const voucherRoutes = Router();
 voucherRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   createVoucher,
 );
 
@@ -88,7 +88,7 @@ voucherRoutes.post(
 voucherRoutes.get(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   getAllVouchers,
 );
 
@@ -99,7 +99,7 @@ voucherRoutes.get(
 voucherRoutes.get(
   "/my-vouchers",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
+  allow("vouchers", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   getMyVouchers,
 );
 
@@ -120,7 +120,7 @@ voucherRoutes.get(
 voucherRoutes.get(
   "/available",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
+  allow("vouchers", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   getAvailableVouchers,
 );
 
@@ -131,7 +131,7 @@ voucherRoutes.get(
 voucherRoutes.patch(
   "/:id",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   updateVoucher,
 );
 
@@ -142,7 +142,7 @@ voucherRoutes.patch(
 voucherRoutes.delete(
   "/:id",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   deactivateVoucher,
 );
 
@@ -163,7 +163,7 @@ voucherRoutes.get("/:id/transactions", isAuthenticated, getVoucherTransactions);
 voucherRoutes.post(
   "/loans/apply",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
+  allow("vouchers", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   applyForLoan,
 );
 
@@ -174,7 +174,7 @@ voucherRoutes.post(
 voucherRoutes.get(
   "/loans/my-applications",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL", "ADMIN"),
+  allow("vouchers", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   getMyLoanApplications,
 );
 
@@ -185,7 +185,7 @@ voucherRoutes.get(
 voucherRoutes.get(
   "/loans/applications",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   getAllLoanApplications,
 );
 
@@ -202,7 +202,7 @@ voucherRoutes.get("/loans/:id", isAuthenticated, getLoanApplicationById);
 voucherRoutes.patch(
   "/loans/:id/approve",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   approveLoan,
 );
 
@@ -213,7 +213,7 @@ voucherRoutes.patch(
 voucherRoutes.post(
   "/loans/:id/disburse",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   disburseLoan,
 );
 
@@ -224,7 +224,7 @@ voucherRoutes.post(
 voucherRoutes.patch(
   "/loans/:id/reject",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   rejectLoan,
 );
 
@@ -245,7 +245,7 @@ voucherRoutes.delete("/loans/:id", isAuthenticated, deleteLoanApplication);
 voucherRoutes.post(
   "/checkout/voucher",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL", "ADMIN"),
+  allow("vouchers", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   processVoucherPayment,
 );
 
@@ -260,7 +260,7 @@ voucherRoutes.post(
 voucherRoutes.post(
   "/:id/repay",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL", "ADMIN"),
+  allow("vouchers", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   makeRepayment,
 );
 
@@ -271,7 +271,7 @@ voucherRoutes.post(
 voucherRoutes.post(
   "/:id/top-up",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL", "ADMIN"),
+  allow("vouchers", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   makeVoucherTopUp,
 );
 
@@ -282,7 +282,7 @@ voucherRoutes.post(
 voucherRoutes.post(
   "/top-ups/:topUpId/verify",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL", "ADMIN"),
+  allow("vouchers", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   verifyVoucherTopUp,
 );
 
@@ -305,7 +305,7 @@ voucherRoutes.get("/:id/penalties", isAuthenticated, getVoucherPenalties);
 voucherRoutes.post(
   "/penalties/calculate",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   calculatePenalties,
 );
 
@@ -316,7 +316,7 @@ voucherRoutes.post(
 voucherRoutes.post(
   "/penalties/:id/waive",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   waivePenalty,
 );
 
@@ -331,7 +331,7 @@ voucherRoutes.post(
 voucherRoutes.get(
   "/credit-summary",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "HOTEL", "ADMIN"),
+  allow("vouchers", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   getRestaurantCreditSummary,
 );
 
@@ -342,7 +342,7 @@ voucherRoutes.get(
 voucherRoutes.patch(
   "/loans/:id/accept",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   markLoanApplicationAsAccepted,
 );
 
@@ -355,7 +355,7 @@ voucherRoutes.get("/code/:voucherCode", isAuthenticated, getVoucherByCode);
 voucherRoutes.post(
   "/reminders/send",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   sendVoucherReminders,
 );
 
@@ -406,7 +406,7 @@ voucherRoutes.get(
 voucherRoutes.post(
   "/card/issue",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   issueVoucherCard,
 );
 
@@ -414,7 +414,7 @@ voucherRoutes.post(
 voucherRoutes.get(
   "/cards",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   getAllVoucherCards,
 );
 
@@ -422,7 +422,7 @@ voucherRoutes.get(
 voucherRoutes.get(
   "/card/enrollment-requests",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   getCardEnrollmentRequests,
 );
 
@@ -430,7 +430,7 @@ voucherRoutes.get(
 voucherRoutes.get(
   "/card/pan/:pan",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   getVoucherCardByPan,
 );
 
@@ -438,7 +438,7 @@ voucherRoutes.get(
 voucherRoutes.get(
   "/activities",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   getRecentActivities,
 );
 
@@ -454,7 +454,7 @@ voucherRoutes.post(
 voucherRoutes.get(
   "/sessions/loan-traders",
   isAuthenticated,
-  checkPermission("ADMIN", "RESTAURANT", "HOTEL", "AFFILIATOR"),
+  allow("vouchers", "RESTAURANT", "HOTEL", "AFFILIATOR"),
   getLoanTraders,
 );
 
@@ -494,7 +494,7 @@ voucherRoutes.get(
 voucherRoutes.get(
   "/sessions",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   getAllLoanSessions,
 );
 
@@ -509,7 +509,7 @@ voucherRoutes.get(
 voucherRoutes.patch(
   "/sessions/:id/approve",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   approveLoanSession,
 );
 
@@ -517,7 +517,7 @@ voucherRoutes.patch(
 voucherRoutes.patch(
   "/sessions/:id/reject",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   rejectLoanSession,
 );
 
@@ -525,7 +525,7 @@ voucherRoutes.patch(
 voucherRoutes.patch(
   "/sessions/:id/accept",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   acceptLoanSession,
 );
 
@@ -533,7 +533,7 @@ voucherRoutes.patch(
 voucherRoutes.get(
   "/sessions/trader-capacity/:traderId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   checkTraderLoanCapacity,
 );
 
@@ -549,7 +549,7 @@ voucherRoutes.post(
 voucherRoutes.post(
   "/sessions/:id/trader-approve-on-behalf/:traderId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   adminApproveLoanSessionOnBehalf,
 );
 
@@ -582,7 +582,7 @@ voucherRoutes.post(
 voucherRoutes.post(
   "/sessions/:sessionId/repay",
   isAuthenticated,
-  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR", "ADMIN"),
+  allow("vouchers", "RESTAURANT", "HOTEL", "AFFILIATOR"),
   repayLoanSession,
 );
 
@@ -590,7 +590,7 @@ voucherRoutes.post(
 voucherRoutes.get(
   "/sessions/:sessionId/repay/verify",
   isAuthenticated,
-  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR", "ADMIN"),
+  allow("vouchers", "RESTAURANT", "HOTEL", "AFFILIATOR"),
   verifyLoanRepayment,
 );
 
@@ -598,7 +598,7 @@ voucherRoutes.get(
 voucherRoutes.get(
   "/card-stats",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("vouchers"),
   getVoucherCardStats,
 );
 

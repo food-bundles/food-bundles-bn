@@ -34,6 +34,7 @@ import { VoucherStatus, LoanStatus } from "@prisma/client";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 
+import { isDashboardRole } from "../config/permissions";
 // ============================================
 // VOUCHER MANAGEMENT CONTROLLERS
 // ============================================
@@ -207,7 +208,7 @@ export const getRestaurantVouchers = async (req: Request, res: Response) => {
       (userRole === "RESTAURANT" && restaurantId === userId) ||
       (userRole === "AFFILIATOR" &&
         restaurantId === (req as any).user.restaurantId) ||
-      userRole === "ADMIN" ||
+      isDashboardRole(userRole) ||
       // LOGISTICS can place orders on behalf of restaurants and pick their voucher
       userRole === "LOGISTICS";
 
@@ -346,7 +347,7 @@ export const getVoucherTransactions = async (req: Request, res: Response) => {
 
     // Check authorization
     const isOwner =
-      voucher.restaurantId === restaurantId || userRole === "ADMIN";
+      voucher.restaurantId === restaurantId || isDashboardRole(userRole);
 
     if (!isOwner) {
       return res.status(403).json({
@@ -396,7 +397,7 @@ export const getVoucherByCode = async (req: Request, res: Response) => {
 
     // Check authorization - restaurants can only see their own vouchers
     const isOwner =
-      voucher.restaurantId === restaurantId || userRole === "ADMIN";
+      voucher.restaurantId === restaurantId || isDashboardRole(userRole);
 
     if (!isOwner) {
       return res.status(403).json({
@@ -469,7 +470,7 @@ export const getMyLoanApplications = async (req: Request, res: Response) => {
       restaurantId = user.id;
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
-    } else if (user.role === "ADMIN") {
+    } else if (isDashboardRole(user.role)) {
       restaurantId =
         (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
@@ -539,7 +540,7 @@ export const getLoanApplicationById = async (req: Request, res: Response) => {
       (userRole === "RESTAURANT" && loan.restaurantId === userId) ||
       (userRole === "AFFILIATOR" &&
         loan.restaurantId === (req as any).user.restaurantId) ||
-      userRole === "ADMIN";
+      isDashboardRole(userRole);
 
     if (!isOwner) {
       return res.status(403).json({
@@ -898,7 +899,7 @@ export const getOutstandingBalance = async (req: Request, res: Response) => {
 
     // Check authorization
     const isOwner =
-      voucher.restaurantId === restaurantId || userRole === "ADMIN";
+      voucher.restaurantId === restaurantId || isDashboardRole(userRole);
 
     if (!isOwner) {
       return res.status(403).json({
@@ -985,7 +986,7 @@ export const getVoucherPenalties = async (req: Request, res: Response) => {
 
     // Check authorization
     const isOwner =
-      voucher.restaurantId === restaurantId || userRole === "ADMIN";
+      voucher.restaurantId === restaurantId || isDashboardRole(userRole);
 
     if (!isOwner) {
       return res.status(403).json({
@@ -1058,7 +1059,7 @@ export const markLoanApplicationAsAccepted = async (
 
     // Check authorization - restaurants can accept their own loans, admins can accept any
     const isAuthorized =
-      userRole === "ADMIN" ||
+      isDashboardRole(userRole) ||
       (userRole === "RESTAURANT" && existingLoan.restaurantId === userId) ||
       (userRole === "AFFILIATOR" &&
         existingLoan.restaurantId === (req as any).user.restaurantId);
@@ -1077,7 +1078,7 @@ export const markLoanApplicationAsAccepted = async (
     }
 
     // For admin users, require acceptedAmount and paymentDays
-    if (userRole === "ADMIN") {
+    if (isDashboardRole(userRole)) {
       if (!acceptedAmount || !paymentDays) {
         return res.status(400).json({
           message: "Accepted amount and payment days are required for admin acceptance",
@@ -1151,7 +1152,7 @@ export const getRestaurantCreditSummary = async (
       restaurantId = user.id;
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
-    } else if (user.role === "ADMIN") {
+    } else if (isDashboardRole(user.role)) {
       restaurantId =
         (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {

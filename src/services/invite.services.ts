@@ -7,6 +7,7 @@ import { checkExistingUser } from "./userServices";
 interface CreateInviteData {
   email: string;
   role: Role;
+  adminRoleId?: string | null;
 }
 
 interface AcceptInviteData {
@@ -21,7 +22,7 @@ interface AcceptInviteData {
 export const inviteServices = {
   // Create invitation
   async createInvite(data: CreateInviteData) {
-    const { email, role } = data;
+    const { email, role, adminRoleId } = data;
 
     // Check if user already exists
     const existingUser = await checkExistingUser(undefined, email || undefined);
@@ -51,6 +52,7 @@ export const inviteServices = {
       data: {
         email,
         role,
+        adminRoleId: adminRoleId || null,
         token,
         expiresAt,
       },
@@ -130,6 +132,11 @@ export const inviteServices = {
 
     const hashedPassword = await hashPassword(password);
 
+    // The role may have been deleted after the invite was sent
+    const adminRole = invitation.adminRoleId
+      ? await prisma.adminRole.findUnique({ where: { id: invitation.adminRoleId }, select: { id: true } })
+      : null;
+
     // Create user and mark invitation as used
     const [user] = await prisma.$transaction([
       prisma.admin.create({
@@ -139,6 +146,7 @@ export const inviteServices = {
           phone,
           password: hashedPassword,
           role: invitation.role,
+          adminRoleId: adminRole?.id ?? null,
           termsAndConditions:
             invitation.role === "TRADER" && termsAndConditions
               ? termsAndConditions

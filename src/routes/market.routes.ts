@@ -16,7 +16,7 @@ import {
   exportComparison,
   getLowestPriceComparison,
 } from "../controllers/market.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 
 const marketRoutes = Router();
 
@@ -24,7 +24,7 @@ const marketRoutes = Router();
 marketRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   createMarket,
 );
 
@@ -35,14 +35,14 @@ marketRoutes.get("/:marketId", isAuthenticated, getMarketById);
 marketRoutes.put(
   "/:marketId",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   updateMarket,
 );
 
 marketRoutes.delete(
   "/:marketId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("markets"),
   deleteMarket,
 );
 
@@ -50,7 +50,7 @@ marketRoutes.delete(
 marketRoutes.post(
   "/prices",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   recordMarketPrice,
 );
 
@@ -63,21 +63,21 @@ marketRoutes.post("/prices/analyze", isAuthenticated, analyzePrice);
 marketRoutes.get(
   "/prices/by-product",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   getMarketPricesByProduct,
 );
 
 marketRoutes.put(
   "/prices/:historyId",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   updateMarketPriceHistory,
 );
 
 marketRoutes.delete(
   "/prices/:historyId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("markets"),
   deleteMarketPriceHistory,
 );
 
@@ -85,21 +85,21 @@ marketRoutes.delete(
 marketRoutes.get(
   "/export/markets",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   exportMarkets,
 );
 
 marketRoutes.get(
   "/export/price-history",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   exportPriceHistory,
 );
 
 marketRoutes.get(
   "/export/comparison",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   exportComparison,
 );
 

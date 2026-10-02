@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { UserController } from "../controllers/userController";
 import { Role } from "@prisma/client";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 import FarmerController, {
   submitProductController,
 } from "../controllers/farmer.controller";
@@ -47,7 +47,7 @@ farmersRoutes.patch(
 );
 
 farmersRoutes.post("/", UserController.createFarmer);
-farmersRoutes.post("/admin/create", isAuthenticated, checkPermission(Role.ADMIN, Role.AGGREGATOR), UserController.createFarmerByAdmin);
+farmersRoutes.post("/admin/create", isAuthenticated, allow("farmers", "AGGREGATOR"), UserController.createFarmerByAdmin);
 farmersRoutes.get("/", UserController.getAllFarmers);
 farmersRoutes.get("/:id", UserController.getFarmerById);
 farmersRoutes.put("/:id", UserController.updateFarmer);

@@ -39,6 +39,7 @@ import prisma from "../prisma";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 import { getPaymentMethodByIdService } from "../services/payment-method.service";
 
+import { isDashboardRole } from "../config/permissions";
 // ==================== SUBSCRIPTION PLAN CONTROLLERS ====================
 
 /**
@@ -400,7 +401,7 @@ export const getMyCurrentSubscription = async (req: Request, res: Response) => {
       restaurantId = user.id;
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
-    } else if (user.role === "ADMIN") {
+    } else if (isDashboardRole(user.role)) {
       restaurantId =
         (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
@@ -496,7 +497,7 @@ export const updateRestaurantSubscription = async (
     }
 
     // Only admins can change status directly
-    if (status && userRole !== "ADMIN") {
+    if (status && !isDashboardRole(userRole)) {
       return res.status(403).json({
         message: "Only admins can change subscription status",
       });

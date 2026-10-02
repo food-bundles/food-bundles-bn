@@ -7,7 +7,7 @@ import {
   approveSubmission,
   updateProductQuantityFromSubmission,
 } from "../controllers/productController";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 import { upload, validateImages } from "../utils/imageUpload";
 
 const submissionsRoutes = Router();
@@ -16,7 +16,7 @@ const submissionsRoutes = Router();
 submissionsRoutes.get(
   "/verified",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("farmer_submissions"),
   getVerifiedSubmissions
 );
 
@@ -24,7 +24,7 @@ submissionsRoutes.get(
 submissionsRoutes.get(
   "/awaiting-feedback",
   isAuthenticated,
-  checkPermission(Role.AGGREGATOR, Role.ADMIN),
+  allow("farmer_submissions", "AGGREGATOR"),
   ProductVerifyController.getSubmissionsAwaitingFeedback
 );
 
@@ -61,7 +61,7 @@ submissionsRoutes.get(
 submissionsRoutes.patch(
   "/:submissionId/products/:productId/update-quantity",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("farmer_submissions"),
   updateProductQuantityFromSubmission
 );
 
@@ -69,7 +69,7 @@ submissionsRoutes.patch(
 submissionsRoutes.post(
   "/:submissionId/create-product",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("farmer_submissions"),
   upload.array("images", 4),
   validateImages,
   createProductFromSubmission
@@ -79,7 +79,7 @@ submissionsRoutes.post(
 submissionsRoutes.patch(
   "/:submissionId/approve",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("farmer_submissions"),
   approveSubmission
 );
 
@@ -87,7 +87,7 @@ submissionsRoutes.patch(
 submissionsRoutes.post(
   "/:submissionId/purchase",
   isAuthenticated,
-  checkPermission(Role.AGGREGATOR, Role.ADMIN),
+  allow("farmer_submissions", "AGGREGATOR"),
   ProductVerifyController.purchaseProduct
 );
 
@@ -95,7 +95,7 @@ submissionsRoutes.post(
 submissionsRoutes.put(
   "/:submissionId/clear",
   isAuthenticated,
-  checkPermission(Role.AGGREGATOR, Role.ADMIN),
+  allow("farmer_submissions", "AGGREGATOR"),
   ProductVerifyController.clearSubmission
 );
 

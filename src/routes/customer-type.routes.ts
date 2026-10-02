@@ -11,28 +11,28 @@ import {
   assignCustomerType,
   swapCustomerTypePricing,
 } from "../controllers/customer-type.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 
 const customerTypeRoutes = Router();
 
 customerTypeRoutes.get("/", getAllCustomerTypes);
 
-customerTypeRoutes.get("/usage", isAuthenticated, checkPermission("ADMIN"), getCustomerTypeUsage);
+customerTypeRoutes.get("/usage", isAuthenticated, allow("customer_types"), getCustomerTypeUsage);
 
-customerTypeRoutes.get("/price-usage", isAuthenticated, checkPermission("ADMIN"), getPriceUsage);
+customerTypeRoutes.get("/price-usage", isAuthenticated, allow("customer_types"), getPriceUsage);
 
-customerTypeRoutes.patch("/assign-customer-type", isAuthenticated, checkPermission("ADMIN"), assignCustomerType);
+customerTypeRoutes.patch("/assign-customer-type", isAuthenticated, allow("customer_types"), assignCustomerType);
 
-customerTypeRoutes.post("/swap-pricing", isAuthenticated, checkPermission("ADMIN"), swapCustomerTypePricing);
+customerTypeRoutes.post("/swap-pricing", isAuthenticated, allow("customer_types"), swapCustomerTypePricing);
 
-customerTypeRoutes.post("/", isAuthenticated, checkPermission("ADMIN"), createCustomerType);
+customerTypeRoutes.post("/", isAuthenticated, allow("customer_types"), createCustomerType);
 
-customerTypeRoutes.patch("/:customerTypeId/status", isAuthenticated, checkPermission("ADMIN"), toggleCustomerTypeStatus);
+customerTypeRoutes.patch("/:customerTypeId/status", isAuthenticated, allow("customer_types"), toggleCustomerTypeStatus);
 
-customerTypeRoutes.get("/:customerTypeId", isAuthenticated, checkPermission("ADMIN"), getCustomerTypeById);
+customerTypeRoutes.get("/:customerTypeId", isAuthenticated, allow("customer_types"), getCustomerTypeById);
 
-customerTypeRoutes.patch("/:customerTypeId", isAuthenticated, checkPermission("ADMIN"), updateCustomerType);
+customerTypeRoutes.patch("/:customerTypeId", isAuthenticated, allow("customer_types"), updateCustomerType);
 
-customerTypeRoutes.delete("/:customerTypeId", isAuthenticated, checkPermission("ADMIN"), deleteCustomerType);
+customerTypeRoutes.delete("/:customerTypeId", isAuthenticated, allow("customer_types"), deleteCustomerType);
 
 export default customerTypeRoutes;

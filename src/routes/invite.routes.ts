@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { inviteController } from "../controllers/invite.controller";
-import { checkPermission, isAuthenticated } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 
 const inviteRoutes = Router();
 
@@ -8,7 +8,7 @@ const inviteRoutes = Router();
 inviteRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("invitations"),
   inviteController.createInvite
 );
 
@@ -16,7 +16,7 @@ inviteRoutes.post(
 inviteRoutes.get(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("invitations"),
   inviteController.getAllInvites
 );
 
@@ -24,7 +24,7 @@ inviteRoutes.get(
 inviteRoutes.get(
   "/:id",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("invitations"),
   inviteController.getInviteById
 );
 
@@ -38,7 +38,7 @@ inviteRoutes.post("/accept", inviteController.acceptInvite);
 inviteRoutes.post(
   "/:id/resend",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("invitations"),
   inviteController.resendInvite
 );
 
@@ -46,7 +46,7 @@ inviteRoutes.post(
 inviteRoutes.delete(
   "/:id",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("invitations"),
   inviteController.cancelInvite
 );
 

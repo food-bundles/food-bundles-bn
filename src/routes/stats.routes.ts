@@ -10,7 +10,7 @@ import {
   getRecentActivities,
   getSystemStatus,
 } from "../controllers/stats.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 
 const router = Router();
 
@@ -28,7 +28,7 @@ const router = Router();
 router.get(
   "/dashboard",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("dashboard"),
   getDashboardStats
 );
 
@@ -45,7 +45,7 @@ router.get(
  * @query dateFrom - Start date filter (optional)
  * @query dateTo - End date filter (optional)
  */
-router.get("/users", isAuthenticated, checkPermission("ADMIN"), getUserStats);
+router.get("/users", isAuthenticated, allow("dashboard"), getUserStats);
 
 /**
  * @route GET /stats/orders
@@ -56,7 +56,7 @@ router.get("/users", isAuthenticated, checkPermission("ADMIN"), getUserStats);
  * @query dateFrom - Start date filter (optional)
  * @query dateTo - End date filter (optional)
  */
-router.get("/orders", isAuthenticated, checkPermission("ADMIN"), getOrderStats);
+router.get("/orders", isAuthenticated, allow("dashboard"), getOrderStats);
 
 /**
  * @route GET /stats/finance
@@ -70,7 +70,7 @@ router.get("/orders", isAuthenticated, checkPermission("ADMIN"), getOrderStats);
 router.get(
   "/finance",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("dashboard"),
   getFinanceStats
 );
 
@@ -86,7 +86,7 @@ router.get(
 router.get(
   "/subscriptions",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("dashboard"),
   getSubscriptionStats
 );
 
@@ -102,7 +102,7 @@ router.get(
 router.get(
   "/vouchers",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("dashboard"),
   getVoucherStats
 );
 
@@ -115,7 +115,7 @@ router.get(
  * @query dateFrom - Start date filter (optional)
  * @query dateTo - End date filter (optional)
  */
-router.get("/quick", isAuthenticated, checkPermission("ADMIN"), getQuickStats);
+router.get("/quick", isAuthenticated, allow("dashboard"), getQuickStats);
 
 /**
  * @route GET /stats/activities
@@ -125,7 +125,7 @@ router.get("/quick", isAuthenticated, checkPermission("ADMIN"), getQuickStats);
 router.get(
   "/activities",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("dashboard"),
   getRecentActivities
 );
 
@@ -137,7 +137,7 @@ router.get(
 router.get(
   "/system-status",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("dashboard"),
   getSystemStatus
 );
 
