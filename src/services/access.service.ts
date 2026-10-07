@@ -90,42 +90,46 @@ export class AccessError extends Error {
  * 3. Existing ADMIN / MARKET_PRICES users without a role get the matching one
  */
 export const ensureSystemRoles = async () => {
-  const administrator = await prisma.adminRole.upsert({
-    where: { name: SYSTEM_ROLES.ADMINISTRATOR.name },
-    update: { permissions: ALL_PERMISSIONS, isSystem: true },
-    create: {
-      name: SYSTEM_ROLES.ADMINISTRATOR.name,
-      description: SYSTEM_ROLES.ADMINISTRATOR.description,
-      permissions: ALL_PERMISSIONS,
-      isSystem: true,
-    },
-  });
+  try {
+    const administrator = await prisma.adminRole.upsert({
+      where: { name: SYSTEM_ROLES.ADMINISTRATOR.name },
+      update: { permissions: ALL_PERMISSIONS, isSystem: true },
+      create: {
+        name: SYSTEM_ROLES.ADMINISTRATOR.name,
+        description: SYSTEM_ROLES.ADMINISTRATOR.description,
+        permissions: ALL_PERMISSIONS,
+        isSystem: true,
+      },
+    });
 
-  const marketManager = await prisma.adminRole.upsert({
-    where: { name: SYSTEM_ROLES.MARKET_PRICES_MANAGER.name },
-    update: { isSystem: true },
-    create: {
-      name: SYSTEM_ROLES.MARKET_PRICES_MANAGER.name,
-      description: SYSTEM_ROLES.MARKET_PRICES_MANAGER.description,
-      permissions: SYSTEM_ROLES.MARKET_PRICES_MANAGER.permissions,
-      isSystem: true,
-    },
-  });
+    const marketManager = await prisma.adminRole.upsert({
+      where: { name: SYSTEM_ROLES.MARKET_PRICES_MANAGER.name },
+      update: { isSystem: true },
+      create: {
+        name: SYSTEM_ROLES.MARKET_PRICES_MANAGER.name,
+        description: SYSTEM_ROLES.MARKET_PRICES_MANAGER.description,
+        permissions: SYSTEM_ROLES.MARKET_PRICES_MANAGER.permissions,
+        isSystem: true,
+      },
+    });
 
-  const [admins, marketUsers] = await Promise.all([
-    prisma.admin.updateMany({
-      where: { role: "ADMIN", adminRoleId: null },
-      data: { adminRoleId: administrator.id },
-    }),
-    prisma.admin.updateMany({
-      where: { role: "MARKET_PRICES", adminRoleId: null },
-      data: { adminRoleId: marketManager.id },
-    }),
-  ]);
+    const [admins, marketUsers] = await Promise.all([
+      prisma.admin.updateMany({
+        where: { role: "ADMIN", adminRoleId: null },
+        data: { adminRoleId: administrator.id },
+      }),
+      prisma.admin.updateMany({
+        where: { role: "MARKET_PRICES", adminRoleId: null },
+        data: { adminRoleId: marketManager.id },
+      }),
+    ]);
 
-  if (admins.count || marketUsers.count) {
-    console.log(
-      `[roles] Assigned Administrator to ${admins.count} and Market Prices Manager to ${marketUsers.count} existing user(s)`,
-    );
+    if (admins.count || marketUsers.count) {
+      console.log(
+        `[roles] Assigned Administrator to ${admins.count} and Market Prices Manager to ${marketUsers.count} existing user(s)`,
+      );
+    }
+  } catch (error: any) {
+    console.warn("[roles] Warning: Could not sync system roles at startup:", error?.message || error);
   }
 };

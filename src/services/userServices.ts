@@ -884,7 +884,7 @@ export const getAdminByIdService = async (id: string) => {
       username: true,
       email: true,
       role: true,
-      adminRole: { select: { id: true, name: true } },
+      AdminRole: { select: { id: true, name: true } },
       phone: true,
       location: true,
       province: true,

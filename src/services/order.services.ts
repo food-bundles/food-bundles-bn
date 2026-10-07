@@ -1604,7 +1604,7 @@ export const generatePaymentLinkService = async (
  * Service to fetch a public-safe order summary by payment link token
  */
 export const getOrderByPaymentLinkService = async (token: string) => {
-  const order = await prisma.order.findUnique({
+  const order = await prisma.order.findFirst({
     where: { paymentLinkToken: token },
     include: {
       restaurant: {
@@ -1636,12 +1636,12 @@ export const getOrderByPaymentLinkService = async (token: string) => {
 
   return {
     orderNumber: order.orderNumber,
-    restaurantName: order.restaurant.name,
+    restaurantName: order.restaurant?.name || "Restaurant",
     status: order.status,
     paymentStatus: order.paymentStatus,
     currency: order.currency || "RWF",
     totalAmount: order.totalAmount,
-    items: order.orderItems,
+    items: order.orderItems || [],
   };
 };
 
@@ -1663,7 +1663,7 @@ export const payViaPaymentLinkService = async (
     bankDetails?: { clientIp?: string };
   },
 ) => {
-  const order = await prisma.order.findUnique({
+  const order = await prisma.order.findFirst({
     where: { paymentLinkToken: token },
   });
 

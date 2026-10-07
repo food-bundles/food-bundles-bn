@@ -23,7 +23,7 @@ import {
   getWfpFilterOptions,
   clearWfpPrices,
 } from "../controllers/wfp-market.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 import { csvUpload } from "../middleware/csvUpload";
 
 const marketRoutes = Router();
@@ -34,7 +34,7 @@ const marketRoutes = Router();
 marketRoutes.post(
   "/wfp/upload",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
   csvUpload.single("file"),
   uploadWfpCsv
 );
@@ -46,7 +46,7 @@ marketRoutes.get("/wfp/filter-options", getWfpFilterOptions);
 marketRoutes.delete(
   "/wfp/clear",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("markets", "ADMIN"),
   clearWfpPrices
 );
 

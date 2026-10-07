@@ -78,7 +78,7 @@ export const importWfpCsvService = async (
   let headers: string[] = [];
   let totalRows = 0;
   let insertedCount = 0;
-  const batchSize = 5000;
+  const batchSize = 2000;
   let batch: any[] = [];
   const discoveredMarkets = new Map<
     string,

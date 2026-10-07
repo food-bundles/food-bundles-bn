@@ -2521,7 +2521,7 @@ export const confirmLoanRepaymentService = async (
   const payment = await prisma.loanRepayment.findUnique({
     where: { id: paymentId },
     include: {
-      session: {
+      LoanSession: {
         include: {
           restaurant: { select: { id: true, name: true, phone: true } },
         },
@@ -2535,7 +2535,7 @@ export const confirmLoanRepaymentService = async (
       where: { id: sessionId },
       include: { restaurant: { select: { id: true, name: true, phone: true } } },
     });
-    return { repayment: payment, session: freshSession ?? payment.session };
+    return { repayment: payment, session: freshSession ?? (payment as any).LoanSession };
   }
 
   const result = await prisma.$transaction(async (tx: any) => {

@@ -354,9 +354,6 @@ model Admin {
   walletTransactions       WalletTransaction[]   @relation("WalletTransactionAdmin")
   approvedWithdrawals      WalletTransaction[]   @relation("WithdrawApprover")
   traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
-  // Dynamic dashboard role (permissions). Null = legacy behaviour from `role`.
-  adminRoleId              String?
-  adminRole                AdminRole?            @relation(fields: [adminRoleId], references: [id], onDelete: SetNull)
 
   @@index([adminRoleId])
 }
@@ -584,7 +581,7 @@ model Order {
   updatedAt           DateTime             @updatedAt
   paidAt              DateTime?
   paymentLinkExpiry   DateTime?
-  paymentLinkToken    String?              @unique
+  paymentLinkToken    String?
   DeliveryOTP         DeliveryOTP?
   cart                Cart?                @relation(fields: [cartId], references: [id])
   logistics           Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
@@ -607,7 +604,6 @@ model Order {
   @@index([paymentLinkToken])
   @@index([flwStatus])
   @@index([cartId])
-  @@index([paymentLinkToken])
 }
 
 model OrderItem {
@@ -672,11 +668,8 @@ model Wallet {
   commissionEarned          Float               @default(0)
   commission                Float               @default(3.0)
   commissionMode            CommissionMode      @default(NORMAL)
-  unlockFeeEnabled          Boolean             @default(false)
-  unlockFeePercentage       Float?
   commissionModeChangedAt   DateTime?
   lastMonthlyCommissionDate DateTime?
-  leftoverPolicy            String              @default("USELESS")
   totalDeposited            Float               @default(0)
   pendingWithdrawBalance    Float               @default(0)
   pendingWithdrawCommission Float               @default(0)
@@ -691,6 +684,9 @@ model Wallet {
   isActive                  Boolean             @default(true)
   createdAt                 DateTime            @default(now())
   updatedAt                 DateTime            @updatedAt
+  leftoverPolicy            String              @default("USELESS")
+  unlockFeeEnabled          Boolean             @default(false)
+  unlockFeePercentage       Float?
   delegationHistories       DelegationHistory[]
   restaurant                Restaurant?         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   trader                    Admin?              @relation("TraderWallet", fields: [traderId], references: [id], onDelete: Cascade)
@@ -1143,29 +1139,6 @@ model ContactSubmission {
   @@map("contact_submissions")
 }
 
-model SupportRequest {
-  id               String    @id @default(uuid())
-  ticketNumber     String    @unique
-  name             String
-  email            String
-  subject          String
-  category         String
-  severity         String?
-  preferredContact String    @default("email")
-  description      String
-  screenshots      String[]  @default([])
-  status           String    @default("open")
-  response         String?
-  respondedAt      DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  @@index([email])
-  @@index([status])
-  @@index([ticketNumber])
-  @@map("support_requests")
-}
-
 model PromoCode {
   id                    String        @id @default(uuid())
   code                  String        @unique
@@ -1271,37 +1244,6 @@ model MarketPriceHistory {
   @@index([marketId])
   @@index([recordedDate])
   @@index([createdAt])
-}
-
-model CustomerType {
-  id                   String                 @id @default(uuid())
-  name                 String                 @unique
-  description          String?
-  isActive             Boolean                @default(true)
-  createdBy            String?
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
-  ProductCustomerPrice ProductCustomerPrice[]
-  Restaurant           Restaurant[]
-
-  @@index([isActive])
-  @@index([name])
-}
-
-model ProductCustomerPrice {
-  id             String       @id @default(uuid())
-  productId      String
-  customerTypeId String
-  price          Float
-  purchasePrice  Float        @default(0)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  CustomerType   CustomerType @relation(fields: [customerTypeId], references: [id], onDelete: Cascade)
-  Product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@unique([productId, customerTypeId])
-  @@index([customerTypeId])
-  @@index([productId])
 }
 
 model VoucherCard {
@@ -1538,19 +1480,8 @@ model WalletTransfer {
   @@index([createdAt])
 }
 
-model AdminRole {
-  id          String   @id
-  name        String   @unique
-  description String?
-  permissions String[] @default([])
-  isSystem    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
-  Admin       Admin[]
-}
-
 model LoanRepayment {
-  id               String        @id
+  id               String        @id @default(uuid())
   sessionId        String
   amount           Float
   paymentMethod    String
@@ -1563,7 +1494,7 @@ model LoanRepayment {
   status           PaymentStatus @default(PENDING)
   confirmedAt      DateTime?
   createdAt        DateTime      @default(now())
-  updatedAt        DateTime
+  updatedAt        DateTime      @updatedAt
   LoanSession      LoanSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
@@ -1571,27 +1502,33 @@ model LoanRepayment {
   @@index([txRef])
 }
 
-model public_SupportRequest {
-  id               String    @id
-  ticketNumber     String    @unique
-  name             String
-  email            String
-  subject          String
-  category         String
-  severity         String?
-  preferredContact String    @default("email")
-  description      String
-  screenshots      String[]
-  status           String    @default("open")
-  response         String?
-  respondedAt      DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime
+model WfpMarketPrice {
+  id          String   @id @default(uuid())
+  date        DateTime
+  province    String?
+  district    String?
+  marketName  String
+  marketId    Int?
+  latitude    Float?
+  longitude   Float?
+  category    String
+  commodity   String
+  commodityId Int?
+  unit        String   @default("KG")
+  priceFlag   String?
+  priceType   String   @default("Wholesale")
+  currency    String   @default("RWF")
+  price       Float
+  usdPrice    Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  @@index([email])
-  @@index([status])
-  @@index([ticketNumber])
-  @@map("SupportRequest")
+  @@index([date])
+  @@index([marketName])
+  @@index([commodity])
+  @@index([category])
+  @@index([province])
+  @@index([district])
 }
 
 enum TraderTransactionType {

@@ -715,7 +715,7 @@ export class UserController {
       if (!user) {
         user = await prisma.admin.findUnique({
           where: { id: payload.id },
-          include: { adminRole: { select: { id: true, name: true } } },
+          include: { AdminRole: { select: { id: true, name: true } } },
         });
         if (user) userRole = "admin";
       }
