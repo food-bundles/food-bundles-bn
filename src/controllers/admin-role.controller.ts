@@ -161,7 +161,7 @@ export const assignAdminRole = async (req: Request, res: Response) => {
         username: true,
         email: true,
         role: true,
-        adminRole: { select: { id: true, name: true } },
+        AdminRole: { select: { id: true, name: true } },
       },
     });
     res.json({ success: true, message: "Role assigned", data: updated });
