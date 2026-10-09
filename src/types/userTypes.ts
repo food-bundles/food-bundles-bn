@@ -18,6 +18,7 @@ export interface ICreateRestaurantData extends UserLocationData {
   role: Role;
   /** Customer type picked at signup; sets the prices this customer pays */
   customerTypeId?: string | null;
+  agreed?: boolean;
 }
 
 export interface ICreateAdminData extends Partial<UserLocationData> {

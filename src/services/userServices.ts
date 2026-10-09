@@ -385,6 +385,7 @@ export const createRestaurantService = async (
     cell,
     village,
     customerTypeId,
+    agreed,
   } = restaurantData;
   let role = restaurantData.role || "RESTAURANT"; // Default to RESTAURANT if not specified
 
