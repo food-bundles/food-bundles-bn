@@ -356,11 +356,31 @@ export const updateOrder = async (req: Request, res: Response) => {
       });
     }
 
-    // Only admins can update payment-related fields
-    if ((paymentStatus || paymentReference) && !isDashboardRole(userRole)) {
+    // Only dashboard users who can manage orders (admins, super admins and
+    // roles with orders.manage) can update payment-related fields
+    const canManageOrders =
+      isDashboardRole(userRole) &&
+      (userRole === "SUPERUSER" || user.permissions?.includes("orders.manage"));
+    if ((paymentStatus || paymentReference) && !canManageOrders) {
       return res.status(403).json({
         message: "Only admins can update payment information",
       });
+    }
+
+    // Order status may be changed even on a cancelled order, but not while the
+    // payment failed — the payment status must be corrected first (admins do
+    // this via the payment stepper), then the order status can be edited.
+    if (status !== undefined && paymentStatus === undefined) {
+      const currentOrder = await prisma.order.findUnique({
+        where: { id: orderId },
+        select: { paymentStatus: true },
+      });
+      if (currentOrder?.paymentStatus === PaymentStatus.FAILED) {
+        return res.status(409).json({
+          message:
+            "Payment status is FAILED. Update the payment status first, then the order status can be changed.",
+        });
+      }
     }
 
     // Special handling for DELIVERED status
