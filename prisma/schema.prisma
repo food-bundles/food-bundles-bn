@@ -153,6 +153,41 @@ model FarmerSubmission {
   approvedProduct      Product?              @relation(fields: [approvedProductId], references: [id])
   category             ProductCategory?      @relation(fields: [categoryId], references: [id])
   farmer               Farmer                @relation(fields: [farmerId], references: [id])
+  payouts              SubmissionPayout[]
+  statusHistory        SubmissionStatusHistory[]
+}
+
+model SubmissionPayout {
+  id            String        @id @default(uuid())
+  submissionId  String
+  amount        Float
+  phoneNumber   String
+  paypackRef    String?       @unique
+  paypackStatus String?
+  status        PaymentStatus @default(PENDING)
+  initiatedBy   String
+  confirmedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  submission    FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  initiator     Admin            @relation("SubmissionPayoutInitiator", fields: [initiatedBy], references: [id])
+
+  @@index([submissionId])
+  @@index([status])
+  @@index([paypackRef])
+}
+
+model SubmissionStatusHistory {
+  id           String   @id @default(uuid())
+  submissionId String
+  fromStatus   String
+  toStatus     String
+  reason       String?
+  changedBy    String
+  createdAt    DateTime @default(now())
+  submission   FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
 }
 
 model FarmerSecurityEvent {
@@ -333,6 +368,7 @@ model Admin {
   adminRoleId              String?
   AdminRole                AdminRole?            @relation(fields: [adminRoleId], references: [id])
   aggregatorAssignments    FarmerSubmission[]    @relation("Aggregator")
+  initiatedPayouts         SubmissionPayout[]    @relation("SubmissionPayoutInitiator")
   approvedLoans            LoanApplication[]     @relation("LoanApprover")
   managedLoans             LoanApplication[]     @relation("LoanManager")
   approvedSessions         LoanSession[]         @relation("SessionApprover")
@@ -1754,6 +1790,8 @@ enum NotificationEvent {
   SUBMISSION_VERIFIED
   SUBMISSION_FEEDBACK_RECEIVED
   SUBMISSION_REOPENED
+  SUBMISSION_PAID
+  SUBMISSION_FORCE_COMPLETED
 }
 
 enum NotificationTarget {

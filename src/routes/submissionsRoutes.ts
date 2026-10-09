@@ -1,5 +1,6 @@
 import { Router } from "express";
 import ProductVerifyController from "../controllers/ProductVerifyController";
+import SubmissionPayoutController from "../controllers/submissionPayout.controller";
 import { Role } from "@prisma/client";
 import {
   createProductFromSubmission,
@@ -97,6 +98,70 @@ submissionsRoutes.put(
   isAuthenticated,
   allow("farmer_submissions", "AGGREGATOR"),
   ProductVerifyController.clearSubmission
+);
+
+// Reject a submission (admin-side, independent of farmer's own feedback flow)
+submissionsRoutes.patch(
+  "/:submissionId/reject",
+  isAuthenticated,
+  allow("farmer_submissions"),
+  SubmissionPayoutController.reject
+);
+
+// Delete a submission (pre-approval only)
+submissionsRoutes.delete(
+  "/:submissionId",
+  isAuthenticated,
+  allow("farmer_submissions"),
+  SubmissionPayoutController.deleteSubmission
+);
+
+// Force-complete a submission without waiting for farmer feedback
+submissionsRoutes.patch(
+  "/:submissionId/force-complete",
+  isAuthenticated,
+  allow("farmer_submissions"),
+  SubmissionPayoutController.forceComplete
+);
+
+// Reverse a submission's status (admin override + audit trail)
+submissionsRoutes.patch(
+  "/:submissionId/reverse-status",
+  isAuthenticated,
+  allow("farmer_submissions"),
+  SubmissionPayoutController.reverseStatus
+);
+
+// Get a submission's status change history
+submissionsRoutes.get(
+  "/:submissionId/status-history",
+  isAuthenticated,
+  allow("farmer_submissions", "AGGREGATOR"),
+  SubmissionPayoutController.getStatusHistory
+);
+
+// Initiate a PayPack cashout payout for an APPROVED submission
+submissionsRoutes.post(
+  "/:submissionId/payout",
+  isAuthenticated,
+  allow("farmer_submissions", "AGGREGATOR"),
+  SubmissionPayoutController.initiatePayout
+);
+
+// Confirm (or mark failed) a pending payout
+submissionsRoutes.patch(
+  "/:submissionId/payout/:payoutId/confirm",
+  isAuthenticated,
+  allow("farmer_submissions"),
+  SubmissionPayoutController.confirmPayout
+);
+
+// List payouts for a submission
+submissionsRoutes.get(
+  "/:submissionId/payouts",
+  isAuthenticated,
+  allow("farmer_submissions", "AGGREGATOR"),
+  SubmissionPayoutController.getPayouts
 );
 
 // Get specific submission by ID role-based (keep this last among GET routes)
