@@ -20,8 +20,11 @@ import {
   verifyAdminDepositOTP,
   requestWalletAdjustmentOTP,
   verifyWalletAdjustmentOTP,
+  transferToWallet,
+  getAllWalletTransfers,
+  getMyWalletTransfers,
 } from "../controllers/wallet.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 
 const walletRoutes = Router();
 
@@ -80,12 +83,12 @@ walletRoutes.get(
 /**
  * Verify wallet top-up payment
  * GET /wallets/verify-topup/:transactionId
- * Access: Restaurant only
+ * Access: Restaurant, Affiliator, Hotel, Trader or Admin (owner-scoped by transaction id)
  */
 walletRoutes.get(
   "/verify-topup/:transactionId",
   isAuthenticated,
-  checkPermission("RESTAURANT"),
+  allow("deposits", "RESTAURANT", "AFFILIATOR", "HOTEL", "TRADER"),
   verifyWalletTopUp
 );
 
@@ -101,6 +104,46 @@ walletRoutes.get(
 );
 
 // ========================================
+// WALLET TRANSFER ROUTES (voucher amounts / Kayko)
+// ========================================
+
+/**
+ * Transfer voucher amount to restaurant wallet (Admin/Kayko)
+ * POST /wallets/transfers
+ * Access: Admin only
+ */
+walletRoutes.post(
+  "/transfers",
+  isAuthenticated,
+  allow("deposits"),
+  transferToWallet
+);
+
+/**
+ * Get all wallet transfers (Admin)
+ * GET /wallets/transfers
+ * Access: Admin only
+ */
+walletRoutes.get(
+  "/transfers",
+  isAuthenticated,
+  allow("deposits"),
+  getAllWalletTransfers
+);
+
+/**
+ * Get my wallet transfers (Restaurant)
+ * GET /wallets/my-transfers
+ * Access: Restaurant / Hotel / Affiliator
+ */
+walletRoutes.get(
+  "/my-transfers",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  getMyWalletTransfers
+);
+
+// ========================================
 // ADMIN WALLET ROUTES
 // ========================================
 
@@ -109,21 +152,21 @@ walletRoutes.get(
  * GET /wallets
  * Access: Admin only
  */
-walletRoutes.get("/", isAuthenticated, checkPermission("ADMIN"), getAllWallets);
+walletRoutes.get("/", isAuthenticated, allow("deposits"), getAllWallets);
 
 /**
  * Get restaurant wallets only
  * GET /wallets/restaurants
  * Access: Admin only
  */
-walletRoutes.get("/restaurants", isAuthenticated, checkPermission("ADMIN"), getRestaurantWallets);
+walletRoutes.get("/restaurants", isAuthenticated, allow("deposits"), getRestaurantWallets);
 
 /**
  * Get trader wallets only
  * GET /wallets/traders
  * Access: Admin only
  */
-walletRoutes.get("/traders", isAuthenticated, checkPermission("ADMIN"), getTraderWallets);
+walletRoutes.get("/traders", isAuthenticated, allow("deposits"), getTraderWallets);
 
 /**
  * Get all wallet transactions
@@ -133,7 +176,7 @@ walletRoutes.get("/traders", isAuthenticated, checkPermission("ADMIN"), getTrade
 walletRoutes.get(
   "/transactions",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   getAdminWalletTransactions
 );
 
@@ -145,7 +188,7 @@ walletRoutes.get(
 walletRoutes.get(
   "/restaurants/transactions",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   getRestaurantTransactions
 );
 
@@ -157,7 +200,7 @@ walletRoutes.get(
 walletRoutes.get(
   "/traders/transactions",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   getTraderTransactions
 );
 
@@ -169,7 +212,7 @@ walletRoutes.get(
 walletRoutes.get(
   "/:walletId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   getWalletById
 );
 
@@ -181,7 +224,7 @@ walletRoutes.get(
 walletRoutes.patch(
   "/:walletId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   updateWalletStatus
 );
 
@@ -193,7 +236,7 @@ walletRoutes.patch(
 walletRoutes.post(
   "/admin-deposit",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   adminDepositToWallet
 );
 
@@ -205,7 +248,7 @@ walletRoutes.post(
 walletRoutes.post(
   "/admin-deposit/request-otp",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   requestAdminDepositOTP
 );
 
@@ -217,7 +260,7 @@ walletRoutes.post(
 walletRoutes.post(
   "/admin-deposit/verify-otp",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   verifyAdminDepositOTP
 );
 
@@ -229,7 +272,7 @@ walletRoutes.post(
 walletRoutes.post(
   "/:walletId/adjust",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   adjustWalletBalance
 );
 
@@ -241,7 +284,7 @@ walletRoutes.post(
 walletRoutes.post(
   "/:walletId/adjust/request-otp",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   requestWalletAdjustmentOTP
 );
 
@@ -253,7 +296,7 @@ walletRoutes.post(
 walletRoutes.post(
   "/:walletId/adjust/verify-otp",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("deposits"),
   verifyWalletAdjustmentOTP
 );
 

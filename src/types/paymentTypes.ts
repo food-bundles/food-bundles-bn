@@ -239,6 +239,20 @@ export interface VoucherPaymentResult {
   };
   requiresAdditionalPayment?: boolean;
   additionalPaymentAmount?: number;
+  loanSessionDetails?: {
+    sessionId: string;
+    rrn: string;
+    approvedAmount: number;
+    creditUsed: number;
+    remainingCredit: number;
+    leftover?: number;
+    leftoverApplied?: string;
+    transferredToWallet?: number;
+  };
+  requiresTopUp?: boolean;
+  topUpRequired?: number;
+  walletBalance?: number;
+  loanCovered?: number;
   authorizationDetails?: {
     mode: string;
     redirectUrl: string;

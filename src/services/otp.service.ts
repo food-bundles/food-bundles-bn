@@ -107,6 +107,62 @@ export class OTPService {
     }
   }
 
+  /**
+   * OTP sent to the restaurant when an admin places an order on its behalf
+   * and pays with the restaurant's voucher or prepaid wallet. The restaurant
+   * shares the code with the admin to confirm it authorizes the payment.
+   */
+  static async sendAdminOrderOTPToRestaurant(
+    restaurantId: string,
+    paymentMethod: "VOUCHER" | "CASH",
+    amount: number,
+  ): Promise<{ success: boolean; message: string; phone?: string }> {
+    try {
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: restaurantId },
+        select: { phone: true },
+      });
+
+      if (!restaurant?.phone) {
+        return { success: false, message: "Restaurant phone number not found" };
+      }
+
+      const otp = this.generateOTP();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      await prisma.oTP.deleteMany({
+        where: {
+          phone: restaurant.phone,
+          purpose: "VOUCHER_CHECKOUT",
+          verified: false,
+        },
+      });
+
+      await prisma.oTP.create({
+        data: {
+          phone: restaurant.phone,
+          otp,
+          purpose: "VOUCHER_CHECKOUT",
+          expiresAt,
+        },
+      });
+
+      const source = paymentMethod === "VOUCHER" ? "voucher" : "prepaid wallet";
+      await sendMessage(
+        `FoodBundles: an order of ${amount.toLocaleString()} RWF is being placed for you and paid with your ${source}. Your confirmation code is ${otp}. Share it only with FoodBundles staff. Valid for 10 minutes.`,
+        restaurant.phone,
+      );
+
+      return {
+        success: true,
+        message: "OTP sent to restaurant",
+        phone: restaurant.phone,
+      };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  }
+
   static async sendAdminWalletOTP(
     adminId: string,
     operationType: "DEPOSIT" | "ADJUSTMENT",

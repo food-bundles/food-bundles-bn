@@ -20,8 +20,25 @@ import {
   getSubscriptionHistory,
   adminCreateRestaurantSubscription,
 } from "../controllers/subscription.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 import { handleSubscriptionWebhook } from "../controllers/subscription.webhook";
+import {
+  requestLoanAccess,
+  approveLoanAccess,
+  rejectLoanAccess,
+  disableLoanAccess,
+  enableLoanAccess,
+  getMyLoanAccess,
+  getAllLoanAccess,
+  createLoanProvider,
+  getAllLoanProviders,
+  updateLoanProviderStatus,
+  getAllLoanTraders,
+  updateTraderRequiresSubscription,
+  getLoanAccessProviders,
+  updateTraderUnlockFee,
+  updateTraderLeftoverPolicy,
+} from "../controllers/subscription.controller";
 
 const subscriptionRoutes = Router();
 
@@ -37,7 +54,7 @@ const subscriptionRoutes = Router();
 subscriptionRoutes.post(
   "/plans",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   createSubscriptionPlan
 );
 
@@ -63,7 +80,7 @@ subscriptionRoutes.get("/plans/:planId", getSubscriptionPlanById);
 subscriptionRoutes.patch(
   "/plans/:planId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   updateSubscriptionPlan
 );
 
@@ -75,7 +92,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.delete(
   "/plans/:planId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   deleteSubscriptionPlan
 );
 
@@ -102,8 +119,188 @@ subscriptionRoutes.post(
 subscriptionRoutes.get(
   "/my-subscriptions",
   isAuthenticated,
-  checkPermission("RESTAURANT", "AFFILIATOR", "ADMIN", "HOTEL"),
+  allow("subscriptions", "RESTAURANT", "AFFILIATOR", "HOTEL"),
   getMyCurrentSubscription
+);
+
+// ========================================
+// LOAN ACCESS ROUTES (reuse single subscription)
+// NOTE: these static /loan paths must be registered BEFORE the dynamic
+// /:subscriptionId routes below so they are matched correctly.
+// ========================================
+
+/**
+ * Create a loan provider (Admin)
+ * POST /subscriptions/loan/providers
+ * Access: Admin only
+ */
+subscriptionRoutes.post(
+  "/loan/providers",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  createLoanProvider
+);
+
+/**
+ * Get all loan providers
+ * GET /subscriptions/loan/providers
+ */
+subscriptionRoutes.get("/loan/providers", isAuthenticated, getAllLoanProviders);
+
+/**
+ * Update loan provider status (Admin)
+ * PATCH /subscriptions/loan/providers/:providerId
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/providers/:providerId",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  updateLoanProviderStatus
+);
+
+/**
+ * Get all loan traders (Admin)
+ * GET /subscriptions/loan/traders
+ * Access: Admin only
+ */
+subscriptionRoutes.get(
+  "/loan/traders",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  getAllLoanTraders
+);
+
+/**
+ * Toggle trader subscription requirement (Admin)
+ * PATCH /subscriptions/loan/traders/:traderId
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/traders/:traderId",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  updateTraderRequiresSubscription
+);
+
+/**
+ * Overview of all configurable loan providers — traders + platform (Admin)
+ * GET /subscriptions/loan/access-providers
+ * Access: Admin only
+ */
+subscriptionRoutes.get(
+  "/loan/access-providers",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  getLoanAccessProviders
+);
+
+/**
+ * Set/clear a trader's loan unlock fee (Admin)
+ * PATCH /subscriptions/loan/traders/:traderId/unlock-fee
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/traders/:traderId/unlock-fee",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  updateTraderUnlockFee
+);
+
+/**
+ * Set a trader-funded loan's leftover policy (Admin)
+ * PATCH /subscriptions/loan/traders/:traderId/leftover-policy
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/traders/:traderId/leftover-policy",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  updateTraderLeftoverPolicy
+);
+
+/**
+ * Request loan access via a loan-enabled plan
+ * POST /subscriptions/loan/request
+ * Access: Restaurant / Hotel / Affiliator
+ */
+subscriptionRoutes.post(
+  "/loan/request",
+  isAuthenticated,
+  checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR"),
+  requestLoanAccess
+);
+
+/**
+ * Get my loan access subscriptions
+ * GET /subscriptions/loan/my-subscriptions
+ * Access: Restaurant / Hotel / Affiliator
+ */
+subscriptionRoutes.get(
+  "/loan/my-subscriptions",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"], "RESTAURANT", "HOTEL", "AFFILIATOR"),
+  getMyLoanAccess
+);
+
+/**
+ * Get all loan access subscriptions with filters
+ * GET /subscriptions/loan
+ * Access: Admin only
+ */
+subscriptionRoutes.get(
+  "/loan",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  getAllLoanAccess
+);
+
+/**
+ * Approve a pending loan access request
+ * PATCH /subscriptions/loan/:subscriptionId/approve
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/:subscriptionId/approve",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  approveLoanAccess
+);
+
+/**
+ * Reject a pending loan access request
+ * PATCH /subscriptions/loan/:subscriptionId/reject
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/:subscriptionId/reject",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  rejectLoanAccess
+);
+
+/**
+ * Disable loan access
+ * PATCH /subscriptions/loan/:subscriptionId/disable
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/:subscriptionId/disable",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  disableLoanAccess
+);
+
+/**
+ * Enable loan access
+ * PATCH /subscriptions/loan/:subscriptionId/enable
+ * Access: Admin only
+ */
+subscriptionRoutes.patch(
+  "/loan/:subscriptionId/enable",
+  isAuthenticated,
+  allow(["subscriptions", "vouchers"]),
+  enableLoanAccess
 );
 
 /**
@@ -206,7 +403,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.post(
   "/admin/create",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   adminCreateRestaurantSubscription
 );
 
@@ -218,7 +415,7 @@ subscriptionRoutes.post(
 subscriptionRoutes.post(
   "/check-expired",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   checkExpiredSubscriptions
 );
 
@@ -230,7 +427,7 @@ subscriptionRoutes.post(
 subscriptionRoutes.get(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("subscriptions"),
   getAllSubscriptions
 );
 

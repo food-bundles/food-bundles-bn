@@ -11,7 +11,7 @@ import {
   deleteCampaign,
   sendWeeklyPriceUpdate,
 } from "../controllers/newsletter.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 
 const newsletterRoutes = Router();
 
@@ -24,7 +24,7 @@ newsletterRoutes.get("/status", getNewsletterStatus);
 newsletterRoutes.get(
   "/subscribers",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("newsletter"),
   getAllSubscribers,
 );
 
@@ -32,35 +32,35 @@ newsletterRoutes.get(
 newsletterRoutes.post(
   "/campaigns",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("newsletter"),
   createNewsletterCampaign,
 );
 
 newsletterRoutes.get(
   "/campaigns",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("newsletter"),
   getAllCampaigns,
 );
 
 newsletterRoutes.put(
   "/campaigns/:campaignId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("newsletter"),
   updateCampaign,
 );
 
 newsletterRoutes.delete(
   "/campaigns/:campaignId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("newsletter"),
   deleteCampaign,
 );
 
 newsletterRoutes.post(
   "/campaigns/:campaignId/send",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("newsletter"),
   sendNewsletterCampaign,
 );
 
@@ -68,7 +68,7 @@ newsletterRoutes.post(
 newsletterRoutes.post(
   "/weekly-update",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("newsletter"),
   sendWeeklyPriceUpdate,
 );
 

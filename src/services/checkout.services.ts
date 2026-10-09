@@ -10,6 +10,7 @@ import {
   processVoucherPaymentService,
   rollbackVoucherPaymentService,
 } from "./voucher.service";
+import { processLoanSessionPaymentService } from "./voucher-card.service";
 import { getPaymentMethodByIdService } from "./payment-method.service";
 import {
   sendPaymentNotificationEmail,
@@ -29,7 +30,6 @@ import {
 import { OrderStatus, PaymentStatus, VoucherStatus } from "@prisma/client";
 import {
   createOrderFromCartService,
-  generateEBMInvoiceService,
   getOrderByIdService,
   updateOrderService,
 } from "./order.services";
@@ -80,6 +80,7 @@ export interface CreateCheckoutData {
   billingPhone?: string;
   billingAddress?: string;
   voucherCode?: string;
+  loanSessionRrn?: string;
   promoCode?: string;
   fallbackPaymentMethod?: string;
   cardDetails?: {
@@ -115,6 +116,7 @@ export interface CreateAdminOrderData {
   }[];
   paymentMethod: string;
   voucherCode?: string;
+  loanSessionRrn?: string;
   promoCode?: string;
   phoneNumber?: string;
   notes?: string;
@@ -188,6 +190,7 @@ export const createCheckoutService = async (data: CreateCheckoutData) => {
     cardDetails: data.cardDetails,
     bankDetails: data.bankDetails,
     voucherCode: data.voucherCode,
+    loanSessionRrn: data.loanSessionRrn,
     fallbackPaymentMethod: data.fallbackPaymentMethod,
     processDirectly: true,
     restaurantId,
@@ -237,6 +240,7 @@ export const processPaymentService = async (
       clientIp?: string;
     };
     voucherCode?: string;
+    loanSessionRrn?: string;
     fallbackPaymentMethod?: string;
     processDirectly?: boolean;
     restaurantId?: string;
@@ -345,7 +349,6 @@ export const processPaymentService = async (
           currency: order.currency || "RWF",
           clientIp: paymentData.bankDetails?.clientIp || order.clientIp || "",
           deviceFingerprint: order.deviceFingerprint || "62wd23423rq324323qew1",
-          narration: order.narration || "Order payment",
         });
         break;
 
@@ -381,11 +384,6 @@ export const processPaymentService = async (
             voucherCode: paymentData.voucherCode,
           });
 
-          if (walletDebitResult) {
-            // Generate an invoice or receipt here after successful payment
-            await generateEBMInvoiceService(orderId);
-          }
-
           paymentResult = {
             success: true,
             transactionId: `WALLET_${order.txRef}_${Date.now()}`,
@@ -413,16 +411,41 @@ export const processPaymentService = async (
         break;
 
       case "VOUCHER":
-        if (!paymentData.voucherCode) {
-          throw new Error("Voucher code is required for voucher payments");
+        if (!paymentData.voucherCode && !paymentData.loanSessionRrn) {
+          throw new Error(
+            "Voucher code or loan session RRN is required for voucher payments",
+          );
         }
 
-        paymentResult = await processVoucherPayment({
-          voucherCode: paymentData.voucherCode,
-          orderId: order.id!,
-          restaurantId: paymentData.restaurantId || order.restaurantId,
-          originalAmount: order.totalAmount,
-        });
+        // Paying with a PAN-based loan session (new voucher card system)
+        // Strict rule: the loan must cover the ENTIRE order total. If the order
+        // is larger than the loan's usable credit, the payment is rejected — no
+        // split payment with the prepaid wallet is allowed.
+        if (paymentData.loanSessionRrn) {
+          const loanSession = await prisma.loanSession.findFirst({
+            where: {
+              rrn: paymentData.loanSessionRrn,
+              restaurantId: paymentData.restaurantId || order.restaurantId,
+            },
+          });
+          if (!loanSession || !loanSession.id) {
+            throw new Error("Loan session not found");
+          }
+
+          paymentResult = await processLoanSessionPaymentService({
+            sessionId: loanSession.id,
+            orderId: order.id!,
+            restaurantId: paymentData.restaurantId || order.restaurantId,
+            originalAmount: order.totalAmount,
+          });
+        } else {
+          paymentResult = await processVoucherPayment({
+            voucherCode: paymentData.voucherCode!,
+            orderId: order.id!,
+            restaurantId: paymentData.restaurantId || order.restaurantId,
+            originalAmount: order.totalAmount,
+          });
+        }
         break;
 
       default:
@@ -596,6 +619,10 @@ export const processPaymentService = async (
         voucherDetails:
           "voucherDetails" in paymentResult
             ? paymentResult.voucherDetails
+            : undefined,
+        loanSessionDetails:
+          "loanSessionDetails" in paymentResult
+            ? paymentResult.loanSessionDetails
             : undefined,
         requiresAdditionalPayment:
           "requiresAdditionalPayment" in paymentResult
@@ -996,7 +1023,6 @@ async function processBankTransfer({
   currency = "RWF",
   clientIp,
   deviceFingerprint = "62wd23423rq324323qew1",
-  narration = "Order payment",
 }: {
   amount: number;
   txRef: string;
@@ -1005,7 +1031,6 @@ async function processBankTransfer({
   currency?: string;
   clientIp?: string;
   deviceFingerprint?: string;
-  narration?: string;
 }): Promise<BankTransferPaymentResult> {
   try {
     console.log(`Processing bank transfer: ${amount} ${currency} for ${email}`);
@@ -1018,7 +1043,6 @@ async function processBankTransfer({
       currency: currency,
       client_ip: clientIp,
       device_fingerprint: deviceFingerprint,
-      narration: narration,
       redirect_url: `${process.env.CLIENT_PRODUCTION_URL}/restaurant/confirmation`,
       is_permanent: false,
       expires: 3600, // 1 hour expiration
@@ -1221,6 +1245,7 @@ export const createAdminOrderService = async (data: CreateAdminOrderData) => {
     products,
     paymentMethod,
     voucherCode,
+    loanSessionRrn,
     phoneNumber,
     notes,
     deliveryDate,
@@ -1329,6 +1354,7 @@ export const createAdminOrderService = async (data: CreateAdminOrderData) => {
     paymentMethod,
     phoneNumber: phoneNumber || restaurant.phone || undefined,
     voucherCode,
+    loanSessionRrn,
     processDirectly: true,
   });
 

@@ -21,6 +21,7 @@ import { PaginationService } from "./paginationService";
 import { OTPService } from "./otp.service";
 import { LocationValidationService } from "./location.service";
 import { validateTIN } from "../utils/validateTin";
+import { getFriendlyPrismaError } from "../utils/prismaError";
 import { createNotificationService } from "./notification.services";
 import {
   generateFarmerPIN,
@@ -383,9 +384,9 @@ export const createRestaurantService = async (
     sector,
     cell,
     village,
-    role = "RESTAURANT", // Default to RESTAURANT if not specified
-    agreed,
+    customerTypeId,
   } = restaurantData;
+  let role = restaurantData.role || "RESTAURANT"; // Default to RESTAURANT if not specified
 
   // Terms and Conditions must be explicitly accepted before completing signup
   if (!agreed) {
@@ -401,6 +402,20 @@ export const createRestaurantService = async (
 
   if (!tin) {
     throw new Error("TIN (Tax Identification Number) is required");
+  }
+
+  // The customer type chosen at signup (dynamic: Restaurant, Hotel, School…)
+  // is stored in customerTypeId and decides the prices the customer pays.
+  // It never changes the role: every customer signs up with role RESTAURANT.
+  if (customerTypeId) {
+    const customerType = await prisma.customerType.findUnique({
+      where: { id: customerTypeId },
+      select: { isActive: true },
+    });
+    if (!customerType || !customerType.isActive) {
+      throw new Error("Selected business type is not available");
+    }
+    role = "RESTAURANT";
   }
 
   // Validate role
@@ -464,7 +479,7 @@ export const createRestaurantService = async (
         cell,
         village,
         role: role as any, // Set the role (RESTAURANT or HOTEL)
-        agreed: true, // Terms accepted explicitly on the signup form
+        customerTypeId: customerTypeId || null,
       },
     });
 
@@ -530,13 +545,26 @@ export const acceptTermsService = async (identifier: string) => {
   return updatedRestaurant;
 };
 
-export const getAllRestaurantsService = async (query: IPaginationQuery) => {
+export const getAllRestaurantsService = async (
+  query: IPaginationQuery,
+  search?: string,
+) => {
   const normalizedQuery = PaginationService.validatePaginationParams(
     query.page,
     query.limit,
   );
 
+  const term = search?.trim();
   const options = {
+    where: term
+      ? {
+          OR: [
+            { name: { contains: term, mode: "insensitive" } },
+            { email: { contains: term, mode: "insensitive" } },
+            { phone: { contains: term } },
+          ],
+        }
+      : undefined,
     select: {
       id: true,
       name: true,
@@ -746,6 +774,7 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
     phone,
     password,
     role,
+    adminRoleId,
     location,
     province,
     district,
@@ -792,6 +821,7 @@ export const createAdminService = async (adminData: ICreateAdminData) => {
         phone: phone || null,
         password: hashedPassword,
         role,
+        adminRoleId: adminRoleId || null,
         location,
         province,
         district,
@@ -859,6 +889,7 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
       cell: true,
       village: true,
       createdAt: true,
+      adminRole: { select: { id: true, name: true } },
     },
     orderBy: {
       createdAt: "desc",
@@ -885,6 +916,7 @@ export const getAdminByIdService = async (id: string) => {
       username: true,
       email: true,
       role: true,
+      AdminRole: { select: { id: true, name: true } },
       phone: true,
       location: true,
       province: true,
@@ -1177,24 +1209,39 @@ export const googleSignupService = async (data: {
     throw new Error("An account with this email already exists");
   }
 
-  if (role === "FARMER") {
-    const farmer = await prisma.farmer.create({
-      data: {
-        email,
-        name: name || undefined,
-        phone: phone || undefined,
-        location: location || undefined,
-        role: "FARMER",
-        phoneVerified: false,
-      },
-    });
+  // Check if phone already exists across all tables
+  if (phone) {
+    const existingPhone = await checkExistingUser(phone);
+    if (existingPhone) {
+      throw new Error(
+        "This phone number is already registered. Please use a different phone number.",
+      );
+    }
+  }
 
-    const { password: _, ...farmerWithoutPassword } = farmer;
-    return {
-      user: farmerWithoutPassword,
-      userType: "farmer",
-      message: "Account created successfully",
-    };
+  if (role === "FARMER") {
+    try {
+      const farmer = await prisma.farmer.create({
+        data: {
+          email,
+          name: name || undefined,
+          phone: phone || undefined,
+          location: location || undefined,
+          role: "FARMER",
+          phoneVerified: false,
+        },
+      });
+
+      const { password: _, ...farmerWithoutPassword } = farmer;
+      return {
+        user: farmerWithoutPassword,
+        userType: "farmer",
+        message: "Account created successfully",
+      };
+    } catch (error: any) {
+      const friendlyMessage = getFriendlyPrismaError(error);
+      throw new Error(friendlyMessage || `Failed to create account: ${error.message}`);
+    }
   } else if (role === "RESTAURANT" || role === "HOTEL") {
     if (!tin) {
       throw new Error("TIN number is required for restaurant/hotel accounts");
@@ -1213,27 +1260,32 @@ export const googleSignupService = async (data: {
       throw new Error("This TIN is already registered");
     }
 
-    const restaurant = await prisma.restaurant.create({
-      data: {
-        name,
-        email,
-        phone: phone || undefined,
-        tin,
-        location: location || undefined,
-        role: role as any,
-password: "", // No password for Google signups - they authenticate via Google
-        verified: true, // Email is verified by Google, no OTP flow for Google signups
-        agreed: false, // Google user must accept the terms before accessing the dashboard
-      },
-    });
+    try {
+      const restaurant = await prisma.restaurant.create({
+        data: {
+          name,
+          email,
+          phone: phone || undefined,
+          tin,
+          location: location || undefined,
+          role: role as any,
+          password: "", // No password for Google signups - they authenticate via Google
+          verified: false,
+          agreed: false,
+        },
+      });
 
-    const { password: _, ...restaurantWithoutPassword } = restaurant;
-    return {
-      user: restaurantWithoutPassword,
-      userType: "restaurant",
-      message:
-        "Account created successfully. Please accept the terms and conditions.",
-    };
+      const { password: _, ...restaurantWithoutPassword } = restaurant;
+      return {
+        user: restaurantWithoutPassword,
+        userType: "restaurant",
+        message:
+          "Account created successfully. Please verify your phone number.",
+      };
+    } catch (error: any) {
+      const friendlyMessage = getFriendlyPrismaError(error);
+      throw new Error(friendlyMessage || `Failed to create account: ${error.message}`);
+    }
   } else {
     throw new Error("Invalid role for Google signup");
   }
@@ -1259,7 +1311,7 @@ export const requestPasswordResetService = async (email: string) => {
     userName = user.phone || "Farmer";
   } else if (user.userType === "RESTAURANT") {
     userName = (user as any).name || "Restaurant Owner";
-  } else if (user.userType === "ADMIN") {
+  } else if (user.userType === "ADMIN" || user.userType === "STAFF" || user.userType === "MARKET_PRICES" || user.userType === "SUPERUSER") {
     userName = (user as any).username || "Admin";
   }
 
@@ -1310,7 +1362,7 @@ export const resetPasswordService = async (
         where: { id: userId },
         data: { password: hashedPassword },
       });
-    } else if (userType === "ADMIN" || userType === "TRADER" || userType === "AGGREGATOR" || userType === "LOGISTICS" || userType === "FOOD_BUNDLE" || userType === "SUPERUSER") {
+    } else if (userType === "ADMIN" || userType === "TRADER" || userType === "AGGREGATOR" || userType === "LOGISTICS" || userType === "FOOD_BUNDLE" || userType === "SUPERUSER" || userType === "MARKET_PRICES" || userType === "STAFF") {
       await prisma.admin.update({
         where: { id: userId },
         data: { password: hashedPassword },

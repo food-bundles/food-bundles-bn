@@ -2,6 +2,7 @@ import speakeasy from "speakeasy";
 import QRCode from "qrcode";
 import prisma from "../prisma";
 
+import { isDashboardRole } from "../config/permissions";
 export class AuthenticatorService {
   static async generateSecret(userName: string, userRole: string) {
     // Generate a unique secret for the user with a descriptive name and date for better identification in authenticator apps since after disable and re-enable, the secret changes but the user can still recognize it in their app. as the same
@@ -57,7 +58,7 @@ export class AuthenticatorService {
     let userName = user.name || user.email || "User";
     if (userRole === "FARMER") userName = user.phone || userName;
     else if (userRole === "RESTAURANT") userName = user.name || userName;
-    else if (userRole === "ADMIN") userName = user.username || userName;
+    else if (isDashboardRole(userRole)) userName = user.username || userName;
 
     const { secret, otpauthUrl } = await this.generateSecret(
       userName,

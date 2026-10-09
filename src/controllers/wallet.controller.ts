@@ -14,11 +14,17 @@ import {
   adminDepositToWalletService,
   getRestaurantWalletTransactionService,
 } from "../services/wallet.service";
+import {
+  transferVoucherAmountToWalletService,
+  getAllWalletTransfersService,
+  getRestaurantWalletTransfersService,
+} from "../services/wallet-transfer.service";
 import { WalletTransactionType, TransactionStatus } from "@prisma/client";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 import { OTPService } from "../services/otp.service";
 import { getPaymentMethodByIdService } from "../services/payment-method.service";
 
+import { isDashboardRole } from "../config/permissions";
 /**
  * Create wallet for restaurant
  * POST /wallets
@@ -299,7 +305,7 @@ export const getWalletTransactionById = async (req: Request, res: Response) => {
     // Check if user owns this transaction or is admin
     if (
       transaction.wallet.restaurantId !== restaurantId &&
-      (req as any).user.role !== "ADMIN"
+      !isDashboardRole((req as any).user.role)
     ) {
       return res.status(403).json({
         message: "Unauthorized access to transaction",
@@ -596,8 +602,12 @@ export const verifyWalletTopUp = async (req: Request, res: Response) => {
         data: result,
       });
     } else {
+      const errorMessage =
+        (result as any).error ||
+        (result as any).message ||
+        "Payment verification failed";
       res.status(400).json({
-        message: result.error || "Payment verification failed",
+        message: errorMessage,
         data: result,
       });
     }
@@ -980,6 +990,93 @@ export const getTraderTransactions = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to get trader transactions",
+    });
+  }
+};
+
+// ============================================
+// WALLET TRANSFER CONTROLLERS (Kayko / voucher amounts)
+// ============================================
+
+/**
+ * Transfer voucher amount to restaurant wallet (Admin/Kayko)
+ * POST /wallets/transfers
+ */
+export const transferToWallet = async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, amount, voucherId, loanSessionId, source, notes } =
+      req.body;
+
+    if (!restaurantId || !amount) {
+      return res.status(400).json({
+        message: "restaurantId and amount are required",
+      });
+    }
+
+    const result = await transferVoucherAmountToWalletService({
+      restaurantId,
+      amount: parseFloat(amount),
+      voucherId,
+      loanSessionId,
+      source,
+      notes,
+    });
+
+    res.status(201).json({
+      message: `Transferred ${amount} RWF to restaurant wallet`,
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to transfer amount to wallet",
+    });
+  }
+};
+
+/**
+ * Get all wallet transfers (Admin)
+ * GET /wallets/transfers
+ */
+export const getAllWalletTransfers = async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, status, page, limit } = req.query;
+
+    const result = await getAllWalletTransfersService({
+      restaurantId: restaurantId as string | undefined,
+      status: status as any,
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    });
+
+    res.status(200).json({
+      message: "Wallet transfers retrieved successfully",
+      data: result.data,
+      pagination: result.pagination,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get wallet transfers",
+    });
+  }
+};
+
+/**
+ * Get my wallet transfers (Restaurant)
+ * GET /wallets/my-transfers
+ */
+export const getMyWalletTransfers = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user.id;
+
+    const transfers = await getRestaurantWalletTransfersService(restaurantId);
+
+    res.status(200).json({
+      message: "Wallet transfers retrieved successfully",
+      data: transfers,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get wallet transfers",
     });
   }
 };

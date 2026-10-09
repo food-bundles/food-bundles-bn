@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+
 import {
   createFarmerService,
   createRestaurantService,
@@ -36,6 +37,12 @@ import { Role } from "@prisma/client";
 import { generateToken, verifyToken } from "../utils/jwt";
 import prisma from "../prisma";
 import { OTPService } from "../services/otp.service";
+import {
+  AccessError,
+  getEffectivePermissions,
+  resolveRoleAssignment,
+} from "../services/access.service";
+import { isDashboardRole } from "../config/permissions";
 
 export class UserController {
   static createFarmer = async (req: Request, res: Response) => {
@@ -174,7 +181,12 @@ export class UserController {
 
   static createAdmin = async (req: Request, res: Response) => {
     try {
-      const adminData = req.body;
+      // Validates the role and blocks privilege escalation
+      const assignment = await resolveRoleAssignment((req as any).user, {
+        role: req.body.role,
+        adminRoleId: req.body.adminRoleId,
+      });
+      const adminData = { ...req.body, ...assignment };
       const result = await createAdminService(adminData);
       const isAdmin = result.role === Role.ADMIN;
       let sms;
@@ -195,7 +207,7 @@ export class UserController {
         data: result,
       });
     } catch (error: any) {
-      res.status(400).json({
+      res.status(error instanceof AccessError ? error.status : 400).json({
         success: false,
         message: error.message,
       });
@@ -225,12 +237,15 @@ export class UserController {
 
   static getAllRestaurants = async (req: Request, res: Response) => {
     try {
-      const { page, limit } = req.query;
+      const { page, limit, search } = req.query;
       const paginationQuery = PaginationService.validatePaginationParams(
         page as string,
         limit as string,
       );
-      const restaurants = await getAllRestaurantsService(paginationQuery);
+      const restaurants = await getAllRestaurantsService(
+        paginationQuery,
+        typeof search === "string" ? search : undefined,
+      );
 
       res.status(200).json({
         success: true,
@@ -379,8 +394,21 @@ export class UserController {
 
   static updateAdmin = async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
-      const updateData = req.body;
+      const id = req.params.id as string;
+      const actor = (req as any).user;
+      const { role, adminRoleId, ...updateData } = req.body;
+
+      const target = await prisma.admin.findUnique({ where: { id }, select: { role: true } });
+      if (!target) throw new AccessError("Admin not found", 404);
+      if (target.role === Role.SUPERUSER && actor.role !== Role.SUPERUSER) {
+        throw new AccessError("Only a super admin can edit a super admin");
+      }
+
+      // Role changes go through the same escalation checks as creation
+      if (role !== undefined || adminRoleId !== undefined) {
+        if (id === actor.id) throw new AccessError("You cannot change your own role", 400);
+        Object.assign(updateData, await resolveRoleAssignment(actor, { role, adminRoleId }));
+      }
 
       const updatedAdmin = await updateAdminService(id, updateData);
 
@@ -390,7 +418,7 @@ export class UserController {
         data: updatedAdmin,
       });
     } catch (error: any) {
-      res.status(400).json({
+      res.status(error instanceof AccessError ? error.status : 400).json({
         success: false,
         message: error.message,
       });
@@ -433,7 +461,15 @@ export class UserController {
 
   static deleteAdmin = async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
+      const actor = (req as any).user;
+      if (id === actor.id) throw new AccessError("You cannot delete your own account", 400);
+
+      const target = await prisma.admin.findUnique({ where: { id }, select: { role: true } });
+      if (target?.role === Role.SUPERUSER && actor.role !== Role.SUPERUSER) {
+        throw new AccessError("Only a super admin can delete a super admin");
+      }
+
       await deleteAdminService(id);
 
       res.status(200).json({
@@ -441,7 +477,7 @@ export class UserController {
         message: "Admin deleted successfully",
       });
     } catch (error: any) {
-      res.status(400).json({
+      res.status(error instanceof AccessError ? error.status : 400).json({
         success: false,
         message: error.message,
       });
@@ -607,6 +643,61 @@ export class UserController {
     }
   };
 
+
+  static myProfile = async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ message: "No token provided" });
+      }
+      const token = authHeader.substring(7);
+      const payload = verifyToken(token);
+      if (!payload) {
+        return res.status(401).json({ message: "Invalid token" });
+      }
+
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: payload.id },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          tin: true,
+          location: true,
+          province: true,
+          district: true,
+          sector: true,
+          cell: true,
+          village: true,
+          role: true,
+          verified: true,
+          createdAt: true,
+          KycConsent: {
+            select: {
+              ownerName: true,
+              ownerNationalId: true,
+              yearsInOperation: true,
+              businessType: true,
+              consentVubaBuba: true,
+              consentKayko: true,
+              consentRRA: true,
+              submittedAt: true,
+            },
+          },
+        },
+      });
+
+      if (!restaurant) {
+        return res.status(404).json({ success: false, message: "Restaurant not found" });
+      }
+
+      return res.json({ success: true, data: restaurant });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  };
+
   static me = async (req: Request, res: Response) => {
     try {
       // Get token from Authorization header
@@ -636,7 +727,10 @@ export class UserController {
       }
 
       if (!user) {
-        user = await prisma.admin.findUnique({ where: { id: payload.id } });
+        user = await prisma.admin.findUnique({
+          where: { id: payload.id },
+          include: { AdminRole: { select: { id: true, name: true } } },
+        });
         if (user) userRole = "admin";
       }
 
@@ -644,7 +738,18 @@ export class UserController {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const { password, ...userWithoutPassword } = user;
+      // Never send secrets to the browser
+      const {
+        password,
+        twoFactorSecret,
+        twoFactorBackupCodes,
+        ...userWithoutPassword
+      } = user;
+
+      // Dashboard users get their effective permissions (drives the sidebar)
+      if (isDashboardRole(user.role)) {
+        userWithoutPassword.permissions = await getEffectivePermissions(user);
+      }
 
       return res.json({
         success: true,

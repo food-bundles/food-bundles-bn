@@ -16,14 +16,13 @@ import prisma from "../prisma";
 import cloudinary from "../utils/cloudinary.utility";
 import { wsManager } from "../index";
 
+import { isDashboardRole } from "../config/permissions";
 export const createProduct = async (req: Request, res: Response) => {
   try {
     const {
       tableTronicProductId,
       productName,
       unitPrice,
-      restaurantPrice,
-      hotelPrice,
       purchasePrice,
       categoryId,
       bonus,
@@ -32,6 +31,7 @@ export const createProduct = async (req: Request, res: Response) => {
       expiryDate,
       unit,
       unitId,
+      customerTypePrices,
     } = req.body;
     const adminId = (req as any).user.id;
 
@@ -59,8 +59,6 @@ export const createProduct = async (req: Request, res: Response) => {
       unitId,
       productName,
       unitPrice,
-      restaurantPrice,
-      hotelPrice,
       purchasePrice,
       categoryId,
       bonus,
@@ -70,6 +68,11 @@ export const createProduct = async (req: Request, res: Response) => {
       expiryDate: expiryDate ? new Date(expiryDate) : null,
       unit,
       createdBy: adminId,
+      customerTypePrices: customerTypePrices
+        ? typeof customerTypePrices === "string"
+          ? JSON.parse(customerTypePrices)
+          : customerTypePrices
+        : [],
     });
 
     // BROADCAST NEW PRODUCT VIA WEBSOCKET
@@ -99,8 +102,8 @@ export const updateProductQuantityFromSubmission = async (
       where: { id: adminId },
     });
 
-    if (!admin || admin.role !== "ADMIN") {
-      throw new Error("Only ADMIN users can perform this action");
+    if (!admin || !isDashboardRole(admin.role)) {
+      throw new Error("Only dashboard admins can perform this action");
     }
 
     const result = await updateProductQuantityFromSubmissionService({
@@ -203,6 +206,11 @@ export const updateProduct = async (req: Request, res: Response) => {
     const updateData = req.body;
     const adminId = (req as any).user.id;
 
+    // Parse customerTypePrices if it's a JSON string
+    if (updateData.customerTypePrices && typeof updateData.customerTypePrices === "string") {
+      updateData.customerTypePrices = JSON.parse(updateData.customerTypePrices);
+    }
+
     let finalImageUrls: string[] = [];
 
     if (updateData.images) {
@@ -240,6 +248,10 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
 
     const result = await updateProductService(productId, updateData, adminId);
+
+    if (!result) {
+      return res.status(404).json({ message: "Product not found after update" });
+    }
 
     console.log("The updated result", result);
 
@@ -322,7 +334,9 @@ export const getAllProducts = async (req: Request, res: Response) => {
 export const getProductsByRole = async (req: Request, res: Response) => {
   try {
     const { categoryId, search, page = 1, limit = 10 } = req.query;
-    const userRole = (req as any).user.role as string;
+    // Any dashboard user (staff roles included) gets the admin product view
+    const rawRole = (req as any).user.role as string;
+    const userRole = isDashboardRole(rawRole) ? "ADMIN" : rawRole;
 
     // Validate role
     const validRoles = ["ADMIN", "AGGREGATOR", "LOGISTICS"];
@@ -424,9 +438,9 @@ export const updateProductStatus = async (req: Request, res: Response) => {
       where: { id: adminId },
     });
 
-    if (!admin || admin.role !== "ADMIN") {
+    if (!admin || !isDashboardRole(admin.role)) {
       return res.status(403).json({
-        message: "Only ADMIN users can update product status",
+        message: "Only dashboard admins can update product status",
       });
     }
 

@@ -16,7 +16,7 @@ import {
   getMyPromoCodes,
   calculateCartWithPromo,
 } from "../controllers/promo.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 
 const router = Router();
 
@@ -28,14 +28,14 @@ router.get("/my-promos", isAuthenticated, checkPermission("RESTAURANT"), getMyPr
 router.post("/calculate-cart", isAuthenticated, checkPermission("RESTAURANT"), calculateCartWithPromo);
 
 // Admin routes - require admin authentication
-router.post("/", isAuthenticated, checkPermission("ADMIN"), createPromoCode);
-router.get("/", isAuthenticated, checkPermission("ADMIN"), getAllPromoCodes);
-router.get("/:id", isAuthenticated, checkPermission("ADMIN"), getPromoCodeById);
-router.put("/:id", isAuthenticated, checkPermission("ADMIN"), updatePromoCode);
+router.post("/", isAuthenticated, allow("promo_codes"), createPromoCode);
+router.get("/", isAuthenticated, allow("promo_codes"), getAllPromoCodes);
+router.get("/:id", isAuthenticated, allow("promo_codes"), getPromoCodeById);
+router.put("/:id", isAuthenticated, allow("promo_codes"), updatePromoCode);
 router.delete(
   "/:id",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("promo_codes"),
   deletePromoCode
 );
 
@@ -43,13 +43,13 @@ router.delete(
 router.post(
   "/:id/exclude",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("promo_codes"),
   excludeRestaurant
 );
 router.delete(
   "/:id/exclude/:restaurantId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("promo_codes"),
   removeRestaurantExclusion
 );
 
@@ -57,13 +57,13 @@ router.delete(
 router.post(
   "/:id/include",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("promo_codes"),
   includeRestaurant
 );
 router.delete(
   "/:id/include/:restaurantId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("promo_codes"),
   removeRestaurantInclusion
 );
 

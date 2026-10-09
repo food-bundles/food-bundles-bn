@@ -10,6 +10,11 @@ import {
   deleteOrderService,
   getOrderStatisticsService,
   createOrderFromCartService,
+  editOrderService,
+  sendPaymentLinkService,
+  generatePaymentLinkService,
+  getOrderByPaymentLinkService,
+  payViaPaymentLinkService,
   generateEBMInvoiceService,
 } from "../services/order.services";
 import { OrderStatus, PaymentStatus } from "@prisma/client";
@@ -17,6 +22,7 @@ import prisma from "../prisma";
 import { wsManager } from "../index";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 
+import { isDashboardRole } from "../config/permissions";
 /**
  * Controller to create order from cart
  * POST /orders/from-cart
@@ -62,18 +68,26 @@ export const createOrderFromCart = async (req: Request, res: Response) => {
  */
 export const createDirectOrder = async (req: Request, res: Response) => {
   try {
-    const { items, paymentMethod, notes, requestedDelivery } = req.body;
+    const {
+      items,
+      paymentMethod,
+      notes,
+      requestedDelivery,
+      restaurantId: bodyRestaurantId,
+    } = req.body;
 
     const userId = (req as any).user.id;
     const userRole = (req as any).user.role;
 
-    // Determine if user is affiliator or restaurant
+    // Determine if user is affiliator, restaurant, or acting on behalf of one (e.g. admin)
     let restaurantId = userId;
     let affiliatorId;
 
     if (userRole === "AFFILIATOR") {
       affiliatorId = userId;
       restaurantId = undefined;
+    } else if (userRole !== "RESTAURANT") {
+      restaurantId = bodyRestaurantId;
     }
 
     if (affiliatorId) {
@@ -229,7 +243,7 @@ export const getMyOrders = async (req: Request, res: Response) => {
       restaurantId = user.id;
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
-    } else if (user.role === "ADMIN") {
+    } else if (isDashboardRole(user.role)) {
       restaurantId =
         (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
@@ -303,7 +317,6 @@ export const updateOrder = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     const {
-      ebmReference,
       status,
       notes,
       requestedDelivery,
@@ -343,11 +356,31 @@ export const updateOrder = async (req: Request, res: Response) => {
       });
     }
 
-    // Only admins can update payment-related fields
-    if ((paymentStatus || paymentReference) && userRole !== "ADMIN") {
+    // Only dashboard users who can manage orders (admins, super admins and
+    // roles with orders.manage) can update payment-related fields
+    const canManageOrders =
+      isDashboardRole(userRole) &&
+      (userRole === "SUPERUSER" || user.permissions?.includes("orders.manage"));
+    if ((paymentStatus || paymentReference) && !canManageOrders) {
       return res.status(403).json({
         message: "Only admins can update payment information",
       });
+    }
+
+    // Order status may be changed even on a cancelled order, but not while the
+    // payment failed — the payment status must be corrected first (admins do
+    // this via the payment stepper), then the order status can be edited.
+    if (status !== undefined && paymentStatus === undefined) {
+      const currentOrder = await prisma.order.findUnique({
+        where: { id: orderId },
+        select: { paymentStatus: true },
+      });
+      if (currentOrder?.paymentStatus === PaymentStatus.FAILED) {
+        return res.status(409).json({
+          message:
+            "Payment status is FAILED. Update the payment status first, then the order status can be changed.",
+        });
+      }
     }
 
     // Special handling for DELIVERED status
@@ -387,7 +420,6 @@ export const updateOrder = async (req: Request, res: Response) => {
     }
 
     const updateData: any = {};
-    if (ebmReference !== undefined) updateData.ebmReference = ebmReference;
     if (status !== undefined) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
     if (requestedDelivery !== undefined)
@@ -460,6 +492,7 @@ export const cancelOrder = async (req: Request, res: Response) => {
 export const reOrderFromExistingOrder = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
+    const { paymentMethodId } = req.body;
 
     const user = (req as any).user;
     const restaurantId =
@@ -467,7 +500,8 @@ export const reOrderFromExistingOrder = async (req: Request, res: Response) => {
 
     const paymentResult = await reOrderFromExistingOrderService(
       orderId,
-      restaurantId
+      restaurantId,
+      paymentMethodId
     );
 
     if (paymentResult.success) {
@@ -678,6 +712,126 @@ export const getOrderByNumber = async (req: Request, res: Response) => {
 };
 
 /**
+ * Controller to edit order items, quantities, and prices (Admin only)
+ * PATCH /orders/:orderId/edit
+ */
+export const editOrder = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { items, notes, requestedDelivery, billingName, billingPhone, billingEmail, billingAddress } = req.body;
+    const user = (req as any).user;
+    const userRole = user.role;
+
+    // Only owners (restaurant/affiliator) or admins can edit orders
+    if (!isDashboardRole(userRole) && userRole !== "RESTAURANT" && userRole !== "AFFILIATOR") {
+      return res.status(403).json({
+        message: "You do not have permission to edit orders",
+      });
+    }
+
+    // For restaurant/affiliator roles, verify they own the order
+    let restaurantId: string | undefined;
+    if (userRole === "RESTAURANT") {
+      restaurantId = user.id;
+    } else if (userRole === "AFFILIATOR") {
+      restaurantId = user.restaurantId;
+    }
+
+    if (restaurantId) {
+      const order = await getOrderByIdService(orderId, restaurantId);
+      if (!order) {
+        return res.status(404).json({
+          message: "Order not found or you do not have access to it",
+        });
+      }
+    }
+
+    const updatedOrder = await editOrderService(orderId, {
+      items,
+      notes,
+      requestedDelivery: requestedDelivery ? new Date(requestedDelivery) : undefined,
+      billingName,
+      billingPhone,
+      billingEmail,
+      billingAddress,
+    });
+
+    res.status(200).json({
+      message: "Order updated successfully",
+      data: updatedOrder,
+    });
+  } catch (error: any) {
+    if (error.message.includes("not found") || error.message.includes("Cannot edit order")) {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
+    res.status(500).json({
+      message: error.message || "Failed to edit order",
+    });
+  }
+};
+
+/**
+ * Controller to send/retry payment link for an order
+ * POST /orders/:orderId/send-payment-link
+ */
+export const sendPaymentLink = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const user = (req as any).user;
+    const userRole = user.role;
+    const restaurantId =
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+        ? user.restaurantId
+        : undefined;
+
+    const paymentResult = await sendPaymentLinkService(orderId, restaurantId);
+
+    if (paymentResult.success) {
+      if (paymentResult.redirectUrl) {
+        res.status(200).json({
+          message: "Payment link generated successfully",
+          data: {
+            redirectUrl: paymentResult.redirectUrl,
+            transactionId: paymentResult.transactionId,
+            status: paymentResult.status,
+            requiresRedirect: true,
+          },
+        });
+      } else if (paymentResult.transferDetails) {
+        res.status(200).json({
+          message: "Bank transfer details generated",
+          data: {
+            transferDetails: paymentResult.transferDetails,
+            transactionId: paymentResult.transactionId,
+            status: paymentResult.status,
+          },
+        });
+      } else {
+        res.status(200).json({
+          message: paymentResult.message || "Payment link sent successfully",
+          data: {
+            transactionId: paymentResult.transactionId,
+            status: paymentResult.status,
+          },
+        });
+      }
+    } else {
+      res.status(400).json({
+        message: paymentResult.error || "Failed to generate payment link",
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to send payment link",
+    });
+  }
+};
+
+/**
  * Controller to generate EBM invoice for an order
  * POST /orders/:orderId/generate-ebm-invoice
  */
@@ -746,6 +900,88 @@ export const testWebSocket = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       message: error.message || "Failed to test WebSocket",
+    });
+  }
+};
+
+/**
+ * Controller to generate a shareable public payment link for an order
+ * POST /orders/:orderId/payment-link
+ * @access Restaurant/Affiliator (own orders) or Admin (any order)
+ */
+export const generatePaymentLink = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const user = (req as any).user;
+    const userRole = user.role;
+    const restaurantId =
+      userRole === "RESTAURANT"
+        ? user.id
+        : userRole === "AFFILIATOR"
+        ? user.restaurantId
+        : undefined;
+
+    const result = await generatePaymentLinkService(orderId, restaurantId);
+
+    res.status(200).json({
+      message: "Payment link generated successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to generate payment link",
+    });
+  }
+};
+
+/**
+ * Controller to fetch a public-safe order summary by payment link token
+ * GET /orders/pay/:token
+ * @access Public
+ */
+export const getOrderByPaymentLink = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const order = await getOrderByPaymentLinkService(token);
+
+    res.status(200).json({
+      message: "Order retrieved successfully",
+      data: order,
+    });
+  } catch (error: any) {
+    res.status(404).json({
+      message: error.message || "Payment link not found",
+    });
+  }
+};
+
+/**
+ * Controller to submit a payment via a public payment link
+ * POST /orders/pay/:token
+ * @access Public
+ */
+export const payViaPaymentLink = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const { paymentMethod, phoneNumber, cardDetails, bankDetails } = req.body;
+
+    if (!paymentMethod) {
+      return res.status(400).json({
+        message: "Payment method is required",
+      });
+    }
+
+    const result = await payViaPaymentLinkService(token, {
+      paymentMethod,
+      phoneNumber,
+      cardDetails,
+      bankDetails,
+    });
+
+    res.status(200).json(result);
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to process payment",
     });
   }
 };

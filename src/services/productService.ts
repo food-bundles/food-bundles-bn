@@ -2,13 +2,12 @@ import prisma from "../prisma";
 import { createNotificationService } from "./notification.services";
 import { getProductUnitByIdService } from "./unit.service";
 
+import { isDashboardRole } from "../config/permissions";
 export interface ProductData {
   tableTronicProductId?: number | null;
   unitId?: string | null;
   productName: string;
   unitPrice: number;
-  restaurantPrice?: number | null;
-  hotelPrice?: number | null;
   purchasePrice: number;
   categoryId: string;
   category?: Category;
@@ -19,7 +18,7 @@ export interface ProductData {
   expiryDate: Date | null;
   unit: string;
   createdBy: string;
-  
+  customerTypePrices?: { customerTypeId: string; price: number; purchasePrice?: number }[];
 }
 
 interface Category {
@@ -34,8 +33,8 @@ export const createProductService = async (productData: ProductData) => {
     where: { id: productData.createdBy },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can create products");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can create products");
   }
 
   // Check if SKU already exists
@@ -57,41 +56,48 @@ export const createProductService = async (productData: ProductData) => {
   }
 
   // Create the product with proper admin connection
-  const product = await prisma.product.create({
-    data: {
-      tableTronicProductId: productData.tableTronicProductId,
-      unitId: productData.unitId,
-      productName: productData.productName,
-      unitPrice: Number(productData.unitPrice),
-      restaurantPrice: productData.restaurantPrice ? Number(productData.restaurantPrice) : null,
-      hotelPrice: productData.hotelPrice ? Number(productData.hotelPrice) : null,
-      purchasePrice: Number(productData.purchasePrice),
-      categoryId: productData.categoryId,
-      bonus: Number(productData.bonus) || 0, // Use || instead of ?? for NaN handling
-      sku: productData.sku,
-      quantity: Number(productData.quantity),
-      images: productData.images,
-      expiryDate: productData.expiryDate,
-      unit: productData.unit,
-      createdBy: productData.createdBy,
-    },
-    include: {
-      admin: {
-        select: {
-          id: true,
-          username: true,
-          email: true,
-        },
+  const product = await prisma.$transaction(async (tx) => {
+    const created = await tx.product.create({
+      data: {
+        tableTronicProductId: productData.tableTronicProductId,
+        unitId: productData.unitId,
+        productName: productData.productName,
+        unitPrice: Number(productData.unitPrice),
+        purchasePrice: Number(productData.purchasePrice),
+        categoryId: productData.categoryId,
+        bonus: Number(productData.bonus) || 0,
+        sku: productData.sku,
+        quantity: Number(productData.quantity),
+        images: productData.images,
+        expiryDate: productData.expiryDate,
+        unit: productData.unit,
+        createdBy: productData.createdBy,
       },
+      include: {
+        admin: { select: { id: true, username: true, email: true } },
+        category: { select: { id: true, name: true, description: true } },
+      },
+    });
 
-      category: {
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
+    if (productData.customerTypePrices && productData.customerTypePrices.length > 0) {
+      await tx.productCustomerPrice.createMany({
+        data: productData.customerTypePrices.map((ctp) => ({
+          productId: created.id,
+          customerTypeId: ctp.customerTypeId,
+          price: Number(ctp.price),
+          purchasePrice: Number(ctp.purchasePrice ?? productData.purchasePrice ?? 0),
+        })),
+      });
+    }
+
+    return tx.product.findUnique({
+      where: { id: created.id },
+      include: {
+        admin: { select: { id: true, username: true, email: true } },
+        category: { select: { id: true, name: true, description: true } },
+        customerTypePrices: { include: { customerType: { select: { id: true, name: true } } } },
       },
-    },
+    });
   });
 
   return product;
@@ -208,8 +214,8 @@ export const updateProductService = async (
 
   console.log("admin:", admin);
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can update products");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can update products");
   }
 
   // Check SKU uniqueness if SKU is being updated
@@ -232,63 +238,88 @@ export const updateProductService = async (
     }
   }
 
-  // Update product
-  const updatedProduct = await prisma.product.update({
-    where: { id: productId },
-    data: {
-      ...(updateData.tableTronicProductId !== undefined && {
-        tableTronicProductId: updateData.tableTronicProductId,
-      }),
-      ...(updateData.unitId !== undefined && {
-        unitId: updateData.unitId,
-      }),
-      ...(updateData.productName !== undefined && {
-        productName: updateData.productName,
-      }),
-      ...(updateData.unitPrice !== undefined && {
-        unitPrice: Number(updateData.unitPrice),
-      }),
-      ...(updateData.restaurantPrice !== undefined && {
-        restaurantPrice: updateData.restaurantPrice ? Number(updateData.restaurantPrice) : null,
-      }),
-      ...(updateData.hotelPrice !== undefined && {
-        hotelPrice: updateData.hotelPrice ? Number(updateData.hotelPrice) : null,
-      }),
-      ...(updateData.purchasePrice !== undefined && {
-        purchasePrice: Number(updateData.purchasePrice),
-      }),
-      ...(updateData.categoryId !== undefined && {
-        categoryId: updateData.categoryId,
-      }),
-      ...(updateData.bonus !== undefined && {
-        bonus: Number(updateData.bonus),
-      }),
-      ...(updateData.sku !== undefined && { sku: updateData.sku }),
-      ...(updateData.quantity !== undefined && {
-        quantity: Number(updateData.quantity),
-      }),
-      ...(updateData.images !== undefined && { images: updateData.images }),
-      ...(updateData.expiryDate !== undefined && {
-        expiryDate: updateData.expiryDate,
-      }),
-      ...(updateData.unit !== undefined && { unit: updateData.unit }),
-    },
-    include: {
-      admin: {
-        select: {
-          id: true,
-          username: true,
-          email: true,
+  // Update product with customer type prices in a transaction
+  const updatedProduct = await prisma.$transaction(async (tx) => {
+    const product = await tx.product.update({
+      where: { id: productId },
+      data: {
+        ...(updateData.tableTronicProductId !== undefined && {
+          tableTronicProductId: updateData.tableTronicProductId,
+        }),
+        ...(updateData.unitId !== undefined && {
+          unitId: updateData.unitId,
+        }),
+        ...(updateData.productName !== undefined && {
+          productName: updateData.productName,
+        }),
+        ...(updateData.unitPrice !== undefined && {
+          unitPrice: Number(updateData.unitPrice),
+        }),
+        ...(updateData.purchasePrice !== undefined && {
+          purchasePrice: Number(updateData.purchasePrice),
+        }),
+        ...(updateData.categoryId !== undefined && {
+          categoryId: updateData.categoryId,
+        }),
+        ...(updateData.bonus !== undefined && {
+          bonus: Number(updateData.bonus),
+        }),
+        ...(updateData.sku !== undefined && { sku: updateData.sku }),
+        ...(updateData.quantity !== undefined && {
+          quantity: Number(updateData.quantity),
+        }),
+        ...(updateData.images !== undefined && { images: updateData.images }),
+        ...(updateData.expiryDate !== undefined && {
+          expiryDate: updateData.expiryDate,
+        }),
+        ...(updateData.unit !== undefined && { unit: updateData.unit }),
+      },
+    });
+
+    // Update customer type prices if provided
+    if (updateData.customerTypePrices && Array.isArray(updateData.customerTypePrices)) {
+      // Delete existing prices for this product
+      await tx.productCustomerPrice.deleteMany({ where: { productId } });
+
+      // Create new prices
+      if (updateData.customerTypePrices.length > 0) {
+        await tx.productCustomerPrice.createMany({
+          data: updateData.customerTypePrices.map((ctp) => ({
+            productId,
+            customerTypeId: ctp.customerTypeId,
+            price: Number(ctp.price),
+            purchasePrice: Number(ctp.purchasePrice ?? product.purchasePrice ?? 0),
+          })),
+        });
+      }
+    }
+
+    return tx.product.findUnique({
+      where: { id: productId },
+      include: {
+        admin: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+        category: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        },
+        customerTypePrices: {
+          include: {
+            customerType: {
+              select: { id: true, name: true },
+            },
+          },
         },
       },
-      category: {
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
-      },
-    },
+    });
   });
 
   console.log("updatedProduct:", updatedProduct);
@@ -380,8 +411,8 @@ export const createProductFromSubmissionService = async ({
     where: { id: productData.createdBy },
   });
 
-  if (!admin || admin.role !== "ADMIN") {
-    throw new Error("Only ADMIN users can create products");
+  if (!admin || !isDashboardRole(admin.role)) {
+    throw new Error("Only dashboard admins can create products");
   }
 
   // Check if SKU already exists
@@ -459,6 +490,20 @@ export const createProductFromSubmissionService = async ({
       product,
       submission: updatedSubmission,
     };
+  });
+
+  await createNotificationService({
+    title: "Product Approved",
+    message: `Your product "${submission.productName}" has been approved and is now available`,
+    eventType: "PRODUCT_APPROVED",
+    targetType: "SPECIFIC_USER",
+    targetId: submission.farmerId,
+    metadata: {
+      productId: result.product.id,
+      productName: submission.productName,
+      submissionId: submission.id,
+      approvedBy: productData.createdBy,
+    },
   });
 
   return result;
@@ -585,8 +630,6 @@ export const getAllProductsService = async ({
         tableTronicProductId: true,
         productName: true,
         unitPrice: true,
-        restaurantPrice: true,
-        hotelPrice: true,
         purchasePrice: true,
         category: true,
         bonus: true,
@@ -595,6 +638,15 @@ export const getAllProductsService = async ({
         images: true,
         unit: true,
         status: true,
+        customerTypePrices: {
+          select: {
+            id: true,
+            price: true,
+            customerType: {
+              select: { id: true, name: true },
+            },
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -700,8 +752,6 @@ export const getProductsByRoleService = async ({
         tableTronicProductId: true,
         productName: true,
         unitPrice: true,
-        restaurantPrice: true,
-        hotelPrice: true,
         purchasePrice: true,
         category: true,
         bonus: true,
@@ -722,6 +772,15 @@ export const getProductsByRoleService = async ({
             email: true,
           },
         },
+        customerTypePrices: {
+          select: {
+            id: true,
+            price: true,
+            customerType: {
+              select: { id: true, name: true },
+            },
+          },
+        },
       };
       // Remove status filter for ADMIN to see both ACTIVE and INACTIVE products
       delete baseWhere.status;
@@ -733,8 +792,6 @@ export const getProductsByRoleService = async ({
         tableTronicProductId: true,
         productName: true,
         unitPrice: true,
-        restaurantPrice: true,
-        hotelPrice: true,
         purchasePrice: true,
         category: true,
         bonus: true,
@@ -743,6 +800,15 @@ export const getProductsByRoleService = async ({
         images: true,
         unit: true,
         expiryDate: true,
+        customerTypePrices: {
+          select: {
+            id: true,
+            price: true,
+            customerType: {
+              select: { id: true, name: true },
+            },
+          },
+        },
       };
       additionalWhere.quantity = { gt: 0 }; // Only products with quantity
       break;
@@ -753,14 +819,21 @@ export const getProductsByRoleService = async ({
         tableTronicProductId: true,
         productName: true,
         unitPrice: true,
-        restaurantPrice: true,
-        hotelPrice: true,
         category: true,
         bonus: true,
         sku: true,
         quantity: true,
         images: true,
         unit: true,
+        customerTypePrices: {
+          select: {
+            id: true,
+            price: true,
+            customerType: {
+              select: { id: true, name: true },
+            },
+          },
+        },
       };
       additionalWhere.quantity = { gt: 0 }; // Only products with quantity
       break;
@@ -771,14 +844,21 @@ export const getProductsByRoleService = async ({
         tableTronicProductId: true,
         productName: true,
         unitPrice: true,
-        restaurantPrice: true,
-        hotelPrice: true,
         category: true,
         bonus: true,
         sku: true,
         quantity: true,
         images: true,
         unit: true,
+        customerTypePrices: {
+          select: {
+            id: true,
+            price: true,
+            customerType: {
+              select: { id: true, name: true },
+            },
+          },
+        },
       };
       additionalWhere.quantity = { gt: 0 }; // Only products with quantity
   }
@@ -835,6 +915,13 @@ export const getProductByIdService = async (productId: string) => {
               id: true,
               phone: true,
             },
+          },
+        },
+      },
+      customerTypePrices: {
+        include: {
+          customerType: {
+            select: { id: true, name: true },
           },
         },
       },

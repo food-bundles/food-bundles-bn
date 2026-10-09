@@ -18,12 +18,28 @@ import {
   changeSubscriptionPlanService,
   getRestaurantSubscriptionHistoryService,
   adminCreateRestaurantSubscriptionService,
+  requestLoanSubscriptionService,
+  approveLoanSubscriptionService,
+  rejectLoanSubscriptionService,
+  disableLoanSubscriptionService,
+  enableLoanSubscriptionService,
+  getRestaurantLoanSubscriptionsService,
+  getAllLoanSubscriptionsService,
+  createLoanProviderService,
+  getAllLoanProvidersService,
+  updateLoanProviderStatusService,
+  getAllLoanTradersService,
+  updateTraderRequiresSubscriptionService,
+  getLoanAccessProvidersService,
+  updateTraderUnlockFeeService,
+  updateTraderLeftoverPolicyService,
 } from "../services/subscription.service";
 import { SubscriptionStatus } from "@prisma/client";
 import prisma from "../prisma";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 import { getPaymentMethodByIdService } from "../services/payment-method.service";
 
+import { isDashboardRole } from "../config/permissions";
 // ==================== SUBSCRIPTION PLAN CONTROLLERS ====================
 
 /**
@@ -40,6 +56,8 @@ export const createSubscriptionPlan = async (req: Request, res: Response) => {
       features,
       voucherAccess,
       voucherPaymentDays,
+      loanAccess,
+      loanProviderId,
       freeDelivery,
       stablePricing,
       receiveEBM,
@@ -63,6 +81,8 @@ export const createSubscriptionPlan = async (req: Request, res: Response) => {
       voucherPaymentDays: voucherPaymentDays
         ? parseInt(voucherPaymentDays)
         : undefined,
+      loanAccess,
+      loanProviderId,
       freeDelivery,
       stablePricing,
       receiveEBM,
@@ -150,6 +170,8 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
       isActive,
       voucherAccess,
       voucherPaymentDays,
+      loanAccess,
+      loanProviderId,
       freeDelivery,
       stablePricing,
       receiveEBM,
@@ -167,6 +189,8 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
     if (voucherAccess !== undefined) updateData.voucherAccess = voucherAccess;
     if (voucherPaymentDays !== undefined)
       updateData.voucherPaymentDays = parseInt(voucherPaymentDays);
+    if (loanAccess !== undefined) updateData.loanAccess = loanAccess;
+    if (loanProviderId !== undefined) updateData.loanProviderId = loanProviderId;
     if (freeDelivery !== undefined) updateData.freeDelivery = freeDelivery;
     if (stablePricing !== undefined) updateData.stablePricing = stablePricing;
     if (receiveEBM !== undefined) updateData.receiveEBM = receiveEBM;
@@ -377,7 +401,7 @@ export const getMyCurrentSubscription = async (req: Request, res: Response) => {
       restaurantId = user.id;
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
-    } else if (user.role === "ADMIN") {
+    } else if (isDashboardRole(user.role)) {
       restaurantId =
         (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
@@ -473,7 +497,7 @@ export const updateRestaurantSubscription = async (
     }
 
     // Only admins can change status directly
-    if (status && userRole !== "ADMIN") {
+    if (status && !isDashboardRole(userRole)) {
       return res.status(403).json({
         message: "Only admins can change subscription status",
       });
@@ -569,11 +593,451 @@ export const renewSubscription = async (req: Request, res: Response) => {
         ? "Subscription renewed and payment initiated"
         : "Subscription renewed successfully. Please complete payment.",
       data: result.subscription,
-      payment: result.payment,
+payment: result.payment,
     });
   } catch (error: any) {
     res.status(500).json({
-      message: error.message || "Failed to renew subscription",
+      message: error.message || "Failed to create subscription",
+    });
+  }
+};
+
+// ==================== LOAN ACCESS CONTROLLERS (single subscription reused) ====================
+
+/**
+ * Create a loan provider (Admin)
+ * POST /subscriptions/loan/providers
+ */
+export const createLoanProvider = async (req: Request, res: Response) => {
+  try {
+    const { name, description, unlockFeeEnabled, unlockFeePercentage, termsAndConditions } = req.body;
+
+    if (!name) {
+      return res.status(400).json({
+        message: "name is required",
+      });
+    }
+
+    const provider = await createLoanProviderService({
+      name,
+      description,
+      unlockFeeEnabled,
+      unlockFeePercentage:
+        typeof unlockFeePercentage === "number" ? unlockFeePercentage : null,
+      termsAndConditions,
+    });
+
+    res.status(201).json({
+      message: "Loan provider created successfully",
+      data: provider,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to create loan provider",
+    });
+  }
+};
+
+/**
+ * Get all loan providers
+ * GET /subscriptions/loan/providers
+ */
+export const getAllLoanProviders = async (req: Request, res: Response) => {
+  try {
+    const providers = await getAllLoanProvidersService();
+
+    res.status(200).json({
+      message: "Loan providers retrieved successfully",
+      data: providers,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan providers",
+    });
+  }
+};
+
+/**
+ * Update loan provider status (Admin)
+ * PATCH /subscriptions/loan/providers/:providerId
+ */
+export const updateLoanProviderStatus = async (req: Request, res: Response) => {
+  try {
+    const { providerId } = req.params;
+    const { isActive, unlockFeeEnabled, unlockFeePercentage, leftoverPolicy, termsAndConditions } = req.body;
+
+    if (
+      isActive === undefined &&
+      unlockFeeEnabled === undefined &&
+      unlockFeePercentage === undefined &&
+      leftoverPolicy === undefined &&
+      termsAndConditions === undefined
+    ) {
+      return res.status(400).json({
+        message: "At least one field (isActive, unlockFeeEnabled, unlockFeePercentage, leftoverPolicy, termsAndConditions) is required",
+      });
+    }
+
+    if (
+      leftoverPolicy !== undefined &&
+      leftoverPolicy !== "USELESS" &&
+      leftoverPolicy !== "TOPUP_WALLET"
+    ) {
+      return res.status(400).json({
+        message: "leftoverPolicy must be 'USELESS' or 'TOPUP_WALLET'",
+      });
+    }
+
+    const provider = await updateLoanProviderStatusService(providerId, {
+      isActive: isActive === undefined ? undefined : Boolean(isActive),
+      unlockFeeEnabled:
+        unlockFeeEnabled === undefined ? undefined : Boolean(unlockFeeEnabled),
+      unlockFeePercentage:
+        unlockFeePercentage === undefined ? undefined : unlockFeePercentage,
+      leftoverPolicy:
+        leftoverPolicy === undefined ? undefined : leftoverPolicy,
+      termsAndConditions:
+        termsAndConditions === undefined ? undefined : termsAndConditions,
+    });
+
+    res.status(200).json({
+      message: "Loan provider updated successfully",
+      data: provider,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to update loan provider",
+    });
+  }
+};
+
+/**
+ * Get all traders (loan providers) with their subscription requirement
+ * GET /subscriptions/loan/traders
+ */
+export const getAllLoanTraders = async (req: Request, res: Response) => {
+  try {
+    const traders = await getAllLoanTradersService();
+
+    res.status(200).json({
+      message: "Loan traders retrieved successfully",
+      data: traders,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan traders",
+    });
+  }
+};
+
+/**
+ * Toggle whether a trader requires an active subscription
+ * PATCH /subscriptions/loan/traders/:traderId
+ */
+export const updateTraderRequiresSubscription = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { traderId } = req.params;
+    const { requiresSubscription } = req.body;
+
+    if (typeof requiresSubscription !== "boolean") {
+      return res.status(400).json({
+        message: "requiresSubscription (boolean) is required",
+      });
+    }
+
+    const trader = await updateTraderRequiresSubscriptionService(
+      traderId,
+      requiresSubscription,
+    );
+
+    res.status(200).json({
+      message: "Trader subscription requirement updated successfully",
+      data: trader,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to update trader subscription requirement",
+    });
+  }
+};
+
+/**
+ * Overview of all configurable loan providers — traders + Food Bundles platform
+ * GET /subscriptions/loan/access-providers
+ */
+export const getLoanAccessProviders = async (req: Request, res: Response) => {
+  try {
+    const providers = await getLoanAccessProvidersService();
+
+    res.status(200).json({
+      message: "Loan access providers retrieved successfully",
+      data: providers,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan access providers",
+    });
+  }
+};
+
+/**
+ * Set/clear the unlock fee for a trader-funded loan
+ * PATCH /subscriptions/loan/traders/:traderId/unlock-fee
+ */
+export const updateTraderUnlockFee = async (req: Request, res: Response) => {
+  try {
+    const { traderId } = req.params;
+    const { unlockFeeEnabled, unlockFeePercentage } = req.body;
+
+    if (typeof unlockFeeEnabled !== "boolean") {
+      return res.status(400).json({
+        message: "unlockFeeEnabled (boolean) is required",
+      });
+    }
+
+    if (
+      unlockFeeEnabled &&
+      (typeof unlockFeePercentage !== "number" || unlockFeePercentage <= 0)
+    ) {
+      return res.status(400).json({
+        message: "unlockFeePercentage (number > 0) is required when the fee is enabled",
+      });
+    }
+
+    const wallet = await updateTraderUnlockFeeService(traderId, {
+      unlockFeeEnabled,
+      unlockFeePercentage:
+        typeof unlockFeePercentage === "number" ? unlockFeePercentage : null,
+    });
+
+    res.status(200).json({
+      message: unlockFeeEnabled
+        ? "Trader unlock fee activated"
+        : "Trader unlock fee paused",
+      data: wallet,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to update trader unlock fee",
+    });
+  }
+};
+
+/**
+ * Set the leftover policy for a trader-funded loan
+ * PATCH /subscriptions/loan/traders/:traderId/leftover-policy
+ */
+export const updateTraderLeftoverPolicy = async (req: Request, res: Response) => {
+  try {
+    const { traderId } = req.params;
+    const { leftoverPolicy } = req.body;
+
+    if (leftoverPolicy !== "USELESS" && leftoverPolicy !== "TOPUP_WALLET") {
+      return res.status(400).json({
+        message: "leftoverPolicy must be 'USELESS' or 'TOPUP_WALLET'",
+      });
+    }
+
+    const wallet = await updateTraderLeftoverPolicyService(
+      traderId,
+      leftoverPolicy,
+    );
+
+    res.status(200).json({
+      message:
+        leftoverPolicy === "TOPUP_WALLET"
+          ? "Leftover will be topped up to the restaurant's wallet"
+          : "Leftover will be useless (recorded but not reusable)",
+      data: wallet,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to update trader leftover policy",
+    });
+  }
+};
+
+/**
+ * Request loan access via a loan-enabled subscription plan
+ * POST /subscriptions/loan/request
+ */
+export const requestLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user.id;
+    const { planId, notes } = req.body;
+
+    if (!planId) {
+      return res.status(400).json({
+        message: "planId is required (a plan that includes loan access)",
+      });
+    }
+
+    const subscription = await requestLoanSubscriptionService(
+      restaurantId,
+      planId,
+      notes,
+    );
+
+    res.status(201).json({
+      message: "Loan access request submitted for approval",
+      data: subscription,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to request loan access",
+    });
+  }
+};
+
+/**
+ * Approve a pending loan access request (Admin)
+ * PATCH /subscriptions/loan/:subscriptionId/approve
+ */
+export const approveLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { subscriptionId } = req.params;
+
+    const subscription = await approveLoanSubscriptionService(
+      subscriptionId,
+      adminId,
+    );
+
+    res.status(200).json({
+      message: "Loan access approved",
+      data: subscription,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to approve loan access",
+    });
+  }
+};
+
+/**
+ * Reject a pending loan access request (Admin)
+ * PATCH /subscriptions/loan/:subscriptionId/reject
+ */
+export const rejectLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { subscriptionId } = req.params;
+    const { reason } = req.body;
+
+    const subscription = await rejectLoanSubscriptionService(
+      subscriptionId,
+      adminId,
+      reason,
+    );
+
+    res.status(200).json({
+      message: "Loan access request rejected",
+      data: subscription,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to reject loan access",
+    });
+  }
+};
+
+/**
+ * Disable loan access (Admin)
+ * PATCH /subscriptions/loan/:subscriptionId/disable
+ */
+export const disableLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { subscriptionId } = req.params;
+
+    const subscription = await disableLoanSubscriptionService(
+      subscriptionId,
+      adminId,
+    );
+
+    res.status(200).json({
+      message: "Loan access disabled",
+      data: subscription,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to disable loan access",
+    });
+  }
+};
+
+/**
+ * Enable loan access (Admin)
+ * PATCH /subscriptions/loan/:subscriptionId/enable
+ */
+export const enableLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user.id;
+    const { subscriptionId } = req.params;
+
+    const subscription = await enableLoanSubscriptionService(
+      subscriptionId,
+      adminId,
+    );
+
+    res.status(200).json({
+      message: "Loan access enabled",
+      data: subscription,
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Failed to enable loan access",
+    });
+  }
+};
+
+/**
+ * Get my loan access subscriptions (Restaurant)
+ * GET /subscriptions/loan/my-subscriptions
+ */
+export const getMyLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const restaurantId = (req as any).user.id;
+
+    const subscriptions = await getRestaurantLoanSubscriptionsService(
+      restaurantId,
+    );
+
+    res.status(200).json({
+      message: "Loan access subscriptions retrieved successfully",
+      data: subscriptions,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan access subscriptions",
+    });
+  }
+};
+
+/**
+ * Get all loan access subscriptions (Admin)
+ * GET /subscriptions/loan
+ */
+export const getAllLoanAccess = async (req: Request, res: Response) => {
+  try {
+    const { status, userType, loanProviderId } = req.query;
+
+    const subscriptions = await getAllLoanSubscriptionsService({
+      status: status as SubscriptionStatus | undefined,
+      userType: userType as string | undefined,
+      loanProviderId: loanProviderId as string | undefined,
+    });
+
+    res.status(200).json({
+      message: "Loan access subscriptions retrieved successfully",
+      data: subscriptions,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to get loan access subscriptions",
     });
   }
 };

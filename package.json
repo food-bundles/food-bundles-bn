@@ -10,8 +10,11 @@
     "build": "npx prisma generate && tsc",
     "db:push": "npx prisma db push",
     "generate": "npx prisma generate",
-    "seed": "ts-node prisma/seed.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "create-superadmin": "node dist/scripts/create-superadmin.js",
+    "create-superadmin:dev": "ts-node src/scripts/create-superadmin.ts",
+    "seed:customer-types": "node dist/scripts/seed-customer-types.js",
+    "seed:customer-types:dev": "ts-node src/scripts/seed-customer-types.ts"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +31,7 @@
     "dotenv": "^17.2.1",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.1",
     "flutterwave-node-v3": "^1.3.0",
     "google-auth-library": "^11.0.2",
     "jsonwebtoken": "^9.0.2",

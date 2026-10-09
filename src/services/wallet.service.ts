@@ -1021,6 +1021,45 @@ export const getAllWalletsService = async ({
 /**
  * Verify wallet top-up payment
  */
+/**
+ * Look up the real status of a PayPack cashin via the PayPack events API.
+ * The `transaction(ref)` endpoint never includes a `status` field, so it must
+ * never be used to decide success — only the events feed has the status.
+ */
+async function getPaypackTransactionStatus(flwRef: string) {
+  try {
+    const res: any = await getPaypack().events({ ref: flwRef });
+    const txs: any[] = res?.data?.transactions;
+    if (Array.isArray(txs) && txs.length) {
+      const applicable = txs
+        .filter((t) => t && t.data && typeof t.data.status === "string")
+        .sort(
+          (a, b) =>
+            new Date(b.created_at || 0).getTime() -
+            new Date(a.created_at || 0).getTime(),
+        );
+      const latest = applicable[0];
+      if (latest?.data) {
+        return {
+          status: latest.data.status,
+          ref: latest.data.ref || flwRef,
+          userRef: latest.data.user_ref,
+          processedAt: latest.data.processed_at,
+        };
+      }
+    }
+  } catch (e: any) {
+    console.log("PayPack events lookup failed:", e.message);
+  }
+  try {
+    const tx: any = await getPaypack().transaction(flwRef);
+    if (tx?.data?.ref) return { status: tx.data.status, ref: tx.data.ref };
+  } catch (e: any) {
+    console.log("PayPack transaction lookup failed:", e.message);
+  }
+  return { status: undefined, ref: flwRef };
+}
+
 export const verifyWalletTopUpService = async (transactionId: string) => {
   try {
     // Find the wallet transaction
@@ -1045,12 +1084,23 @@ export const verifyWalletTopUpService = async (transactionId: string) => {
       };
     }
 
+    const wt = walletTransaction;
+
+    // Already confirmed (webhook for PayPack MoMo, Flutterwave card, or admin
+    // deposit) — nothing left to verify, payment succeeded.
+    if (wt.status === "COMPLETED") {
+      return {
+        success: true,
+        verified: true,
+        status: wt.flwStatus || "successful",
+        transactionId: wt.externalTxId || wt.id,
+        newBalance: wt.newBalance ?? undefined,
+      };
+    }
+
     // For mobile money, we need to check if we have a proper Flutterwave transaction ID
     // If the flwRef is still our custom tx_ref, we can't verify yet
-    if (
-      walletTransaction.flwRef &&
-      walletTransaction.flwRef.startsWith("WALLET_TOPUP_")
-    ) {
+    if (wt.flwRef && wt.flwRef.startsWith("WALLET_TOPUP_")) {
       return {
         success: false,
         verified: false,
@@ -1060,107 +1110,170 @@ export const verifyWalletTopUpService = async (transactionId: string) => {
       };
     }
 
-    // Only try to verify if we have a numeric transaction ID from Flutterwave
-    if (
-      !walletTransaction.externalTxId ||
-      isNaN(Number(walletTransaction.externalTxId))
-    ) {
-      return {
-        success: false,
-        verified: false,
-        error: "No valid Flutterwave transaction ID available for verification",
-        status: "pending",
-      };
-    }
+    // Confirm the payment against the provider and credit the wallet once
+    // (shared by both PayPack and Flutterwave paths).
+    const confirmAndCredit = async (providerRef: string) => {
+      const newBalance = wt.wallet.balance + wt.amount;
 
-    // Verify with Flutterwave using the numeric ID
-    const response = await getFlw().Transaction.verify({
-      id: Number(walletTransaction.externalTxId),
-    });
+      await prisma.$transaction([
+        prisma.wallet.update({
+          where: { id: wt.walletId },
+          data: {
+            balance: newBalance,
+            totalDeposited: { increment: wt.amount },
+            updatedAt: new Date(),
+          },
+        }),
+        prisma.walletTransaction.update({
+          where: { id: wt.id },
+          data: {
+            status: "COMPLETED",
+            newBalance,
+            flwStatus: "successful",
+            externalTxId: providerRef,
+            updatedAt: new Date(),
+          },
+        }),
+      ]);
 
-    console.log("Flutterwave verification response:", response);
-
-    if (
-      response.status === "success" &&
-      response.data.status === "successful"
-    ) {
-      // Update transaction if not already completed
-      if (walletTransaction.status !== "COMPLETED") {
-        const newBalance =
-          walletTransaction.wallet.balance + walletTransaction.amount;
-
-        // Update wallet balance and transaction status
-        await prisma.$transaction([
-          prisma.wallet.update({
-            where: { id: walletTransaction.walletId },
-            data: {
-              balance: newBalance,
-              updatedAt: new Date(),
-            },
-          }),
-          prisma.walletTransaction.update({
-            where: { id: walletTransaction.id },
-            data: {
-              status: "COMPLETED",
-              newBalance,
-              flwStatus: "successful",
-              externalTxId: response.data.id?.toString(),
-              flwRef: response.data.flw_ref,
-            },
-          }),
-        ]);
-
-        // Send notification email
-        try {
-          console.log("Sending wallet top up email...");
-          if (walletTransaction.wallet.restaurant?.email) {
-            await sendWalletNotificationEmail({
-              email: walletTransaction.wallet.restaurant.email,
-              restaurantName: walletTransaction.wallet.restaurant.name || "",
-              type: "TOP_UP",
-              amount: walletTransaction.amount,
-              newBalance,
-              transactionId: response.data.flw_ref || walletTransaction.id,
-              paymentMethod: walletTransaction.paymentMethod || "Unknown",
-            });
-          }
-        } catch (emailError) {
-          console.log("Failed to send wallet notification email:", emailError);
+      // Send notification email
+      try {
+        console.log("Sending wallet top up email...");
+        if (wt.wallet.restaurant?.email) {
+          await sendWalletNotificationEmail({
+            email: wt.wallet.restaurant.email,
+            restaurantName: wt.wallet.restaurant.name || "",
+            type: "TOP_UP",
+            amount: wt.amount,
+            newBalance,
+            transactionId: providerRef,
+            paymentMethod: wt.paymentMethod || "Unknown",
+          });
         }
+      } catch (emailError) {
+        console.log("Failed to send wallet notification email:", emailError);
       }
 
       return {
         success: true,
         verified: true,
-        amount: response.data.amount,
-        currency: response.data.currency,
-        status: response.data.status,
-        transactionId: response.data.id,
-        flwRef: response.data.flw_ref,
+        amount: wt.amount,
+        currency: wt.wallet.currency,
+        status: "successful",
+        transactionId: providerRef,
+        newBalance,
+      };
+    };
+
+    const candidates = [wt.externalTxId, wt.flwRef, wt.flwTxRef].filter(
+      Boolean,
+    ) as string[];
+
+    // PayPack cashin references are UUIDs — verify against the PayPack API.
+    const paypackRef = candidates.find((ref) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        ref,
+      ),
+    );
+
+    if (paypackRef) {
+      const { status: paypackStatus, ref: paypackRefResolved } =
+        await getPaypackTransactionStatus(paypackRef);
+
+      if (["successful", "success", "completed"].includes(paypackStatus)) {
+        return await confirmAndCredit(paypackRefResolved || paypackRef);
+      }
+
+      if (["failed", "cancelled"].includes(paypackStatus)) {
+        await prisma.walletTransaction.update({
+          where: { id: wt.id },
+          data: { status: "FAILED", flwStatus: paypackStatus },
+        });
+        return {
+          success: false,
+          verified: false,
+          status: "failed",
+          message: "The payment was not completed. Please try again.",
+        };
+      }
+
+      return {
+        success: false,
+        verified: false,
+        status: "pending",
+        message:
+          paypackStatus === "processing"
+            ? "Payment is still processing. Please confirm it on your phone."
+            : "Payment is still pending. Please confirm the payment on your phone.",
       };
     }
 
-    // Update transaction as failed if verification shows it failed
-    if (
-      walletTransaction.status === "PENDING" ||
-      walletTransaction.status === "PROCESSING"
-    ) {
-      await prisma.walletTransaction.update({
-        where: { id: walletTransaction.id },
-        data: {
-          status: "FAILED",
-          flwStatus: response.data?.status || "failed",
-        },
-      });
-    }
+    // Flutterwave hosted checkout / card — verify by reference using our
+    // tx_ref, or by the numeric transaction ID when one actually came back.
+    const flwTxRef =
+      wt.flwTxRef || wt.externalTxId || wt.flwRef || "";
 
-    return {
-      success: false,
-      verified: false,
-      error: "Payment verification failed",
-      status: response.data?.status,
-      message: response.message,
-    };
+    try {
+      const numericId = wt.externalTxId ? Number(wt.externalTxId) : NaN;
+
+      let response: any;
+
+      if (!isNaN(numericId) && String(numericId) !== wt.flwTxRef) {
+        response = await getFlw().Transaction.verify({
+          id: numericId,
+        });
+      } else if (flwTxRef) {
+        const res = await axios.get(
+          `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${flwTxRef}`,
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+            },
+          },
+        );
+        response = res.data;
+      } else {
+        return {
+          success: false,
+          verified: false,
+          error:
+            "No Flutterwave transaction reference available for verification",
+          status: "pending",
+        };
+      }
+
+      console.log("Flutterwave verification response:", response);
+
+      if (
+        response.status === "success" &&
+        response.data.status === "successful"
+      ) {
+        return await confirmAndCredit(
+          response.data.id?.toString() ||
+            response.data.flw_ref ||
+            flwTxRef,
+        );
+      }
+
+      return {
+        success: false,
+        verified: false,
+        error: "Payment verification failed",
+        status: response.data?.status,
+        message: response.message,
+      };
+    } catch (error: any) {
+      console.log(
+        "Error verifying wallet top-up with Flutterwave:",
+        error.message,
+      );
+      return {
+        success: false,
+        verified: false,
+        error: "Payment verification failed: " + error.message,
+        status: "pending",
+      };
+    }
   } catch (error: any) {
     console.log("Error verifying wallet top-up:", error);
     return {

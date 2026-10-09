@@ -16,7 +16,8 @@ export interface ICreateRestaurantData extends UserLocationData {
   tin: string;
   password: string;
   role: Role;
-  agreed?: boolean;
+  /** Customer type picked at signup; sets the prices this customer pays */
+  customerTypeId?: string | null;
 }
 
 export interface ICreateAdminData extends Partial<UserLocationData> {
@@ -25,6 +26,7 @@ export interface ICreateAdminData extends Partial<UserLocationData> {
   phone?: string;
   password: string;
   role: Role;
+  adminRoleId?: string | null;
 }
 
 export interface IUpdateFarmerData extends Partial<UserLocationData> {
@@ -32,6 +34,9 @@ export interface IUpdateFarmerData extends Partial<UserLocationData> {
   email?: string;
   name?: string;
   password?: string;
+  smsNotifications?: boolean;
+  notificationFrequency?: string;
+  preferredLanguage?: string;
 }
 
 export interface IUpdateRestaurantData extends Partial<UserLocationData> {
@@ -46,6 +51,7 @@ export interface IUpdateAdminData extends Partial<UserLocationData> {
   email?: string;
   password?: string;
   role?: Role;
+  adminRoleId?: string | null;
 }
 
 export interface IPaginationQuery {

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import ProductVerifyController from "../controllers/ProductVerifyController";
-import { checkPermission, isAuthenticated } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 import { Role } from "@prisma/client";
 
 const ProductverifyRoutes = Router();
@@ -8,7 +8,7 @@ const ProductverifyRoutes = Router();
 ProductverifyRoutes.put(
   "/product/:submissionId/update",
   isAuthenticated,
-  checkPermission(Role.AGGREGATOR, Role.ADMIN),
+  allow("farmer_submissions", "AGGREGATOR"),
   ProductVerifyController.updateSubmission
 );
 

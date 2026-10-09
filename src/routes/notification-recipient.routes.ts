@@ -5,12 +5,12 @@ import {
   updateNotificationRecipient,
   deleteNotificationRecipient,
 } from "../controllers/notification-recipient.controller";
-import { checkPermission, isAuthenticated } from "../middleware/authMiddleware";
+import { allow, isAuthenticated } from "../middleware/authMiddleware";
 
 const smsNotifyRouter = Router();
 
 smsNotifyRouter.use(isAuthenticated);
-smsNotifyRouter.use(checkPermission("ADMIN"));
+smsNotifyRouter.use(allow("sms_recipients"));
 smsNotifyRouter.post("/", addNotificationRecipient);
 smsNotifyRouter.get("/", getAllNotificationRecipients);
 smsNotifyRouter.patch("/:id", updateNotificationRecipient);

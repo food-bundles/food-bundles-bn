@@ -13,6 +13,7 @@ import WebSocketManager from "./utils/websocket_manager";
 import { DeliveryService } from "./services/delivery.service";
 import { scheduleVoucherReminders } from "./jobs/voucher-reminder.job";
 import { scheduleWeeklyPriceUpdate } from "./services/newsletter.service";
+import { ensureSystemRoles } from "./services/access.service";
 
 interface CustomIncomingMessage extends IncomingMessage {
   rawBody: Buffer;
@@ -50,8 +51,8 @@ app.use(
   }),
 );
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ extended: false, limit: "100mb" }));
 
 // JSON error handler
 app.use((err: any, req: any, res: any, next: any) => {
@@ -66,6 +67,12 @@ app.use((err: any, req: any, res: any, next: any) => {
 
 // Raw body for webhooks
 app.use("/webhooks", express.raw({ type: "application/json" }));
+
+// Serve uploaded images (product images, support ticket screenshots, etc.)
+app.use(
+  "/uploads",
+  express.static("uploads", { maxAge: "7d", fallthrough: true }),
+);
 
 app.use("/", routes);
 
@@ -105,6 +112,11 @@ httpServer.listen(PORT, () => {
   // Initialize cron jobs
   scheduleVoucherReminders();
   scheduleWeeklyPriceUpdate();
+
+  // Create/sync system roles and give existing admins their default role
+  ensureSystemRoles().catch((error) =>
+    console.error("[roles] Failed to sync system roles:", error),
+  );
 });
 
 // Graceful shutdown

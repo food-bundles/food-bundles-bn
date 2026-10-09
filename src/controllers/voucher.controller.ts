@@ -26,12 +26,15 @@ import {
   getMyVouchersService,
   getAllVouchersService,
   markLoanApplicationAsAcceptedService,
+  initiateVoucherCreditTopUpService,
+  verifyVoucherCreditTopUpService,
 } from "../services/voucher.service";
 import { sendVoucherMaturityRemindersService } from "../services/voucher-reminder.service";
 import { VoucherStatus, LoanStatus } from "@prisma/client";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 
+import { isDashboardRole } from "../config/permissions";
 // ============================================
 // VOUCHER MANAGEMENT CONTROLLERS
 // ============================================
@@ -205,7 +208,9 @@ export const getRestaurantVouchers = async (req: Request, res: Response) => {
       (userRole === "RESTAURANT" && restaurantId === userId) ||
       (userRole === "AFFILIATOR" &&
         restaurantId === (req as any).user.restaurantId) ||
-      userRole === "ADMIN";
+      isDashboardRole(userRole) ||
+      // LOGISTICS can place orders on behalf of restaurants and pick their voucher
+      userRole === "LOGISTICS";
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -342,7 +347,7 @@ export const getVoucherTransactions = async (req: Request, res: Response) => {
 
     // Check authorization
     const isOwner =
-      voucher.restaurantId === restaurantId || userRole === "ADMIN";
+      voucher.restaurantId === restaurantId || isDashboardRole(userRole);
 
     if (!isOwner) {
       return res.status(403).json({
@@ -392,7 +397,7 @@ export const getVoucherByCode = async (req: Request, res: Response) => {
 
     // Check authorization - restaurants can only see their own vouchers
     const isOwner =
-      voucher.restaurantId === restaurantId || userRole === "ADMIN";
+      voucher.restaurantId === restaurantId || isDashboardRole(userRole);
 
     if (!isOwner) {
       return res.status(403).json({
@@ -465,7 +470,7 @@ export const getMyLoanApplications = async (req: Request, res: Response) => {
       restaurantId = user.id;
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
-    } else if (user.role === "ADMIN") {
+    } else if (isDashboardRole(user.role)) {
       restaurantId =
         (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {
@@ -535,7 +540,7 @@ export const getLoanApplicationById = async (req: Request, res: Response) => {
       (userRole === "RESTAURANT" && loan.restaurantId === userId) ||
       (userRole === "AFFILIATOR" &&
         loan.restaurantId === (req as any).user.restaurantId) ||
-      userRole === "ADMIN";
+      isDashboardRole(userRole);
 
     if (!isOwner) {
       return res.status(403).json({
@@ -781,6 +786,90 @@ export const makeRepayment = async (req: Request, res: Response) => {
 };
 
 /**
+ * Initiate a voucher credit top-up (pay the extra = requested - approved)
+ * POST /vouchers/:id/top-up
+ */
+export const makeVoucherTopUp = async (req: Request, res: Response) => {
+  try {
+    const { id: voucherId } = req.params;
+    const userId = (req as any).user.id;
+    const userRole = (req as any).user.role;
+
+    let restaurantId = userId;
+    let affiliatorId;
+
+    if (userRole === "AFFILIATOR") {
+      affiliatorId = userId;
+      restaurantId = undefined;
+    }
+
+    if (affiliatorId) {
+      const restaurant = await getRestaurantFromAffiliatorService(affiliatorId);
+      restaurantId = restaurant.id;
+    }
+
+    const { amount, paymentMethod, paymentReference, phoneNumber } = req.body;
+
+    if (!paymentMethod) {
+      return res.status(400).json({ message: "Payment method is required" });
+    }
+
+    if (!amount || amount <= 0) {
+      return res
+        .status(400)
+        .json({ message: "A valid top-up amount is required" });
+    }
+
+    const result = await initiateVoucherCreditTopUpService({
+      voucherId,
+      restaurantId,
+      amount,
+      paymentMethod,
+      paymentReference,
+      phoneNumber,
+    });
+
+    if (result.redirectUrl) {
+      return res.status(200).json({
+        message: "Payment initiated - redirect required",
+        data: {
+          topUpId: result.topUpId,
+          transactionId: (result as any).transactionId,
+          redirectUrl: result.redirectUrl,
+          status: result.status,
+          requiresRedirect: true,
+        },
+      });
+    }
+
+    res.status(200).json({
+      message: result.message || "Voucher top-up processed successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to process voucher top-up",
+    });
+  }
+};
+
+/**
+ * Verify an in-flight voucher credit top-up
+ * POST /vouchers/top-ups/:topUpId/verify
+ */
+export const verifyVoucherTopUp = async (req: Request, res: Response) => {
+  try {
+    const { topUpId } = req.params;
+    const result = await verifyVoucherCreditTopUpService(topUpId);
+    return res.status(200).json(result);
+  } catch (error: any) {
+    res.status(500).json({
+      message: error.message || "Failed to verify voucher top-up",
+    });
+  }
+};
+
+/**
  * Get outstanding balance
  * GET /vouchers/:id/outstanding
  */
@@ -810,7 +899,7 @@ export const getOutstandingBalance = async (req: Request, res: Response) => {
 
     // Check authorization
     const isOwner =
-      voucher.restaurantId === restaurantId || userRole === "ADMIN";
+      voucher.restaurantId === restaurantId || isDashboardRole(userRole);
 
     if (!isOwner) {
       return res.status(403).json({
@@ -897,7 +986,7 @@ export const getVoucherPenalties = async (req: Request, res: Response) => {
 
     // Check authorization
     const isOwner =
-      voucher.restaurantId === restaurantId || userRole === "ADMIN";
+      voucher.restaurantId === restaurantId || isDashboardRole(userRole);
 
     if (!isOwner) {
       return res.status(403).json({
@@ -970,7 +1059,7 @@ export const markLoanApplicationAsAccepted = async (
 
     // Check authorization - restaurants can accept their own loans, admins can accept any
     const isAuthorized =
-      userRole === "ADMIN" ||
+      isDashboardRole(userRole) ||
       (userRole === "RESTAURANT" && existingLoan.restaurantId === userId) ||
       (userRole === "AFFILIATOR" &&
         existingLoan.restaurantId === (req as any).user.restaurantId);
@@ -989,7 +1078,7 @@ export const markLoanApplicationAsAccepted = async (
     }
 
     // For admin users, require acceptedAmount and paymentDays
-    if (userRole === "ADMIN") {
+    if (isDashboardRole(userRole)) {
       if (!acceptedAmount || !paymentDays) {
         return res.status(400).json({
           message: "Accepted amount and payment days are required for admin acceptance",
@@ -1063,7 +1152,7 @@ export const getRestaurantCreditSummary = async (
       restaurantId = user.id;
     } else if (user.role === "AFFILIATOR") {
       restaurantId = user.restaurantId;
-    } else if (user.role === "ADMIN") {
+    } else if (isDashboardRole(user.role)) {
       restaurantId =
         (req.query.restaurantId as string) || (req.query.userId as string);
       if (!restaurantId) {

@@ -9,6 +9,7 @@ import submissionsRoutes from "./submissionsRoutes";
 import adminsRoutes from "./adminsRoutes";
 import restaurantsRoutes from "./restaurantsRoutes";
 import farmersRoutes from "./farmersRoutes";
+import farmerDashboardRoutes from "./farmerDashboardRoutes";
 import cartRoutes from "./cart.routes";
 import checkoutRoutes from "./checkout.routes";
 import orderRoutes from "./order.routes";
@@ -24,6 +25,7 @@ import notificationRoutes from "./notification.routes";
 import salesRoutes from "./sales.routes";
 import exportRoutes from "./export.routes";
 import contactRoutes from "./contact.routes";
+import supportRoutes from "./support.routes";
 import inviteRoutes from "./invite.routes";
 import affiliatorRoutes from "./affiliator.routes";
 import statsRoutes from "./stats.routes";
@@ -35,10 +37,13 @@ import smsNotifyRouter from "./notification-recipient.routes";
 import marketRoutes from "./market.routes";
 import newsletterRoutes from "./newsletter.routes";
 import authenticatorRoutes from "./authenticator.routes";
+import customerTypeRoutes from "./customer-type.routes";
+import adminRoleRoutes from "./admin-role.routes";
 
 const routes = Router();
 
 // Order matters! Most specific routes should come first
+routes.use("/farmers/dashboard", farmerDashboardRoutes);
 routes.use("/farmers", farmersRoutes);
 routes.use("/restaurants", restaurantsRoutes);
 routes.use("/affiliators", affiliatorRoutes);
@@ -61,6 +66,7 @@ routes.use("/sales", salesRoutes);
 routes.use("/export", exportRoutes);
 routes.use("/invites", inviteRoutes);
 routes.use("/contact-submissions", contactRoutes);
+routes.use("/support-tickets", supportRoutes);
 routes.use("/stats", statsRoutes);
 routes.use("/promo", promoRoutes);
 routes.use("/traders", traderRoutes);
@@ -70,6 +76,8 @@ routes.use("/notification-recipients", smsNotifyRouter);
 routes.use("/markets", marketRoutes);
 routes.use("/newsletter", newsletterRoutes);
 routes.use("/authenticator", authenticatorRoutes);
+routes.use("/customer-types", customerTypeRoutes);
+routes.use("/admin-roles", adminRoleRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

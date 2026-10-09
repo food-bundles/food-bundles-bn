@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import crypto from "crypto";
 import { OrderStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
 import { ProductData } from "./productService";
 import { processPaymentService } from "./checkout.services";
@@ -6,6 +7,8 @@ import { decryptSecretData, encryptSecretData } from "../utils/password";
 import { wsManager } from "../index";
 import { createNotificationService } from "./notification.services";
 import { applyPromoCodeService } from "./promo.service";
+import { sendMessage } from "../utils/sms.utility";
+import { sendOrderPendingPaymentEmail } from "../utils/emailTemplates";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -50,7 +53,6 @@ interface CreateDirectOrderData {
 }
 
 export interface UpdateOrderData {
-  ebmReference?: string;
   status?: OrderStatus;
   notes?: string;
   requestedDelivery?: Date;
@@ -366,6 +368,38 @@ export const createOrderFromCartService = async (
     },
   });
 
+  // Notify the restaurant that the order was placed and is awaiting payment.
+  // Fire-and-forget: notification failures must never affect order creation.
+  const recipientEmail = order.billingEmail || cart.restaurant.email;
+  const recipientPhone = order.billingPhone || cart.restaurant.phone;
+
+  if (recipientEmail) {
+    sendOrderPendingPaymentEmail({
+      orderNumber: order.orderNumber,
+      restaurantName: cart.restaurant.name,
+      totalAmount,
+      products: cart.cartItems.map((item) => ({
+        name: item.product.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      customer: {
+        name: order.billingName || cart.restaurant.name,
+        email: recipientEmail,
+      },
+      paymentMethod: order.paymentMethod || "CASH",
+    }).catch((err) =>
+      console.error("Failed to send order-pending email:", err),
+    );
+  }
+
+  if (recipientPhone) {
+    sendMessage(
+      `Your FoodBundles order ${order.orderNumber} (${totalAmount.toLocaleString()} RWF) has been received and is awaiting payment.`,
+      recipientPhone,
+    ).catch((err) => console.error("Failed to send order-pending SMS:", err));
+  }
+
   return await getOrderByIdService(order.id);
 };
 
@@ -456,10 +490,10 @@ export const createDirectOrderService = async (data: CreateDirectOrderData) => {
         paymentStatus: "PENDING",
         notes,
         requestedDelivery,
-        billingName,
-        billingEmail,
-        billingPhone,
-        billingAddress,
+        billingName: billingName || restaurant.name,
+        billingEmail: billingEmail || restaurant.email,
+        billingPhone: billingPhone || restaurant.phone,
+        billingAddress: billingAddress || restaurant.location,
         txRef,
         txOrderId,
         currency: "RWF",
@@ -498,6 +532,38 @@ export const createDirectOrderService = async (data: CreateDirectOrderData) => {
     return newOrder;
   });
 
+  // Notify the restaurant that the order was placed and is awaiting payment.
+  // Fire-and-forget: notification failures must never affect order creation.
+  const recipientEmail = order.billingEmail || restaurant.email;
+  const recipientPhone = order.billingPhone || restaurant.phone;
+
+  if (recipientEmail) {
+    sendOrderPendingPaymentEmail({
+      orderNumber: order.orderNumber,
+      restaurantName: restaurant.name,
+      totalAmount: order.totalAmount,
+      products: validatedItems.map((item) => ({
+        name: item.product.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      customer: {
+        name: order.billingName || restaurant.name,
+        email: recipientEmail,
+      },
+      paymentMethod: order.paymentMethod || "CASH",
+    }).catch((err) =>
+      console.error("Failed to send order-pending email:", err),
+    );
+  }
+
+  if (recipientPhone) {
+    sendMessage(
+      `Your FoodBundles order ${order.orderNumber} (${order.totalAmount.toLocaleString()} RWF) has been received and is awaiting payment.`,
+      recipientPhone,
+    ).catch((err) => console.error("Failed to send order-pending SMS:", err));
+  }
+
   return await getOrderByIdService(order.id);
 };
 
@@ -525,7 +591,6 @@ export const getOrderByIdService = async (
           product: {
             select: {
               id: true,
-              tableTronicProductId: true,
               productName: true,
               unitPrice: true,
               unit: true,
@@ -635,7 +700,6 @@ export const getAllOrdersService = async ({
             product: {
               select: {
                 id: true,
-                tableTronicProductId: true,
                 productName: true,
                 unitPrice: true,
                 unit: true,
@@ -942,6 +1006,7 @@ export const generateEBMInvoiceService = async (orderId: string) => {
 export const reOrderFromExistingOrderService = async (
   orderId: string,
   restaurantId: string,
+  paymentMethodId?: string,
 ) => {
   console.log(
     "Re-ordering from order ID:",
@@ -1133,7 +1198,6 @@ export const reOrderFromExistingOrderService = async (
           product: {
             select: {
               id: true,
-              tableTronicProductId: true,
               productName: true,
               unitPrice: true,
               images: true,
@@ -1176,6 +1240,23 @@ export const reOrderFromExistingOrderService = async (
     };
   }
 
+  // Resolve payment method: use new selection if provided, else fall back to existing order's method
+  let resolvedPaymentMethod = existingOrder.paymentMethod!;
+  if (paymentMethodId) {
+    try {
+      const { getPaymentMethodByIdService } = await import("./payment-method.service");
+      const paymentMethodConfig = await getPaymentMethodByIdService(paymentMethodId);
+      resolvedPaymentMethod = paymentMethodConfig.name.toUpperCase();
+    } catch {
+      // If lookup fails, keep the original payment method
+    }
+  }
+
+  // VOUCHER cannot be used for reorder - it requires OTP verification and a fresh voucher code
+  if (resolvedPaymentMethod === "VOUCHER") {
+    throw new Error("Voucher payments cannot be used for reorder. Please select a different payment method.");
+  }
+
   // Create order data from existing cart (now cleared and updated)
   const orderData = {
     cartId: cart.id,
@@ -1183,7 +1264,7 @@ export const reOrderFromExistingOrderService = async (
     status: OrderStatus.PENDING,
     notes: existingOrder.notes!,
     requestedDelivery: existingOrder.requestedDelivery!,
-    paymentMethod: existingOrder.paymentMethod!,
+    paymentMethod: resolvedPaymentMethod,
     billingName: existingOrder.billingName!,
     billingEmail: existingOrder.billingEmail!,
     billingPhone: existingOrder.billingPhone!,
@@ -1204,7 +1285,7 @@ export const reOrderFromExistingOrderService = async (
 
   // Process payment
   const paymentResult = await processPaymentService(orderCreated.id!, {
-    paymentMethod: existingOrder.paymentMethod!,
+    paymentMethod: resolvedPaymentMethod,
     phoneNumber: existingOrder.billingPhone!,
     cardDetails: cardDetailsDecrypted,
     bankDetails: {
@@ -1222,6 +1303,247 @@ export const reOrderFromExistingOrderService = async (
       warnings,
     };
   }
+
+  return paymentResult;
+};
+
+/**
+ * Interface for editing an order (admin only)
+ */
+export interface EditOrderData {
+  items?: Array<{
+    orderItemId?: string; // existing item ID to update
+    productId?: string;   // for new items
+    productName?: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
+  notes?: string;
+  requestedDelivery?: Date;
+  billingName?: string;
+  billingPhone?: string;
+  billingEmail?: string;
+  billingAddress?: string;
+}
+
+/**
+ * Service to edit an order by updating its items, quantities, and prices (Admin only)
+ * Only allows editing PENDING or CONFIRMED orders
+ */
+export const editOrderService = async (
+  orderId: string,
+  data: EditOrderData,
+) => {
+  // Get existing order
+  const existingOrder = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      orderItems: true,
+      restaurant: true,
+    },
+  });
+
+  if (!existingOrder) {
+    throw new Error("Order not found");
+  }
+
+  // Only allow editing PENDING or CONFIRMED orders
+  if (!["PENDING", "CONFIRMED"].includes(existingOrder.status)) {
+    throw new Error(
+      `Cannot edit order with status: ${existingOrder.status}. Only PENDING or CONFIRMED orders can be edited.`
+    );
+  }
+
+  const updatedOrder = await prisma.$transaction(async (tx) => {
+    // Update items if provided
+    if (data.items && data.items.length > 0) {
+      // Collect product IDs that need quantity adjustment
+      const productAdjustments: Map<string, number> = new Map();
+
+      // First: restore all old item quantities to product stock
+      for (const oldItem of existingOrder.orderItems) {
+        if (oldItem.productId) {
+          const current = productAdjustments.get(oldItem.productId) || 0;
+          productAdjustments.set(oldItem.productId, current + oldItem.quantity);
+        }
+      }
+
+      // Delete all existing order items
+      await tx.orderItem.deleteMany({
+        where: { orderId },
+      });
+
+      // Create new order items and calculate new total
+      let newTotalAmount = 0;
+      const newItemsData = [];
+
+      for (const item of data.items) {
+        let unitPrice = item.unitPrice;
+        let productName = item.productName;
+        let quantity = item.quantity;
+
+        // If productId provided, validate and get current product info
+        if (item.productId) {
+          const product = await tx.product.findUnique({
+            where: { id: item.productId },
+          });
+
+          if (!product) {
+            throw new Error(`Product ${item.productId} not found`);
+          }
+
+          if (product.status !== "ACTIVE") {
+            throw new Error(`Product ${product.productName} is not available`);
+          }
+
+          // Use provided unitPrice or current product price
+          unitPrice = item.unitPrice || product.unitPrice;
+          productName = product.productName;
+        }
+
+        const subtotal = unitPrice * quantity;
+        newTotalAmount += subtotal;
+
+        newItemsData.push({
+          orderId,
+          productId: item.productId || null,
+          productName: productName || "Unknown Product",
+          quantity,
+          unitPrice,
+          subtotal,
+          unit: "unit",
+          images: [],
+          category: null,
+        });
+
+        // Track new items to decrement from stock
+        if (item.productId) {
+          const current = productAdjustments.get(item.productId) || 0;
+          productAdjustments.set(item.productId, current - quantity);
+        }
+      }
+
+      // Batch create new order items
+      await tx.orderItem.createMany({
+        data: newItemsData,
+      });
+
+      // Adjust product quantities (positive = restore, negative = decrement)
+      for (const [productId, adjustment] of productAdjustments) {
+        if (adjustment !== 0) {
+          const product = await tx.product.findUnique({
+            where: { id: productId },
+          });
+
+          if (product) {
+            const newQuantity = product.quantity + adjustment;
+            if (newQuantity < 0) {
+              throw new Error(
+                `Insufficient stock for ${product.productName}. Available: ${product.quantity}`
+              );
+            }
+            await tx.product.update({
+              where: { id: productId },
+              data: { quantity: newQuantity },
+            });
+          }
+        }
+      }
+
+      // Update order total amount (keep delivery/packaging fees)
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          totalAmount: newTotalAmount + (existingOrder.deliveryFee || 0) + (existingOrder.packagingFee || 0),
+          originalAmount: newTotalAmount + (existingOrder.deliveryFee || 0) + (existingOrder.packagingFee || 0),
+          notes: data.notes !== undefined ? data.notes : existingOrder.notes,
+          requestedDelivery: data.requestedDelivery || existingOrder.requestedDelivery,
+          billingName: data.billingName || existingOrder.billingName,
+          billingPhone: data.billingPhone || existingOrder.billingPhone,
+          billingEmail: data.billingEmail || existingOrder.billingEmail,
+          billingAddress: data.billingAddress || existingOrder.billingAddress,
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      // No items change, just update metadata
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          notes: data.notes !== undefined ? data.notes : existingOrder.notes,
+          requestedDelivery: data.requestedDelivery || existingOrder.requestedDelivery,
+          billingName: data.billingName || existingOrder.billingName,
+          billingPhone: data.billingPhone || existingOrder.billingPhone,
+          billingEmail: data.billingEmail || existingOrder.billingEmail,
+          billingAddress: data.billingAddress || existingOrder.billingAddress,
+          updatedAt: new Date(),
+        },
+      });
+    }
+
+    return await getOrderByIdService(orderId);
+  });
+
+  // Broadcast WebSocket update
+  try {
+    wsManager.broadcastOrderUpdate({
+      orderId: updatedOrder.id,
+      status: updatedOrder.status,
+      timestamp: new Date().toISOString(),
+      restaurantId: updatedOrder.restaurantId,
+      data: {
+        orderNumber: updatedOrder.orderNumber,
+        totalAmount: updatedOrder.totalAmount,
+        currency: updatedOrder.currency || "RWF",
+      },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast order update:", error);
+  }
+
+  return updatedOrder;
+};
+
+/**
+ * Service to send/retry payment link for an order
+ * Generates a new Flutterwave payment link
+ */
+export const sendPaymentLinkService = async (
+  orderId: string,
+  restaurantId?: string,
+) => {
+  const order = await getOrderByIdService(orderId, restaurantId);
+
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  // Only send payment link for orders with failed or pending payment
+  if (order.paymentStatus === "COMPLETED") {
+    throw new Error("Payment is already completed for this order");
+  }
+
+  // VOUCHER payments cannot be retried via payment link - they require OTP verification
+  if (order.paymentMethod === "VOUCHER") {
+    throw new Error("Voucher payments cannot be retried. Please use Reorder with a different payment method.");
+  }
+
+  // Update order status back to PENDING so payment can be retried
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: "PENDING",
+      paymentStatus: PaymentStatus.PENDING,
+      updatedAt: new Date(),
+    },
+  });
+
+  // Process payment to get a new payment link
+  const paymentResult = await processPaymentService(orderId, {
+    paymentMethod: order.paymentMethod || "MOBILE_MONEY",
+    phoneNumber: order.billingPhone || "",
+    processDirectly: true,
+  });
 
   return paymentResult;
 };
@@ -1249,6 +1571,115 @@ export const deleteOrderService = async (orderId: string) => {
   ]);
 
   return { message: "Order deleted successfully" };
+};
+
+/**
+ * Service to generate (or regenerate) a shareable public payment link for an order
+ */
+export const generatePaymentLinkService = async (
+  orderId: string,
+  restaurantId?: string,
+) => {
+  const order = await getOrderByIdService(orderId, restaurantId);
+
+  if (order.paymentStatus === "COMPLETED") {
+    throw new Error("Order is already paid");
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      paymentLinkToken: token,
+      paymentLinkExpiry: expiresAt,
+    },
+  });
+
+  return { token, expiresAt };
+};
+
+/**
+ * Service to fetch a public-safe order summary by payment link token
+ */
+export const getOrderByPaymentLinkService = async (token: string) => {
+  const order = await prisma.order.findFirst({
+    where: { paymentLinkToken: token },
+    include: {
+      restaurant: {
+        select: { name: true },
+      },
+      orderItems: {
+        select: {
+          productName: true,
+          quantity: true,
+          unitPrice: true,
+          subtotal: true,
+          unit: true,
+        },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new Error("Payment link not found");
+  }
+
+  if (order.paymentLinkExpiry && order.paymentLinkExpiry < new Date()) {
+    throw new Error("Payment link has expired");
+  }
+
+  if (order.paymentStatus === "COMPLETED") {
+    throw new Error("This order has already been paid");
+  }
+
+  return {
+    orderNumber: order.orderNumber,
+    restaurantName: order.restaurant?.name || "Restaurant",
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    currency: order.currency || "RWF",
+    totalAmount: order.totalAmount,
+    items: order.orderItems || [],
+  };
+};
+
+/**
+ * Service to process a payment submitted via a public payment link
+ */
+export const payViaPaymentLinkService = async (
+  token: string,
+  paymentData: {
+    paymentMethod: string;
+    phoneNumber?: string;
+    cardDetails?: {
+      cardNumber: string;
+      cvv: string;
+      expiryMonth: string;
+      expiryYear: string;
+      pin?: string;
+    };
+    bankDetails?: { clientIp?: string };
+  },
+) => {
+  const order = await prisma.order.findFirst({
+    where: { paymentLinkToken: token },
+  });
+
+  if (!order) {
+    throw new Error("Payment link not found");
+  }
+
+  if (order.paymentLinkExpiry && order.paymentLinkExpiry < new Date()) {
+    throw new Error("Payment link has expired");
+  }
+
+  if (order.paymentStatus === "COMPLETED") {
+    throw new Error("This order has already been paid");
+  }
+
+  return processPaymentService(order.id, paymentData);
 };
 
 /**

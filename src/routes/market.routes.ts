@@ -19,15 +19,47 @@ import {
   bulkDeleteMarkets,
   bulkDeletePriceHistory,
 } from "../controllers/market.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import {
+  uploadWfpCsv,
+  getWfpPrices,
+  getWfpAnalytics,
+  getWfpFilterOptions,
+  clearWfpPrices,
+} from "../controllers/wfp-market.controller";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
+import { csvUpload } from "../middleware/csvUpload";
 
 const marketRoutes = Router();
 
-// Market CRUD operations
+// ============================================
+// WFP HISTORICAL DATASET & LIVE VISUALIZATION
+// ============================================
+marketRoutes.post(
+  "/wfp/upload",
+  isAuthenticated,
+  allow("markets", "ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  csvUpload.single("file"),
+  uploadWfpCsv
+);
+
+marketRoutes.get("/wfp/prices", getWfpPrices);
+marketRoutes.get("/wfp/analytics", getWfpAnalytics);
+marketRoutes.get("/wfp/filter-options", getWfpFilterOptions);
+
+marketRoutes.delete(
+  "/wfp/clear",
+  isAuthenticated,
+  allow("markets", "ADMIN"),
+  clearWfpPrices
+);
+
+// ============================================
+// MARKET CRUD OPERATIONS
+// ============================================
 marketRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   createMarket,
 );
 
@@ -60,22 +92,24 @@ marketRoutes.get("/:marketId", isAuthenticated, getMarketById);
 marketRoutes.put(
   "/:marketId",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   updateMarket,
 );
 
 marketRoutes.delete(
   "/:marketId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("markets"),
   deleteMarket,
 );
 
-// Price tracking operations
+// ============================================
+// PRICE TRACKING OPERATIONS
+// ============================================
 marketRoutes.post(
   "/prices",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   recordMarketPrice,
 );
 
@@ -88,43 +122,45 @@ marketRoutes.post("/prices/analyze", isAuthenticated, analyzePrice);
 marketRoutes.get(
   "/prices/by-product",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   getMarketPricesByProduct,
 );
 
 marketRoutes.put(
   "/prices/:historyId",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   updateMarketPriceHistory,
 );
 
 marketRoutes.delete(
   "/prices/:historyId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("markets"),
   deleteMarketPriceHistory,
 );
 
-// Export endpoints
+// ============================================
+// EXPORT ENDPOINTS
+// ============================================
 marketRoutes.get(
   "/export/markets",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   exportMarkets,
 );
 
 marketRoutes.get(
   "/export/price-history",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   exportPriceHistory,
 );
 
 marketRoutes.get(
   "/export/comparison",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow("markets", "LOGISTICS", "AGGREGATOR"),
   exportComparison,
 );
 

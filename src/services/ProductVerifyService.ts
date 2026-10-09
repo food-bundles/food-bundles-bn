@@ -5,6 +5,11 @@ import {
   IPaginationOptions,
 } from "../types/productVerifyTypes";
 import { PaginationService } from "./paginationService";
+import { createNotificationService } from "./notification.services";
+
+// NOTE: there is currently no service/route that transitions a FarmerSubmission
+// to status "PAID" — APPROVED is the last automated stage. A payout/mark-paid
+// flow (with its own SUBMISSION_PAID notification) still needs to be built.
 
 export const purchaseProductService = async (
   submissionId: string,
@@ -70,6 +75,20 @@ export const purchaseProductService = async (
           phone: true,
         },
       },
+    },
+  });
+
+  await createNotificationService({
+    title: "Submission Verified",
+    message: `Your submission of ${existingSubmission.productName} has been verified. Please review and respond to the offer.`,
+    eventType: "SUBMISSION_VERIFIED",
+    targetType: "SPECIFIC_USER",
+    targetId: updatedSubmission.farmerId,
+    metadata: {
+      submissionId: updatedSubmission.id,
+      productName: existingSubmission.productName,
+      acceptedQty,
+      acceptedPrice,
     },
   });
 
@@ -155,6 +174,18 @@ export const clearSubmissionService = async (submissionId: string) => {
           phone: true,
         },
       },
+    },
+  });
+
+  await createNotificationService({
+    title: "Submission Reopened",
+    message: `Your submission of ${existingSubmission.productName} was reopened and is pending review again.`,
+    eventType: "SUBMISSION_REOPENED",
+    targetType: "SPECIFIC_USER",
+    targetId: updatedSubmission.farmerId,
+    metadata: {
+      submissionId: updatedSubmission.id,
+      productName: existingSubmission.productName,
     },
   });
 

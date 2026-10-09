@@ -9,7 +9,7 @@ import {
   updateProductStatus,
   getDiscountedProducts,
 } from "../controllers/productController";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, allow } from "../middleware/authMiddleware";
 import productImagesUpload from "../middleware/multer";
 
 const productRoutes = Router();
@@ -17,7 +17,7 @@ const productRoutes = Router();
 productRoutes.get(
   "/role-based",
   isAuthenticated,
-  checkPermission("ADMIN", "AGGREGATOR", "LOGISTICS"), // Allow these roles
+  allow("products", "AGGREGATOR", "LOGISTICS"), // Allow these roles
   getProductsByRole
 );
 
@@ -25,7 +25,7 @@ productRoutes.get(
 productRoutes.post(
   "/",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("products"),
   productImagesUpload,
   createProduct
 );
@@ -43,7 +43,7 @@ productRoutes.get("/:productId", getProductById);
 productRoutes.patch(
   "/:productId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("products"),
   productImagesUpload,
   updateProduct
 );
@@ -51,7 +51,7 @@ productRoutes.patch(
 productRoutes.delete(
   "/:productId",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("products"),
   deleteProduct
 );
 
@@ -59,7 +59,7 @@ productRoutes.delete(
 productRoutes.patch(
   "/:productId/status",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow("products"),
   updateProductStatus
 );
 

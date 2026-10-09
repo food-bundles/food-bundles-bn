@@ -7,6 +7,7 @@ import { checkExistingUser } from "./userServices";
 interface CreateInviteData {
   email: string;
   role: Role;
+  adminRoleId?: string | null;
 }
 
 interface AcceptInviteData {
@@ -14,12 +15,14 @@ interface AcceptInviteData {
   username: string;
   phone?: string;
   password: string;
+  termsAndConditions?: string;
+  loanTermsAndConditions?: string;
 }
 
 export const inviteServices = {
   // Create invitation
   async createInvite(data: CreateInviteData) {
-    const { email, role } = data;
+    const { email, role, adminRoleId } = data;
 
     // Check if user already exists
     const existingUser = await checkExistingUser(undefined, email || undefined);
@@ -49,6 +52,7 @@ export const inviteServices = {
       data: {
         email,
         role,
+        adminRoleId: adminRoleId || null,
         token,
         expiresAt,
       },
@@ -102,9 +106,20 @@ export const inviteServices = {
 
   // Accept invitation (create user)
   async acceptInvite(data: AcceptInviteData) {
-    const { token, username, phone, password } = data;
+    const { token, username, phone, password, termsAndConditions, loanTermsAndConditions } = data;
 
     const invitation = await this.verifyInviteToken(token);
+
+    // Traders must provide the loan terms & conditions restaurants sign
+    // when requesting a loan from them.
+    if (
+      invitation.role === "TRADER" &&
+      (!loanTermsAndConditions || !loanTermsAndConditions.trim())
+    ) {
+      throw new Error(
+        "Traders must provide loan terms & conditions that restaurants will sign when requesting a loan",
+      );
+    }
 
     // Check if user already exists
     const existingUser = await prisma.admin.findFirst({
@@ -117,6 +132,11 @@ export const inviteServices = {
 
     const hashedPassword = await hashPassword(password);
 
+    // The role may have been deleted after the invite was sent
+    const adminRole = invitation.adminRoleId
+      ? await prisma.adminRole.findUnique({ where: { id: invitation.adminRoleId }, select: { id: true } })
+      : null;
+
     // Create user and mark invitation as used
     const [user] = await prisma.$transaction([
       prisma.admin.create({
@@ -126,6 +146,15 @@ export const inviteServices = {
           phone,
           password: hashedPassword,
           role: invitation.role,
+          adminRoleId: adminRole?.id ?? null,
+          termsAndConditions:
+            invitation.role === "TRADER" && termsAndConditions
+              ? termsAndConditions
+              : null,
+          loanTermsAndConditions:
+            invitation.role === "TRADER" && loanTermsAndConditions
+              ? loanTermsAndConditions
+              : null,
         },
         select: {
           id: true,

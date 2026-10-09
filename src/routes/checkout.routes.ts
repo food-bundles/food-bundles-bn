@@ -3,10 +3,13 @@ import {
   createCheckout,
   processPayment,
   verifyPayment,
+  getCheckoutStatus,
   verifyVoucherOTPAndCreateOrder,
   createAdminOrder,
+  requestAdminOrderOTP,
+  getAdminOrderLoanSessions,
 } from "../controllers/checkout.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 
 const checkoutRoutes = Router();
 
@@ -41,6 +44,13 @@ checkoutRoutes.post("/:orderId/payment", isAuthenticated, processPayment);
 checkoutRoutes.get("/:orderId/verify-payment", isAuthenticated, verifyPayment);
 
 /**
+ * Get payment status for tracking (polling)
+ * GET /checkouts/:orderId/status
+ * Access: Restaurant (own checkouts) or Admin (any checkout)
+ */
+checkoutRoutes.get("/:orderId/status", isAuthenticated, getCheckoutStatus);
+
+/**
  * Verify OTP and create order for voucher payment
  * POST /checkouts/verify-voucher-otp
  * Access: Restaurant only
@@ -53,6 +63,30 @@ checkoutRoutes.post(
 );
 
 /**
+ * Usable loan sessions (vouchers) for a restaurant, for admin order payment
+ * GET /checkouts/admin-order/loan-sessions/:restaurantId
+ * Access: ADMIN or LOGISTICS only
+ */
+checkoutRoutes.get(
+  "/admin-order/loan-sessions/:restaurantId",
+  isAuthenticated,
+  allow("orders", "LOGISTICS"),
+  getAdminOrderLoanSessions
+);
+
+/**
+ * Send OTP to restaurant before a voucher/prepaid admin order
+ * POST /checkouts/admin-order/request-otp
+ * Access: ADMIN or LOGISTICS only
+ */
+checkoutRoutes.post(
+  "/admin-order/request-otp",
+  isAuthenticated,
+  allow("orders", "LOGISTICS"),
+  requestAdminOrderOTP
+);
+
+/**
  * Create order on behalf of restaurant by ADMIN/LOGISTICS
  * POST /checkouts/admin-order
  * Access: ADMIN or LOGISTICS only
@@ -60,7 +94,7 @@ checkoutRoutes.post(
 checkoutRoutes.post(
   "/admin-order",
   isAuthenticated,
-  checkPermission("ADMIN", "LOGISTICS"),
+  allow("orders", "LOGISTICS"),
   createAdminOrder
 );
 
