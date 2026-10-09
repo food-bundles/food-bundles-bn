@@ -375,8 +375,9 @@ export const createRestaurantService = async (
     sector,
     cell,
     village,
-    role = "RESTAURANT", // Default to RESTAURANT if not specified
+    customerTypeId,
   } = restaurantData;
+  let role = restaurantData.role || "RESTAURANT"; // Default to RESTAURANT if not specified
 
   // Require fields
   if (!name || !password) {
@@ -385,6 +386,20 @@ export const createRestaurantService = async (
 
   if (!tin) {
     throw new Error("TIN (Tax Identification Number) is required");
+  }
+
+  // The customer type chosen at signup (dynamic: Restaurant, Hotel, School…)
+  // is stored in customerTypeId and decides the prices the customer pays.
+  // It never changes the role: every customer signs up with role RESTAURANT.
+  if (customerTypeId) {
+    const customerType = await prisma.customerType.findUnique({
+      where: { id: customerTypeId },
+      select: { isActive: true },
+    });
+    if (!customerType || !customerType.isActive) {
+      throw new Error("Selected business type is not available");
+    }
+    role = "RESTAURANT";
   }
 
   // Validate role
@@ -448,6 +463,7 @@ export const createRestaurantService = async (
         cell,
         village,
         role: role as any, // Set the role (RESTAURANT or HOTEL)
+        customerTypeId: customerTypeId || null,
       },
     });
 

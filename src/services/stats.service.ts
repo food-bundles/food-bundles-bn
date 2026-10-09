@@ -1,5 +1,6 @@
 import prisma from "../prisma";
 import {
+  Prisma,
   OrderStatus,
   PaymentStatus,
   VoucherStatus,
@@ -761,7 +762,7 @@ const getComprehensiveOrderStats = async (filters: StatsFilters = {}) => {
 const getComprehensiveFinanceStats = async (filters: StatsFilters = {}) => {
   const [orders, subscriptions, vouchers] = await Promise.all([
     prisma.order.findMany({
-      where: { paymentStatus: PaymentStatus.COMPLETED },
+      where: REVENUE_ORDER_WHERE,
       select: { createdAt: true, totalAmount: true },
     }),
     prisma.subscriptionPayment.findMany({
@@ -976,6 +977,25 @@ const getDailyOrderStats = async (dateFrom: Date, dateTo: Date) => {
     .sort((a, b) => a.date.localeCompare(b.date));
 };
 
+/**
+ * Orders that count as revenue:
+ * - payment completed (cash, mobile money, card, prepaid wallet), or
+ * - paid with a loan session (VOUCHER_CREDIT via LOAN_SESSION): the sale is
+ *   made when the order is placed, unless it was later cancelled or refunded.
+ * Old-style voucher orders are excluded because their money is already
+ * counted when the voucher is repaid (voucherRepayment) — avoids double counting.
+ */
+const REVENUE_ORDER_WHERE: Prisma.OrderWhereInput = {
+  OR: [
+    { paymentStatus: PaymentStatus.COMPLETED },
+    {
+      paymentStatus: PaymentStatus.VOUCHER_CREDIT,
+      paymentProvider: "LOAN_SESSION",
+      status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REFUNDED] },
+    },
+  ],
+};
+
 const getOrderRevenue = async (
   dateFrom: Date,
   dateTo: Date
@@ -983,7 +1003,7 @@ const getOrderRevenue = async (
   const result = await prisma.order.aggregate({
     where: {
       createdAt: { gte: dateFrom, lte: dateTo },
-      paymentStatus: PaymentStatus.COMPLETED,
+      ...REVENUE_ORDER_WHERE,
     },
     _sum: { totalAmount: true },
   });
