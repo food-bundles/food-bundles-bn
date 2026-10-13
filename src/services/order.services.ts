@@ -937,7 +937,7 @@ export const cancelOrderService = async (
     console.error("Failed to broadcast order cancellation:", error);
   }
 
-  // Notify the restaurant of the cancellation. Isolated so an email
+  // Notify the restaurant of the cancellation. Isolated so a notification
   // failure can never affect the already-committed cancellation.
   if (order.restaurant?.email) {
     try {
@@ -953,6 +953,30 @@ export const cancelOrderService = async (
     } catch (emailError) {
       console.error("Failed to send order cancellation email:", emailError);
     }
+  }
+
+  try {
+    if (order.restaurant?.phone) {
+      await sendMessage(
+        `Your order ${order.orderNumber} has been cancelled.${reason ? ` Reason: ${reason}` : ""}`,
+        order.restaurant.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send order cancellation SMS:", smsError);
+  }
+
+  try {
+    await createNotificationService({
+      title: "Order Cancelled",
+      message: `Your order #${order.orderNumber} has been cancelled.${reason ? ` Reason: ${reason}` : ""}`,
+      eventType: "ORDER_CANCELLED",
+      targetType: "SPECIFIC_USER",
+      targetId: order.restaurantId,
+      metadata: { orderId: order.id, orderNumber: order.orderNumber, reason },
+    });
+  } catch (notifError) {
+    console.error("Failed to create order cancellation notification:", notifError);
   }
 
   return { message: "Order cancelled successfully" };
