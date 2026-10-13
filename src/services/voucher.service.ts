@@ -22,6 +22,8 @@ import {
   sendAdminVoucherApprovedEmail,
   sendWalletNotificationEmail,
   sendLoanApplicationSubmittedEmail,
+  sendLoanDisbursedEmail,
+  sendLoanRepaymentConfirmedEmail,
 } from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { getUserById } from "./userGets";
@@ -1273,6 +1275,54 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
     console.error("Failed to broadcast loan disbursement:", error);
   }
 
+  // Notify the restaurant their loan was disbursed — isolated so a
+  // notification failure can never affect the already-committed disbursement.
+  const disbursedRestaurant = result.loan.restaurant;
+  const disbursedAmount = result.loan.approvedAmount ?? 0;
+  if (disbursedRestaurant) {
+    try {
+      await createNotificationService({
+        title: "Loan Disbursed",
+        message: `Your loan of ${disbursedAmount.toLocaleString()} RWF has been disbursed as a voucher.`,
+        eventType: "VOUCHER_ISSUED",
+        targetType: "SPECIFIC_USER",
+        targetId: disbursedRestaurant.id,
+        metadata: {
+          loanId: result.loan.id,
+          voucherId: result.voucher.id,
+          amount: disbursedAmount,
+        },
+      });
+    } catch (notifError) {
+      console.error("Failed to create loan disbursement notification:", notifError);
+    }
+
+    try {
+      if (disbursedRestaurant.phone) {
+        await sendMessage(
+          `Dear ${disbursedRestaurant.name}, your loan of ${disbursedAmount.toLocaleString()} RWF has been disbursed. Voucher code: ${result.voucher.voucherCode}.`,
+          disbursedRestaurant.phone,
+        );
+      }
+    } catch (smsError) {
+      console.error("Failed to send loan disbursement SMS:", smsError);
+    }
+
+    try {
+      if (disbursedRestaurant.email) {
+        await sendLoanDisbursedEmail({
+          email: disbursedRestaurant.email,
+          restaurantName: disbursedRestaurant.name,
+          amount: disbursedAmount,
+          voucherCode: result.voucher.voucherCode,
+          repaymentDays: result.loan.repaymentDays ?? undefined,
+        });
+      }
+    } catch (emailError) {
+      console.error("Failed to send loan disbursement email:", emailError);
+    }
+  }
+
   return result;
 };
 
@@ -1577,6 +1627,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
   }
 
   // Create repayment record and update voucher status to SETTLED
+  let fullySettled = false;
   const result = await prisma.$transaction(async (tx) => {
     const repayment = await tx.voucherRepayment.create({
       data: {
@@ -1641,6 +1692,8 @@ export const processRepaymentService = async (data: RepaymentData) => {
 
       // If fully paid, update loan and voucher status
       if (outstanding <= 0) {
+        fullySettled = true;
+
         await tx.loanApplication.update({
           where: { id: voucher.loanId },
           data: { status: "SETTLED" },
@@ -1667,6 +1720,49 @@ export const processRepaymentService = async (data: RepaymentData) => {
 
     return repayment;
   });
+
+  // Notify the restaurant their repayment was received — isolated so a
+  // notification failure can never affect the already-committed repayment.
+  try {
+    await createNotificationService({
+      title: "Repayment Received",
+      message: fullySettled
+        ? `Your repayment of ${amount.toLocaleString()} RWF has been received. Your loan is now fully settled.`
+        : `Your repayment of ${amount.toLocaleString()} RWF has been received.`,
+      eventType: "PAYMENT_PROCESSED",
+      targetType: "SPECIFIC_USER",
+      targetId: restaurantId,
+      metadata: { voucherId, loanId: voucher.loanId, amount, fullySettled },
+    });
+  } catch (notifError) {
+    console.error("Failed to create repayment notification:", notifError);
+  }
+
+  try {
+    if (restaurant.phone) {
+      await sendMessage(
+        fullySettled
+          ? `Dear ${restaurant.name}, your repayment of ${amount.toLocaleString()} RWF has been received. Your loan is now fully settled. Thank you!`
+          : `Dear ${restaurant.name}, your repayment of ${amount.toLocaleString()} RWF has been received.`,
+        restaurant.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send repayment SMS:", smsError);
+  }
+
+  try {
+    if (restaurant.email) {
+      await sendLoanRepaymentConfirmedEmail({
+        email: restaurant.email,
+        restaurantName: restaurant.name,
+        amount,
+        fullySettled,
+      });
+    }
+  } catch (emailError) {
+    console.error("Failed to send repayment email:", emailError);
+  }
 
   return { repayment: result, paymentResult };
 };
