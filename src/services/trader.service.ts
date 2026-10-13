@@ -1712,21 +1712,29 @@ export const approveDelegationService = async (
       commission,
     });
 
+    // Send OTP via SMS too — email should not be the only channel carrying
+    // the actual code, since every other OTP flow in the system is SMS-first.
+    if (wallet.trader?.phone) {
+      try {
+        await sendMessage(
+          `Your Food Bundles delegation acceptance OTP is: ${otp}. Valid for 24 hours.`,
+          wallet.trader.phone,
+        );
+      } catch (smsError) {
+        console.error("Failed to send delegation OTP SMS:", smsError);
+      }
+    }
+
     // Send notifications
     await createNotificationService({
       title: "Delegation Approved",
-      message: `Your delegation request has been approved with ${commission}% commission. Check your email for OTP to accept.`,
+      message: wallet.trader?.phone
+        ? `Your delegation request has been approved with ${commission}% commission. Check your SMS or email for the OTP to accept.`
+        : `Your delegation request has been approved with ${commission}% commission. Check your email for OTP to accept.`,
       eventType: "SYSTEM_MAINTENANCE",
       targetType: "SPECIFIC_USER",
       targetId: traderId,
     });
-
-    if (wallet.trader?.phone) {
-      await sendMessage(
-        `Delegation approved with ${commission}% commission. Check your email for OTP to accept delegation.`,
-        wallet.trader.phone,
-      );
-    }
 
     return {
       success: true,
