@@ -1677,6 +1677,7 @@ export const calculatePenaltiesService = async (
       },
       include: {
         vouchers: true,
+        restaurant: true,
       },
     });
   }
@@ -1755,6 +1756,50 @@ export const calculatePenaltiesService = async (
       } catch (error) {
         console.error("Failed to broadcast penalty application:", error);
       }
+
+      // NOTIFY RESTAURANT OF PENALTY (in-app + SMS + email) — durable
+      // notification alongside the WebSocket-only broadcast above, since a
+      // restaurant that's offline when the penalty is applied would
+      // otherwise have no record of it.
+      try {
+        if (loan.restaurantId) {
+          await createNotificationService({
+            title: "Loan Repayment Penalty Applied",
+            message: `A penalty of ${penalty.penaltyAmount.toLocaleString()} RWF has been applied for ${daysOverdue} day(s) overdue.`,
+            eventType: "VOUCHER_PENALTY_APPLIED",
+            targetType: "SPECIFIC_USER",
+            targetId: loan.restaurantId,
+            metadata: {
+              penaltyId: penalty.id,
+              loanId: loan.id,
+              voucherId: voucher.id,
+              penaltyAmount: penalty.penaltyAmount,
+              daysOverdue,
+            },
+          });
+        }
+
+        if (loan.restaurant?.phone) {
+          await sendMessage(
+            `Dear ${loan.restaurant.name}, a penalty of ${penalty.penaltyAmount.toLocaleString()} RWF has been applied to your loan for ${daysOverdue} day(s) overdue repayment.`,
+            loan.restaurant.phone,
+          );
+        }
+
+        if (loan.restaurant?.email) {
+          await sendWalletNotificationEmail({
+            email: loan.restaurant.email,
+            restaurantName: loan.restaurant.name,
+            type: "ADJUSTMENT",
+            amount: penalty.penaltyAmount,
+            newBalance: 0,
+            transactionId: `PENALTY_${penalty.id}`,
+            description: `Loan repayment penalty: ${penalty.penaltyAmount.toLocaleString()} RWF for ${daysOverdue} day(s) overdue. This is a penalty charge, not a wallet transaction.`,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to send penalty notification:", error);
+      }
     }
 
     // Check for severe delinquency (>60 days) and suspend vouchers
@@ -1780,6 +1825,45 @@ export const calculatePenaltiesService = async (
         }
       } catch (error) {
         console.error("Failed to broadcast voucher suspension:", error);
+      }
+
+      // NOTIFY RESTAURANT OF VOUCHER SUSPENSION (in-app + SMS + email) —
+      // durable notification alongside the WebSocket-only broadcast above.
+      try {
+        if (loan.restaurantId) {
+          await createNotificationService({
+            title: "Vouchers Suspended",
+            message: `Your vouchers have been suspended due to ${daysOverdue} day(s) overdue repayment.`,
+            eventType: "VOUCHER_SUSPENDED",
+            targetType: "SPECIFIC_USER",
+            targetId: loan.restaurantId,
+            metadata: {
+              loanId: loan.id,
+              daysOverdue,
+            },
+          });
+        }
+
+        if (loan.restaurant?.phone) {
+          await sendMessage(
+            `Dear ${loan.restaurant.name}, your vouchers have been suspended due to ${daysOverdue} day(s) overdue repayment. Please settle your outstanding balance to restore access.`,
+            loan.restaurant.phone,
+          );
+        }
+
+        if (loan.restaurant?.email) {
+          await sendWalletNotificationEmail({
+            email: loan.restaurant.email,
+            restaurantName: loan.restaurant.name,
+            type: "ADJUSTMENT",
+            amount: 0,
+            newBalance: 0,
+            transactionId: `SUSPENSION_${loan.id}`,
+            description: `Your vouchers have been suspended due to ${daysOverdue} day(s) overdue repayment. This is a suspension notice, not a wallet transaction.`,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to send voucher suspension notification:", error);
       }
     }
   }
