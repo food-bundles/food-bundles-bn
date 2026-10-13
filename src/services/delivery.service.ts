@@ -2,6 +2,7 @@ import prisma from "../prisma";
 import { DeliveryStatus, OrderStatus, PaymentStatus } from "@prisma/client";
 import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "./notification.services";
+import { sendOrderStatusEmail } from "../utils/emails";
 
 export class DeliveryService {
   /**
@@ -207,6 +208,26 @@ export class DeliveryService {
           deliveredAt: new Date().toISOString(),
         },
       });
+
+      // Email confirmation — previously no email was ever sent for order
+      // delivery, despite the template already supporting a DELIVERED
+      // status. Isolated so a failure here can never flip the already-
+      // confirmed delivery into a reported failure.
+      try {
+        if (deliveryOTP.order.restaurant.email) {
+          await sendOrderStatusEmail({
+            orderNumber: deliveryOTP.order.orderNumber,
+            status: "DELIVERED",
+            restaurantName: deliveryOTP.order.restaurant.name,
+            customer: {
+              name: deliveryOTP.order.restaurant.name,
+              email: deliveryOTP.order.restaurant.email,
+            },
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send order delivered email:", emailError);
+      }
 
       return {
         success: true,

@@ -138,6 +138,27 @@ export const generateOrderStatusTemplate = (data: OrderStatusData): string => {
 };
 
 /**
+ * Send order status update email (e.g. DELIVERED, CANCELLED)
+ */
+export async function sendOrderStatusEmail(data: OrderStatusData) {
+  const transporter = getEmailTransporter();
+
+  const orderStatusEmail = {
+    from: `"Food Bundles" <${process.env.GOOGLE_EMAIL}>`,
+    to: data.customer.email,
+    subject: `Order #${data.orderNumber} - ${data.status.replace("_", " ")}`,
+    html: generateOrderStatusTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(orderStatusEmail);
+    console.log("Order status email sent successfully");
+  } catch (error) {
+    console.error("Failed to send order status email:", error);
+  }
+}
+
+/**
  * Generate "order placed, payment pending" email template
  */
 export const generateOrderPendingPaymentTemplate = (
