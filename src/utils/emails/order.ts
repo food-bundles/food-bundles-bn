@@ -640,3 +640,79 @@ export async function sendLogisticsOrderNotificationEmail(paymentData: {
     await prisma.$disconnect();
   }
 }
+
+export interface AdminOrderCancelledData {
+  orderNumber: string;
+  restaurantName: string;
+  totalAmount: number;
+  reason?: string;
+}
+
+/**
+ * Generate admin order cancelled email template
+ */
+const sendAdminOrderCancelledTemplate = (
+  data: AdminOrderCancelledData,
+): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order Cancelled - Admin Notification</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .content { padding: 30px; }
+      .order-info { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #374151; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #374151; font-weight: bold; }
+      .amount { font-size: 24px; font-weight: bold; color: #374151; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear Admin,</p>
+
+        <p>An order has been cancelled.</p>
+
+        <div class="order-info">
+          <p><span class="highlight">Order Number:</span> ${data.orderNumber}</p>
+          <p><span class="highlight">Restaurant:</span> ${data.restaurantName}</p>
+          <p><span class="highlight">Total Amount:</span> <span class="amount">${data.totalAmount.toLocaleString()} RWF</span></p>
+          ${data.reason ? `<p><span class="highlight">Reason:</span> ${data.reason}</p>` : ""}
+        </div>
+      </div>
+      <div class="footer">
+        <p>Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Send admin order cancelled email
+export async function sendAdminOrderCancelledEmail(
+  data: AdminOrderCancelledData,
+) {
+  const transporter = getAdminEmailTransporter();
+
+  const adminCancelledEmail = {
+    from: `"Food Bundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `Order Cancelled - #${data.orderNumber} from ${data.restaurantName}`,
+    html: sendAdminOrderCancelledTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(adminCancelledEmail);
+    console.log("Admin order cancelled email sent successfully");
+  } catch (error) {
+    console.error("Failed to send admin order cancelled email:", error);
+  }
+}
