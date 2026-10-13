@@ -1,5 +1,5 @@
 import prisma from "../prisma";
-import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emails";
+import { cleanPhoneNumber, isValidRwandaPhone, sendAdminPayoutFailedEmail } from "../utils/emails";
 import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
 
@@ -204,6 +204,78 @@ export const confirmSubmissionPayoutService = async (
       }
     } catch (e) {
       console.error("Failed to send payout confirmation SMS:", e);
+    }
+  } else {
+    // FAILED outcome — notify both farmer and admin so the failure doesn't
+    // go unnoticed; isolated so a notification failure can never affect the
+    // already-recorded payout status.
+    const submission = await prisma.farmerSubmission.findUnique({
+      where: { id: submissionId },
+      include: { farmer: { select: { phone: true, name: true } } },
+    });
+
+    if (submission) {
+      try {
+        await createNotificationService({
+          title: "Payout Failed",
+          message: `Your payout for ${submission.productName} could not be completed. Our team has been notified and will retry.`,
+          eventType: "SUBMISSION_PAYOUT_FAILED",
+          targetType: "SPECIFIC_USER",
+          targetId: submission.farmerId,
+          metadata: { submissionId: submission.id, payoutId: updatedPayout.id, amount: updatedPayout.amount },
+        });
+      } catch (notifError) {
+        console.error("Failed to create payout-failed notification:", notifError);
+      }
+
+      try {
+        if (submission.farmer?.phone) {
+          const cleanedPhone = cleanPhoneNumber(submission.farmer.phone);
+          if (isValidRwandaPhone(cleanedPhone)) {
+            await sendMessage(
+              `Dear farmer, your payout for ${submission.productName} (${updatedPayout.amount.toLocaleString()} RWF) could not be completed. Our team has been notified and will retry.`,
+              cleanedPhone,
+            );
+          }
+        }
+      } catch (smsError) {
+        console.error("Failed to send payout-failed SMS to farmer:", smsError);
+      }
+
+      try {
+        await createNotificationService({
+          title: "Farmer Payout Failed",
+          message: `Payout of ${updatedPayout.amount.toLocaleString()} RWF for ${submission.farmer?.name || "a farmer"}'s submission of ${submission.productName} failed.`,
+          eventType: "SUBMISSION_PAYOUT_FAILED",
+          targetType: "ROLE_BASED",
+          targetRole: "ADMIN",
+          metadata: { submissionId: submission.id, payoutId: updatedPayout.id, amount: updatedPayout.amount },
+        });
+      } catch (notifError) {
+        console.error("Failed to create admin payout-failed notification:", notifError);
+      }
+
+      try {
+        await sendMessage(
+          `Payout FAILED: ${updatedPayout.amount.toLocaleString()} RWF for ${submission.farmer?.name || "a farmer"}'s submission of ${submission.productName}. Please retry.`,
+          process.env.PRIVATE_RECEIVER || "",
+        );
+      } catch (smsError) {
+        console.error("Failed to send admin payout-failed SMS:", smsError);
+      }
+
+      try {
+        if (process.env.ADMIN_EMAIL) {
+          await sendAdminPayoutFailedEmail({
+            farmerName: submission.farmer?.name || "Farmer",
+            farmerPhone: submission.farmer?.phone || undefined,
+            productName: submission.productName,
+            amount: updatedPayout.amount,
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send admin payout-failed email:", emailError);
+      }
     }
   }
 
