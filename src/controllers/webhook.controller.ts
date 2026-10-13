@@ -9,6 +9,7 @@ import {
   sendPaymentConfirmationEmail,
   sendPaymentFailedEmail,
   sendSubscriptionActivatedEmail,
+  sendLoanRepaymentConfirmedEmail,
 } from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { clearCartService } from "../services/cart.service";
@@ -226,6 +227,8 @@ async function processVoucherRepaymentPayment(
 
   console.log("Found matching voucher repayment:", repaymentTransaction.id);
 
+  let fullySettled = false;
+
   if (status === "successful") {
     await retryDatabaseOperation(async () => {
       return await prisma.$transaction(async (tx) => {
@@ -284,6 +287,8 @@ async function processVoucherRepaymentPayment(
 
           // If fully paid, update loan and voucher status
           if (outstanding <= 0) {
+            fullySettled = true;
+
             await tx.loanApplication.update({
               where: { id: repaymentTransaction.loanId },
               data: { status: "SETTLED" },
@@ -320,6 +325,57 @@ async function processVoucherRepaymentPayment(
       );
     } catch (wsError) {
       console.error("Failed to broadcast voucher repayment:", wsError);
+    }
+
+    // Notify the restaurant — isolated so a notification failure can never
+    // affect the already-committed repayment.
+    const repaymentRestaurant = repaymentTransaction.voucher?.restaurant;
+    if (repaymentRestaurant) {
+      try {
+        await createNotificationService({
+          title: "Repayment Received",
+          message: fullySettled
+            ? `Your repayment of ${repaymentTransaction.amount.toLocaleString()} RWF has been received. Your loan is now fully settled.`
+            : `Your repayment of ${repaymentTransaction.amount.toLocaleString()} RWF has been received.`,
+          eventType: "PAYMENT_PROCESSED",
+          targetType: "SPECIFIC_USER",
+          targetId: repaymentRestaurant.id,
+          metadata: {
+            voucherId: repaymentTransaction.voucherId,
+            loanId: repaymentTransaction.loanId,
+            amount: repaymentTransaction.amount,
+            fullySettled,
+          },
+        });
+      } catch (notifError) {
+        console.error("Failed to create repayment notification:", notifError);
+      }
+
+      try {
+        if (repaymentRestaurant.phone) {
+          await sendMessage(
+            fullySettled
+              ? `Dear ${repaymentRestaurant.name}, your repayment of ${repaymentTransaction.amount.toLocaleString()} RWF has been received. Your loan is now fully settled. Thank you!`
+              : `Dear ${repaymentRestaurant.name}, your repayment of ${repaymentTransaction.amount.toLocaleString()} RWF has been received.`,
+            repaymentRestaurant.phone,
+          );
+        }
+      } catch (smsError) {
+        console.error("Failed to send repayment SMS:", smsError);
+      }
+
+      try {
+        if (repaymentRestaurant.email) {
+          await sendLoanRepaymentConfirmedEmail({
+            email: repaymentRestaurant.email,
+            restaurantName: repaymentRestaurant.name,
+            amount: repaymentTransaction.amount,
+            fullySettled,
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send repayment email:", emailError);
+      }
     }
 
     console.log(`Voucher repayment completed: ${repaymentTransaction.id}`);
