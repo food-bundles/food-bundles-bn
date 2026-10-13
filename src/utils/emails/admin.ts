@@ -12,6 +12,13 @@ export interface AdminNotificationData {
   approvedBy?: string;
 }
 
+export interface RoleChangedData {
+  email: string;
+  username: string;
+  roleName: string;
+  changedBy?: string;
+}
+
 export interface PriceUpdateData {
   products: {
     id: string;
@@ -376,5 +383,69 @@ export async function sendPriceUpdateEmail(
     console.log("Price update email sent successfully");
   } catch (error) {
     console.error("Failed to send price update email:", error);
+  }
+}
+
+/**
+ * Generate role-changed email template
+ */
+const sendRoleChangedTemplate = (data: RoleChangedData): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Account Permissions Updated - FoodBundles</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .content { padding: 30px; }
+      .role-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #374151; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #374151; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear ${data.username},</p>
+
+        <p>Your account role/permissions on FoodBundles have been updated.</p>
+
+        <div class="role-details">
+          <p><span class="highlight">New Role:</span> ${data.roleName}</p>
+          ${data.changedBy ? `<p><span class="highlight">Changed By:</span> ${data.changedBy}</p>` : ""}
+        </div>
+
+        <p>If you believe this change was made in error, please contact an administrator.</p>
+      </div>
+      <div class="footer">
+        <p>Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Send role-changed email
+export async function sendRoleChangedEmail(data: RoleChangedData) {
+  const transporter = getEmailTransporter();
+
+  const roleChangedEmail = {
+    from: `"FoodBundles" <${process.env.GOOGLE_EMAIL}>`,
+    to: data.email,
+    subject: "Your Account Permissions Have Been Updated",
+    html: sendRoleChangedTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(roleChangedEmail);
+    console.log("Role changed email sent successfully");
+  } catch (error) {
+    console.error("Failed to send role changed email:", error);
   }
 }
