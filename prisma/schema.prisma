@@ -1812,6 +1812,7 @@ enum NotificationEvent {
   KYC_REJECTED
   WALLET_TRANSACTION
   ADMIN_ROLE_CHANGED
+  ORDER_CANCELLED
 }
 
 enum NotificationTarget {
