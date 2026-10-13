@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emails";
 import { createNotificationService } from "./notification.services";
+import { sendMessage } from "../utils/sms.utility";
 
 // Payment client - lazy initialized to ensure env vars are loaded
 let _paypack: any = null;
@@ -175,6 +176,7 @@ export const confirmSubmissionPayoutService = async (
     const submission = await prisma.farmerSubmission.update({
       where: { id: submissionId },
       data: { status: "PAID", paidAt: new Date() },
+      include: { farmer: { select: { phone: true } } },
     });
 
     await createNotificationService({
@@ -189,6 +191,20 @@ export const confirmSubmissionPayoutService = async (
         amount: updatedPayout.amount,
       },
     });
+
+    try {
+      if (submission.farmer.phone) {
+        const cleanedPhone = cleanPhoneNumber(submission.farmer.phone);
+        if (isValidRwandaPhone(cleanedPhone)) {
+          await sendMessage(
+            `Dear farmer, your payment for ${submission.productName} (${updatedPayout.amount.toLocaleString()} RWF) has been completed. Thank you for working with Food Bundles.`,
+            cleanedPhone,
+          );
+        }
+      }
+    } catch (e) {
+      console.error("Failed to send payout confirmation SMS:", e);
+    }
   }
 
   return updatedPayout;

@@ -288,4 +288,115 @@ export class OTPService {
       };
     }
   }
+
+  /**
+   * Request OTP for a farmer submission payout (PayPack cashout). Mirrors
+   * sendAdminWalletOTP exactly: OTP goes to PRIVATE_RECEIVER, not the
+   * initiating admin, since cashout is an irreversible money movement that
+   * should require the same second factor as admin wallet operations.
+   */
+  static async sendSubmissionPayoutOTP(
+    adminId: string,
+    submissionId: string,
+    phoneNumber: string,
+    amount: number,
+    productName?: string,
+  ): Promise<{ success: boolean; message: string; sessionId?: string }> {
+    try {
+      const otp = this.generateOTP();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+      const privateReceiver = process.env.PRIVATE_RECEIVER;
+
+      if (!privateReceiver) {
+        return { success: false, message: "Private receiver not configured" };
+      }
+
+      await prisma.oTP.deleteMany({
+        where: {
+          phone: privateReceiver,
+          purpose: "SUBMISSION_PAYOUT",
+          verified: false,
+        },
+      });
+
+      const otpRecord = await prisma.oTP.create({
+        data: {
+          phone: privateReceiver,
+          otp,
+          purpose: "SUBMISSION_PAYOUT",
+          expiresAt,
+        },
+      });
+
+      await sendMessage(
+        `Farmer submission payout OTP: ${otp}. Amount: ${amount.toLocaleString()} RWF${productName ? ` for ${productName}` : ""}. Valid for 10 minutes.`,
+        privateReceiver,
+      );
+
+      const sessionId = Buffer.from(
+        JSON.stringify({
+          adminId,
+          submissionId,
+          phoneNumber,
+          amount,
+          otpId: otpRecord.id,
+          timestamp: Date.now(),
+        }),
+      ).toString("base64");
+
+      return {
+        success: true,
+        message: "OTP sent to private receiver",
+        sessionId,
+      };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  }
+
+  static async verifySubmissionPayoutOTP(
+    otp: string,
+    sessionId: string,
+  ): Promise<{ success: boolean; message: string; sessionData?: any }> {
+    try {
+      const sessionData = JSON.parse(
+        Buffer.from(sessionId, "base64").toString(),
+      );
+
+      const privateReceiver = process.env.PRIVATE_RECEIVER;
+      if (!privateReceiver) {
+        return { success: false, message: "Private receiver not configured" };
+      }
+
+      const otpRecord = await prisma.oTP.findFirst({
+        where: {
+          phone: privateReceiver,
+          otp,
+          purpose: OTPPurpose.SUBMISSION_PAYOUT,
+          verified: false,
+          expiresAt: { gt: new Date() },
+        },
+      });
+
+      if (!otpRecord) {
+        return { success: false, message: "Invalid or expired OTP" };
+      }
+
+      await prisma.oTP.update({
+        where: { id: otpRecord.id },
+        data: { verified: true },
+      });
+
+      return {
+        success: true,
+        message: "OTP verified successfully",
+        sessionData,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: "Invalid session or OTP verification failed",
+      };
+    }
+  }
 }
