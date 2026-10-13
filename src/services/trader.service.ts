@@ -13,6 +13,7 @@ import {
   sendTraderDelegationOTPEmail,
 } from "../utils/emails";
 import { VoucherType } from "@prisma/client";
+import { wsManager } from "../index";
 
 // Create trader transaction record
 export const createTraderTransactionService = async (data: {
@@ -1576,6 +1577,17 @@ export const requestDelegationService = async (traderId: string) => {
     process.env.PRIVATE_RECEIVER || "",
   );
 
+  try {
+    wsManager.broadcastDelegationUpdate({
+      traderId,
+      action: "REQUESTED",
+      timestamp: new Date().toISOString(),
+      data: { delegationStatus: "PENDING" },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast delegation request:", error);
+  }
+
   return {
     success: true,
     message: "Delegation request submitted successfully",
@@ -1648,6 +1660,17 @@ export const approveDelegationService = async (
       `Delegation approved for trader ${wallet.trader?.username} with ${commission}% commission.`,
       process.env.PRIVATE_RECEIVER || "",
     );
+
+    try {
+      wsManager.broadcastDelegationUpdate({
+        traderId,
+        action: "ACCEPTED",
+        timestamp: new Date().toISOString(),
+        data: { commission, delegationStatus: "ACCEPTED" },
+      });
+    } catch (error) {
+      console.error("Failed to broadcast delegation approval:", error);
+    }
 
     return {
       success: true,
@@ -1735,6 +1758,17 @@ export const approveDelegationService = async (
       targetType: "SPECIFIC_USER",
       targetId: traderId,
     });
+
+    try {
+      wsManager.broadcastDelegationUpdate({
+        traderId,
+        action: "APPROVED",
+        timestamp: new Date().toISOString(),
+        data: { commission, delegationStatus: "APPROVED" },
+      });
+    } catch (error) {
+      console.error("Failed to broadcast delegation approval:", error);
+    }
 
     return {
       success: true,
@@ -1877,6 +1911,17 @@ export const revokeDelegationService = async (
       "Your trading delegation permission has been revoked by admin.",
       wallet.trader.phone,
     );
+  }
+
+  try {
+    wsManager.broadcastDelegationUpdate({
+      traderId,
+      action: "REVOKED",
+      timestamp: new Date().toISOString(),
+      data: { delegationStatus: "NORMAL" },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast delegation revocation:", error);
   }
 
   return { success: true, message: "Delegation revoked successfully" };
@@ -2115,6 +2160,17 @@ export const reverseDelegationService = async (traderId: string) => {
     );
   }
 
+  try {
+    wsManager.broadcastDelegationUpdate({
+      traderId,
+      action: "REVERSED",
+      timestamp: new Date().toISOString(),
+      data: { delegationStatus: "NORMAL" },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast delegation reversal:", error);
+  }
+
   return { success: true, message: "Delegation reversed successfully" };
 };
 
@@ -2189,6 +2245,17 @@ export const acceptDelegationService = async (
       "You have accepted the delegation. Food Bundles is now trading on your behalf.",
       trader.phone,
     );
+  }
+
+  try {
+    wsManager.broadcastDelegationUpdate({
+      traderId,
+      action: "ACCEPTED",
+      timestamp: new Date().toISOString(),
+      data: { delegationStatus: "ACCEPTED" },
+    });
+  } catch (error) {
+    console.error("Failed to broadcast delegation acceptance:", error);
   }
 
   return { success: true, message: "Delegation accepted successfully" };
