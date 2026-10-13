@@ -303,6 +303,37 @@ const getFilterConditions = async (
     };
   }
 
+  if (options?.feedbackStatus) {
+    whereCondition.farmerFeedbackStatus = options.feedbackStatus;
+  }
+
+  if (options?.province) {
+    whereCondition.province = options.province;
+  }
+
+  if (options?.dateFrom || options?.dateTo) {
+    whereCondition.submittedAt = {
+      ...(options.dateFrom && { gte: new Date(options.dateFrom) }),
+      ...(options.dateTo && { lte: new Date(options.dateTo) }),
+    };
+  }
+
+  if (options?.search) {
+    const search = options.search;
+    whereCondition.OR = [
+      { id: { equals: search } },
+      { productName: { contains: search, mode: "insensitive" } },
+      { village: { contains: search, mode: "insensitive" } },
+      { cell: { contains: search, mode: "insensitive" } },
+      { sector: { contains: search, mode: "insensitive" } },
+      { district: { contains: search, mode: "insensitive" } },
+      { province: { contains: search, mode: "insensitive" } },
+      { farmer: { phone: { contains: search, mode: "insensitive" } } },
+      { farmer: { email: { contains: search, mode: "insensitive" } } },
+      { aggregator: { username: { contains: search, mode: "insensitive" } } },
+    ];
+  }
+
   return whereCondition;
 };
 

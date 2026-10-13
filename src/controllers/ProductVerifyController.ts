@@ -116,6 +116,11 @@ export default class ProductVerifyController {
         sortOrder = "desc",
         status,
         productName,
+        feedbackStatus,
+        province,
+        search,
+        dateFrom,
+        dateTo,
       } = req.query;
       const paginationQuery = PaginationService.validatePaginationParams(
         page as string,
@@ -133,6 +138,11 @@ export default class ProductVerifyController {
           sortOrder: sortOrder as "asc" | "desc",
           status: status as string,
           productName: productName as string,
+          feedbackStatus: feedbackStatus as string,
+          province: province as string,
+          search: search as string,
+          dateFrom: dateFrom as string,
+          dateTo: dateTo as string,
         },
       });
 
