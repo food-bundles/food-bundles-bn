@@ -30,6 +30,7 @@ import {
   verifyLoanRepaymentService,
 } from "../services/voucher-card.service";
 import { CardStatus, LoanSessionStatus } from "@prisma/client";
+import { OTPService } from "../services/otp.service";
 
 // ============================================
 // CARD ENDPOINTS
@@ -538,6 +539,153 @@ export const verifyLoanRepayment = async (req: Request, res: Response) => {
         .json({ success: false, message: "Session id is required" });
     }
     const result = await verifyLoanRepaymentService(sessionId, restaurantId);
+    res.json({ success: true, data: result, message: "Payment status checked" });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// ============================================
+// ADMIN: PAY A VOUCHER ON BEHALF OF A RESTAURANT
+// ============================================
+
+const REPAYABLE_STATUSES: LoanSessionStatus[] = [
+  LoanSessionStatus.ACTIVE,
+  LoanSessionStatus.PARTIALLY_USED,
+  LoanSessionStatus.FULLY_USED,
+  LoanSessionStatus.OVERDUE,
+];
+
+// Load a session an admin wants to repay and work out the amount (never more than owed)
+const loadRepayableSession = async (sessionId: string, rawAmount?: unknown) => {
+  const session = await prisma.loanSession.findUnique({
+    where: { id: sessionId },
+    select: {
+      id: true,
+      rrn: true,
+      restaurantId: true,
+      status: true,
+      outstandingAmount: true,
+    },
+  });
+  if (!session) throw new Error("Loan session not found");
+  if (!REPAYABLE_STATUSES.includes(session.status)) {
+    throw new Error(`This voucher cannot be repaid (status: ${session.status})`);
+  }
+  if (session.outstandingAmount <= 0) {
+    throw new Error("This voucher has no outstanding balance to pay");
+  }
+  const requested = Number(rawAmount);
+  const amount =
+    requested > 0 ? Math.min(requested, session.outstandingAmount) : session.outstandingAmount;
+  return { session, amount };
+};
+
+/**
+ * Send the restaurant an OTP before its prepaid wallet is used to repay a voucher
+ * POST /vouchers/sessions/:sessionId/admin-repay/request-otp   { amount? }
+ */
+export const requestAdminRepayOTP = async (req: Request, res: Response) => {
+  try {
+    const { session, amount } = await loadRepayableSession(
+      req.params.sessionId as string,
+      req.body?.amount,
+    );
+
+    // Check the wallet first so the restaurant is not texted for a payment that would fail
+    const wallet = await prisma.wallet.findUnique({
+      where: { restaurantId: session.restaurantId },
+      select: { balance: true, isActive: true, currency: true },
+    });
+    if (!wallet || !wallet.isActive) {
+      throw new Error("Restaurant has no active prepaid wallet");
+    }
+    if (wallet.balance < amount) {
+      throw new Error(
+        `Insufficient wallet balance. Available: ${wallet.balance.toLocaleString()} ${wallet.currency}, Required: ${amount.toLocaleString()} RWF`,
+      );
+    }
+
+    const otpResult = await OTPService.sendVoucherRepaymentOTPToRestaurant(
+      session.restaurantId,
+      amount,
+      session.rrn,
+    );
+    if (!otpResult.success) throw new Error(otpResult.message);
+
+    res.json({
+      success: true,
+      message: "OTP sent to the restaurant's phone number",
+      data: {
+        // Mask all but the last 3 digits so the admin knows which phone received it
+        phone: otpResult.phone?.replace(/.(?=.{3})/g, "*"),
+        amount,
+        walletBalance: wallet.balance,
+      },
+    });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Pay a voucher on behalf of the restaurant
+ * POST /vouchers/sessions/:sessionId/admin-repay
+ *   { paymentMethod: "MOBILE_MONEY", phoneNumber, amount? }  → USSD push to that phone
+ *   { paymentMethod: "CASH", otp, amount? }                  → restaurant prepaid wallet
+ */
+export const adminRepayLoanSession = async (req: Request, res: Response) => {
+  try {
+    const { paymentMethod, phoneNumber, otp } = req.body ?? {};
+    const method = String(paymentMethod || "").toUpperCase();
+    if (!["MOBILE_MONEY", "CASH"].includes(method)) {
+      throw new Error("Payment method must be MOBILE_MONEY or CASH (prepaid wallet)");
+    }
+
+    const { session, amount } = await loadRepayableSession(
+      req.params.sessionId as string,
+      req.body?.amount,
+    );
+
+    if (method === "MOBILE_MONEY" && !phoneNumber) {
+      throw new Error("Phone number is required for mobile money");
+    }
+
+    // The restaurant must confirm wallet payments with the OTP it received
+    if (method === "CASH") {
+      if (!otp) throw new Error("OTP from the restaurant is required to use its prepaid wallet");
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: session.restaurantId },
+        select: { phone: true },
+      });
+      if (!restaurant?.phone) throw new Error("Restaurant phone number not found");
+      const otpResult = await OTPService.verifyOTP(restaurant.phone, String(otp), "VOUCHER_CHECKOUT");
+      if (!otpResult.success) throw new Error(otpResult.message);
+    }
+
+    const result = await repayLoanSessionService(session.id, session.restaurantId, {
+      paymentMethod: method,
+      phoneNumber,
+      amount,
+    });
+    res.json({ success: true, data: result, message: result.message });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Check a pending mobile money repayment started by an admin
+ * GET /vouchers/sessions/:sessionId/admin-repay/verify
+ */
+export const adminVerifyLoanRepayment = async (req: Request, res: Response) => {
+  try {
+    const session = await prisma.loanSession.findUnique({
+      where: { id: req.params.sessionId as string },
+      select: { id: true, restaurantId: true },
+    });
+    if (!session) throw new Error("Loan session not found");
+    const result = await verifyLoanRepaymentService(session.id, session.restaurantId);
     res.json({ success: true, data: result, message: "Payment status checked" });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });

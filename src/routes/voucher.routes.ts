@@ -60,6 +60,9 @@ import {
   repayLoanSession,
   verifyLoanRepayment,
   getVoucherCardStats,
+  requestAdminRepayOTP,
+  adminRepayLoanSession,
+  adminVerifyLoanRepayment,
   getRecentActivities,
 } from "../controllers/voucher-card.controller";
 import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
@@ -592,6 +595,26 @@ voucherRoutes.get(
   isAuthenticated,
   allow("vouchers", "RESTAURANT", "HOTEL", "AFFILIATOR"),
   verifyLoanRepayment,
+);
+
+// Admin pays a voucher on behalf of a restaurant (needs vouchers.manage)
+voucherRoutes.post(
+  "/sessions/:sessionId/admin-repay/request-otp",
+  isAuthenticated,
+  allow.manage("vouchers"),
+  requestAdminRepayOTP,
+);
+voucherRoutes.post(
+  "/sessions/:sessionId/admin-repay",
+  isAuthenticated,
+  allow.manage("vouchers"),
+  adminRepayLoanSession,
+);
+voucherRoutes.get(
+  "/sessions/:sessionId/admin-repay/verify",
+  isAuthenticated,
+  allow.manage("vouchers"),
+  adminVerifyLoanRepayment,
 );
 
 // Voucher card system stats (admin)
