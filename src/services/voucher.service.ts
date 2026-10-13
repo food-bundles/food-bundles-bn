@@ -1280,6 +1280,23 @@ export const rejectLoanApplicationService = async (
     console.error("Failed to broadcast loan rejection:", error);
   }
 
+  if (updatedLoan.restaurantId) {
+    try {
+      await createNotificationService({
+        title: "Loan Application Rejected",
+        message: reason
+          ? `Your loan application was rejected. Reason: ${reason}`
+          : "Your loan application was rejected.",
+        eventType: "PAYMENT_FAILED",
+        targetType: "SPECIFIC_USER",
+        targetId: updatedLoan.restaurantId,
+        metadata: { loanId: updatedLoan.id, reason },
+      });
+    } catch (error) {
+      console.error("Failed to create loan rejection notification:", error);
+    }
+  }
+
   return updatedLoan;
 };
 
