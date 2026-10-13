@@ -1,5 +1,6 @@
 import prisma from "../prisma";
 import { createNotificationService } from "./notification.services";
+import { sendMessage } from "../utils/sms.utility";
 
 /**
  * Force-completes a submission on admin authority, bypassing the wait for
@@ -154,6 +155,32 @@ export const reverseSubmissionStatusService = async (
     return updated;
   });
 
+  // Notify the farmer their submission status was changed — isolated so a
+  // notification failure can never affect the already-committed reversal.
+  try {
+    await createNotificationService({
+      title: "Submission Status Updated",
+      message: `Your submission of ${submission.productName} was reverted from ${fromStatus} to ${toStatus} by an administrator.${reason ? ` Reason: ${reason}` : ""}`,
+      eventType: "SUBMISSION_STATUS_REVERSED",
+      targetType: "SPECIFIC_USER",
+      targetId: updatedSubmission.farmerId,
+      metadata: { submissionId, fromStatus, toStatus, reason },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-reversed notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${submission.productName} was updated from ${fromStatus} to ${toStatus}.${reason ? ` Reason: ${reason}` : ""}`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-reversed SMS:", smsError);
+  }
+
   return updatedSubmission;
 };
 
@@ -211,6 +238,32 @@ export const rejectSubmissionService = async (
 
     return updated;
   });
+
+  // Notify the farmer of the rejection — isolated so a notification failure
+  // can never affect the already-committed rejection.
+  try {
+    await createNotificationService({
+      title: "Submission Rejected",
+      message: `Your submission of ${submission.productName} was rejected.${reason ? ` Reason: ${reason}` : ""}`,
+      eventType: "SUBMISSION_REJECTED",
+      targetType: "SPECIFIC_USER",
+      targetId: updatedSubmission.farmerId,
+      metadata: { submissionId, reason },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-rejected notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${submission.productName} was rejected.${reason ? ` Reason: ${reason}` : ""}`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-rejected SMS:", smsError);
+  }
 
   return updatedSubmission;
 };
