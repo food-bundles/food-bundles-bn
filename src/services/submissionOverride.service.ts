@@ -72,14 +72,29 @@ export const forceCompleteSubmissionService = async (
     return updated;
   });
 
-  await createNotificationService({
-    title: "Submission Force-Completed",
-    message: `Your submission of ${submission.productName} was marked complete by an administrator.`,
-    eventType: "SUBMISSION_FORCE_COMPLETED",
-    targetType: "SPECIFIC_USER",
-    targetId: updatedSubmission.farmerId,
-    metadata: { submissionId, reason },
-  });
+  try {
+    await createNotificationService({
+      title: "Submission Force-Completed",
+      message: `Your submission of ${submission.productName} was marked complete by an administrator.`,
+      eventType: "SUBMISSION_FORCE_COMPLETED",
+      targetType: "SPECIFIC_USER",
+      targetId: updatedSubmission.farmerId,
+      metadata: { submissionId, reason },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-force-completed notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${submission.productName} was marked complete and will be paid out soon.`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-force-completed SMS:", smsError);
+  }
 
   return updatedSubmission;
 };
