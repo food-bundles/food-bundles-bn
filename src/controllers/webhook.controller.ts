@@ -142,6 +142,32 @@ async function processWalletTransaction(
       console.error("Failed to send wallet notification:", error);
     }
 
+    // Persist an in-app notification for the top-up
+    try {
+      const targetId =
+        walletTransaction.wallet.restaurantId ||
+        walletTransaction.wallet.traderId;
+
+      if (targetId) {
+        await createNotificationService({
+          title: "Wallet Top-Up Successful",
+          message: `Your wallet was topped up with ${walletTransaction.amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+          eventType: "WALLET_TRANSACTION",
+          targetType: "SPECIFIC_USER",
+          targetId,
+          metadata: {
+            walletId: walletTransaction.walletId,
+            transactionId: walletTransaction.id,
+            type: "TOP_UP",
+            amount: walletTransaction.amount,
+            newBalance,
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Failed to create wallet top-up notification:", error);
+    }
+
     console.log(
       `Wallet top-up completed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet ${walletTransaction.walletId}`,
     );
