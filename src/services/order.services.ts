@@ -8,7 +8,11 @@ import { wsManager } from "../index";
 import { createNotificationService } from "./notification.services";
 import { applyPromoCodeService } from "./promo.service";
 import { sendMessage } from "../utils/sms.utility";
-import { sendOrderPendingPaymentEmail } from "../utils/emails";
+import {
+  sendOrderPendingPaymentEmail,
+  sendAdminOrderPendingPaymentEmail,
+  sendOrderStatusEmail,
+} from "../utils/emails";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -400,6 +404,26 @@ export const createOrderFromCartService = async (
     ).catch((err) => console.error("Failed to send order-pending SMS:", err));
   }
 
+  if (recipientEmail) {
+    sendAdminOrderPendingPaymentEmail({
+      orderNumber: order.orderNumber,
+      restaurantName: cart.restaurant.name,
+      totalAmount,
+      products: cart.cartItems.map((item) => ({
+        name: item.product.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      customer: {
+        name: order.billingName || cart.restaurant.name,
+        email: recipientEmail,
+      },
+      paymentMethod: order.paymentMethod || "CASH",
+    }).catch((err) =>
+      console.error("Failed to send admin order-pending email:", err),
+    );
+  }
+
   return await getOrderByIdService(order.id);
 };
 
@@ -562,6 +586,26 @@ export const createDirectOrderService = async (data: CreateDirectOrderData) => {
       `Your FoodBundles order ${order.orderNumber} (${order.totalAmount.toLocaleString()} RWF) has been received and is awaiting payment.`,
       recipientPhone,
     ).catch((err) => console.error("Failed to send order-pending SMS:", err));
+  }
+
+  if (recipientEmail) {
+    sendAdminOrderPendingPaymentEmail({
+      orderNumber: order.orderNumber,
+      restaurantName: restaurant.name,
+      totalAmount: order.totalAmount,
+      products: validatedItems.map((item) => ({
+        name: item.product.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      customer: {
+        name: order.billingName || restaurant.name,
+        email: recipientEmail,
+      },
+      paymentMethod: order.paymentMethod || "CASH",
+    }).catch((err) =>
+      console.error("Failed to send admin order-pending email:", err),
+    );
   }
 
   return await getOrderByIdService(order.id);
@@ -798,6 +842,24 @@ export const updateOrderService = async (
     }
   }
 
+  // Notify the restaurant of a status change. Isolated so an email
+  // failure can never affect the already-committed status update.
+  if (data.status && existingOrder.restaurant?.email) {
+    try {
+      await sendOrderStatusEmail({
+        orderNumber: updatedOrder.orderNumber,
+        status: updatedOrder.status,
+        restaurantName: existingOrder.restaurant.name,
+        customer: {
+          name: existingOrder.restaurant.name,
+          email: existingOrder.restaurant.email,
+        },
+      });
+    } catch (emailError) {
+      console.error("Failed to send order status email:", emailError);
+    }
+  }
+
   // Return complete order details
   return await getOrderByIdService(updatedOrder.id);
 };
@@ -860,6 +922,24 @@ export const cancelOrderService = async (
     });
   } catch (error) {
     console.error("Failed to broadcast order cancellation:", error);
+  }
+
+  // Notify the restaurant of the cancellation. Isolated so an email
+  // failure can never affect the already-committed cancellation.
+  if (order.restaurant?.email) {
+    try {
+      await sendOrderStatusEmail({
+        orderNumber: order.orderNumber,
+        status: "CANCELLED",
+        restaurantName: order.restaurant.name,
+        customer: {
+          name: order.restaurant.name,
+          email: order.restaurant.email,
+        },
+      });
+    } catch (emailError) {
+      console.error("Failed to send order cancellation email:", emailError);
+    }
   }
 
   return { message: "Order cancelled successfully" };
