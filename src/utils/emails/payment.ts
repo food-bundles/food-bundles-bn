@@ -1,4 +1,4 @@
-import { getEmailTransporter } from "./shared";
+import { getEmailTransporter, getAdminEmailTransporter } from "./shared";
 
 export interface PaymentNotificationData {
   amount: number;
@@ -510,6 +510,119 @@ export const sendPaymentFailedTemplate = (data: {
   </body>
   </html>`;
 };
+
+/**
+ * Generate admin payment failed email template
+ */
+const sendAdminPaymentFailedTemplate = (data: {
+  amount: number;
+  transactionId: string;
+  restaurantName: string;
+  products: { name: string; quantity: number; price: number }[];
+  customer: {
+    name: string;
+    email: string;
+  };
+  orderId: string;
+  orderNumber: string;
+  failureReason?: string;
+}): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Failed - Admin Notification</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; background-color: #f8f9fa; margin: 0; padding: 0; }
+      .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); overflow: hidden; }
+      .header { background: #374151; color: #fff; padding: 30px 20px; text-align: center; }
+      .content { padding: 30px; }
+      .order-details { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #374151; }
+      .product-item { display: flex; justify-content: space-between; margin: 8px 0; padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #374151; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear Admin,</p>
+        <p>A payment attempt for the order below from <strong>${data.restaurantName}</strong> was not successful.</p>
+
+        <div class="order-details">
+          <h2>Payment Details</h2>
+          <p><span class="highlight">Order Number:</span> #${data.orderNumber}</p>
+          <p><span class="highlight">Restaurant:</span> ${data.restaurantName}</p>
+          <p><span class="highlight">Customer:</span> ${data.customer.name} (${data.customer.email})</p>
+          <p><span class="highlight">Amount:</span> ${data.amount.toLocaleString()} RWF</p>
+          ${
+            data.failureReason
+              ? `<p><span class="highlight">Reason:</span> ${data.failureReason}</p>`
+              : ""
+          }
+
+          <h3 style="margin-top: 20px;">Items Ordered:</h3>
+          ${data.products
+            .map(
+              (product) => `
+              <div class="product-item">
+                <div>
+                  <strong>${product.name}</strong><br>
+                  <small>Quantity: ${product.quantity}</small>
+                </div>
+                <div><strong>${product.price.toLocaleString()} RWF</strong></div>
+              </div>`,
+            )
+            .join("")}
+        </div>
+
+        <p><strong>Action Required:</strong> No further action is needed unless the restaurant reports a recurring issue — the order remains saved and can be completed once payment succeeds.</p>
+      </div>
+      <div class="footer">
+        <p>Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+/**
+ * Send admin payment failed email
+ */
+export async function sendAdminPaymentFailedEmail(paymentData: {
+  amount: number;
+  transactionId: string;
+  restaurantName: string;
+  products: { name: string; quantity: number; price: number }[];
+  customer: {
+    name: string;
+    email: string;
+  };
+  orderId: string;
+  orderNumber: string;
+  failureReason?: string;
+}) {
+  const transporter = getAdminEmailTransporter();
+
+  const adminFailedEmail = {
+    from: `"Food Bundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `Payment Failed - Order #${paymentData.orderNumber} from ${paymentData.restaurantName}`,
+    html: sendAdminPaymentFailedTemplate(paymentData),
+  };
+
+  try {
+    await transporter.sendMail(adminFailedEmail);
+    console.log("Admin payment failed email sent successfully");
+  } catch (error) {
+    console.error("Failed to send admin payment failed email:", error);
+  }
+}
 
 // Send payment notification email
 export async function sendPaymentNotificationEmail(paymentData: {

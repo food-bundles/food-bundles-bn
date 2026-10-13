@@ -38,9 +38,10 @@ export const generateOrderStatusTemplate = (data: OrderStatusData): string => {
     CONFIRMED: { bg: "#f3f4f6", text: "#374151" },
     PREPARING: { bg: "#f3f4f6", text: "#374151" },
     READY: { bg: "#f3f4f6", text: "#374151" },
-    OUT_FOR_DELIVERY: { bg: "#f3f4f6", text: "#374151" },
+    IN_TRANSIT: { bg: "#f3f4f6", text: "#374151" },
     DELIVERED: { bg: "#f3f4f6", text: "#374151" },
     CANCELLED: { bg: "#f3f4f6", text: "#374151" },
+    REFUNDED: { bg: "#f3f4f6", text: "#374151" },
   };
 
   const statusInfo = statusColors[data.status] || statusColors.PENDING;
@@ -252,6 +253,103 @@ export async function sendOrderPendingPaymentEmail(
     console.log("Order pending-payment email sent successfully");
   } catch (error) {
     console.error("Failed to send order pending-payment email:", error);
+  }
+}
+
+/**
+ * Generate admin "new order created, pending payment" email template
+ */
+const generateAdminOrderPendingPaymentTemplate = (
+  data: OrderPendingPaymentData,
+): string => {
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New Order Created - Admin Notification</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .content { padding: 30px; }
+      .products-list { background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0; }
+      .order-info { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #374151; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      h2 { color: #334155; margin-top: 0; font-size: 20px; }
+      p { margin: 8px 0; color: #475569; }
+      .highlight { color: #374151; font-weight: bold; }
+      .amount { font-size: 24px; font-weight: bold; color: #374151; }
+      .status-pending { color: #374151; font-weight: bold; }
+      .product-item { display: flex; justify-content: space-between; margin: 8px 0; padding: 8px 0; border-bottom: 1px solid #e2e8f0; gap: 10px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear Admin,</p>
+
+        <p>A new order has been created by <strong>${data.restaurantName}</strong> and is <span class="status-pending">awaiting payment</span>.</p>
+
+        <div class="products-list">
+          <h2>Order Items</h2>
+          ${data.products
+            .map(
+              (product) => `
+            <div class="product-item">
+              <div>
+                <strong>${product.name}</strong><br>
+                <small>Quantity: ${product.quantity}</small>
+              </div>
+              <div>Price: <strong>${product.unitPrice.toLocaleString()} RWF</strong></div>
+            </div>`,
+            )
+            .join("")}
+          <div class="product-item" style="border-top: 2px solid #374151; margin-top: 10px; padding-top: 10px;">
+            <div><strong>Total Amount</strong></div>
+            <div class="amount">${data.totalAmount.toLocaleString()} RWF</div>
+          </div>
+        </div>
+
+        <div class="order-info">
+          <p><span class="highlight">Order Number:</span> ${data.orderNumber}</p>
+          <p><span class="highlight">Restaurant:</span> ${data.restaurantName}</p>
+          <p><span class="highlight">Customer:</span> ${data.customer.name} (${data.customer.email})</p>
+          <p><span class="highlight">Payment Method:</span> ${data.paymentMethod}</p>
+          <p><span class="highlight">Status:</span> <span class="status-pending">Pending Payment</span></p>
+        </div>
+      </div>
+      <div class="footer">
+        <p>Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+/**
+ * Send admin "new order created, pending payment" email
+ */
+export async function sendAdminOrderPendingPaymentEmail(
+  data: OrderPendingPaymentData,
+) {
+  const transporter = getAdminEmailTransporter();
+
+  const adminPendingEmail = {
+    from: `"Food Bundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `New Order Created - #${data.orderNumber} from ${data.restaurantName}`,
+    html: generateAdminOrderPendingPaymentTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(adminPendingEmail);
+    console.log("Admin order pending-payment email sent successfully");
+  } catch (error) {
+    console.error("Failed to send admin order pending-payment email:", error);
   }
 }
 
