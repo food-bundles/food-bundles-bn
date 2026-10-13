@@ -9,3 +9,4 @@ export * from "./admin";
 export * from "./trader";
 export * from "./newsletter";
 export * from "./voucher";
+export * from "./submission";
