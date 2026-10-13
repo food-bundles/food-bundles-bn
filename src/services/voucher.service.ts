@@ -21,6 +21,7 @@ import {
   sendAdminVoucherAppliedEmail,
   sendAdminVoucherApprovedEmail,
   sendWalletNotificationEmail,
+  sendLoanApplicationSubmittedEmail,
 } from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { getUserById } from "./userGets";
@@ -828,6 +829,46 @@ export const submitLoanApplicationService = async (
     voucherAmount: requestedAmount,
     appliedBy: restaurant.name,
   });
+
+  // Acknowledge receipt to the applicant — isolated so a notification
+  // failure can never affect the already-committed application.
+  try {
+    if (restaurant.phone) {
+      await sendMessage(
+        `Dear ${restaurant.name}, we have received your loan/voucher application for ${requestedAmount.toLocaleString()} RWF and it is pending review. We'll notify you once it's reviewed.`,
+        restaurant.phone,
+      );
+    }
+  } catch (error) {
+    console.error("Failed to send loan application SMS to restaurant:", error);
+  }
+
+  try {
+    if (restaurant.email) {
+      await sendLoanApplicationSubmittedEmail({
+        email: restaurant.email,
+        restaurantName: restaurant.name,
+        requestedAmount,
+        purpose,
+        repaymentDays: voucherDays,
+      });
+    }
+  } catch (error) {
+    console.error("Failed to send loan application email to restaurant:", error);
+  }
+
+  try {
+    await createNotificationService({
+      title: "Application Submitted",
+      message: `Your loan/voucher application for ${requestedAmount.toLocaleString()} RWF has been submitted and is pending review.`,
+      eventType: "VOUCHER_APPLIED",
+      targetType: "SPECIFIC_USER",
+      targetId: restaurantId,
+      metadata: { loanApplicationId: loanApplication.id, requestedAmount },
+    });
+  } catch (error) {
+    console.error("Failed to create loan application notification:", error);
+  }
 
   // Broadcast loan application submission (if wsManager is available)
   try {
