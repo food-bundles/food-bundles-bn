@@ -13,6 +13,7 @@ import {
   sendAdminOrderPendingPaymentEmail,
   sendOrderStatusEmail,
   sendAdminLowStockAlertEmail,
+  sendAdminOrderCancelledEmail,
 } from "../utils/emails";
 
 // Interface for creating an order from cart
@@ -437,6 +438,28 @@ export const createOrderFromCartService = async (
     );
   }
 
+  createNotificationService({
+    title: "Order Placed",
+    message: `Your order #${order.orderNumber} has been received and is awaiting payment.`,
+    eventType: "NEW_ORDER_PLACED",
+    targetType: "SPECIFIC_USER",
+    targetId: order.restaurantId,
+    metadata: { orderId: order.id, orderNumber: order.orderNumber, totalAmount },
+  }).catch((err) =>
+    console.error("Failed to create order-pending notification:", err),
+  );
+
+  createNotificationService({
+    title: "New Order Received",
+    message: `${cart.restaurant.name} placed order #${order.orderNumber} (${totalAmount.toLocaleString()} RWF), awaiting payment.`,
+    eventType: "NEW_ORDER_PLACED",
+    targetType: "ROLE_BASED",
+    targetRole: "ADMIN",
+    metadata: { orderId: order.id, orderNumber: order.orderNumber, restaurantId: order.restaurantId, totalAmount },
+  }).catch((err) =>
+    console.error("Failed to create admin order-pending notification:", err),
+  );
+
   return await getOrderByIdService(order.id);
 };
 
@@ -620,6 +643,28 @@ export const createDirectOrderService = async (data: CreateDirectOrderData) => {
       console.error("Failed to send admin order-pending email:", err),
     );
   }
+
+  createNotificationService({
+    title: "Order Placed",
+    message: `Your order #${order.orderNumber} has been received and is awaiting payment.`,
+    eventType: "NEW_ORDER_PLACED",
+    targetType: "SPECIFIC_USER",
+    targetId: order.restaurantId,
+    metadata: { orderId: order.id, orderNumber: order.orderNumber, totalAmount: order.totalAmount },
+  }).catch((err) =>
+    console.error("Failed to create order-pending notification:", err),
+  );
+
+  createNotificationService({
+    title: "New Order Received",
+    message: `${restaurant.name} placed order #${order.orderNumber} (${order.totalAmount.toLocaleString()} RWF), awaiting payment.`,
+    eventType: "NEW_ORDER_PLACED",
+    targetType: "ROLE_BASED",
+    targetRole: "ADMIN",
+    metadata: { orderId: order.id, orderNumber: order.orderNumber, restaurantId: order.restaurantId, totalAmount: order.totalAmount },
+  }).catch((err) =>
+    console.error("Failed to create admin order-pending notification:", err),
+  );
 
   return await getOrderByIdService(order.id);
 };
@@ -977,6 +1022,42 @@ export const cancelOrderService = async (
     });
   } catch (notifError) {
     console.error("Failed to create order cancellation notification:", notifError);
+  }
+
+  // Notify admin of the cancellation across all channels.
+  try {
+    await createNotificationService({
+      title: "Order Cancelled",
+      message: `Order #${order.orderNumber} from ${order.restaurant?.name || "a restaurant"} has been cancelled.${reason ? ` Reason: ${reason}` : ""}`,
+      eventType: "ORDER_CANCELLED",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: { orderId: order.id, orderNumber: order.orderNumber, reason },
+    });
+  } catch (notifError) {
+    console.error("Failed to create admin order cancellation notification:", notifError);
+  }
+
+  try {
+    await sendMessage(
+      `Order #${order.orderNumber} from ${order.restaurant?.name || "a restaurant"} has been cancelled.${reason ? ` Reason: ${reason}` : ""}`,
+      process.env.PRIVATE_RECEIVER || "",
+    );
+  } catch (smsError) {
+    console.error("Failed to send admin order cancellation SMS:", smsError);
+  }
+
+  try {
+    if (process.env.ADMIN_EMAIL) {
+      await sendAdminOrderCancelledEmail({
+        orderNumber: order.orderNumber,
+        restaurantName: order.restaurant?.name || "",
+        totalAmount: order.totalAmount,
+        reason,
+      });
+    }
+  } catch (emailError) {
+    console.error("Failed to send admin order cancellation email:", emailError);
   }
 
   return { message: "Order cancelled successfully" };
