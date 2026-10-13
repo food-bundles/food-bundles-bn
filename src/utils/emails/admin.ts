@@ -19,12 +19,6 @@ export interface RoleChangedData {
   changedBy?: string;
 }
 
-export interface LowStockAlertData {
-  productName: string;
-  currentQuantity: number;
-  unit: string;
-}
-
 export interface PriceUpdateData {
   products: {
     id: string;
@@ -455,6 +449,7 @@ export async function sendRoleChangedEmail(data: RoleChangedData) {
     console.error("Failed to send role changed email:", error);
   }
 }
+<<<<<<< HEAD
 
 /**
  * Generate low stock alert email template
@@ -519,3 +514,5 @@ export async function sendAdminLowStockAlertEmail(data: LowStockAlertData) {
     console.error("Failed to send admin low stock alert email:", error);
   }
 }
+=======
+>>>>>>> 79f0a93 (feat: add role-changed email template and notification event)
