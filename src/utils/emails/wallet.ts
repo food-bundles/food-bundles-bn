@@ -204,3 +204,94 @@ export async function sendAdminWalletOTPEmail(data: {
     console.error("Failed to send admin wallet OTP email:", error);
   }
 }
+
+export interface AdminWalletTransactionData {
+  ownerName: string;
+  ownerType: "RESTAURANT" | "TRADER";
+  type: "TOP_UP" | "PAYMENT" | "REFUND" | "ADJUSTMENT" | "WITHDRAWAL";
+  amount: number;
+  newBalance: number;
+  transactionId: string;
+  paymentMethod?: string;
+  description?: string;
+}
+
+/**
+ * Generate admin wallet transaction email template
+ */
+const sendAdminWalletTransactionTemplate = (
+  data: AdminWalletTransactionData,
+): string => {
+  const transactionTypeMap = {
+    TOP_UP: "Top-Up",
+    PAYMENT: "Payment",
+    REFUND: "Refund",
+    ADJUSTMENT: "Adjustment",
+    WITHDRAWAL: "Withdrawal",
+  };
+  const typeLabel = transactionTypeMap[data.type] || "Transaction";
+
+  return `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wallet ${typeLabel} - Admin Notification</title>
+    <style>
+      body { font-family: 'Arial', sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f8f9fa; }
+      .container { margin: 0 auto; max-width: 600px; background-color: #ffffff; padding: 0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); overflow: hidden; }
+      .content { padding: 30px; }
+      .wallet-info { background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #374151; }
+      .footer { text-align: center; padding: 20px; color: #64748b; background-color: #f8fafc; }
+      .highlight { color: #374151; font-weight: bold; }
+      .amount { font-size: 24px; font-weight: bold; color: #374151; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <p>Dear Admin,</p>
+
+        <p>A wallet ${typeLabel.toLowerCase()} has occurred.</p>
+
+        <div class="wallet-info">
+          <p><span class="highlight">${data.ownerType === "TRADER" ? "Trader" : "Restaurant"}:</span> ${data.ownerName}</p>
+          <p><span class="highlight">Type:</span> ${typeLabel}</p>
+          <p><span class="highlight">Amount:</span> <span class="amount">${data.amount.toLocaleString()} RWF</span></p>
+          <p><span class="highlight">New Balance:</span> ${data.newBalance.toLocaleString()} RWF</p>
+          ${data.paymentMethod ? `<p><span class="highlight">Payment Method:</span> ${data.paymentMethod}</p>` : ""}
+          ${data.description ? `<p><span class="highlight">Description:</span> ${data.description}</p>` : ""}
+        </div>
+      </div>
+      <div class="footer">
+        <p>Contact Support: sales@food.rw | +250 796 897 823</p>
+        <p><strong>The FoodBundles Team</strong></p>
+        <p style="font-size: 12px; margin-top: 15px;">
+          This is an automated message. Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+// Send admin wallet transaction email
+export async function sendAdminWalletTransactionEmail(
+  data: AdminWalletTransactionData,
+) {
+  const transporter = getAdminEmailTransporter();
+
+  const adminEmail = {
+    from: `"Food Bundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `Wallet ${data.type} - ${data.ownerName} (${data.amount.toLocaleString()} RWF)`,
+    html: sendAdminWalletTransactionTemplate(data),
+  };
+
+  try {
+    await transporter.sendMail(adminEmail);
+    console.log("Admin wallet transaction email sent successfully");
+  } catch (error) {
+    console.error("Failed to send admin wallet transaction email:", error);
+  }
+}
