@@ -10,6 +10,7 @@ import {
   sendPaymentFailedEmail,
   sendSubscriptionActivatedEmail,
   sendLoanRepaymentConfirmedEmail,
+  sendAdminWalletTransactionEmail,
 } from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { clearCartService } from "../services/cart.service";
@@ -167,6 +168,51 @@ async function processWalletTransaction(
       }
     } catch (error) {
       console.error("Failed to create wallet top-up notification:", error);
+    }
+
+    // Notify admin — email + in-app only.
+    try {
+      const ownerName =
+        walletTransaction.wallet.restaurant?.name ||
+        walletTransaction.wallet.trader?.username ||
+        "User";
+
+      if (process.env.ADMIN_EMAIL) {
+        await sendAdminWalletTransactionEmail({
+          ownerName,
+          ownerType: walletTransaction.wallet.restaurantId ? "RESTAURANT" : "TRADER",
+          type: "TOP_UP",
+          amount: walletTransaction.amount,
+          newBalance,
+          transactionId: walletTransaction.id,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to send admin wallet top-up email:", error);
+    }
+
+    try {
+      const ownerName =
+        walletTransaction.wallet.restaurant?.name ||
+        walletTransaction.wallet.trader?.username ||
+        "User";
+
+      await createNotificationService({
+        title: "Wallet Top-Up",
+        message: `${ownerName} topped up ${walletTransaction.amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+        eventType: "WALLET_TRANSACTION",
+        targetType: "ROLE_BASED",
+        targetRole: "ADMIN",
+        metadata: {
+          walletId: walletTransaction.walletId,
+          transactionId: walletTransaction.id,
+          type: "TOP_UP",
+          amount: walletTransaction.amount,
+          newBalance,
+        },
+      });
+    } catch (error) {
+      console.error("Failed to create admin wallet top-up notification:", error);
     }
 
     console.log(

@@ -2,7 +2,10 @@ import prisma from "../prisma";
 import { TransactionStatus, WalletTransactionType } from "@prisma/client";
 import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
-import { sendWalletNotificationEmail } from "../utils/emails";
+import {
+  sendWalletNotificationEmail,
+  sendAdminWalletTransactionEmail,
+} from "../utils/emails";
 
 /**
  * Transfer unused voucher amount to restaurant's Food Bundles wallet.
@@ -119,6 +122,36 @@ export const transferVoucherAmountToWalletService = async (data: {
     }
   } catch (emailError) {
     console.error("Failed to send wallet transfer email:", emailError);
+  }
+
+  // Notify admin — email + in-app only.
+  try {
+    if (process.env.ADMIN_EMAIL) {
+      await sendAdminWalletTransactionEmail({
+        ownerName: restaurant.name,
+        ownerType: "RESTAURANT",
+        type: "TOP_UP",
+        amount,
+        newBalance,
+        transactionId: transfer.id,
+        description: notes || `Voucher unused amount transferred to wallet (${source})`,
+      });
+    }
+  } catch (emailError) {
+    console.error("Failed to send admin wallet transfer email:", emailError);
+  }
+
+  try {
+    await createNotificationService({
+      title: "Voucher Amount Credited to Wallet",
+      message: `${restaurant.name}'s unused voucher amount of ${amount.toLocaleString()} RWF was credited to their wallet.`,
+      eventType: "WALLET_TRANSACTION",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: { transferId: transfer.id, amount, newBalance },
+    });
+  } catch (notifError) {
+    console.error("Failed to create admin wallet transfer notification:", notifError);
   }
 
   return {
