@@ -193,17 +193,32 @@ export const clearSubmissionService = async (submissionId: string) => {
     },
   });
 
-  await createNotificationService({
-    title: "Submission Reopened",
-    message: `Your submission of ${existingSubmission.productName} was reopened and is pending review again.`,
-    eventType: "SUBMISSION_REOPENED",
-    targetType: "SPECIFIC_USER",
-    targetId: updatedSubmission.farmerId,
-    metadata: {
-      submissionId: updatedSubmission.id,
-      productName: existingSubmission.productName,
-    },
-  });
+  try {
+    await createNotificationService({
+      title: "Submission Reopened",
+      message: `Your submission of ${existingSubmission.productName} was reopened and is pending review again.`,
+      eventType: "SUBMISSION_REOPENED",
+      targetType: "SPECIFIC_USER",
+      targetId: updatedSubmission.farmerId,
+      metadata: {
+        submissionId: updatedSubmission.id,
+        productName: existingSubmission.productName,
+      },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-reopened notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${existingSubmission.productName} was reopened and is pending review again.`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-reopened SMS:", smsError);
+  }
 
   return updatedSubmission;
 };
