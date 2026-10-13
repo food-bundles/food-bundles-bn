@@ -4,6 +4,7 @@ import {
   cleanPhoneNumber,
   isValidRwandaPhone,
 } from "../utils/emails";
+import { createNotificationService } from "./notification.services";
 import {
   CreateWalletData,
   DebitWalletData,
@@ -440,6 +441,22 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
           console.log("Failed to send wallet notification email:", emailError);
         }
       }
+
+      // Persist an in-app notification for the top-up
+      if (wallet.restaurantId) {
+        try {
+          await createNotificationService({
+            title: "Wallet Top-Up Successful",
+            message: `Your wallet was topped up with ${amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+            eventType: "WALLET_TRANSACTION",
+            targetType: "SPECIFIC_USER",
+            targetId: wallet.restaurantId,
+            metadata: { walletId: wallet.id, transactionId: txRef, type: "TOP_UP", amount, newBalance },
+          });
+        } catch (notifError) {
+          console.error("Failed to create wallet top-up notification:", notifError);
+        }
+      }
     }
 
     return {
@@ -716,6 +733,22 @@ export const adminDepositToWalletService = async (data: {
     }
   }
 
+  // Persist an in-app notification for the admin deposit
+  if (wallet.restaurantId) {
+    try {
+      await createNotificationService({
+        title: "Wallet Top-Up Successful",
+        message: `Your wallet was topped up with ${amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+        eventType: "WALLET_TRANSACTION",
+        targetType: "SPECIFIC_USER",
+        targetId: wallet.restaurantId,
+        metadata: { walletId: wallet.id, transactionId: result.transaction.id, type: "TOP_UP", amount, newBalance },
+      });
+    } catch (notifError) {
+      console.error("Failed to create wallet top-up notification:", notifError);
+    }
+  }
+
   return {
     success: true,
     wallet: await getWalletByIdService(wallet.id),
@@ -817,6 +850,22 @@ export const debitWalletService = async (data: DebitWalletData) => {
     }
   }
 
+  // Persist an in-app notification for the wallet debit
+  if (wallet.restaurantId) {
+    try {
+      await createNotificationService({
+        title: "Wallet Payment Processed",
+        message: `${amount.toLocaleString()} RWF was deducted from your wallet. New balance: ${newBalance.toLocaleString()} RWF`,
+        eventType: "WALLET_TRANSACTION",
+        targetType: "SPECIFIC_USER",
+        targetId: wallet.restaurantId,
+        metadata: { walletId: wallet.id, transactionId: transaction.id, type: "PAYMENT", amount, newBalance },
+      });
+    } catch (notifError) {
+      console.error("Failed to create wallet payment notification:", notifError);
+    }
+  }
+
   return {
     wallet: updatedWallet,
     transaction,
@@ -881,6 +930,22 @@ export const refundToWalletService = async (data: DebitWalletData) => {
       });
     } catch (emailError) {
       console.log("Failed to send wallet notification email:", emailError);
+    }
+  }
+
+  // Persist an in-app notification for the refund
+  if (wallet.restaurantId) {
+    try {
+      await createNotificationService({
+        title: "Wallet Refund Credited",
+        message: `${amount.toLocaleString()} RWF was refunded to your wallet. New balance: ${newBalance.toLocaleString()} RWF`,
+        eventType: "WALLET_TRANSACTION",
+        targetType: "SPECIFIC_USER",
+        targetId: wallet.restaurantId,
+        metadata: { walletId: wallet.id, transactionId: transaction.id, type: "REFUND", amount, newBalance },
+      });
+    } catch (notifError) {
+      console.error("Failed to create wallet refund notification:", notifError);
     }
   }
 
@@ -1152,6 +1217,22 @@ export const verifyWalletTopUpService = async (transactionId: string) => {
         }
       } catch (emailError) {
         console.log("Failed to send wallet notification email:", emailError);
+      }
+
+      // Persist an in-app notification for the top-up
+      if (wt.wallet.restaurantId) {
+        try {
+          await createNotificationService({
+            title: "Wallet Top-Up Successful",
+            message: `Your wallet was topped up with ${wt.amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+            eventType: "WALLET_TRANSACTION",
+            targetType: "SPECIFIC_USER",
+            targetId: wt.wallet.restaurantId,
+            metadata: { walletId: wt.walletId, transactionId: providerRef, type: "TOP_UP", amount: wt.amount, newBalance },
+          });
+        } catch (notifError) {
+          console.error("Failed to create wallet top-up notification:", notifError);
+        }
       }
 
       return {
