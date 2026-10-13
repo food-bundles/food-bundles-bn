@@ -128,6 +128,12 @@ export const reverseSubmissionStatusService = async (
 
   const fromStatus = submission.status;
 
+  if (toStatus === fromStatus) {
+    throw new Error(
+      `Submission is already ${fromStatus}; choose a different target status to reverse it`
+    );
+  }
+
   const data: Record<string, unknown> = { status: toStatus };
 
   // Null out fields inconsistent with the target status, preserving what's
@@ -241,11 +247,14 @@ export const rejectSubmissionService = async (
       include: { farmer: { select: { id: true, phone: true } } },
     });
 
+    // This rejects the farmer's offer feedback, not the submission's own
+    // status field (still `submission.status`), so the audit row records
+    // that distinction instead of a misleading no-op fromStatus===toStatus.
     await tx.submissionStatusHistory.create({
       data: {
         submissionId,
-        fromStatus: submission.status,
-        toStatus: submission.status,
+        fromStatus: submission.farmerFeedbackStatus || "PENDING",
+        toStatus: "REJECTED",
         reason: reason || "Rejected by admin",
         changedBy: adminId,
       },
