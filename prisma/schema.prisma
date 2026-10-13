@@ -916,6 +916,7 @@ model Voucher {
   repaymentDays      Int                  @default(7)
   serviceFeeRate     Float                @default(0)
   usedAt             DateTime?
+  maturingSoonNotified Boolean            @default(false)
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   orders             Order[]
@@ -1813,6 +1814,7 @@ enum NotificationEvent {
   WALLET_TRANSACTION
   ADMIN_ROLE_CHANGED
   ORDER_CANCELLED
+  VOUCHER_MATURING_SOON
 }
 
 enum NotificationTarget {
