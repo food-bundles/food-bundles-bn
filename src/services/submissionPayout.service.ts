@@ -215,6 +215,7 @@ export const confirmSubmissionPayoutService = async (
     } catch (e) {
       console.error("Failed to send payout confirmation SMS:", e);
     }
+<<<<<<< HEAD
   } else {
     // FAILED outcome — notify both farmer and admin so the failure doesn't
     // go unnoticed; isolated so a notification failure can never affect the
@@ -287,6 +288,8 @@ export const confirmSubmissionPayoutService = async (
         console.error("Failed to send admin payout-failed email:", emailError);
       }
     }
+=======
+>>>>>>> 51a5f8c (feat: notify farmer by SMS on payout and require OTP for cashout)
   }
 
   return updatedPayout;
