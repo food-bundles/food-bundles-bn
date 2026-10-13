@@ -39,6 +39,7 @@ import newsletterRoutes from "./newsletter.routes";
 import authenticatorRoutes from "./authenticator.routes";
 import customerTypeRoutes from "./customer-type.routes";
 import adminRoleRoutes from "./admin-role.routes";
+import wishlistRoutes from "./wishlist.routes";
 
 const routes = Router();
 
@@ -78,6 +79,7 @@ routes.use("/newsletter", newsletterRoutes);
 routes.use("/authenticator", authenticatorRoutes);
 routes.use("/customer-types", customerTypeRoutes);
 routes.use("/admin-roles", adminRoleRoutes);
+routes.use("/wishlist", wishlistRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

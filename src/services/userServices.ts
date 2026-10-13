@@ -1588,3 +1588,4 @@ export const createRestaurantByAdminService = async (
     throw new Error(`Failed to create restaurant: ${error.message}`);
   }
 };
+

@@ -16,9 +16,9 @@ export interface ICreateRestaurantData extends UserLocationData {
   tin: string;
   password: string;
   role: Role;
+  agreed?: boolean;
   /** Customer type picked at signup; sets the prices this customer pays */
   customerTypeId?: string | null;
-  agreed?: boolean;
 }
 
 export interface ICreateAdminData extends Partial<UserLocationData> {
