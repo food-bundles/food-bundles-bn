@@ -41,6 +41,8 @@ import {
   resolveRoleAssignment,
 } from "../services/access.service";
 import { isDashboardRole } from "../config/permissions";
+import { createNotificationService } from "../services/notification.services";
+import { sendRoleChangedEmail } from "../utils/emails";
 
 export class UserController {
   static createFarmer = async (req: Request, res: Response) => {
@@ -403,12 +405,44 @@ export class UserController {
       }
 
       // Role changes go through the same escalation checks as creation
+      let roleChanged = false;
       if (role !== undefined || adminRoleId !== undefined) {
         if (id === actor.id) throw new AccessError("You cannot change your own role", 400);
         Object.assign(updateData, await resolveRoleAssignment(actor, { role, adminRoleId }));
+        roleChanged = true;
       }
 
       const updatedAdmin = await updateAdminService(id, updateData);
+
+      if (roleChanged) {
+        const roleName = updateData.adminRoleId
+          ? (await prisma.adminRole.findUnique({ where: { id: updateData.adminRoleId } }))?.name || updateData.role
+          : updateData.role;
+
+        try {
+          await createNotificationService({
+            title: "Your Role Was Updated",
+            message: `Your role has been changed to ${roleName}.`,
+            eventType: "ADMIN_ROLE_CHANGED",
+            targetType: "SPECIFIC_USER",
+            targetId: id,
+            metadata: { roleName, changedBy: actor.id },
+          });
+        } catch (notifError) {
+          console.error("Failed to create role-change notification:", notifError);
+        }
+
+        try {
+          await sendRoleChangedEmail({
+            email: updatedAdmin.email,
+            username: updatedAdmin.username,
+            roleName,
+            changedBy: actor.username,
+          });
+        } catch (emailError) {
+          console.error("Failed to send role-change email:", emailError);
+        }
+      }
 
       res.status(200).json({
         success: true,
