@@ -885,41 +885,41 @@ model SubscriptionHistory {
 }
 
 model Voucher {
-  id                   String               @id @default(uuid())
-  voucherCode          String               @unique
-  voucherType          VoucherType
-  discountPercentage   Float
-  creditLimit          Float
-  currency             VoucherCurrency      @default(RWF)
-  totalCredit          Float
-  usedCredit           Float                @default(0)
-  remainingCredit      Float
-  paidAmount           Float                @default(0)
-  remainingAmount      Float                @default(0)
-  commission           Float                @default(0)
-  status               VoucherStatus        @default(ACTIVE)
-  expiryDate           DateTime?
-  issuedDate           DateTime             @default(now())
-  approvedBy           String?
-  restaurantId         String?
-  farmerId             String?
-  loanId               String?
-  repaymentDays        Int                  @default(7)
-  serviceFeeRate       Float                @default(0)
-  usedAt               DateTime?
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  maturingSoonNotified Boolean              @default(false)
-  orders               Order[]
-  approver             Admin?               @relation(fields: [approvedBy], references: [id])
-  farmer               Farmer?              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  loan                 LoanApplication?     @relation(fields: [loanId], references: [id])
-  restaurant           Restaurant?          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  creditTopUps         VoucherCreditTopUp[]
-  penalties            VoucherPenalty[]
-  repayments           VoucherRepayment[]
-  transactions         VoucherTransaction[]
-  walletTransfers      WalletTransfer[]
+  id                 String               @id @default(uuid())
+  voucherCode        String               @unique
+  voucherType        VoucherType
+  discountPercentage Float
+  creditLimit        Float
+  currency           VoucherCurrency      @default(RWF)
+  totalCredit        Float
+  usedCredit         Float                @default(0)
+  remainingCredit    Float
+  paidAmount         Float                @default(0)
+  remainingAmount    Float                @default(0)
+  commission         Float                @default(0)
+  status             VoucherStatus        @default(ACTIVE)
+  expiryDate         DateTime?
+  issuedDate         DateTime             @default(now())
+  approvedBy         String?
+  restaurantId       String?
+  farmerId           String?
+  loanId             String?
+  repaymentDays      Int                  @default(7)
+  serviceFeeRate     Float                @default(0)
+  usedAt             DateTime?
+  maturingSoonNotified Boolean            @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  orders             Order[]
+  approver           Admin?               @relation(fields: [approvedBy], references: [id])
+  farmer             Farmer?              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  loan               LoanApplication?     @relation(fields: [loanId], references: [id])
+  restaurant         Restaurant?          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  creditTopUps       VoucherCreditTopUp[]
+  penalties          VoucherPenalty[]
+  repayments         VoucherRepayment[]
+  transactions       VoucherTransaction[]
+  walletTransfers    WalletTransfer[]
 
   @@index([restaurantId])
   @@index([farmerId])
