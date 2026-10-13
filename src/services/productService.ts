@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 import { createNotificationService } from "./notification.services";
 import { getProductUnitByIdService } from "./unit.service";
+import { sendMessage } from "../utils/sms.utility";
 
 import { isDashboardRole } from "../config/permissions";
 export interface ProductData {
@@ -449,19 +450,34 @@ export const createProductFromSubmissionService = async ({
     };
   });
 
-  await createNotificationService({
-    title: "Product Approved",
-    message: `Your product "${submission.productName}" has been approved and is now available`,
-    eventType: "PRODUCT_APPROVED",
-    targetType: "SPECIFIC_USER",
-    targetId: submission.farmerId,
-    metadata: {
-      productId: result.product.id,
-      productName: submission.productName,
-      submissionId: submission.id,
-      approvedBy: productData.createdBy,
-    },
-  });
+  try {
+    await createNotificationService({
+      title: "Product Approved",
+      message: `Your product "${submission.productName}" has been approved and is now available`,
+      eventType: "PRODUCT_APPROVED",
+      targetType: "SPECIFIC_USER",
+      targetId: submission.farmerId,
+      metadata: {
+        productId: result.product.id,
+        productName: submission.productName,
+        submissionId: submission.id,
+        approvedBy: productData.createdBy,
+      },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-approved notification:", notifError);
+  }
+
+  try {
+    if (result.submission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${submission.productName} has been approved and will be paid out soon.`,
+        result.submission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-approved SMS:", smsError);
+  }
 
   return result;
 };
@@ -984,19 +1000,34 @@ export const approveSubmissionService = async (
     },
   });
 
-  await createNotificationService({
-    title: "Product Approved",
-    message: `Your product "${submission.productName}" has been approved and is now available`,
-    eventType: "PRODUCT_APPROVED",
-    targetType: "SPECIFIC_USER",
-    targetId: submission.farmerId,
-    metadata: {
-      productId: submission.id,
-      productName: submission.productName,
-      submissionId: submission.id,
-      approvedBy: adminId,
-    },
-  });
+  try {
+    await createNotificationService({
+      title: "Product Approved",
+      message: `Your product "${submission.productName}" has been approved and is now available`,
+      eventType: "PRODUCT_APPROVED",
+      targetType: "SPECIFIC_USER",
+      targetId: submission.farmerId,
+      metadata: {
+        productId: submission.id,
+        productName: submission.productName,
+        submissionId: submission.id,
+        approvedBy: adminId,
+      },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-approved notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${submission.productName} has been approved and will be paid out soon.`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-approved SMS:", smsError);
+  }
 
   return updatedSubmission;
 };
