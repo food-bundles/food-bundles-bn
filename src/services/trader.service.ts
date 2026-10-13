@@ -2845,35 +2845,52 @@ export const cancelWithdrawRequestService = async (
     }),
   ]);
 
-  // Notifications
-  await createNotificationService({
-    title: "Withdraw Cancelled",
-    message: `Your withdraw request of ${amount} RWF has been cancelled`,
-    eventType: "SYSTEM_MAINTENANCE",
-    targetType: "SPECIFIC_USER",
-    targetId: traderId,
-  });
+  // Notifications — isolated so a notification failure can never affect the
+  // already-committed cancellation.
+  try {
+    await createNotificationService({
+      title: "Withdraw Cancelled",
+      message: `Your withdraw request of ${amount} RWF has been cancelled`,
+      eventType: "SYSTEM_MAINTENANCE",
+      targetType: "SPECIFIC_USER",
+      targetId: traderId,
+    });
+  } catch (notifError) {
+    console.error("Failed to create withdraw-cancelled notification:", notifError);
+  }
 
-  if (wallet.trader?.phone) {
-    await sendMessage(
-      `Withdraw request cancelled: ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()}`,
-      wallet.trader.phone,
-    );
+  try {
+    if (wallet.trader?.phone) {
+      await sendMessage(
+        `Withdraw request cancelled: ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()}`,
+        wallet.trader.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send withdraw-cancelled SMS:", smsError);
   }
 
   // Notify admin
-  await createNotificationService({
-    title: "Withdraw Request Cancelled",
-    message: `Withdraw request of ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()} has been cancelled`,
-    eventType: "SYSTEM_MAINTENANCE",
-    targetType: "ADMIN",
-  });
+  try {
+    await createNotificationService({
+      title: "Withdraw Request Cancelled",
+      message: `Withdraw request of ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()} has been cancelled`,
+      eventType: "SYSTEM_MAINTENANCE",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+    });
+  } catch (notifError) {
+    console.error("Failed to create admin withdraw-cancelled notification:", notifError);
+  }
 
-  // Send SMS to private receiver
-  await sendMessage(
-    `Withdraw request cancelled: ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()} by ${wallet.trader?.username}`,
-    process.env.PRIVATE_RECEIVER || "",
-  );
+  try {
+    await sendMessage(
+      `Withdraw request cancelled: ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()} by ${wallet.trader?.username}`,
+      process.env.PRIVATE_RECEIVER || "",
+    );
+  } catch (smsError) {
+    console.error("Failed to send admin withdraw-cancelled SMS:", smsError);
+  }
 
   return { success: true, message: "Withdraw request cancelled successfully" };
 };
