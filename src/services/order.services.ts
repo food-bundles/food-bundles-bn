@@ -12,6 +12,7 @@ import {
   sendOrderPendingPaymentEmail,
   sendAdminOrderPendingPaymentEmail,
   sendOrderStatusEmail,
+  sendAdminLowStockAlertEmail,
 } from "../utils/emails";
 
 // Interface for creating an order from cart
@@ -174,6 +175,18 @@ export const createOrderFromCartService = async (
             unit: product.unit,
           },
         });
+
+        try {
+          if (process.env.ADMIN_EMAIL) {
+            await sendAdminLowStockAlertEmail({
+              productName: product.productName,
+              currentQuantity: product.quantity,
+              unit: product.unit,
+            });
+          }
+        } catch (emailError) {
+          console.error("Failed to send low stock alert email:", emailError);
+        }
       }
 
       throw new Error(
