@@ -21,6 +21,8 @@ import {
   sendAdminPaymentFailedEmail,
   sendLogisticsOrderNotificationEmail,
 } from "../utils/emails";
+import { sendMessage } from "../utils/sms.utility";
+import { createNotificationService } from "./notification.services";
 import {
   BankTransferPaymentResult,
   CardPaymentResult,
@@ -628,6 +630,68 @@ export const processPaymentService = async (
         }
       }
 
+      // SMS + in-app notifications for successful payments — isolated so a
+      // notification failure can never affect the already-completed payment.
+      if (paymentResult.status === "successful") {
+        const recipientPhone = order.billingPhone || order.restaurant.phone;
+
+        try {
+          if (recipientPhone) {
+            await sendMessage(
+              `Your payment of ${order.totalAmount.toLocaleString()} RWF for order ${order.orderNumber} was successful. Thank you!`,
+              recipientPhone,
+            );
+          }
+        } catch (smsError) {
+          console.log("Error sending payment success SMS:", smsError);
+        }
+
+        try {
+          await sendMessage(
+            `Order #${order.orderNumber} payment confirmed by ${order.restaurant.name}`,
+            process.env.PRIVATE_RECEIVER || "",
+          );
+        } catch (smsError) {
+          console.log("Error sending admin payment success SMS:", smsError);
+        }
+
+        try {
+          await createNotificationService({
+            title: "Payment Successful",
+            message: `Payment of ${order.totalAmount} RWF for order #${order.orderNumber} has been processed`,
+            eventType: "PAYMENT_PROCESSED",
+            targetType: "SPECIFIC_USER",
+            targetId: order.restaurantId,
+            metadata: {
+              orderId: order.id,
+              amount: order.totalAmount,
+              paymentMethod: order.paymentMethod,
+              transactionId: paymentResult.transactionId,
+            },
+          });
+        } catch (notifError) {
+          console.log("Error creating payment success notification:", notifError);
+        }
+
+        try {
+          await createNotificationService({
+            title: "New Order Received",
+            message: `Order #${order.orderNumber} has been placed by ${order.restaurant.name}`,
+            eventType: "NEW_ORDER_PLACED",
+            targetType: "ROLE_BASED",
+            targetRole: "ADMIN",
+            metadata: {
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              restaurantId: order.restaurantId,
+              totalAmount: order.totalAmount,
+            },
+          });
+        } catch (notifError) {
+          console.log("Error creating admin order notification:", notifError);
+        }
+      }
+
       return {
         success: true,
         checkout: updatedCheckout,
@@ -729,6 +793,49 @@ export const processPaymentService = async (
         } catch (emailError) {
           console.log("Error sending notification email:", emailError);
           // Don't fail the payment process if email fails
+        }
+      }
+
+      // SMS + in-app notifications for failed payments — isolated so a
+      // notification failure can never affect the already-recorded failure.
+      {
+        const recipientPhone = order.billingPhone || order.restaurant.phone;
+
+        try {
+          if (recipientPhone) {
+            await sendMessage(
+              `Your payment for order ${order.orderNumber} failed. Please try again or contact support.`,
+              recipientPhone,
+            );
+          }
+        } catch (smsError) {
+          console.log("Error sending payment failed SMS:", smsError);
+        }
+
+        try {
+          await sendMessage(
+            `Payment failed for order #${order.orderNumber} from ${order.restaurant.name}`,
+            process.env.PRIVATE_RECEIVER || "",
+          );
+        } catch (smsError) {
+          console.log("Error sending admin payment failed SMS:", smsError);
+        }
+
+        try {
+          await createNotificationService({
+            title: "Payment Failed",
+            message: `Payment for order #${order.orderNumber} failed. Please try again or contact support`,
+            eventType: "PAYMENT_FAILED",
+            targetType: "SPECIFIC_USER",
+            targetId: order.restaurantId,
+            metadata: {
+              orderId: order.id,
+              amount: order.totalAmount,
+              failureReason: paymentResult.error || "Payment failed",
+            },
+          });
+        } catch (notifError) {
+          console.log("Error creating payment failed notification:", notifError);
         }
       }
 
