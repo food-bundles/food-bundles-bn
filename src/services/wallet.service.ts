@@ -1,9 +1,11 @@
 import prisma from "../prisma";
 import {
   sendWalletNotificationEmail,
+  sendAdminWalletTransactionEmail,
   cleanPhoneNumber,
   isValidRwandaPhone,
 } from "../utils/emails";
+import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "./notification.services";
 import {
   CreateWalletData,
@@ -233,6 +235,14 @@ export const getWalletByIdService = async (walletId: string) => {
           phone: true,
         },
       },
+      trader: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          phone: true,
+        },
+      },
     },
   });
 
@@ -425,12 +435,16 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
         console.error("Failed to broadcast wallet update:", wsError);
       }
 
-      // Send notification email
-      if (wallet.restaurant?.email) {
+      // Send notification email — supports either a restaurant or a trader wallet
+      const topUpOwnerEmail = wallet.restaurant?.email || wallet.trader?.email;
+      const topUpOwnerName = wallet.restaurant?.name || wallet.trader?.username || "";
+      const topUpOwnerId = wallet.restaurantId || wallet.traderId;
+
+      if (topUpOwnerEmail) {
         try {
           await sendWalletNotificationEmail({
-            email: wallet.restaurant.email,
-            restaurantName: wallet.restaurant.name || "",
+            email: topUpOwnerEmail,
+            restaurantName: topUpOwnerName,
             type: "TOP_UP",
             amount,
             newBalance,
@@ -443,19 +457,62 @@ export const topUpWalletService = async (data: TopUpWalletData) => {
       }
 
       // Persist an in-app notification for the top-up
-      if (wallet.restaurantId) {
+      if (topUpOwnerId) {
         try {
           await createNotificationService({
             title: "Wallet Top-Up Successful",
             message: `Your wallet was topped up with ${amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
             eventType: "WALLET_TRANSACTION",
             targetType: "SPECIFIC_USER",
-            targetId: wallet.restaurantId,
+            targetId: topUpOwnerId,
             metadata: { walletId: wallet.id, transactionId: txRef, type: "TOP_UP", amount, newBalance },
           });
         } catch (notifError) {
           console.error("Failed to create wallet top-up notification:", notifError);
         }
+      }
+
+      const topUpOwnerPhone = wallet.restaurant?.phone || wallet.trader?.phone;
+      try {
+        if (topUpOwnerPhone) {
+          await sendMessage(
+            `Your wallet was topped up with ${amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+            topUpOwnerPhone,
+          );
+        }
+      } catch (smsError) {
+        console.error("Failed to send wallet top-up SMS:", smsError);
+      }
+
+      // Notify admin — email + in-app only (wallet activity is primarily the
+      // owner's concern, so admin SMS is reserved for manual admin actions).
+      try {
+        if (process.env.ADMIN_EMAIL) {
+          await sendAdminWalletTransactionEmail({
+            ownerName: topUpOwnerName,
+            ownerType: wallet.restaurantId ? "RESTAURANT" : "TRADER",
+            type: "TOP_UP",
+            amount,
+            newBalance,
+            transactionId: txRef,
+            paymentMethod,
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send admin wallet top-up email:", emailError);
+      }
+
+      try {
+        await createNotificationService({
+          title: "Wallet Top-Up",
+          message: `${topUpOwnerName} topped up ${amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+          eventType: "WALLET_TRANSACTION",
+          targetType: "ROLE_BASED",
+          targetRole: "ADMIN",
+          metadata: { walletId: wallet.id, transactionId: txRef, type: "TOP_UP", amount, newBalance },
+        });
+      } catch (notifError) {
+        console.error("Failed to create admin wallet top-up notification:", notifError);
       }
     }
 
@@ -749,6 +806,17 @@ export const adminDepositToWalletService = async (data: {
     }
   }
 
+  try {
+    if (wallet.restaurant?.phone) {
+      await sendMessage(
+        `Your wallet was topped up with ${amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+        wallet.restaurant.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send wallet top-up SMS:", smsError);
+  }
+
   return {
     success: true,
     wallet: await getWalletByIdService(wallet.id),
@@ -833,12 +901,16 @@ export const debitWalletService = async (data: DebitWalletData) => {
     console.log("updatedVoucher", updatedVoucher);
   }
 
-  // Send notification email
-  if (wallet.restaurant?.email) {
+  // Send notification email — supports either a restaurant or a trader wallet
+  const debitOwnerEmail = wallet.restaurant?.email || wallet.trader?.email;
+  const debitOwnerName = wallet.restaurant?.name || wallet.trader?.username || "";
+  const debitOwnerId = wallet.restaurantId || wallet.traderId;
+
+  if (debitOwnerEmail) {
     try {
       await sendWalletNotificationEmail({
-        email: wallet.restaurant.email,
-        restaurantName: wallet.restaurant.name || "",
+        email: debitOwnerEmail,
+        restaurantName: debitOwnerName,
         type: "PAYMENT",
         amount,
         newBalance,
@@ -851,19 +923,60 @@ export const debitWalletService = async (data: DebitWalletData) => {
   }
 
   // Persist an in-app notification for the wallet debit
-  if (wallet.restaurantId) {
+  if (debitOwnerId) {
     try {
       await createNotificationService({
         title: "Wallet Payment Processed",
         message: `${amount.toLocaleString()} RWF was deducted from your wallet. New balance: ${newBalance.toLocaleString()} RWF`,
         eventType: "WALLET_TRANSACTION",
         targetType: "SPECIFIC_USER",
-        targetId: wallet.restaurantId,
+        targetId: debitOwnerId,
         metadata: { walletId: wallet.id, transactionId: transaction.id, type: "PAYMENT", amount, newBalance },
       });
     } catch (notifError) {
       console.error("Failed to create wallet payment notification:", notifError);
     }
+  }
+
+  const debitOwnerPhone = wallet.restaurant?.phone || wallet.trader?.phone;
+  try {
+    if (debitOwnerPhone) {
+      await sendMessage(
+        `${amount.toLocaleString()} RWF was deducted from your wallet for order payment. New balance: ${newBalance.toLocaleString()} RWF`,
+        debitOwnerPhone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send wallet payment SMS:", smsError);
+  }
+
+  try {
+    if (process.env.ADMIN_EMAIL) {
+      await sendAdminWalletTransactionEmail({
+        ownerName: debitOwnerName,
+        ownerType: wallet.restaurantId ? "RESTAURANT" : "TRADER",
+        type: "PAYMENT",
+        amount,
+        newBalance,
+        transactionId: transaction.id,
+        description: description || "Payment deduction",
+      });
+    }
+  } catch (emailError) {
+    console.error("Failed to send admin wallet payment email:", emailError);
+  }
+
+  try {
+    await createNotificationService({
+      title: "Wallet Payment Processed",
+      message: `${debitOwnerName} paid ${amount.toLocaleString()} RWF from their wallet. New balance: ${newBalance.toLocaleString()} RWF`,
+      eventType: "WALLET_TRANSACTION",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: { walletId: wallet.id, transactionId: transaction.id, type: "PAYMENT", amount, newBalance },
+    });
+  } catch (notifError) {
+    console.error("Failed to create admin wallet payment notification:", notifError);
   }
 
   return {
@@ -916,12 +1029,16 @@ export const refundToWalletService = async (data: DebitWalletData) => {
     }),
   ]);
 
-  // Send notification email
-  if (wallet.restaurant?.email) {
+  // Send notification email — supports either a restaurant or a trader wallet
+  const refundOwnerEmail = wallet.restaurant?.email || wallet.trader?.email;
+  const refundOwnerName = wallet.restaurant?.name || wallet.trader?.username || "";
+  const refundOwnerId = wallet.restaurantId || wallet.traderId;
+
+  if (refundOwnerEmail) {
     try {
       await sendWalletNotificationEmail({
-        email: wallet.restaurant.email,
-        restaurantName: wallet.restaurant.name || "",
+        email: refundOwnerEmail,
+        restaurantName: refundOwnerName,
         type: "REFUND",
         amount,
         newBalance,
@@ -934,19 +1051,60 @@ export const refundToWalletService = async (data: DebitWalletData) => {
   }
 
   // Persist an in-app notification for the refund
-  if (wallet.restaurantId) {
+  if (refundOwnerId) {
     try {
       await createNotificationService({
         title: "Wallet Refund Credited",
         message: `${amount.toLocaleString()} RWF was refunded to your wallet. New balance: ${newBalance.toLocaleString()} RWF`,
         eventType: "WALLET_TRANSACTION",
         targetType: "SPECIFIC_USER",
-        targetId: wallet.restaurantId,
+        targetId: refundOwnerId,
         metadata: { walletId: wallet.id, transactionId: transaction.id, type: "REFUND", amount, newBalance },
       });
     } catch (notifError) {
       console.error("Failed to create wallet refund notification:", notifError);
     }
+  }
+
+  const refundOwnerPhone = wallet.restaurant?.phone || wallet.trader?.phone;
+  try {
+    if (refundOwnerPhone) {
+      await sendMessage(
+        `${amount.toLocaleString()} RWF was refunded to your wallet. New balance: ${newBalance.toLocaleString()} RWF`,
+        refundOwnerPhone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send wallet refund SMS:", smsError);
+  }
+
+  try {
+    if (process.env.ADMIN_EMAIL) {
+      await sendAdminWalletTransactionEmail({
+        ownerName: refundOwnerName,
+        ownerType: wallet.restaurantId ? "RESTAURANT" : "TRADER",
+        type: "REFUND",
+        amount,
+        newBalance,
+        transactionId: transaction.id,
+        description: description || "Refund credit",
+      });
+    }
+  } catch (emailError) {
+    console.error("Failed to send admin wallet refund email:", emailError);
+  }
+
+  try {
+    await createNotificationService({
+      title: "Wallet Refund Credited",
+      message: `${refundOwnerName} was refunded ${amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+      eventType: "WALLET_TRANSACTION",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: { walletId: wallet.id, transactionId: transaction.id, type: "REFUND", amount, newBalance },
+    });
+  } catch (notifError) {
+    console.error("Failed to create admin wallet refund notification:", notifError);
   }
 
   return {
@@ -1134,7 +1292,7 @@ export const verifyWalletTopUpService = async (transactionId: string) => {
       },
       include: {
         wallet: {
-          include: { restaurant: true },
+          include: { restaurant: true, trader: true },
         },
       },
     });
@@ -1201,13 +1359,17 @@ export const verifyWalletTopUpService = async (transactionId: string) => {
         }),
       ]);
 
-      // Send notification email
+      // Send notification email — supports either a restaurant or a trader wallet
+      const verifyOwnerEmail = wt.wallet.restaurant?.email || wt.wallet.trader?.email;
+      const verifyOwnerName = wt.wallet.restaurant?.name || wt.wallet.trader?.username || "";
+      const verifyOwnerId = wt.wallet.restaurantId || wt.wallet.traderId;
+
       try {
         console.log("Sending wallet top up email...");
-        if (wt.wallet.restaurant?.email) {
+        if (verifyOwnerEmail) {
           await sendWalletNotificationEmail({
-            email: wt.wallet.restaurant.email,
-            restaurantName: wt.wallet.restaurant.name || "",
+            email: verifyOwnerEmail,
+            restaurantName: verifyOwnerName,
             type: "TOP_UP",
             amount: wt.amount,
             newBalance,
@@ -1220,19 +1382,60 @@ export const verifyWalletTopUpService = async (transactionId: string) => {
       }
 
       // Persist an in-app notification for the top-up
-      if (wt.wallet.restaurantId) {
+      if (verifyOwnerId) {
         try {
           await createNotificationService({
             title: "Wallet Top-Up Successful",
             message: `Your wallet was topped up with ${wt.amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
             eventType: "WALLET_TRANSACTION",
             targetType: "SPECIFIC_USER",
-            targetId: wt.wallet.restaurantId,
+            targetId: verifyOwnerId,
             metadata: { walletId: wt.walletId, transactionId: providerRef, type: "TOP_UP", amount: wt.amount, newBalance },
           });
         } catch (notifError) {
           console.error("Failed to create wallet top-up notification:", notifError);
         }
+      }
+
+      const verifyOwnerPhone = wt.wallet.restaurant?.phone || wt.wallet.trader?.phone;
+      try {
+        if (verifyOwnerPhone) {
+          await sendMessage(
+            `Your wallet was topped up with ${wt.amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+            verifyOwnerPhone,
+          );
+        }
+      } catch (smsError) {
+        console.error("Failed to send wallet top-up SMS:", smsError);
+      }
+
+      try {
+        if (process.env.ADMIN_EMAIL) {
+          await sendAdminWalletTransactionEmail({
+            ownerName: verifyOwnerName,
+            ownerType: wt.wallet.restaurantId ? "RESTAURANT" : "TRADER",
+            type: "TOP_UP",
+            amount: wt.amount,
+            newBalance,
+            transactionId: providerRef,
+            paymentMethod: wt.paymentMethod || "Unknown",
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send admin wallet top-up email:", emailError);
+      }
+
+      try {
+        await createNotificationService({
+          title: "Wallet Top-Up",
+          message: `${verifyOwnerName} topped up ${wt.amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+          eventType: "WALLET_TRANSACTION",
+          targetType: "ROLE_BASED",
+          targetRole: "ADMIN",
+          metadata: { walletId: wt.walletId, transactionId: providerRef, type: "TOP_UP", amount: wt.amount, newBalance },
+        });
+      } catch (notifError) {
+        console.error("Failed to create admin wallet top-up notification:", notifError);
       }
 
       return {
