@@ -155,18 +155,40 @@ export const submitFarmerFeedbackService = async (
     },
   };
 
-  if (existingSubmission.aggregatorId) {
-    await createNotificationService({
-      ...notificationPayload,
-      targetType: "SPECIFIC_USER",
-      targetId: existingSubmission.aggregatorId,
-    });
-  } else {
-    await createNotificationService({
-      ...notificationPayload,
-      targetType: "ROLE_BASED",
-      targetRole: "ADMIN",
-    });
+  try {
+    if (existingSubmission.aggregatorId) {
+      await createNotificationService({
+        ...notificationPayload,
+        targetType: "SPECIFIC_USER",
+        targetId: existingSubmission.aggregatorId,
+      });
+    } else {
+      await createNotificationService({
+        ...notificationPayload,
+        targetType: "ROLE_BASED",
+        targetRole: "ADMIN",
+      });
+    }
+  } catch (notifError) {
+    console.error("Failed to create feedback-received notification:", notifError);
+  }
+
+  // SMS for the time-sensitive outcomes — a rejection or counter-offer needs
+  // prompt admin/aggregator attention, unlike a routine PENDING placeholder.
+  if (
+    feedbackData.feedbackStatus === "REJECTED" ||
+    feedbackData.feedbackStatus === "EXTENDED" ||
+    feedbackData.feedbackStatus === "ACCEPTED"
+  ) {
+    try {
+      const recipientPhone =
+        updatedSubmission.aggregator?.phone || process.env.PRIVATE_RECEIVER || "";
+      if (recipientPhone) {
+        await sendMessage(notificationPayload.message, recipientPhone);
+      }
+    } catch (smsError) {
+      console.error("Failed to send feedback-received SMS:", smsError);
+    }
   }
 
   return updatedSubmission;
@@ -401,18 +423,34 @@ export const updateFarmerFeedbackService = async (
     },
   };
 
-  if (existingSubmission.aggregatorId) {
-    await createNotificationService({
-      ...updateNotificationPayload,
-      targetType: "SPECIFIC_USER",
-      targetId: existingSubmission.aggregatorId,
-    });
-  } else {
-    await createNotificationService({
-      ...updateNotificationPayload,
-      targetType: "ROLE_BASED",
-      targetRole: "ADMIN",
-    });
+  try {
+    if (existingSubmission.aggregatorId) {
+      await createNotificationService({
+        ...updateNotificationPayload,
+        targetType: "SPECIFIC_USER",
+        targetId: existingSubmission.aggregatorId,
+      });
+    } else {
+      await createNotificationService({
+        ...updateNotificationPayload,
+        targetType: "ROLE_BASED",
+        targetRole: "ADMIN",
+      });
+    }
+  } catch (notifError) {
+    console.error("Failed to create feedback-updated notification:", notifError);
+  }
+
+  if (effectiveStatus === "REJECTED" || effectiveStatus === "EXTENDED" || effectiveStatus === "ACCEPTED") {
+    try {
+      const recipientPhone =
+        updatedSubmission.aggregator?.phone || process.env.PRIVATE_RECEIVER || "";
+      if (recipientPhone) {
+        await sendMessage(updateNotificationPayload.message, recipientPhone);
+      }
+    } catch (smsError) {
+      console.error("Failed to send feedback-updated SMS:", smsError);
+    }
   }
 
   return updatedSubmission;
