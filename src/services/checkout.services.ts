@@ -13,10 +13,13 @@ import {
 import { processLoanSessionPaymentService } from "./voucher-card.service";
 import { getPaymentMethodByIdService } from "./payment-method.service";
 import {
-  sendPaymentNotificationEmail,
+  sendPaymentConfirmationEmail,
   cleanPhoneNumber,
   isValidRwandaPhone,
   sendPaymentFailedEmail,
+  sendAdminOrderConfirmationEmail,
+  sendAdminPaymentFailedEmail,
+  sendLogisticsOrderNotificationEmail,
 } from "../utils/emails";
 import {
   BankTransferPaymentResult,
@@ -576,23 +579,48 @@ export const processPaymentService = async (
             price: item.unitPrice * item.quantity,
             unitPrice: item.unitPrice,
           }));
+          const customerEmail = order.billingEmail || order.restaurant.email!;
+          const customerName = order.billingName || order.restaurant.name;
 
-          sendPaymentNotificationEmail({
+          sendPaymentConfirmationEmail({
             amount: order.totalAmount,
-            phoneNumber: paymentData.phoneNumber || order.billingPhone || "",
+            transactionId: paymentResult.transactionId || order.orderNumber,
             restaurantName: order.restaurant.name,
             products,
             customer: {
-              name: order.billingName || order.restaurant.name,
-              email: order.billingEmail!,
+              name: customerName,
+              email: customerEmail,
             },
             orderId: orderId,
             orderNumber: order.orderNumber,
-            paymentMethod: paymentData.paymentMethod,
-            walletDetails:
-              "walletDetails" in paymentResult
-                ? paymentResult.walletDetails
-                : undefined,
+          });
+
+          if (process.env.ADMIN_EMAIL) {
+            sendAdminOrderConfirmationEmail({
+              amount: order.totalAmount,
+              transactionId: paymentResult.transactionId || order.orderNumber,
+              restaurantName: order.restaurant.name,
+              products,
+              customer: {
+                name: customerName,
+                email: customerEmail,
+              },
+              orderId: orderId,
+              orderNumber: order.orderNumber,
+            });
+          }
+
+          sendLogisticsOrderNotificationEmail({
+            amount: order.totalAmount,
+            transactionId: paymentResult.transactionId || order.orderNumber,
+            restaurantName: order.restaurant.name,
+            products,
+            customer: {
+              name: customerName,
+              email: customerEmail,
+            },
+            orderId: orderId,
+            orderNumber: order.orderNumber,
           });
         } catch (emailError) {
           console.log("Error sending notification email:", emailError);
@@ -682,6 +710,22 @@ export const processPaymentService = async (
             orderNumber: order.orderNumber,
             failureReason: paymentResult.error,
           });
+
+          if (process.env.ADMIN_EMAIL) {
+            sendAdminPaymentFailedEmail({
+              amount: order.totalAmount,
+              transactionId: paymentResult.transactionId,
+              restaurantName: order.restaurant.name,
+              products,
+              customer: {
+                name: order.billingName || order.restaurant.name,
+                email: order.billingEmail!,
+              },
+              orderId: orderId,
+              orderNumber: order.orderNumber,
+              failureReason: paymentResult.error,
+            });
+          }
         } catch (emailError) {
           console.log("Error sending notification email:", emailError);
           // Don't fail the payment process if email fails
