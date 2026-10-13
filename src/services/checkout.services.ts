@@ -17,7 +17,7 @@ import {
   cleanPhoneNumber,
   isValidRwandaPhone,
   sendPaymentFailedEmail,
-} from "../utils/emailTemplates";
+} from "../utils/emails";
 import {
   BankTransferPaymentResult,
   CardPaymentResult,
@@ -587,6 +587,7 @@ export const processPaymentService = async (
               email: order.billingEmail!,
             },
             orderId: orderId,
+            orderNumber: order.orderNumber,
             paymentMethod: paymentData.paymentMethod,
             walletDetails:
               "walletDetails" in paymentResult

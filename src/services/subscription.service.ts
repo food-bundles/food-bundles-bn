@@ -10,7 +10,7 @@ import {
   cleanPhoneNumber,
   isValidRwandaPhone,
   sendSubscriptionExpiryEmail,
-} from "../utils/emailTemplates";
+} from "../utils/emails";
 import { createNotificationService } from "./notification.services";
 import { getPaymentMethodByIdService } from "./payment-method.service";
 import {

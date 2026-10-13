@@ -11,7 +11,7 @@ import {
   sendAdminVoucherApprovedEmail,
   sendTraderLoanApprovalEmail,
   sendTraderDelegationOTPEmail,
-} from "../utils/emailTemplates";
+} from "../utils/emails";
 import { VoucherType } from "@prisma/client";
 
 // Create trader transaction record

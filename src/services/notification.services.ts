@@ -1,6 +1,6 @@
 import prisma from "../prisma";
 import { sendMessage } from "../utils/sms.utility";
-import { sendPriceUpdateEmail, PriceUpdateData } from "../utils/emailTemplates";
+import { sendPriceUpdateEmail, PriceUpdateData } from "../utils/emails";
 import { NotificationEvent } from "@prisma/client";
 
 export interface NotificationData {

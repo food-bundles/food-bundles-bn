@@ -7,7 +7,7 @@ import {
   sendLogisticsOrderNotificationEmail,
   sendPaymentConfirmationEmail,
   sendPaymentFailedEmail,
-} from "../utils/emailTemplates";
+} from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { clearCartService } from "../services/cart.service";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";

@@ -1,5 +1,5 @@
 import prisma from "../prisma";
-import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
+import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emails";
 import { createNotificationService } from "./notification.services";
 
 // Payment client - lazy initialized to ensure env vars are loaded

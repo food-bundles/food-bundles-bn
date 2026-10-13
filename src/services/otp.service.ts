@@ -1,6 +1,6 @@
 import { sendMessage } from "../utils/sms.utility";
 import prisma from "../prisma";
-import { sendAdminWalletOTPEmail } from "../utils/emailTemplates";
+import { sendAdminWalletOTPEmail } from "../utils/emails";
 import { OTPPurpose } from "@prisma/client";
 
 export class OTPService {

@@ -3,7 +3,7 @@ import {
   sendWalletNotificationEmail,
   cleanPhoneNumber,
   isValidRwandaPhone,
-} from "../utils/emailTemplates";
+} from "../utils/emails";
 import {
   CreateWalletData,
   DebitWalletData,

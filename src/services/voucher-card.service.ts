@@ -4,7 +4,7 @@ import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
 import { wsManager } from "../index";
 import { transferVoucherAmountToWalletService } from "./wallet-transfer.service";
-import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
+import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emails";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import {
   debitWalletService,

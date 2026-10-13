@@ -21,7 +21,7 @@ import {
   sendAdminVoucherAppliedEmail,
   sendAdminVoucherApprovedEmail,
   sendWalletNotificationEmail,
-} from "../utils/emailTemplates";
+} from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { getUserById } from "./userGets";
 import { getRestaurantFromAffiliatorService } from "./affiliator.service";
@@ -31,7 +31,7 @@ import {
 } from "./trader.service";
 import { applyPromoCodeService } from "./promo.service";
 import { transferVoucherAmountToWalletService } from "./wallet-transfer.service";
-import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
+import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emails";
 
 // Payment processing functions
 const flw = require("flutterwave-node-v3");

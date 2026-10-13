@@ -27,7 +27,7 @@ import {
   generateRestaurantPassword,
   sendPasswordSMS,
 } from "../utils/passwordGenerator";
-import { sendAdminUserCreatedEmail } from "../utils/emailTemplates";
+import { sendAdminUserCreatedEmail } from "../utils/emails";
 import {
   createTraderWalletService,
   getTraderWalletService,

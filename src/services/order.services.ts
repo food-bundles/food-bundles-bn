@@ -8,7 +8,7 @@ import { wsManager } from "../index";
 import { createNotificationService } from "./notification.services";
 import { applyPromoCodeService } from "./promo.service";
 import { sendMessage } from "../utils/sms.utility";
-import { sendOrderPendingPaymentEmail } from "../utils/emailTemplates";
+import { sendOrderPendingPaymentEmail } from "../utils/emails";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
