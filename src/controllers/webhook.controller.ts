@@ -846,6 +846,28 @@ async function processCheckoutPayment(
       },
     });
 
+    try {
+      const recipientPhone =
+        orderData.billingPhone || orderData.restaurant.phone;
+      if (recipientPhone) {
+        await sendMessage(
+          `Your payment for order ${orderData.orderNumber} failed. Please try again or contact support.`,
+          recipientPhone,
+        );
+      }
+    } catch (smsError) {
+      console.error("Failed to send payment failed SMS:", smsError);
+    }
+
+    try {
+      await sendMessage(
+        `Payment failed for order #${orderData.orderNumber} from ${orderData.restaurant.name}`,
+        process.env.PRIVATE_RECEIVER || "",
+      );
+    } catch (smsError) {
+      console.error("Failed to send admin payment failed SMS:", smsError);
+    }
+
     console.log(`Checkout payment failed: ${orderData.id}`);
   }
 
