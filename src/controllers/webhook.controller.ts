@@ -8,6 +8,7 @@ import {
   sendLogisticsOrderNotificationEmail,
   sendPaymentConfirmationEmail,
   sendPaymentFailedEmail,
+  sendSubscriptionActivatedEmail,
 } from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { clearCartService } from "../services/cart.service";
@@ -1034,14 +1035,54 @@ async function processSubscriptionPayment(
         console.error("Failed to send subscription notification:", error);
       }
 
-      await sendAdminSubscriptionPaidEmail({
-        userType: "RESTAURANT",
-        userName: subscription.restaurant?.name || "",
-        userEmail: subscription.restaurant?.email || "",
-        restaurantName: subscription.restaurant?.name || "",
-        subscriptionPlan: subscription.plan.name,
-        amount: subscription.plan.price,
-      });
+      try {
+        if (subscription.restaurant?.email) {
+          await sendSubscriptionActivatedEmail({
+            email: subscription.restaurant.email,
+            restaurantName: subscription.restaurant.name || "Restaurant",
+            planName: subscription.plan.name,
+            amountPaid: subscription.plan.price,
+            endDate: subscription.endDate || undefined,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to send subscription activated email:", error);
+      }
+
+      try {
+        await sendAdminSubscriptionPaidEmail({
+          userType: "RESTAURANT",
+          userName: subscription.restaurant?.name || "",
+          userEmail: subscription.restaurant?.email || "",
+          restaurantName: subscription.restaurant?.name || "",
+          subscriptionPlan: subscription.plan.name,
+          amount: subscription.plan.price,
+        });
+      } catch (error) {
+        console.error("Failed to send admin subscription paid email:", error);
+      }
+
+      try {
+        if (subscription.restaurantId) {
+          await createNotificationService({
+            title: "Subscription Activated",
+            message: `Your subscription to ${subscription.plan.name} has been activated successfully`,
+            eventType: "SUBSCRIPTION_ACTIVATED",
+            targetType: "SPECIFIC_USER",
+            targetId: subscription.restaurantId,
+            metadata: {
+              subscriptionId: subscription.id,
+              planId: subscription.planId,
+              amount: subscription.plan.price,
+            },
+          });
+        }
+      } catch (error) {
+        console.error(
+          "Failed to create subscription activated notification:",
+          error,
+        );
+      }
 
       // Broadcast subscription update via WebSocket
       try {
