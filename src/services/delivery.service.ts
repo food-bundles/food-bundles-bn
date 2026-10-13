@@ -353,6 +353,11 @@ export class DeliveryService {
       // Validate order exists and is eligible
       const order = await prisma.order.findUnique({
         where: { id: orderId },
+        include: {
+          restaurant: {
+            select: { name: true, email: true },
+          },
+        },
       });
 
       if (!order) {
@@ -430,6 +435,27 @@ export class DeliveryService {
           },
         });
       });
+
+      // Notify the restaurant of the delivery progress. Isolated so an
+      // email failure can never affect the already-committed status update.
+      if (order.restaurant?.email) {
+        try {
+          await sendOrderStatusEmail({
+            orderNumber: order.orderNumber,
+            status: orderStatus,
+            restaurantName: order.restaurant.name,
+            customer: {
+              name: order.restaurant.name,
+              email: order.restaurant.email,
+            },
+          });
+        } catch (emailError) {
+          console.error(
+            "Failed to send delivery status email:",
+            emailError,
+          );
+        }
+      }
 
       return {
         success: true,
