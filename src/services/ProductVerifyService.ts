@@ -6,6 +6,7 @@ import {
 } from "../types/productVerifyTypes";
 import { PaginationService } from "./paginationService";
 import { createNotificationService } from "./notification.services";
+import { sendMessage } from "../utils/sms.utility";
 
 // NOTE: there is currently no service/route that transitions a FarmerSubmission
 // to status "PAID" — APPROVED is the last automated stage. A payout/mark-paid
@@ -78,19 +79,34 @@ export const purchaseProductService = async (
     },
   });
 
-  await createNotificationService({
-    title: "Submission Verified",
-    message: `Your submission of ${existingSubmission.productName} has been verified. Please review and respond to the offer.`,
-    eventType: "SUBMISSION_VERIFIED",
-    targetType: "SPECIFIC_USER",
-    targetId: updatedSubmission.farmerId,
-    metadata: {
-      submissionId: updatedSubmission.id,
-      productName: existingSubmission.productName,
-      acceptedQty,
-      acceptedPrice,
-    },
-  });
+  try {
+    await createNotificationService({
+      title: "Submission Verified",
+      message: `Your submission of ${existingSubmission.productName} has been verified. Please review and respond to the offer.`,
+      eventType: "SUBMISSION_VERIFIED",
+      targetType: "SPECIFIC_USER",
+      targetId: updatedSubmission.farmerId,
+      metadata: {
+        submissionId: updatedSubmission.id,
+        productName: existingSubmission.productName,
+        acceptedQty,
+        acceptedPrice,
+      },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-verified notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${existingSubmission.productName} has been verified: ${acceptedQty} units at ${acceptedPrice.toLocaleString()} RWF each (${totalAmount.toLocaleString()} RWF total). Please respond to the offer.`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-verified SMS:", smsError);
+  }
 
   return updatedSubmission;
 };
