@@ -3,6 +3,7 @@ import crypto from "crypto";
 import prisma from "../prisma";
 import {
   sendAdminOrderConfirmationEmail,
+  sendAdminPaymentFailedEmail,
   sendAdminSubscriptionPaidEmail,
   sendLogisticsOrderNotificationEmail,
   sendPaymentConfirmationEmail,
@@ -574,27 +575,6 @@ async function processCheckoutPayment(
     }
 
     try {
-      await sendAdminOrderConfirmationEmail({
-        amount: orderData.totalAmount,
-        transactionId: data?.id?.toString() || flwRef,
-        restaurantName: orderData.restaurant.name,
-        products: orderData.orderItems.map((item) => ({
-          name: item.productName,
-          quantity: item.quantity,
-          price: item.unitPrice,
-        })),
-        customer: {
-          name: orderData.billingName || orderData.restaurant.name || "",
-          email: orderData.billingEmail || orderData.restaurant.email || "",
-        },
-        orderId: orderData.id,
-        orderNumber: orderData.orderNumber,
-      });
-    } catch (emailError) {
-      console.error("Failed to send confirmation email:", emailError);
-    }
-
-    try {
       await sendLogisticsOrderNotificationEmail({
         amount: orderData.totalAmount,
         transactionId: data?.id?.toString() || flwRef,
@@ -743,6 +723,30 @@ async function processCheckoutPayment(
       });
     } catch (emailError) {
       console.error("Failed to send payment failed email:", emailError);
+    }
+
+    try {
+      if (process.env.ADMIN_EMAIL) {
+        await sendAdminPaymentFailedEmail({
+          amount: orderData.totalAmount,
+          transactionId: data?.id?.toString() || flwRef,
+          restaurantName: orderData.restaurant.name,
+          products: orderData.orderItems.map((item) => ({
+            name: item.productName,
+            quantity: item.quantity,
+            price: item.unitPrice,
+          })),
+          customer: {
+            name: orderData.billingName || orderData.restaurant.name || "",
+            email: orderData.billingEmail || orderData.restaurant.email || "",
+          },
+          orderId: orderData.id,
+          orderNumber: orderData.orderNumber,
+          failureReason: "Payment failed",
+        });
+      }
+    } catch (emailError) {
+      console.error("Failed to send admin payment failed email:", emailError);
     }
 
     // In payment webhook when payment fails
