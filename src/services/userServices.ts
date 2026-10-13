@@ -1196,6 +1196,34 @@ export const googleSignupService = async (data: {
         },
       });
 
+      try {
+        await createNotificationService({
+          title: "New User Registration",
+          message: `New ${farmer.role.toLowerCase()} ${farmer.email} has registered`,
+          eventType: "USER_SIGNUP",
+          targetType: "ROLE_BASED",
+          targetRole: "ADMIN",
+          metadata: {
+            userId: farmer.id,
+            userRole: farmer.role,
+            email: farmer.email,
+            registeredAt: new Date().toISOString(),
+          },
+        });
+      } catch (notifError) {
+        console.error("Failed to create new-user notification:", notifError);
+      }
+
+      try {
+        await sendAdminUserCreatedEmail({
+          userType: farmer.role,
+          userName: farmer.name || farmer.phone || "Farmer",
+          userEmail: farmer.email || "",
+        });
+      } catch (emailError) {
+        console.error("Failed to send new-user admin email:", emailError);
+      }
+
       const { password: _, ...farmerWithoutPassword } = farmer;
       return {
         user: farmerWithoutPassword,
@@ -1238,6 +1266,37 @@ export const googleSignupService = async (data: {
           agreed: false,
         },
       });
+
+      try {
+        await createNotificationService({
+          title: "New User Registration",
+          message: `New ${restaurant.role.toLowerCase()} ${
+            restaurant.name || restaurant.email
+          } has registered`,
+          eventType: "USER_SIGNUP",
+          targetType: "ROLE_BASED",
+          targetRole: "ADMIN",
+          metadata: {
+            userId: restaurant.id,
+            userRole: restaurant.role,
+            email: restaurant.email,
+            registeredAt: new Date().toISOString(),
+          },
+        });
+      } catch (notifError) {
+        console.error("Failed to create new-user notification:", notifError);
+      }
+
+      try {
+        await sendAdminUserCreatedEmail({
+          userName: name,
+          userEmail: email,
+          userType: role === "HOTEL" ? "HOTEL" : "RESTAURANT",
+          restaurantName: name,
+        });
+      } catch (emailError) {
+        console.error("Failed to send new-user admin email:", emailError);
+      }
 
       const { password: _, ...restaurantWithoutPassword } = restaurant;
       return {
