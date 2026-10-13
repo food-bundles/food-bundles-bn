@@ -4,7 +4,11 @@ import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
 import { wsManager } from "../index";
 import { transferVoucherAmountToWalletService } from "./wallet-transfer.service";
-import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emails";
+import {
+  cleanPhoneNumber,
+  isValidRwandaPhone,
+  sendLoanApplicationSubmittedEmail,
+} from "../utils/emails";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import {
   debitWalletService,
@@ -931,6 +935,47 @@ export const requestLoanSessionService = async (
     );
   } catch (e) {
     console.error("SMS failed:", e);
+  }
+
+  // Acknowledge receipt to the applicant — isolated so a notification
+  // failure can never affect the already-committed session request.
+  try {
+    if (restaurant?.phone) {
+      await sendMessage(
+        `Dear ${restaurant.name}, we have received your loan request for ${requestedAmount.toLocaleString()} RWF (RRN: ${rrn}) and it is pending review.`,
+        restaurant.phone,
+      );
+    }
+  } catch (e) {
+    console.error("Failed to send loan session SMS to restaurant:", e);
+  }
+
+  try {
+    if (restaurant?.email) {
+      await sendLoanApplicationSubmittedEmail({
+        email: restaurant.email,
+        restaurantName: restaurant.name,
+        requestedAmount,
+        purpose,
+        repaymentDays,
+        rrn,
+      });
+    }
+  } catch (e) {
+    console.error("Failed to send loan session email to restaurant:", e);
+  }
+
+  try {
+    await createNotificationService({
+      title: "Application Submitted",
+      message: `Your loan request for ${requestedAmount.toLocaleString()} RWF (RRN: ${rrn}) has been submitted and is pending review.`,
+      eventType: "VOUCHER_APPLIED",
+      targetType: "SPECIFIC_USER",
+      targetId: restaurantId,
+      metadata: { sessionId: session.id, rrn, requestedAmount },
+    });
+  } catch (e) {
+    console.error("Failed to create loan session notification:", e);
   }
 
   return session;
