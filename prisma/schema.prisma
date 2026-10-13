@@ -1321,8 +1321,8 @@ model CardEnrollmentRequest {
 }
 
 model KycConsent {
-  id               String     @id @default(uuid())
-  restaurantId     String     @unique
+  id               String           @id @default(uuid())
+  restaurantId     String           @unique
   restaurantName   String
   tinNumber        String
   phoneNumber      String
@@ -1333,15 +1333,20 @@ model KycConsent {
   ownerNationalId  String
   businessType     String
   yearsInOperation Int
-  consentVubaBuba  Boolean    @default(false)
-  consentKayko     Boolean    @default(false)
-  consentRRA       Boolean    @default(false)
-  submittedAt      DateTime   @default(now())
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  restaurant       Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  consentVubaBuba  Boolean          @default(false)
+  consentKayko     Boolean          @default(false)
+  consentRRA       Boolean          @default(false)
+  status           KycConsentStatus @default(PENDING)
+  reviewedAt       DateTime?
+  reviewedBy       String?
+  reviewNotes      String?
+  submittedAt      DateTime         @default(now())
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  restaurant       Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
+  @@index([status])
 }
 
 model LoanSession {
@@ -1740,6 +1745,12 @@ enum CardEnrollmentStatus {
   REJECTED
 }
 
+enum KycConsentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum LoanSessionStatus {
   REQUESTED
   APPROVED_LOCKED
@@ -1796,6 +1807,9 @@ enum NotificationEvent {
   VOUCHER_PENALTY_APPLIED
   VOUCHER_SUSPENDED
   SUBSCRIPTION_ACTIVATED
+  KYC_SUBMITTED
+  KYC_APPROVED
+  KYC_REJECTED
 }
 
 enum NotificationTarget {
