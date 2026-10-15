@@ -40,6 +40,7 @@ import authenticatorRoutes from "./authenticator.routes";
 import customerTypeRoutes from "./customer-type.routes";
 import adminRoleRoutes from "./admin-role.routes";
 import wishlistRoutes from "./wishlist.routes";
+import deliverySettingsRoutes from "./delivery-settings.routes";
 
 const routes = Router();
 
@@ -80,6 +81,7 @@ routes.use("/authenticator", authenticatorRoutes);
 routes.use("/customer-types", customerTypeRoutes);
 routes.use("/admin-roles", adminRoleRoutes);
 routes.use("/wishlist", wishlistRoutes);
+routes.use("/delivery-settings", deliverySettingsRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);
