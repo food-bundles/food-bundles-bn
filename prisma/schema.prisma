@@ -1233,6 +1233,7 @@ model NotificationRecipient {
   id          String               @id @default(uuid())
   name        String
   phoneNumber String
+  email       String?
   category    NotificationCategory
   isActive    Boolean              @default(true)
   createdBy   String?
@@ -1851,6 +1852,7 @@ enum NotificationCategory {
   LOW_STOCK
   PAYMENT_ISSUES
   SYSTEM_ALERTS
+  PRIVATE_RECEIVER
 }
 
 enum NewsletterStatus {
