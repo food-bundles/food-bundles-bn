@@ -1,4 +1,9 @@
 import prisma from "../prisma";
+import {
+  calculateDeliveryFee,
+  getDeliverySettings,
+  hasFreeDeliveryPlan,
+} from "./delivery-fee.service";
 import crypto from "crypto";
 import { OrderStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
 import { ProductData } from "./productService";
@@ -354,17 +359,15 @@ export const createOrderFromCartService = async (
     },
   });
 
-  if (!activeSubscription?.plan?.freeDelivery) {
-    // Time-based delivery fee: 0 between 4:00 AM to 9:00 AM, 5000 RWF otherwise
-    const currentHour = new Date().getHours();
-    const isOffPeakHours = currentHour >= 4 && currentHour < 9;
-
-    if (!isOffPeakHours) {
-      deliveryFee = 5000; // Outside 4:00 AM to 9:00 AM
-    } else {
-      deliveryFee = 0; // Inside 4:00 AM to 9:00 AM (free delivery)
-    }
-  }
+  // Delivery fee from the admin's rules: order amount + requested delivery day
+  // (see delivery-fee.service.ts). Free-delivery plans pay nothing.
+  deliveryFee = calculateDeliveryFee({
+    orderAmount: order.totalAmount, // products total after promo, before fees
+    placedAt: order.createdAt,
+    requestedDelivery: order.requestedDelivery,
+    hasFreeDeliveryPlan: !!activeSubscription?.plan?.freeDelivery,
+    settings: await getDeliverySettings(),
+  });
 
   if (
     otherServices &&
@@ -1552,6 +1555,23 @@ export const editOrderService = async (
     );
   }
 
+  // Delivery fee follows the same rules as checkout. A paid order keeps the
+  // fee it was charged, so an edit never changes what was already paid.
+  const isPaid = ["COMPLETED", "VOUCHER_CREDIT"].includes(existingOrder.paymentStatus);
+  const deliverySettings = await getDeliverySettings();
+  const freeDeliveryPlan = await hasFreeDeliveryPlan(existingOrder.restaurantId);
+  const requestedDelivery = data.requestedDelivery || existingOrder.requestedDelivery;
+  const feeFor = (productsTotal: number) =>
+    isPaid
+      ? existingOrder.deliveryFee || 0
+      : calculateDeliveryFee({
+          orderAmount: productsTotal,
+          placedAt: existingOrder.createdAt,
+          requestedDelivery,
+          hasFreeDeliveryPlan: freeDeliveryPlan,
+          settings: deliverySettings,
+        });
+
   const updatedOrder = await prisma.$transaction(async (tx) => {
     // Update items if provided
     if (data.items && data.items.length > 0) {
@@ -1648,14 +1668,16 @@ export const editOrderService = async (
         }
       }
 
-      // Update order total amount (keep delivery/packaging fees)
+      // Update order total amount (packaging fee kept; delivery fee re-checked)
+      const newDeliveryFee = feeFor(newTotalAmount);
       await tx.order.update({
         where: { id: orderId },
         data: {
-          totalAmount: newTotalAmount + (existingOrder.deliveryFee || 0) + (existingOrder.packagingFee || 0),
-          originalAmount: newTotalAmount + (existingOrder.deliveryFee || 0) + (existingOrder.packagingFee || 0),
+          deliveryFee: newDeliveryFee,
+          totalAmount: newTotalAmount + newDeliveryFee + (existingOrder.packagingFee || 0),
+          originalAmount: newTotalAmount + newDeliveryFee + (existingOrder.packagingFee || 0),
           notes: data.notes !== undefined ? data.notes : existingOrder.notes,
-          requestedDelivery: data.requestedDelivery || existingOrder.requestedDelivery,
+          requestedDelivery,
           billingName: data.billingName || existingOrder.billingName,
           billingPhone: data.billingPhone || existingOrder.billingPhone,
           billingEmail: data.billingEmail || existingOrder.billingEmail,
@@ -1664,12 +1686,17 @@ export const editOrderService = async (
         },
       });
     } else {
-      // No items change, just update metadata
+      // No items change, just update metadata. A new delivery time can change the fee.
+      const productsTotal =
+        existingOrder.totalAmount - (existingOrder.deliveryFee || 0) - (existingOrder.packagingFee || 0);
+      const newDeliveryFee = feeFor(productsTotal);
       await tx.order.update({
         where: { id: orderId },
         data: {
+          deliveryFee: newDeliveryFee,
+          totalAmount: productsTotal + newDeliveryFee + (existingOrder.packagingFee || 0),
           notes: data.notes !== undefined ? data.notes : existingOrder.notes,
-          requestedDelivery: data.requestedDelivery || existingOrder.requestedDelivery,
+          requestedDelivery,
           billingName: data.billingName || existingOrder.billingName,
           billingPhone: data.billingPhone || existingOrder.billingPhone,
           billingEmail: data.billingEmail || existingOrder.billingEmail,

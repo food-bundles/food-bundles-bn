@@ -95,6 +95,7 @@ model Restaurant {
   Wallet                Wallet?
   walletTransactions    WalletTransaction[]
   WalletTransfer        WalletTransfer[]
+  wishlistItems         WishlistItem[]
 }
 
 model Affiliator {
@@ -155,39 +156,6 @@ model FarmerSubmission {
   farmer               Farmer                @relation(fields: [farmerId], references: [id])
   payouts              SubmissionPayout[]
   statusHistory        SubmissionStatusHistory[]
-}
-
-model SubmissionPayout {
-  id            String        @id @default(uuid())
-  submissionId  String
-  amount        Float
-  phoneNumber   String
-  paypackRef    String?       @unique
-  paypackStatus String?
-  status        PaymentStatus @default(PENDING)
-  initiatedBy   String
-  confirmedAt   DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  submission    FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  initiator     Admin            @relation("SubmissionPayoutInitiator", fields: [initiatedBy], references: [id])
-
-  @@index([submissionId])
-  @@index([status])
-  @@index([paypackRef])
-}
-
-model SubmissionStatusHistory {
-  id           String   @id @default(uuid())
-  submissionId String
-  fromStatus   String
-  toStatus     String
-  reason       String?
-  changedBy    String
-  createdAt    DateTime @default(now())
-  submission   FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-
-  @@index([submissionId])
 }
 
 model FarmerSecurityEvent {
@@ -368,7 +336,6 @@ model Admin {
   adminRoleId              String?
   AdminRole                AdminRole?            @relation(fields: [adminRoleId], references: [id])
   aggregatorAssignments    FarmerSubmission[]    @relation("Aggregator")
-  initiatedPayouts         SubmissionPayout[]    @relation("SubmissionPayoutInitiator")
   approvedLoans            LoanApplication[]     @relation("LoanApprover")
   managedLoans             LoanApplication[]     @relation("LoanManager")
   approvedSessions         LoanSession[]         @relation("SessionApprover")
@@ -392,6 +359,14 @@ model Admin {
   traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
 
   @@index([adminRoleId])
+}
+
+/// Admin-editable settings stored as JSON by key (e.g. "delivery_fee").
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
 }
 
 /// Dashboard role created by a super admin. `permissions` holds keys from the
@@ -444,7 +419,21 @@ model Product {
   admin                Admin                  @relation(fields: [createdBy], references: [id])
   productUnit          ProductUnit?           @relation(fields: [unitId], references: [id])
   customerTypePrices   ProductCustomerPrice[]
+  wishlistItems        WishlistItem[]
 }
+/// Products a restaurant saved to its wishlist (heart button on the shop)
+model WishlistItem {
+  id           String     @id @default(uuid())
+  restaurantId String
+  productId    String
+  createdAt    DateTime   @default(now())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, productId])
+  @@index([restaurantId])
+}
+
 
 model CustomerType {
   id                    String                 @id @default(uuid())
@@ -617,7 +606,7 @@ model Order {
   updatedAt           DateTime             @updatedAt
   paidAt              DateTime?
   paymentLinkExpiry   DateTime?
-  paymentLinkToken    String?
+  paymentLinkToken    String?              @unique
   DeliveryOTP         DeliveryOTP?
   cart                Cart?                @relation(fields: [cartId], references: [id])
   logistics           Admin?               @relation("LOGISTICS", fields: [logisticsId], references: [id])
@@ -1545,6 +1534,38 @@ model LoanRepayment {
   @@index([txRef])
 }
 
+model SubmissionStatusHistory {
+  id           String   @id @default(uuid())
+  submissionId String
+  fromStatus   String
+  toStatus     String
+  reason       String?
+  changedBy    String
+  createdAt    DateTime @default(now())
+  submission   FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@index([createdAt])
+}
+
+model SubmissionPayout {
+  id           String   @id @default(uuid())
+  submissionId String
+  amount       Float
+  phoneNumber  String
+  initiatedBy  String
+  status       String   @default("PENDING")
+  paypackRef   String?
+  paypackStatus String?
+  confirmedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  submission   FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@index([status])
+}
+
 model WfpMarketPrice {
   id          String   @id @default(uuid())
   date        DateTime
@@ -1564,14 +1585,34 @@ model WfpMarketPrice {
   price       Float
   usdPrice    Float?
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
   @@index([date])
-  @@index([marketName])
   @@index([commodity])
-  @@index([category])
+  @@index([marketName])
   @@index([province])
-  @@index([district])
+  @@unique([date, marketName, commodity, priceType])
+}
+
+model support_requests {
+  id               String    @id
+  ticketNumber     String    @unique
+  name             String
+  email            String
+  subject          String
+  category         String
+  severity         String?
+  preferredContact String    @default("email")
+  description      String
+  screenshots      String[]  @default([])
+  status           String    @default("open")
+  response         String?
+  respondedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime
+
+  @@index([email])
+  @@index([status])
+  @@index([ticketNumber])
 }
 
 enum TraderTransactionType {

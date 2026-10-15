@@ -5,6 +5,7 @@ import {
   PaymentStatus,
   VoucherStatus,
   SubscriptionStatus,
+  LoanSessionStatus,
   Role,
 } from "@prisma/client";
 import os from "os";
@@ -225,6 +226,8 @@ interface FinanceStats {
 }
 
 interface SubscriptionStats {
+  /** Subscription plans currently offered (independent of who subscribed) */
+  totalPlans: number;
   totalSubscriptions: number;
   activeSubscriptions: number;
   expiredSubscriptions: number;
@@ -241,6 +244,8 @@ interface SubscriptionStats {
 
 interface VoucherStats {
   totalVouchers: number;
+  /** Credits (loan sessions) taken on voucher cards */
+  totalCredits: number;
   usedVouchers: number;
   maturedVouchers: number;
   nearMaturityVouchers: number;
@@ -1570,6 +1575,7 @@ export const getSubscriptionStatsService = async ({
   ]);
 
   return {
+    totalPlans: await prisma.subscriptionPlan.count({ where: { isActive: true } }),
     totalSubscriptions: currentStats.totalSubscriptions,
     activeSubscriptions: currentStats.activeSubscriptions,
     expiredSubscriptions: currentStats.expiredSubscriptions,
@@ -1848,6 +1854,7 @@ export const getVoucherStatsService = async ({
 
   return {
     totalVouchers: currentStats.totalVouchers,
+    totalCredits: currentStats.totalCredits,
     usedVouchers: currentStats.usedVouchers,
     maturedVouchers: currentStats.maturedVouchers,
     nearMaturityVouchers: nearMaturityCount,
@@ -1867,7 +1874,41 @@ export const getVoucherStatsService = async ({
   };
 };
 
+/**
+ * Voucher numbers come from two systems and are added together:
+ * - the voucher-card system in use today: issued cards, and the credits
+ *   (loan sessions) taken on them
+ * - the older Voucher table, kept so historical vouchers still count
+ */
 const getVoucherStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
+  const period = dateFrom && dateTo ? { createdAt: { gte: dateFrom, lte: dateTo } } : {};
+  // Credits that still count: not rejected by the admin / trader
+  const liveCredit = { ...period, status: { not: LoanSessionStatus.REJECTED } };
+
+  const [cards, credits, usedCredits, maturedCredits, creditValue] = await Promise.all([
+    prisma.voucherCard.count({ where: period }),
+    prisma.loanSession.count({ where: liveCredit }),
+    // Used: money was spent on an order or moved to the wallet
+    prisma.loanSession.count({
+      where: {
+        ...liveCredit,
+        OR: [{ amountUsed: { gt: 0 } }, { amountTransferredToWallet: { gt: 0 } }],
+      },
+    }),
+    // Matured: past the due date with money still to repay
+    prisma.loanSession.count({
+      where: {
+        ...liveCredit,
+        outstandingAmount: { gt: 0 },
+        OR: [{ status: LoanSessionStatus.OVERDUE }, { dueDate: { lt: new Date() } }],
+      },
+    }),
+    prisma.loanSession.aggregate({
+      where: liveCredit,
+      _sum: { approvedAmount: true, amountUsed: true, amountTransferredToWallet: true },
+    }),
+  ]);
+
   const whereClause =
     dateFrom && dateTo
       ? {
@@ -1906,11 +1947,15 @@ const getVoucherStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
     ]);
 
   return {
-    totalVouchers,
-    usedVouchers,
-    maturedVouchers,
-    totalValue: totalValue._sum.totalCredit || 0,
-    usedValue: usedValue._sum.usedCredit || 0,
+    totalVouchers: totalVouchers + cards,
+    totalCredits: credits,
+    usedVouchers: usedVouchers + usedCredits,
+    maturedVouchers: maturedVouchers + maturedCredits,
+    totalValue: (totalValue._sum.totalCredit || 0) + (creditValue._sum.approvedAmount || 0),
+    usedValue:
+      (usedValue._sum.usedCredit || 0) +
+      (creditValue._sum.amountUsed || 0) +
+      (creditValue._sum.amountTransferredToWallet || 0),
   };
 };
 
@@ -2025,12 +2070,8 @@ const getQuickStatsByPeriod = async (dateFrom?: Date, dateTo?: Date) => {
         status: SubscriptionStatus.ACTIVE,
       },
     }),
-    prisma.voucher.count({
-      where: {
-        ...whereClause,
-        status: VoucherStatus.USED,
-      },
-    }),
+    // Used vouchers: old-style vouchers plus credits used on voucher cards
+    getVoucherStatsByPeriod(dateFrom, dateTo).then((v) => v.usedVouchers),
   ]);
 
   const completionRate =

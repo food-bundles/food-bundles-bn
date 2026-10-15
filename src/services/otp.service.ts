@@ -163,6 +163,61 @@ export class OTPService {
     }
   }
 
+  /**
+   * OTP sent to the restaurant when an admin pays its voucher (loan) from the
+   * restaurant's prepaid wallet. The restaurant reads the code to the admin
+   * to confirm it agrees to the wallet being debited.
+   */
+  static async sendVoucherRepaymentOTPToRestaurant(
+    restaurantId: string,
+    amount: number,
+    rrn: string,
+  ): Promise<{ success: boolean; message: string; phone?: string }> {
+    try {
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: restaurantId },
+        select: { phone: true },
+      });
+
+      if (!restaurant?.phone) {
+        return { success: false, message: "Restaurant phone number not found" };
+      }
+
+      const otp = this.generateOTP();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      await prisma.oTP.deleteMany({
+        where: {
+          phone: restaurant.phone,
+          purpose: "VOUCHER_CHECKOUT",
+          verified: false,
+        },
+      });
+
+      await prisma.oTP.create({
+        data: {
+          phone: restaurant.phone,
+          otp,
+          purpose: "VOUCHER_CHECKOUT",
+          expiresAt,
+        },
+      });
+
+      await sendMessage(
+        `FoodBundles: ${amount.toLocaleString()} RWF is about to be taken from your prepaid wallet to repay voucher ${rrn}. Your confirmation code is ${otp}. Share it only with FoodBundles staff. Valid for 10 minutes.`,
+        restaurant.phone,
+      );
+
+      return {
+        success: true,
+        message: "OTP sent to restaurant",
+        phone: restaurant.phone,
+      };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  }
+
   static async sendAdminWalletOTP(
     adminId: string,
     operationType: "DEPOSIT" | "ADJUSTMENT",
@@ -354,6 +409,31 @@ export class OTPService {
     }
   }
 
+  static async sendPasswordResetOTP(
+    phone: string,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const otp = this.generateOTP();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      await prisma.oTP.deleteMany({
+        where: { phone, purpose: "PASSWORD_RESET", verified: false },
+      });
+
+      await prisma.oTP.create({
+        data: { phone, otp, purpose: "PASSWORD_RESET", expiresAt },
+      });
+
+      await sendMessage(
+        `Your FoodBundles password reset OTP is: ${otp}. Valid for 10 minutes.`,
+        phone,
+      );
+      return { success: true, message: "OTP sent successfully" };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  }
+
   static async verifySubmissionPayoutOTP(
     otp: string,
     sessionId: string,
@@ -398,5 +478,12 @@ export class OTPService {
         message: "Invalid session or OTP verification failed",
       };
     }
+  }
+
+  static async verifyPasswordResetOTP(
+    phone: string,
+    otp: string,
+  ): Promise<{ success: boolean; message: string }> {
+    return this.verifyOTP(phone, otp, "PASSWORD_RESET");
   }
 }
