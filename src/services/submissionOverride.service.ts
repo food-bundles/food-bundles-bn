@@ -1,5 +1,6 @@
 import prisma from "../prisma";
 import { createNotificationService } from "./notification.services";
+import { sendMessage } from "../utils/sms.utility";
 
 /**
  * Force-completes a submission on admin authority, bypassing the wait for
@@ -71,14 +72,29 @@ export const forceCompleteSubmissionService = async (
     return updated;
   });
 
-  await createNotificationService({
-    title: "Submission Force-Completed",
-    message: `Your submission of ${submission.productName} was marked complete by an administrator.`,
-    eventType: "SUBMISSION_FORCE_COMPLETED",
-    targetType: "SPECIFIC_USER",
-    targetId: updatedSubmission.farmerId,
-    metadata: { submissionId, reason },
-  });
+  try {
+    await createNotificationService({
+      title: "Submission Force-Completed",
+      message: `Your submission of ${submission.productName} was marked complete by an administrator.`,
+      eventType: "SUBMISSION_FORCE_COMPLETED",
+      targetType: "SPECIFIC_USER",
+      targetId: updatedSubmission.farmerId,
+      metadata: { submissionId, reason },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-force-completed notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${submission.productName} was marked complete and will be paid out soon.`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-force-completed SMS:", smsError);
+  }
 
   return updatedSubmission;
 };
@@ -111,6 +127,12 @@ export const reverseSubmissionStatusService = async (
   }
 
   const fromStatus = submission.status;
+
+  if (toStatus === fromStatus) {
+    throw new Error(
+      `Submission is already ${fromStatus}; choose a different target status to reverse it`
+    );
+  }
 
   const data: Record<string, unknown> = { status: toStatus };
 
@@ -153,6 +175,32 @@ export const reverseSubmissionStatusService = async (
 
     return updated;
   });
+
+  // Notify the farmer their submission status was changed — isolated so a
+  // notification failure can never affect the already-committed reversal.
+  try {
+    await createNotificationService({
+      title: "Submission Status Updated",
+      message: `Your submission of ${submission.productName} was reverted from ${fromStatus} to ${toStatus} by an administrator.${reason ? ` Reason: ${reason}` : ""}`,
+      eventType: "SUBMISSION_STATUS_REVERSED",
+      targetType: "SPECIFIC_USER",
+      targetId: updatedSubmission.farmerId,
+      metadata: { submissionId, fromStatus, toStatus, reason },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-reversed notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${submission.productName} was updated from ${fromStatus} to ${toStatus}.${reason ? ` Reason: ${reason}` : ""}`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-reversed SMS:", smsError);
+  }
 
   return updatedSubmission;
 };
@@ -199,11 +247,14 @@ export const rejectSubmissionService = async (
       include: { farmer: { select: { id: true, phone: true } } },
     });
 
+    // This rejects the farmer's offer feedback, not the submission's own
+    // status field (still `submission.status`), so the audit row records
+    // that distinction instead of a misleading no-op fromStatus===toStatus.
     await tx.submissionStatusHistory.create({
       data: {
         submissionId,
-        fromStatus: submission.status,
-        toStatus: submission.status,
+        fromStatus: submission.farmerFeedbackStatus || "PENDING",
+        toStatus: "REJECTED",
         reason: reason || "Rejected by admin",
         changedBy: adminId,
       },
@@ -211,6 +262,32 @@ export const rejectSubmissionService = async (
 
     return updated;
   });
+
+  // Notify the farmer of the rejection — isolated so a notification failure
+  // can never affect the already-committed rejection.
+  try {
+    await createNotificationService({
+      title: "Submission Rejected",
+      message: `Your submission of ${submission.productName} was rejected.${reason ? ` Reason: ${reason}` : ""}`,
+      eventType: "SUBMISSION_REJECTED",
+      targetType: "SPECIFIC_USER",
+      targetId: updatedSubmission.farmerId,
+      metadata: { submissionId, reason },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-rejected notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${submission.productName} was rejected.${reason ? ` Reason: ${reason}` : ""}`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-rejected SMS:", smsError);
+  }
 
   return updatedSubmission;
 };

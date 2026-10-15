@@ -5,6 +5,8 @@ import prisma from "../prisma";
 import { LocationValidationService } from "./location.service";
 import { ProductSubmissionInput } from "../types/productTypes";
 import { createNotificationService } from "./notification.services";
+import { sendMessage } from "../utils/sms.utility";
+import { sendAdminSubmissionCreatedEmail } from "../utils/emails";
 
 // Interface for farmer feedback request
 export interface IFarmerFeedbackRequest {
@@ -153,18 +155,40 @@ export const submitFarmerFeedbackService = async (
     },
   };
 
-  if (existingSubmission.aggregatorId) {
-    await createNotificationService({
-      ...notificationPayload,
-      targetType: "SPECIFIC_USER",
-      targetId: existingSubmission.aggregatorId,
-    });
-  } else {
-    await createNotificationService({
-      ...notificationPayload,
-      targetType: "ROLE_BASED",
-      targetRole: "ADMIN",
-    });
+  try {
+    if (existingSubmission.aggregatorId) {
+      await createNotificationService({
+        ...notificationPayload,
+        targetType: "SPECIFIC_USER",
+        targetId: existingSubmission.aggregatorId,
+      });
+    } else {
+      await createNotificationService({
+        ...notificationPayload,
+        targetType: "ROLE_BASED",
+        targetRole: "ADMIN",
+      });
+    }
+  } catch (notifError) {
+    console.error("Failed to create feedback-received notification:", notifError);
+  }
+
+  // SMS for the time-sensitive outcomes — a rejection or counter-offer needs
+  // prompt admin/aggregator attention, unlike a routine PENDING placeholder.
+  if (
+    feedbackData.feedbackStatus === "REJECTED" ||
+    feedbackData.feedbackStatus === "EXTENDED" ||
+    feedbackData.feedbackStatus === "ACCEPTED"
+  ) {
+    try {
+      const recipientPhone =
+        updatedSubmission.aggregator?.phone || process.env.PRIVATE_RECEIVER || "";
+      if (recipientPhone) {
+        await sendMessage(notificationPayload.message, recipientPhone);
+      }
+    } catch (smsError) {
+      console.error("Failed to send feedback-received SMS:", smsError);
+    }
   }
 
   return updatedSubmission;
@@ -399,18 +423,34 @@ export const updateFarmerFeedbackService = async (
     },
   };
 
-  if (existingSubmission.aggregatorId) {
-    await createNotificationService({
-      ...updateNotificationPayload,
-      targetType: "SPECIFIC_USER",
-      targetId: existingSubmission.aggregatorId,
-    });
-  } else {
-    await createNotificationService({
-      ...updateNotificationPayload,
-      targetType: "ROLE_BASED",
-      targetRole: "ADMIN",
-    });
+  try {
+    if (existingSubmission.aggregatorId) {
+      await createNotificationService({
+        ...updateNotificationPayload,
+        targetType: "SPECIFIC_USER",
+        targetId: existingSubmission.aggregatorId,
+      });
+    } else {
+      await createNotificationService({
+        ...updateNotificationPayload,
+        targetType: "ROLE_BASED",
+        targetRole: "ADMIN",
+      });
+    }
+  } catch (notifError) {
+    console.error("Failed to create feedback-updated notification:", notifError);
+  }
+
+  if (effectiveStatus === "REJECTED" || effectiveStatus === "EXTENDED" || effectiveStatus === "ACCEPTED") {
+    try {
+      const recipientPhone =
+        updatedSubmission.aggregator?.phone || process.env.PRIVATE_RECEIVER || "";
+      if (recipientPhone) {
+        await sendMessage(updateNotificationPayload.message, recipientPhone);
+      }
+    } catch (smsError) {
+      console.error("Failed to send feedback-updated SMS:", smsError);
+    }
   }
 
   return updatedSubmission;
@@ -451,6 +491,9 @@ export async function submitProductService(
     where: { id: submissionData.farmerId },
     select: {
       id: true,
+      name: true,
+      phone: true,
+      email: true,
       location: true,
       province: true,
       district: true,
@@ -519,6 +562,50 @@ export async function submitProductService(
       },
     },
   });
+
+  // Alert admin that a new submission is awaiting review — isolated so a
+  // notification failure can never affect the already-committed submission.
+  try {
+    await createNotificationService({
+      title: "New Farmer Submission",
+      message: `${farmer.name || farmer.phone || "A farmer"} submitted ${submissionData.submittedQty} of ${productData.productName} for review.`,
+      eventType: "SUBMISSION_CREATED",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: {
+        submissionId: submission.id,
+        farmerId: farmer.id,
+        productName: productData.productName,
+        submittedQty: submissionData.submittedQty,
+        wishedPrice: submissionData.wishedPrice,
+      },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-created notification:", notifError);
+  }
+
+  try {
+    await sendMessage(
+      `New submission: ${farmer.name || farmer.phone || "A farmer"} submitted ${submissionData.submittedQty} of ${productData.productName} for review.`,
+      process.env.PRIVATE_RECEIVER || "",
+    );
+  } catch (smsError) {
+    console.error("Failed to send admin submission-created SMS:", smsError);
+  }
+
+  try {
+    if (process.env.ADMIN_EMAIL) {
+      await sendAdminSubmissionCreatedEmail({
+        farmerName: farmer.name || "Farmer",
+        farmerPhone: farmer.phone || undefined,
+        productName: productData.productName,
+        submittedQty: submissionData.submittedQty,
+        wishedPrice: submissionData.wishedPrice,
+      });
+    }
+  } catch (emailError) {
+    console.error("Failed to send admin submission-created email:", emailError);
+  }
 
   return submission;
 }

@@ -1,6 +1,11 @@
 import prisma from "../prisma";
 import { TransactionStatus, WalletTransactionType } from "@prisma/client";
 import { createNotificationService } from "./notification.services";
+import { sendMessage } from "../utils/sms.utility";
+import {
+  sendWalletNotificationEmail,
+  sendAdminWalletTransactionEmail,
+} from "../utils/emails";
 
 /**
  * Transfer unused voucher amount to restaurant's Food Bundles wallet.
@@ -79,14 +84,75 @@ export const transferVoucherAmountToWalletService = async (data: {
   });
 
   // Notify restaurant
-  await createNotificationService({
-    title: "Voucher Amount Credited",
-    message: `${amount.toLocaleString()} RWF from your unused voucher has been credited to your wallet. New balance: ${newBalance.toLocaleString()} RWF`,
-    eventType: "PAYMENT_PROCESSED",
-    targetType: "SPECIFIC_USER",
-    targetId: restaurantId,
-    metadata: { transferId: transfer.id, amount, newBalance },
-  });
+  try {
+    await createNotificationService({
+      title: "Voucher Amount Credited",
+      message: `${amount.toLocaleString()} RWF from your unused voucher has been credited to your wallet. New balance: ${newBalance.toLocaleString()} RWF`,
+      eventType: "PAYMENT_PROCESSED",
+      targetType: "SPECIFIC_USER",
+      targetId: restaurantId,
+      metadata: { transferId: transfer.id, amount, newBalance },
+    });
+  } catch (notifError) {
+    console.error("Failed to create wallet transfer notification:", notifError);
+  }
+
+  try {
+    if (restaurant.phone) {
+      await sendMessage(
+        `Dear ${restaurant.name}, ${amount.toLocaleString()} RWF from your unused voucher has been credited to your wallet. New balance: ${newBalance.toLocaleString()} RWF`,
+        restaurant.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send wallet transfer SMS:", smsError);
+  }
+
+  try {
+    if (restaurant.email) {
+      await sendWalletNotificationEmail({
+        email: restaurant.email,
+        restaurantName: restaurant.name,
+        type: "TOP_UP",
+        amount,
+        newBalance,
+        transactionId: transfer.id,
+        description: notes || `Voucher unused amount transferred to wallet (${source})`,
+      });
+    }
+  } catch (emailError) {
+    console.error("Failed to send wallet transfer email:", emailError);
+  }
+
+  // Notify admin — email + in-app only.
+  try {
+    if (process.env.ADMIN_EMAIL) {
+      await sendAdminWalletTransactionEmail({
+        ownerName: restaurant.name,
+        ownerType: "RESTAURANT",
+        type: "TOP_UP",
+        amount,
+        newBalance,
+        transactionId: transfer.id,
+        description: notes || `Voucher unused amount transferred to wallet (${source})`,
+      });
+    }
+  } catch (emailError) {
+    console.error("Failed to send admin wallet transfer email:", emailError);
+  }
+
+  try {
+    await createNotificationService({
+      title: "Voucher Amount Credited to Wallet",
+      message: `${restaurant.name}'s unused voucher amount of ${amount.toLocaleString()} RWF was credited to their wallet.`,
+      eventType: "WALLET_TRANSACTION",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: { transferId: transfer.id, amount, newBalance },
+    });
+  } catch (notifError) {
+    console.error("Failed to create admin wallet transfer notification:", notifError);
+  }
 
   return {
     transfer,

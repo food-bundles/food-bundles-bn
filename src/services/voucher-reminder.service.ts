@@ -2,6 +2,11 @@ import prisma from "../prisma";
 import { VoucherStatus, NotificationCategory } from "@prisma/client";
 import { sendMessage } from "../utils/sms.utility";
 import { getRecipientsByCategoryService } from "./notification-recipient.service";
+import {
+  sendVoucherMaturingSoonEmail,
+  sendAdminVoucherMaturingSoonEmail,
+} from "../utils/emails";
+import { createNotificationService } from "./notification.services";
 
 /**
  * Check vouchers and send reminders
@@ -35,6 +40,7 @@ export const sendVoucherMaturityRemindersService = async () => {
             id: true,
             name: true,
             phone: true,
+            email: true,
           },
         },
       },
@@ -43,14 +49,16 @@ export const sendVoucherMaturityRemindersService = async () => {
     results.usedVouchersFound = usedVouchers.length;
     console.log(`Found ${usedVouchers.length} USED vouchers`);
 
+    const maturingSoonForAdmin: {
+      restaurantName: string;
+      voucherCode: string;
+      amountDue: number;
+      maturityDate: Date;
+    }[] = [];
+
     for (const voucher of usedVouchers) {
       if (!voucher.usedAt) {
         results.skipped.push(`${voucher.voucherCode}: No usedAt date`);
-        continue;
-      }
-      
-      if (!voucher.restaurant?.phone) {
-        results.skipped.push(`${voucher.voucherCode}: No phone number`);
         continue;
       }
 
@@ -63,6 +71,62 @@ export const sendVoucherMaturityRemindersService = async () => {
 
       console.log(`Voucher ${voucher.voucherCode}: ${daysUntilMaturity} days until maturity`);
 
+      // 48-hour email + in-app heads-up, additive to the 24h SMS reminder
+      // below. Guarded by maturingSoonNotified so it fires exactly once per
+      // voucher regardless of how many times this job runs while 2 days
+      // remain.
+      if (daysUntilMaturity === 2 && !voucher.maturingSoonNotified) {
+        if (voucher.restaurant?.email) {
+          try {
+            await sendVoucherMaturingSoonEmail({
+              email: voucher.restaurant.email,
+              restaurantName: voucher.restaurant.name,
+              voucherCode: voucher.voucherCode,
+              amountDue: amountToPay,
+              maturityDate,
+            });
+          } catch (emailError) {
+            console.error("Failed to send voucher maturing soon email:", emailError);
+          }
+        }
+
+        if (voucher.restaurantId) {
+          try {
+            await createNotificationService({
+              title: "Voucher Due Soon",
+              message: `Your voucher ${voucher.voucherCode} (${amountToPay.toLocaleString()} RWF) is due in 48 hours.`,
+              eventType: "VOUCHER_MATURING_SOON",
+              targetType: "SPECIFIC_USER",
+              targetId: voucher.restaurantId,
+              metadata: { voucherId: voucher.id, voucherCode: voucher.voucherCode, amountDue: amountToPay },
+            });
+          } catch (notifError) {
+            console.error("Failed to create voucher maturing soon notification:", notifError);
+          }
+        }
+
+        maturingSoonForAdmin.push({
+          restaurantName: voucher.restaurant?.name || "Unknown",
+          voucherCode: voucher.voucherCode,
+          amountDue: amountToPay,
+          maturityDate,
+        });
+
+        try {
+          await prisma.voucher.update({
+            where: { id: voucher.id },
+            data: { maturingSoonNotified: true },
+          });
+        } catch (updateError) {
+          console.error("Failed to mark voucher as maturing-soon-notified:", updateError);
+        }
+      }
+
+      if (!voucher.restaurant?.phone) {
+        results.skipped.push(`${voucher.voucherCode}: No phone number`);
+        continue;
+      }
+
       if (daysUntilMaturity === 1) {
         await sendMessage(
           `Reminder: Your voucher ${voucher.voucherCode} will mature tomorrow. Amount to pay: ${amountToPay.toLocaleString()} RWF. Please ensure payment is ready.`,
@@ -73,6 +137,31 @@ export const sendVoucherMaturityRemindersService = async () => {
         console.log(`Pre-maturity reminder sent for voucher ${voucher.voucherCode}`);
       } else {
         results.skipped.push(`${voucher.voucherCode}: ${daysUntilMaturity} days until maturity`);
+      }
+    }
+
+    // Admin email + in-app summary for vouchers maturing in 48 hours
+    if (maturingSoonForAdmin.length > 0) {
+      try {
+        if (process.env.ADMIN_EMAIL) {
+          await sendAdminVoucherMaturingSoonEmail({ vouchers: maturingSoonForAdmin });
+        }
+      } catch (emailError) {
+        console.error("Failed to send admin voucher maturing soon email:", emailError);
+      }
+
+      try {
+        const totalAmount = maturingSoonForAdmin.reduce((sum, v) => sum + v.amountDue, 0);
+        await createNotificationService({
+          title: "Vouchers Due Soon",
+          message: `${maturingSoonForAdmin.length} voucher(s) totaling ${totalAmount.toLocaleString()} RWF are due in 48 hours.`,
+          eventType: "VOUCHER_MATURING_SOON",
+          targetType: "ROLE_BASED",
+          targetRole: "ADMIN",
+          metadata: { count: maturingSoonForAdmin.length, totalAmount },
+        });
+      } catch (notifError) {
+        console.error("Failed to create admin voucher maturing soon notification:", notifError);
       }
     }
 

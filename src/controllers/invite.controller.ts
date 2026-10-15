@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { inviteServices } from "../services/invite.services";
-import { sendInvitationEmail, sendAdminUserCreatedEmail } from "../utils/emailTemplates";
+import { sendInvitationEmail, sendAdminUserCreatedEmail } from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "../services/notification.services";
 import { Role } from "@prisma/client";

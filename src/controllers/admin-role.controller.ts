@@ -7,6 +7,8 @@ import {
   isDashboardRole,
 } from "../config/permissions";
 import { AccessError, resolveRoleAssignment } from "../services/access.service";
+import { createNotificationService } from "../services/notification.services";
+import { sendRoleChangedEmail } from "../utils/emails";
 
 const sendError = (res: Response, error: any, fallback: string) => {
   const status = error instanceof AccessError ? error.status : error.code === "P2002" ? 409 : 500;
@@ -164,6 +166,33 @@ export const assignAdminRole = async (req: Request, res: Response) => {
         AdminRole: { select: { id: true, name: true } },
       },
     });
+
+    const roleName = updated.AdminRole?.name || updated.role;
+
+    try {
+      await createNotificationService({
+        title: "Your Role Was Updated",
+        message: `Your role has been changed to ${roleName}.`,
+        eventType: "ADMIN_ROLE_CHANGED",
+        targetType: "SPECIFIC_USER",
+        targetId: updated.id,
+        metadata: { roleName, changedBy: actor.id },
+      });
+    } catch (notifError) {
+      console.error("Failed to create role-change notification:", notifError);
+    }
+
+    try {
+      await sendRoleChangedEmail({
+        email: updated.email,
+        username: updated.username,
+        roleName,
+        changedBy: actor.username,
+      });
+    } catch (emailError) {
+      console.error("Failed to send role-change email:", emailError);
+    }
+
     res.json({ success: true, message: "Role assigned", data: updated });
   } catch (error: any) {
     sendError(res, error, "Failed to assign role");

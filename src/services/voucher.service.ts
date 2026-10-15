@@ -21,7 +21,10 @@ import {
   sendAdminVoucherAppliedEmail,
   sendAdminVoucherApprovedEmail,
   sendWalletNotificationEmail,
-} from "../utils/emailTemplates";
+  sendLoanApplicationSubmittedEmail,
+  sendLoanDisbursedEmail,
+  sendLoanRepaymentConfirmedEmail,
+} from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { getUserById } from "./userGets";
 import { getRestaurantFromAffiliatorService } from "./affiliator.service";
@@ -31,7 +34,7 @@ import {
 } from "./trader.service";
 import { applyPromoCodeService } from "./promo.service";
 import { transferVoucherAmountToWalletService } from "./wallet-transfer.service";
-import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
+import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emails";
 
 // Payment processing functions
 const flw = require("flutterwave-node-v3");
@@ -829,6 +832,46 @@ export const submitLoanApplicationService = async (
     appliedBy: restaurant.name,
   });
 
+  // Acknowledge receipt to the applicant — isolated so a notification
+  // failure can never affect the already-committed application.
+  try {
+    if (restaurant.phone) {
+      await sendMessage(
+        `Dear ${restaurant.name}, we have received your loan/voucher application for ${requestedAmount.toLocaleString()} RWF and it is pending review. We'll notify you once it's reviewed.`,
+        restaurant.phone,
+      );
+    }
+  } catch (error) {
+    console.error("Failed to send loan application SMS to restaurant:", error);
+  }
+
+  try {
+    if (restaurant.email) {
+      await sendLoanApplicationSubmittedEmail({
+        email: restaurant.email,
+        restaurantName: restaurant.name,
+        requestedAmount,
+        purpose,
+        repaymentDays: voucherDays,
+      });
+    }
+  } catch (error) {
+    console.error("Failed to send loan application email to restaurant:", error);
+  }
+
+  try {
+    await createNotificationService({
+      title: "Application Submitted",
+      message: `Your loan/voucher application for ${requestedAmount.toLocaleString()} RWF has been submitted and is pending review.`,
+      eventType: "VOUCHER_APPLIED",
+      targetType: "SPECIFIC_USER",
+      targetId: restaurantId,
+      metadata: { loanApplicationId: loanApplication.id, requestedAmount },
+    });
+  } catch (error) {
+    console.error("Failed to create loan application notification:", error);
+  }
+
   // Broadcast loan application submission (if wsManager is available)
   try {
     wsManager.broadcastLoanUpdate({
@@ -1232,6 +1275,54 @@ export const disburseLoanService = async (loanId: string, adminId: string) => {
     console.error("Failed to broadcast loan disbursement:", error);
   }
 
+  // Notify the restaurant their loan was disbursed — isolated so a
+  // notification failure can never affect the already-committed disbursement.
+  const disbursedRestaurant = result.loan.restaurant;
+  const disbursedAmount = result.loan.approvedAmount ?? 0;
+  if (disbursedRestaurant) {
+    try {
+      await createNotificationService({
+        title: "Loan Disbursed",
+        message: `Your loan of ${disbursedAmount.toLocaleString()} RWF has been disbursed as a voucher.`,
+        eventType: "VOUCHER_ISSUED",
+        targetType: "SPECIFIC_USER",
+        targetId: disbursedRestaurant.id,
+        metadata: {
+          loanId: result.loan.id,
+          voucherId: result.voucher.id,
+          amount: disbursedAmount,
+        },
+      });
+    } catch (notifError) {
+      console.error("Failed to create loan disbursement notification:", notifError);
+    }
+
+    try {
+      if (disbursedRestaurant.phone) {
+        await sendMessage(
+          `Dear ${disbursedRestaurant.name}, your loan of ${disbursedAmount.toLocaleString()} RWF has been disbursed. Voucher code: ${result.voucher.voucherCode}.`,
+          disbursedRestaurant.phone,
+        );
+      }
+    } catch (smsError) {
+      console.error("Failed to send loan disbursement SMS:", smsError);
+    }
+
+    try {
+      if (disbursedRestaurant.email) {
+        await sendLoanDisbursedEmail({
+          email: disbursedRestaurant.email,
+          restaurantName: disbursedRestaurant.name,
+          amount: disbursedAmount,
+          voucherCode: result.voucher.voucherCode,
+          repaymentDays: result.loan.repaymentDays ?? undefined,
+        });
+      }
+    } catch (emailError) {
+      console.error("Failed to send loan disbursement email:", emailError);
+    }
+  }
+
   return result;
 };
 
@@ -1278,6 +1369,23 @@ export const rejectLoanApplicationService = async (
     });
   } catch (error) {
     console.error("Failed to broadcast loan rejection:", error);
+  }
+
+  if (updatedLoan.restaurantId) {
+    try {
+      await createNotificationService({
+        title: "Loan Application Rejected",
+        message: reason
+          ? `Your loan application was rejected. Reason: ${reason}`
+          : "Your loan application was rejected.",
+        eventType: "PAYMENT_FAILED",
+        targetType: "SPECIFIC_USER",
+        targetId: updatedLoan.restaurantId,
+        metadata: { loanId: updatedLoan.id, reason },
+      });
+    } catch (error) {
+      console.error("Failed to create loan rejection notification:", error);
+    }
   }
 
   return updatedLoan;
@@ -1519,6 +1627,7 @@ export const processRepaymentService = async (data: RepaymentData) => {
   }
 
   // Create repayment record and update voucher status to SETTLED
+  let fullySettled = false;
   const result = await prisma.$transaction(async (tx) => {
     const repayment = await tx.voucherRepayment.create({
       data: {
@@ -1583,6 +1692,8 @@ export const processRepaymentService = async (data: RepaymentData) => {
 
       // If fully paid, update loan and voucher status
       if (outstanding <= 0) {
+        fullySettled = true;
+
         await tx.loanApplication.update({
           where: { id: voucher.loanId },
           data: { status: "SETTLED" },
@@ -1609,6 +1720,49 @@ export const processRepaymentService = async (data: RepaymentData) => {
 
     return repayment;
   });
+
+  // Notify the restaurant their repayment was received — isolated so a
+  // notification failure can never affect the already-committed repayment.
+  try {
+    await createNotificationService({
+      title: "Repayment Received",
+      message: fullySettled
+        ? `Your repayment of ${amount.toLocaleString()} RWF has been received. Your loan is now fully settled.`
+        : `Your repayment of ${amount.toLocaleString()} RWF has been received.`,
+      eventType: "PAYMENT_PROCESSED",
+      targetType: "SPECIFIC_USER",
+      targetId: restaurantId,
+      metadata: { voucherId, loanId: voucher.loanId, amount, fullySettled },
+    });
+  } catch (notifError) {
+    console.error("Failed to create repayment notification:", notifError);
+  }
+
+  try {
+    if (restaurant.phone) {
+      await sendMessage(
+        fullySettled
+          ? `Dear ${restaurant.name}, your repayment of ${amount.toLocaleString()} RWF has been received. Your loan is now fully settled. Thank you!`
+          : `Dear ${restaurant.name}, your repayment of ${amount.toLocaleString()} RWF has been received.`,
+        restaurant.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send repayment SMS:", smsError);
+  }
+
+  try {
+    if (restaurant.email) {
+      await sendLoanRepaymentConfirmedEmail({
+        email: restaurant.email,
+        restaurantName: restaurant.name,
+        amount,
+        fullySettled,
+      });
+    }
+  } catch (emailError) {
+    console.error("Failed to send repayment email:", emailError);
+  }
 
   return { repayment: result, paymentResult };
 };
@@ -1677,6 +1831,7 @@ export const calculatePenaltiesService = async (
       },
       include: {
         vouchers: true,
+        restaurant: true,
       },
     });
   }
@@ -1755,6 +1910,50 @@ export const calculatePenaltiesService = async (
       } catch (error) {
         console.error("Failed to broadcast penalty application:", error);
       }
+
+      // NOTIFY RESTAURANT OF PENALTY (in-app + SMS + email) — durable
+      // notification alongside the WebSocket-only broadcast above, since a
+      // restaurant that's offline when the penalty is applied would
+      // otherwise have no record of it.
+      try {
+        if (loan.restaurantId) {
+          await createNotificationService({
+            title: "Loan Repayment Penalty Applied",
+            message: `A penalty of ${penalty.penaltyAmount.toLocaleString()} RWF has been applied for ${daysOverdue} day(s) overdue.`,
+            eventType: "VOUCHER_PENALTY_APPLIED",
+            targetType: "SPECIFIC_USER",
+            targetId: loan.restaurantId,
+            metadata: {
+              penaltyId: penalty.id,
+              loanId: loan.id,
+              voucherId: voucher.id,
+              penaltyAmount: penalty.penaltyAmount,
+              daysOverdue,
+            },
+          });
+        }
+
+        if (loan.restaurant?.phone) {
+          await sendMessage(
+            `Dear ${loan.restaurant.name}, a penalty of ${penalty.penaltyAmount.toLocaleString()} RWF has been applied to your loan for ${daysOverdue} day(s) overdue repayment.`,
+            loan.restaurant.phone,
+          );
+        }
+
+        if (loan.restaurant?.email) {
+          await sendWalletNotificationEmail({
+            email: loan.restaurant.email,
+            restaurantName: loan.restaurant.name,
+            type: "ADJUSTMENT",
+            amount: penalty.penaltyAmount,
+            newBalance: 0,
+            transactionId: `PENALTY_${penalty.id}`,
+            description: `Loan repayment penalty: ${penalty.penaltyAmount.toLocaleString()} RWF for ${daysOverdue} day(s) overdue. This is a penalty charge, not a wallet transaction.`,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to send penalty notification:", error);
+      }
     }
 
     // Check for severe delinquency (>60 days) and suspend vouchers
@@ -1780,6 +1979,45 @@ export const calculatePenaltiesService = async (
         }
       } catch (error) {
         console.error("Failed to broadcast voucher suspension:", error);
+      }
+
+      // NOTIFY RESTAURANT OF VOUCHER SUSPENSION (in-app + SMS + email) —
+      // durable notification alongside the WebSocket-only broadcast above.
+      try {
+        if (loan.restaurantId) {
+          await createNotificationService({
+            title: "Vouchers Suspended",
+            message: `Your vouchers have been suspended due to ${daysOverdue} day(s) overdue repayment.`,
+            eventType: "VOUCHER_SUSPENDED",
+            targetType: "SPECIFIC_USER",
+            targetId: loan.restaurantId,
+            metadata: {
+              loanId: loan.id,
+              daysOverdue,
+            },
+          });
+        }
+
+        if (loan.restaurant?.phone) {
+          await sendMessage(
+            `Dear ${loan.restaurant.name}, your vouchers have been suspended due to ${daysOverdue} day(s) overdue repayment. Please settle your outstanding balance to restore access.`,
+            loan.restaurant.phone,
+          );
+        }
+
+        if (loan.restaurant?.email) {
+          await sendWalletNotificationEmail({
+            email: loan.restaurant.email,
+            restaurantName: loan.restaurant.name,
+            type: "ADJUSTMENT",
+            amount: 0,
+            newBalance: 0,
+            transactionId: `SUSPENSION_${loan.id}`,
+            description: `Your vouchers have been suspended due to ${daysOverdue} day(s) overdue repayment. This is a suspension notice, not a wallet transaction.`,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to send voucher suspension notification:", error);
       }
     }
   }

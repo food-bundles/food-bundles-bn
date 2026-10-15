@@ -3,11 +3,15 @@ import crypto from "crypto";
 import prisma from "../prisma";
 import {
   sendAdminOrderConfirmationEmail,
+  sendAdminPaymentFailedEmail,
   sendAdminSubscriptionPaidEmail,
   sendLogisticsOrderNotificationEmail,
   sendPaymentConfirmationEmail,
   sendPaymentFailedEmail,
-} from "../utils/emailTemplates";
+  sendSubscriptionActivatedEmail,
+  sendLoanRepaymentConfirmedEmail,
+  sendAdminWalletTransactionEmail,
+} from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { clearCartService } from "../services/cart.service";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
@@ -140,6 +144,77 @@ async function processWalletTransaction(
       console.error("Failed to send wallet notification:", error);
     }
 
+    // Persist an in-app notification for the top-up
+    try {
+      const targetId =
+        walletTransaction.wallet.restaurantId ||
+        walletTransaction.wallet.traderId;
+
+      if (targetId) {
+        await createNotificationService({
+          title: "Wallet Top-Up Successful",
+          message: `Your wallet was topped up with ${walletTransaction.amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+          eventType: "WALLET_TRANSACTION",
+          targetType: "SPECIFIC_USER",
+          targetId,
+          metadata: {
+            walletId: walletTransaction.walletId,
+            transactionId: walletTransaction.id,
+            type: "TOP_UP",
+            amount: walletTransaction.amount,
+            newBalance,
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Failed to create wallet top-up notification:", error);
+    }
+
+    // Notify admin — email + in-app only.
+    try {
+      const ownerName =
+        walletTransaction.wallet.restaurant?.name ||
+        walletTransaction.wallet.trader?.username ||
+        "User";
+
+      if (process.env.ADMIN_EMAIL) {
+        await sendAdminWalletTransactionEmail({
+          ownerName,
+          ownerType: walletTransaction.wallet.restaurantId ? "RESTAURANT" : "TRADER",
+          type: "TOP_UP",
+          amount: walletTransaction.amount,
+          newBalance,
+          transactionId: walletTransaction.id,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to send admin wallet top-up email:", error);
+    }
+
+    try {
+      const ownerName =
+        walletTransaction.wallet.restaurant?.name ||
+        walletTransaction.wallet.trader?.username ||
+        "User";
+
+      await createNotificationService({
+        title: "Wallet Top-Up",
+        message: `${ownerName} topped up ${walletTransaction.amount.toLocaleString()} RWF. New balance: ${newBalance.toLocaleString()} RWF`,
+        eventType: "WALLET_TRANSACTION",
+        targetType: "ROLE_BASED",
+        targetRole: "ADMIN",
+        metadata: {
+          walletId: walletTransaction.walletId,
+          transactionId: walletTransaction.id,
+          type: "TOP_UP",
+          amount: walletTransaction.amount,
+          newBalance,
+        },
+      });
+    } catch (error) {
+      console.error("Failed to create admin wallet top-up notification:", error);
+    }
+
     console.log(
       `Wallet top-up completed: ${walletTransaction.amount} ${walletTransaction.wallet.currency} for wallet ${walletTransaction.walletId}`,
     );
@@ -197,6 +272,8 @@ async function processVoucherRepaymentPayment(
   }
 
   console.log("Found matching voucher repayment:", repaymentTransaction.id);
+
+  let fullySettled = false;
 
   if (status === "successful") {
     await retryDatabaseOperation(async () => {
@@ -256,6 +333,8 @@ async function processVoucherRepaymentPayment(
 
           // If fully paid, update loan and voucher status
           if (outstanding <= 0) {
+            fullySettled = true;
+
             await tx.loanApplication.update({
               where: { id: repaymentTransaction.loanId },
               data: { status: "SETTLED" },
@@ -292,6 +371,57 @@ async function processVoucherRepaymentPayment(
       );
     } catch (wsError) {
       console.error("Failed to broadcast voucher repayment:", wsError);
+    }
+
+    // Notify the restaurant — isolated so a notification failure can never
+    // affect the already-committed repayment.
+    const repaymentRestaurant = repaymentTransaction.voucher?.restaurant;
+    if (repaymentRestaurant) {
+      try {
+        await createNotificationService({
+          title: "Repayment Received",
+          message: fullySettled
+            ? `Your repayment of ${repaymentTransaction.amount.toLocaleString()} RWF has been received. Your loan is now fully settled.`
+            : `Your repayment of ${repaymentTransaction.amount.toLocaleString()} RWF has been received.`,
+          eventType: "PAYMENT_PROCESSED",
+          targetType: "SPECIFIC_USER",
+          targetId: repaymentRestaurant.id,
+          metadata: {
+            voucherId: repaymentTransaction.voucherId,
+            loanId: repaymentTransaction.loanId,
+            amount: repaymentTransaction.amount,
+            fullySettled,
+          },
+        });
+      } catch (notifError) {
+        console.error("Failed to create repayment notification:", notifError);
+      }
+
+      try {
+        if (repaymentRestaurant.phone) {
+          await sendMessage(
+            fullySettled
+              ? `Dear ${repaymentRestaurant.name}, your repayment of ${repaymentTransaction.amount.toLocaleString()} RWF has been received. Your loan is now fully settled. Thank you!`
+              : `Dear ${repaymentRestaurant.name}, your repayment of ${repaymentTransaction.amount.toLocaleString()} RWF has been received.`,
+            repaymentRestaurant.phone,
+          );
+        }
+      } catch (smsError) {
+        console.error("Failed to send repayment SMS:", smsError);
+      }
+
+      try {
+        if (repaymentRestaurant.email) {
+          await sendLoanRepaymentConfirmedEmail({
+            email: repaymentRestaurant.email,
+            restaurantName: repaymentRestaurant.name,
+            amount: repaymentTransaction.amount,
+            fullySettled,
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send repayment email:", emailError);
+      }
     }
 
     console.log(`Voucher repayment completed: ${repaymentTransaction.id}`);
@@ -574,27 +704,6 @@ async function processCheckoutPayment(
     }
 
     try {
-      await sendAdminOrderConfirmationEmail({
-        amount: orderData.totalAmount,
-        transactionId: data?.id?.toString() || flwRef,
-        restaurantName: orderData.restaurant.name,
-        products: orderData.orderItems.map((item) => ({
-          name: item.productName,
-          quantity: item.quantity,
-          price: item.unitPrice,
-        })),
-        customer: {
-          name: orderData.billingName || orderData.restaurant.name || "",
-          email: orderData.billingEmail || orderData.restaurant.email || "",
-        },
-        orderId: orderData.id,
-        orderNumber: orderData.orderNumber,
-      });
-    } catch (emailError) {
-      console.error("Failed to send confirmation email:", emailError);
-    }
-
-    try {
       await sendLogisticsOrderNotificationEmail({
         amount: orderData.totalAmount,
         transactionId: data?.id?.toString() || flwRef,
@@ -745,6 +854,30 @@ async function processCheckoutPayment(
       console.error("Failed to send payment failed email:", emailError);
     }
 
+    try {
+      if (process.env.ADMIN_EMAIL) {
+        await sendAdminPaymentFailedEmail({
+          amount: orderData.totalAmount,
+          transactionId: data?.id?.toString() || flwRef,
+          restaurantName: orderData.restaurant.name,
+          products: orderData.orderItems.map((item) => ({
+            name: item.productName,
+            quantity: item.quantity,
+            price: item.unitPrice,
+          })),
+          customer: {
+            name: orderData.billingName || orderData.restaurant.name || "",
+            email: orderData.billingEmail || orderData.restaurant.email || "",
+          },
+          orderId: orderData.id,
+          orderNumber: orderData.orderNumber,
+          failureReason: "Payment failed",
+        });
+      }
+    } catch (emailError) {
+      console.error("Failed to send admin payment failed email:", emailError);
+    }
+
     // In payment webhook when payment fails
     await createNotificationService({
       title: "Payment Failed",
@@ -758,6 +891,28 @@ async function processCheckoutPayment(
         failureReason: "Payment failed",
       },
     });
+
+    try {
+      const recipientPhone =
+        orderData.billingPhone || orderData.restaurant.phone;
+      if (recipientPhone) {
+        await sendMessage(
+          `Your payment for order ${orderData.orderNumber} failed. Please try again or contact support.`,
+          recipientPhone,
+        );
+      }
+    } catch (smsError) {
+      console.error("Failed to send payment failed SMS:", smsError);
+    }
+
+    try {
+      await sendMessage(
+        `Payment failed for order #${orderData.orderNumber} from ${orderData.restaurant.name}`,
+        process.env.PRIVATE_RECEIVER || "",
+      );
+    } catch (smsError) {
+      console.error("Failed to send admin payment failed SMS:", smsError);
+    }
 
     console.log(`Checkout payment failed: ${orderData.id}`);
   }
@@ -1030,14 +1185,54 @@ async function processSubscriptionPayment(
         console.error("Failed to send subscription notification:", error);
       }
 
-      await sendAdminSubscriptionPaidEmail({
-        userType: "RESTAURANT",
-        userName: subscription.restaurant?.name || "",
-        userEmail: subscription.restaurant?.email || "",
-        restaurantName: subscription.restaurant?.name || "",
-        subscriptionPlan: subscription.plan.name,
-        amount: subscription.plan.price,
-      });
+      try {
+        if (subscription.restaurant?.email) {
+          await sendSubscriptionActivatedEmail({
+            email: subscription.restaurant.email,
+            restaurantName: subscription.restaurant.name || "Restaurant",
+            planName: subscription.plan.name,
+            amountPaid: subscription.plan.price,
+            endDate: subscription.endDate || undefined,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to send subscription activated email:", error);
+      }
+
+      try {
+        await sendAdminSubscriptionPaidEmail({
+          userType: "RESTAURANT",
+          userName: subscription.restaurant?.name || "",
+          userEmail: subscription.restaurant?.email || "",
+          restaurantName: subscription.restaurant?.name || "",
+          subscriptionPlan: subscription.plan.name,
+          amount: subscription.plan.price,
+        });
+      } catch (error) {
+        console.error("Failed to send admin subscription paid email:", error);
+      }
+
+      try {
+        if (subscription.restaurantId) {
+          await createNotificationService({
+            title: "Subscription Activated",
+            message: `Your subscription to ${subscription.plan.name} has been activated successfully`,
+            eventType: "SUBSCRIPTION_ACTIVATED",
+            targetType: "SPECIFIC_USER",
+            targetId: subscription.restaurantId,
+            metadata: {
+              subscriptionId: subscription.id,
+              planId: subscription.planId,
+              amount: subscription.plan.price,
+            },
+          });
+        }
+      } catch (error) {
+        console.error(
+          "Failed to create subscription activated notification:",
+          error,
+        );
+      }
 
       // Broadcast subscription update via WebSocket
       try {

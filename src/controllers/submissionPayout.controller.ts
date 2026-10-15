@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import prisma from "../prisma";
 import {
   initiateSubmissionPayoutService,
   confirmSubmissionPayoutService,
@@ -11,13 +12,14 @@ import {
   deleteSubmissionService,
   getSubmissionStatusHistoryService,
 } from "../services/submissionOverride.service";
+import { OTPService } from "../services/otp.service";
 
 export default class SubmissionPayoutController {
-  static initiatePayout = async (req: Request, res: Response) => {
+  static requestPayoutOTP = async (req: Request, res: Response) => {
     try {
       const { submissionId } = req.params;
       const { phoneNumber } = req.body;
-      const initiatedBy = (req as any).user.id;
+      const adminId = (req as any).user.id;
 
       if (!phoneNumber) {
         return res
@@ -25,10 +27,88 @@ export default class SubmissionPayoutController {
           .json({ success: false, message: "phoneNumber is required" });
       }
 
-      const result = await initiateSubmissionPayoutService(
+      const submission = await prisma.farmerSubmission.findUnique({
+        where: { id: submissionId },
+      });
+
+      if (!submission) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Submission not found" });
+      }
+
+      if (submission.status !== "APPROVED") {
+        return res.status(400).json({
+          success: false,
+          message: "Only APPROVED submissions can be paid out",
+        });
+      }
+
+      const otpResult = await OTPService.sendSubmissionPayoutOTP(
+        adminId,
         submissionId,
         phoneNumber,
-        initiatedBy
+        submission.totalAmount || 0,
+        submission.productName
+      );
+
+      if (!otpResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: otpResult.message,
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "OTP sent to private receiver for verification",
+        requiresOTP: true,
+        sessionId: otpResult.sessionId,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to send OTP",
+      });
+    }
+  };
+
+  static verifyPayoutOTP = async (req: Request, res: Response) => {
+    try {
+      const { otp, sessionId } = req.body;
+      const adminId = (req as any).user.id;
+
+      if (!otp || !sessionId) {
+        return res.status(400).json({
+          success: false,
+          message: "OTP and session ID are required",
+        });
+      }
+
+      const otpResult = await OTPService.verifySubmissionPayoutOTP(
+        otp,
+        sessionId
+      );
+
+      if (!otpResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: otpResult.message,
+        });
+      }
+
+      const { sessionData } = otpResult;
+      if (sessionData.adminId !== adminId) {
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized: Admin ID mismatch",
+        });
+      }
+
+      const result = await initiateSubmissionPayoutService(
+        sessionData.submissionId,
+        sessionData.phoneNumber,
+        sessionData.adminId
       );
 
       res.status(200).json({
