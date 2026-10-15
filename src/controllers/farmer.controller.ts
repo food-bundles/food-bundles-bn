@@ -331,3 +331,78 @@ export const submitProductController = catchAsyncError(
     });
   }
 );
+
+// Admin creates a submission on behalf of a farmer (e.g. reported by phone
+// or in person). Unlike submitProductController, farmerId is explicit in the
+// body rather than derived from the authenticated session.
+export const adminCreateSubmissionController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const {
+      farmerId,
+      productId,
+      quantity,
+      wishedPrice,
+      province,
+      district,
+      sector,
+      cell,
+      village,
+    } = req.body;
+
+    if (!farmerId || !productId) {
+      return next(
+        new errorHandler({
+          message: "farmerId and productId are required",
+          statusCode: 400,
+        })
+      );
+    }
+
+    if (!quantity || !wishedPrice) {
+      return next(
+        new errorHandler({
+          message: "Quantity, and wishedPrice are required",
+          statusCode: 400,
+        })
+      );
+    }
+
+    if (isNaN(parseFloat(quantity)) || parseFloat(quantity) <= 0) {
+      return next(
+        new errorHandler({
+          message: "quantity must be a positive number",
+          statusCode: 400,
+        })
+      );
+    }
+
+    if (isNaN(parseFloat(wishedPrice)) || parseFloat(wishedPrice) <= 0) {
+      return next(
+        new errorHandler({
+          message: "wishedPrice must be a positive number",
+          statusCode: 400,
+        })
+      );
+    }
+
+    const submissionData: ProductSubmissionInput = {
+      farmerId,
+      productId,
+      submittedQty: parseFloat(quantity),
+      wishedPrice: parseFloat(wishedPrice),
+      province,
+      district,
+      sector,
+      cell,
+      village,
+    };
+
+    const result = await submitProductService(submissionData);
+
+    res.status(201).json({
+      success: true,
+      message: "Submission created successfully",
+      data: result,
+    });
+  }
+);

@@ -23,6 +23,7 @@ const EXPORT_MODULES: Record<string, PermissionModule[]> = {
   loans: ["vouchers"],
   deposits: ["deposits"],
   transactions: ["deposits"],
+  submissions: ["farmer_submissions"],
 };
 
 const ALL_MODULES = PERMISSION_MODULES.map((m) => m.key) as PermissionModule[];
