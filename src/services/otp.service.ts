@@ -2,6 +2,7 @@ import { sendMessage } from "../utils/sms.utility";
 import prisma from "../prisma";
 import { sendAdminWalletOTPEmail } from "../utils/emails";
 import { OTPPurpose } from "@prisma/client";
+import { notifyPrivateReceiversService } from "./notification-recipient.service";
 
 export class OTPService {
   static generateOTP(): string {

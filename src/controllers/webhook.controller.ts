@@ -22,6 +22,7 @@ import { rollbackSubscriptionPaymentService } from "../services/subscription.ser
 import { confirmUnlockFeePaymentService } from "../services/voucher-card.service";
 import { confirmLoanRepaymentService } from "../services/voucher-card.service";
 import { confirmVoucherCreditTopUpService } from "../services/voucher.service";
+import { notifyPrivateReceiversService } from "../services/notification-recipient.service";
 
 // Process wallet transactions with WebSocket notification
 async function processWalletTransaction(
@@ -649,13 +650,12 @@ async function processCheckoutPayment(
 
     // Send SMS notification to private receiver
     try {
-      await sendMessage(
-        `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
-
-        process.env.PRIVATE_RECEIVER || "",
-      );
+      await notifyPrivateReceiversService({
+        subject: `FoodBundles - Order Placed`,
+        body: `Order #${orderData.orderNumber} has been placed by ${orderData.restaurant.name}`,
+      });
     } catch (smsError) {
-      console.error("Failed to send SMS notification:", smsError);
+      console.error("Failed to notify private receivers for order placed:", smsError);
     }
 
     // Send admin email notification
@@ -906,12 +906,12 @@ async function processCheckoutPayment(
     }
 
     try {
-      await sendMessage(
-        `Payment failed for order #${orderData.orderNumber} from ${orderData.restaurant.name}`,
-        process.env.PRIVATE_RECEIVER || "",
-      );
+      await notifyPrivateReceiversService({
+        subject: `FoodBundles - Payment Failed`,
+        body: `Payment failed for order #${orderData.orderNumber} from ${orderData.restaurant.name}`,
+      });
     } catch (smsError) {
-      console.error("Failed to send admin payment failed SMS:", smsError);
+      console.error("Failed to notify private receivers for payment failed:", smsError);
     }
 
     console.log(`Checkout payment failed: ${orderData.id}`);
@@ -1173,16 +1173,12 @@ async function processSubscriptionPayment(
       }
 
       try {
-        await sendMessage(
-          `A new subscription payment has been received from ${
-            subscription.restaurant?.name || ""
-          } for the ${subscription.plan.name} plan. Amount: Rwf${
-            subscription.plan.price
-          }. Thank you!`,
-          process.env.PRIVATE_RECEIVER || "",
-        );
+        await notifyPrivateReceiversService({
+          subject: `FoodBundles - Subscription Payment Received`,
+          body: `A new subscription payment has been received from ${subscription.restaurant?.name || ""} for the ${subscription.plan.name} plan. Amount: Rwf${subscription.plan.price}. Thank you!`,
+        });
       } catch (error) {
-        console.error("Failed to send subscription notification:", error);
+        console.error("Failed to notify private receivers for subscription:", error);
       }
 
       try {

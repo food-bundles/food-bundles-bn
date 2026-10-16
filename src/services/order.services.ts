@@ -20,6 +20,7 @@ import {
   sendAdminLowStockAlertEmail,
   sendAdminOrderCancelledEmail,
 } from "../utils/emails";
+import { notifyPrivateReceiversService } from "./notification-recipient.service";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -1042,12 +1043,12 @@ export const cancelOrderService = async (
   }
 
   try {
-    await sendMessage(
-      `Order #${order.orderNumber} from ${order.restaurant?.name || "a restaurant"} has been cancelled.${reason ? ` Reason: ${reason}` : ""}`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles — Order Cancelled #${order.orderNumber}`,
+      body: `Order #${order.orderNumber} from ${order.restaurant?.name || "a restaurant"} has been cancelled.${reason ? ` Reason: ${reason}` : ""}`,
+    });
   } catch (smsError) {
-    console.error("Failed to send admin order cancellation SMS:", smsError);
+    console.error("Failed to notify private receivers for order cancellation:", smsError);
   }
 
   try {
