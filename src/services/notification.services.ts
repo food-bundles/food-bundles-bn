@@ -1,7 +1,8 @@
 import prisma from "../prisma";
 import { sendMessage } from "../utils/sms.utility";
 import { sendPriceUpdateEmail, PriceUpdateData } from "../utils/emails";
-import { NotificationEvent } from "@prisma/client";
+import { NotificationEvent, NotificationCategory } from "@prisma/client";
+import { sendToRecipientsByCategoryService } from "./notification-recipient.service";
 
 export interface NotificationData {
   title: string;
@@ -331,25 +332,6 @@ export const sendPriceUpdateNotificationsService = async () => {
       }
     });
 
-    // SMS to private numbers
-    const privateNumbers = [
-      process.env.PRIVATE_RECEIVER,
-      process.env.LOGISTICS_NUMBER_ONE,
-      process.env.LOGISTICS_NUMBER_TWO,
-      process.env.LOGISTICS_NUMBER_THREE,
-    ].filter(Boolean);
-
-    privateNumbers.forEach((phone) => {
-      smsPromises.push(
-        sendMessage(
-          "Product prices have been updated on FoodBundles platform. Please check the latest updates.",
-          phone!,
-        ).catch((error) =>
-          console.error(`SMS failed for private number ${phone}:`, error),
-        ),
-      );
-    });
-
     // Send email notifications
     const emailPromises: Promise<any>[] = [];
 
@@ -384,19 +366,19 @@ export const sendPriceUpdateNotificationsService = async () => {
       }
     });
 
-    // Emails to private addresses
-    const privateEmails = [
-      process.env.ADMIN_EMAIL,
-      process.env.TECH_EMAIL,
-    ].filter(Boolean);
-
-    privateEmails.forEach((email) => {
-      emailPromises.push(
-        sendPriceUpdateEmail(email!, priceUpdateData).catch((error) =>
-          console.error(`Email failed for private email ${email}:`, error),
-        ),
-      );
-    });
+    // SMS + email to PRIVATE_RECEIVER recipients from DB (replaces raw env vars)
+    const privateMessage = "Product prices have been updated on FoodBundles platform. Please check the latest updates.";
+    smsPromises.push(
+      sendToRecipientsByCategoryService(
+        NotificationCategory.PRIVATE_RECEIVER,
+        {
+          subject: "FoodBundles — Product Prices Updated",
+          body: privateMessage,
+        },
+      ).catch((error) =>
+        console.error("Failed to notify PRIVATE_RECEIVER recipients:", error),
+      ),
+    );
 
     // Create in-app notifications
     const productNames = recentlyUpdatedProducts

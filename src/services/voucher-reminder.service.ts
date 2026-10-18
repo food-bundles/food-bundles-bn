@@ -1,7 +1,10 @@
 import prisma from "../prisma";
 import { VoucherStatus, NotificationCategory } from "@prisma/client";
 import { sendMessage } from "../utils/sms.utility";
-import { getRecipientsByCategoryService } from "./notification-recipient.service";
+import {
+  getRecipientsByCategoryService,
+  sendToRecipientsByCategoryService,
+} from "./notification-recipient.service";
 import {
   sendVoucherMaturingSoonEmail,
   sendAdminVoucherMaturingSoonEmail,
@@ -204,42 +207,30 @@ export const sendVoucherMaturityRemindersService = async () => {
 
     if (maturedVouchers.length > 0) {
       try {
-        const adminRecipients = await getRecipientsByCategoryService(
-          NotificationCategory.MATURED_VOUCHERS
+        const voucherSummary = maturedVouchers
+          .map(
+            (v) =>
+              `${v.restaurant?.name || "Unknown"}: ${v.voucherCode} - ${v.remainingAmount.toLocaleString()} RWF`
+          )
+          .join("\n");
+
+        const totalAmount = maturedVouchers.reduce(
+          (sum, v) => sum + v.remainingAmount,
+          0
         );
 
-        if (adminRecipients.length > 0) {
-          const voucherSummary = maturedVouchers
-            .map(
-              (v) =>
-                `${v.restaurant?.name || "Unknown"}: ${v.voucherCode} - ${v.remainingAmount.toLocaleString()} RWF`
-            )
-            .join("\n");
+        const adminMessage = `MATURED VOUCHERS ALERT\n\nTotal: ${maturedVouchers.length} voucher(s)\nTotal Amount: ${totalAmount.toLocaleString()} RWF\n\nDetails:\n${voucherSummary}`;
 
-          const totalAmount = maturedVouchers.reduce(
-            (sum, v) => sum + v.remainingAmount,
-            0
-          );
-
-          const adminMessage = `MATURED VOUCHERS ALERT\n\nTotal: ${maturedVouchers.length} voucher(s)\nTotal Amount: ${totalAmount.toLocaleString()} RWF\n\nDetails:\n${voucherSummary}`;
-
-          for (const recipient of adminRecipients) {
-            try {
-              await sendMessage(adminMessage, recipient.phoneNumber);
-              results.adminNotificationsSent++;
-              console.log(
-                `Admin notification sent to ${recipient.name} (${recipient.phoneNumber})`
-              );
-            } catch (error) {
-              console.error(
-                `Failed to send admin notification to ${recipient.name}:`,
-                error
-              );
-            }
+        const { recipientCount } = await sendToRecipientsByCategoryService(
+          NotificationCategory.MATURED_VOUCHERS,
+          {
+            subject: `Matured Vouchers Alert — ${maturedVouchers.length} voucher(s)`,
+            body: adminMessage,
           }
-        }
+        );
+        results.adminNotificationsSent += recipientCount;
       } catch (error) {
-        console.error("Failed to send admin notifications:", error);
+        console.error("Failed to send matured vouchers notifications:", error);
       }
     }
 
@@ -264,40 +255,28 @@ export const sendVoucherMaturityRemindersService = async () => {
 
     if (expiredVouchers.length > 0) {
       try {
-        const adminRecipients = await getRecipientsByCategoryService(
-          NotificationCategory.EXPIRED_VOUCHERS
+        const voucherSummary = expiredVouchers
+          .map(
+            (v) =>
+              `${v.restaurant?.name || "Unknown"}: ${v.voucherCode} - ${v.creditLimit.toLocaleString()} RWF`
+          )
+          .join("\n");
+
+        const totalCreditLimit = expiredVouchers.reduce(
+          (sum, v) => sum + v.creditLimit,
+          0
         );
 
-        if (adminRecipients.length > 0) {
-          const voucherSummary = expiredVouchers
-            .map(
-              (v) =>
-                `${v.restaurant?.name || "Unknown"}: ${v.voucherCode} - ${v.creditLimit.toLocaleString()} RWF`
-            )
-            .join("\n");
+        const adminMessage = `EXPIRED VOUCHERS ALERT\n\nTotal: ${expiredVouchers.length} voucher(s)\nTotal Credit: ${totalCreditLimit.toLocaleString()} RWF\n\nDetails:\n${voucherSummary}`;
 
-          const totalCreditLimit = expiredVouchers.reduce(
-            (sum, v) => sum + v.creditLimit,
-            0
-          );
-
-          const adminMessage = `EXPIRED VOUCHERS ALERT\n\nTotal: ${expiredVouchers.length} voucher(s)\nTotal Credit: ${totalCreditLimit.toLocaleString()} RWF\n\nDetails:\n${voucherSummary}`;
-
-          for (const recipient of adminRecipients) {
-            try {
-              await sendMessage(adminMessage, recipient.phoneNumber);
-              results.adminNotificationsSent++;
-              console.log(
-                `Expired vouchers notification sent to ${recipient.name} (${recipient.phoneNumber})`
-              );
-            } catch (error) {
-              console.error(
-                `Failed to send expired vouchers notification to ${recipient.name}:`,
-                error
-              );
-            }
+        const { recipientCount } = await sendToRecipientsByCategoryService(
+          NotificationCategory.EXPIRED_VOUCHERS,
+          {
+            subject: `Expired Vouchers Alert — ${expiredVouchers.length} voucher(s)`,
+            body: adminMessage,
           }
-        }
+        );
+        results.adminNotificationsSent += recipientCount;
       } catch (error) {
         console.error("Failed to send expired vouchers notifications:", error);
       }

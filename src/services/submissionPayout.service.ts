@@ -2,6 +2,7 @@ import prisma from "../prisma";
 import { cleanPhoneNumber, isValidRwandaPhone, sendAdminPayoutFailedEmail } from "../utils/emails";
 import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
+import { notifyPrivateReceiversService } from "./notification-recipient.service";
 
 // Payment client - lazy initialized to ensure env vars are loaded
 let _paypack: any = null;
@@ -256,12 +257,12 @@ export const confirmSubmissionPayoutService = async (
       }
 
       try {
-        await sendMessage(
-          `Payout FAILED: ${updatedPayout.amount.toLocaleString()} RWF for ${submission.farmer?.name || "a farmer"}'s submission of ${submission.productName}. Please retry.`,
-          process.env.PRIVATE_RECEIVER || "",
-        );
+        await notifyPrivateReceiversService({
+          subject: `FoodBundles — Payout Failed: ${submission.productName}`,
+          body: `Payout FAILED: ${updatedPayout.amount.toLocaleString()} RWF for ${submission.farmer?.name || "a farmer"}'s submission of ${submission.productName}. Please retry.`,
+        });
       } catch (smsError) {
-        console.error("Failed to send admin payout-failed SMS:", smsError);
+        console.error("Failed to notify private receivers for payout failure:", smsError);
       }
 
       try {

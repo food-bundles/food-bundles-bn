@@ -35,6 +35,7 @@ import {
 import { applyPromoCodeService } from "./promo.service";
 import { transferVoucherAmountToWalletService } from "./wallet-transfer.service";
 import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emails";
+import { notifyPrivateReceiversService } from "./notification-recipient.service";
 
 // Payment processing functions
 const flw = require("flutterwave-node-v3");
@@ -796,16 +797,12 @@ export const submitLoanApplicationService = async (
   });
 
   try {
-    await sendMessage(
-      `A new Loan Application worth ${
-        loanApplication.requestedAmount
-      } RWF has been applied by restaurant: ${
-        loanApplication.restaurant?.name || ""
-      } with ${loanApplication.repaymentDays} days of repayment. Thank you!`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: "FoodBundles — New Loan Application",
+      body: `A new Loan Application worth ${loanApplication.requestedAmount} RWF has been applied by restaurant: ${loanApplication.restaurant?.name || ""} with ${loanApplication.repaymentDays} days of repayment. Thank you!`,
+    });
   } catch (error) {
-    console.error("Failed to send loan application notification:", error);
+    console.error("Failed to notify private receivers for loan application:", error);
   }
 
   await createNotificationService({
@@ -1104,18 +1101,12 @@ export const approveLoanApplicationService = async (
     });
 
     try {
-      await sendMessage(
-        `A new ${voucher.discountPercentage}% discount voucher worth ${
-          voucher.creditLimit
-        } RWF has been issued for restaurant: ${
-          updatedLoan.restaurant?.name || ""
-        } by ${
-          updatedLoan.approver?.username || voucher.approver?.username || ""
-        }. Thank you!`,
-        process.env.PRIVATE_RECEIVER || "",
-      );
+      await notifyPrivateReceiversService({
+        subject: "FoodBundles — New Voucher Issued",
+        body: `A new ${voucher.discountPercentage}% discount voucher worth ${voucher.creditLimit} RWF has been issued for restaurant: ${updatedLoan.restaurant?.name || ""} by ${updatedLoan.approver?.username || voucher.approver?.username || ""}. Thank you!`,
+      });
     } catch (error) {
-      console.error("Failed to send subscription notification:", error);
+      console.error("Failed to notify private receivers for voucher issuance:", error);
     }
 
     await createNotificationService({
@@ -1138,16 +1129,12 @@ export const approveLoanApplicationService = async (
   const approvedByName = await getUserById(approvedBy);
   // Send notifications
   try {
-    await sendMessage(
-      `A ${result.voucher.discountPercentage}% discount voucher worth ${
-        result.voucher.creditLimit
-      } RWF has been issued and approved by ${
-        approvedByName?.name
-      } for restaurant: ${result.updatedLoan.restaurant?.name || ""}.`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: "FoodBundles — Voucher Approved",
+      body: `A ${result.voucher.discountPercentage}% discount voucher worth ${result.voucher.creditLimit} RWF has been issued and approved by ${approvedByName?.name} for restaurant: ${result.updatedLoan.restaurant?.name || ""}.`,
+    });
   } catch (smsError) {
-    console.error("Failed to send SMS notification:", smsError);
+    console.error("Failed to notify private receivers for voucher approval:", smsError);
   }
 
   await sendAdminVoucherApprovedEmail({
@@ -3274,10 +3261,10 @@ export const processMaturedVouchersAutoDeductionService = async () => {
             });
           }
 
-          await sendMessage(
-            `Auto-deduction: ${restaurant.name} - ${totalDeducted.toLocaleString()} RWF deducted for ${processedVouchers.length} voucher(s)`,
-            process.env.PRIVATE_RECEIVER || "",
-          );
+          await notifyPrivateReceiversService({
+            subject: `FoodBundles — Auto-Deduction: ${restaurant.name}`,
+            body: `Auto-deduction: ${restaurant.name} - ${totalDeducted.toLocaleString()} RWF deducted for ${processedVouchers.length} voucher(s)`,
+          }).catch((err) => console.error("Failed to notify private receivers for auto-deduction:", err));
         } catch (error) {
           console.error("Failed to send notifications:", error);
         }
@@ -3411,10 +3398,10 @@ export const processExpiredVouchersService = async () => {
         });
       }
 
-      await sendMessage(
-        `Trader ${trader?.username} - expired voucher ${voucher.voucherCode}: ${approvedAmount} RWF returned`,
-        process.env.PRIVATE_RECEIVER || "",
-      );
+      await notifyPrivateReceiversService({
+        subject: `FoodBundles — Expired Voucher Processed: ${voucher.voucherCode}`,
+        body: `Trader ${trader?.username} - expired voucher ${voucher.voucherCode}: ${approvedAmount} RWF returned`,
+      }).catch((err) => console.error("Failed to notify private receivers for expired voucher:", err));
 
       results.push({
         voucherId: voucher.id,

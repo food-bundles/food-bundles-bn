@@ -23,6 +23,7 @@ import {
 } from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "./notification.services";
+import { notifyPrivateReceiversService } from "./notification-recipient.service";
 import {
   BankTransferPaymentResult,
   CardPaymentResult,
@@ -647,12 +648,12 @@ export const processPaymentService = async (
         }
 
         try {
-          await sendMessage(
-            `Order #${order.orderNumber} payment confirmed by ${order.restaurant.name}`,
-            process.env.PRIVATE_RECEIVER || "",
-          );
+          await notifyPrivateReceiversService({
+            subject: `FoodBundles — Order #${order.orderNumber} Payment Confirmed`,
+            body: `Order #${order.orderNumber} payment confirmed by ${order.restaurant.name}`,
+          });
         } catch (smsError) {
-          console.log("Error sending admin payment success SMS:", smsError);
+          console.log("Error notifying private receivers for payment success:", smsError);
         }
 
         try {
@@ -813,12 +814,12 @@ export const processPaymentService = async (
         }
 
         try {
-          await sendMessage(
-            `Payment failed for order #${order.orderNumber} from ${order.restaurant.name}`,
-            process.env.PRIVATE_RECEIVER || "",
-          );
+          await notifyPrivateReceiversService({
+            subject: `FoodBundles — Payment Failed: Order #${order.orderNumber}`,
+            body: `Payment failed for order #${order.orderNumber} from ${order.restaurant.name}`,
+          });
         } catch (smsError) {
-          console.log("Error sending admin payment failed SMS:", smsError);
+          console.log("Error notifying private receivers for payment failure:", smsError);
         }
 
         try {
