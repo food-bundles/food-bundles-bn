@@ -53,8 +53,9 @@ export async function addFarmerPhone(
   farmerId: string,
   rawPhone: string
 ): Promise<{ phone: string; phoneVerified: boolean }> {
-  const digits = String(rawPhone ?? "").replace(/\D/g, "");
-  const phone = digits.startsWith("250") ? `0${digits.slice(3)}` : digits;
+  let digits = String(rawPhone ?? "").replace(/\D/g, "");
+  if (digits.startsWith("250")) digits = digits.slice(3);
+  const phone = `0${digits.replace(/^0+/, "")}`;
   if (!RW_MOBILE.test(phone)) {
     throw new PhoneUpdateError(
       "Enter a valid mobile number starting with 078, 079, 072 or 073"
