@@ -418,6 +418,7 @@ export const approveSubmission = async (req: Request, res: Response) => {
     wsManager.broadcastNewProduct(result);
 
     res.status(200).json({
+      success: true,
       message: "Submission approved successfully",
       data: result,
     });

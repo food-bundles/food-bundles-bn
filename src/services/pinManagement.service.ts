@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 import bcrypt from "bcrypt";
 import { comparePassword, hashPassword } from "../utils/password";
+import { sendMessage } from "../utils/sms.utility";
 
 export class PinManagementService {
   static async changePIN(
@@ -36,6 +37,19 @@ export class PinManagementService {
           pinChangedAt: new Date(),
         },
       });
+
+      // Notify the farmer (SMS, minimal wording) so they have a chance to
+      // catch an unauthorized PIN change — previously completely silent.
+      try {
+        if (farmer.phone) {
+          await sendMessage(
+            "Your Food Bundles account PIN was changed. If this wasn't you, contact support immediately.",
+            farmer.phone,
+          );
+        }
+      } catch (notifyError) {
+        console.error("Failed to send PIN change notification:", notifyError);
+      }
 
       return true;
     } catch (error) {

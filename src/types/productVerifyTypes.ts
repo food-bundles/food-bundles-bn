@@ -7,6 +7,11 @@ export interface IPaginationOptions {
   sortOrder?: "asc" | "desc";
   status?: string;
   productName?: string;
+  feedbackStatus?: string;
+  province?: string;
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface IGetSubmissionsParams {

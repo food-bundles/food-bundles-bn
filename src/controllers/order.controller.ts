@@ -367,19 +367,46 @@ export const updateOrder = async (req: Request, res: Response) => {
       });
     }
 
-    // Order status may be changed even on a cancelled order, but not while the
-    // payment failed — the payment status must be corrected first (admins do
-    // this via the payment stepper), then the order status can be edited.
-    if (status !== undefined && paymentStatus === undefined) {
+    // Paid = COMPLETED, or VOUCHER_CREDIT (paid with voucher credit)
+    const PAID_STATUSES: string[] = [PaymentStatus.COMPLETED, PaymentStatus.VOUCHER_CREDIT];
+    // Payment moving away from paid sends an unfinished order back here
+    let resetOrderStatus: OrderStatus | undefined;
+
+    if (status !== undefined || paymentStatus !== undefined) {
       const currentOrder = await prisma.order.findUnique({
         where: { id: orderId },
-        select: { paymentStatus: true },
+        select: { status: true, paymentStatus: true },
       });
-      if (currentOrder?.paymentStatus === PaymentStatus.FAILED) {
+      if (!currentOrder) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      const nextPaymentStatus = paymentStatus ?? currentOrder.paymentStatus;
+
+      // The order status can only change once the order is paid. Cancelling
+      // stays possible so unpaid orders can still be closed.
+      if (
+        status !== undefined &&
+        status !== currentOrder.status &&
+        status !== OrderStatus.CANCELLED &&
+        !PAID_STATUSES.includes(nextPaymentStatus)
+      ) {
         return res.status(409).json({
           message:
-            "Payment status is FAILED. Update the payment status first, then the order status can be changed.",
+            "The order status can only be changed after the payment is completed. Update the payment status first.",
         });
+      }
+
+      // Payment no longer completed (e.g. moved back to FAILED): an order that
+      // is still being processed goes back to PENDING until it is paid again.
+      // Delivered, cancelled and refunded orders keep their status.
+      if (
+        status === undefined &&
+        paymentStatus !== undefined &&
+        PAID_STATUSES.includes(currentOrder.paymentStatus) &&
+        !PAID_STATUSES.includes(paymentStatus) &&
+        !["PENDING", "DELIVERED", "CANCELLED", "REFUNDED"].includes(currentOrder.status)
+      ) {
+        resetOrderStatus = OrderStatus.PENDING;
       }
     }
 
@@ -430,6 +457,7 @@ export const updateOrder = async (req: Request, res: Response) => {
       updateData.actualDelivery = new Date(actualDelivery);
     if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod;
     if (paymentStatus !== undefined) updateData.paymentStatus = paymentStatus;
+    if (resetOrderStatus) updateData.status = resetOrderStatus;
     if (paymentReference !== undefined)
       updateData.paymentReference = paymentReference;
 

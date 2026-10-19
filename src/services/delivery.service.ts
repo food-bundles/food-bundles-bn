@@ -2,6 +2,7 @@ import prisma from "../prisma";
 import { DeliveryStatus, OrderStatus, PaymentStatus } from "@prisma/client";
 import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "./notification.services";
+import { sendOrderStatusEmail } from "../utils/emails";
 
 export class DeliveryService {
   /**
@@ -208,6 +209,26 @@ export class DeliveryService {
         },
       });
 
+      // Email confirmation — previously no email was ever sent for order
+      // delivery, despite the template already supporting a DELIVERED
+      // status. Isolated so a failure here can never flip the already-
+      // confirmed delivery into a reported failure.
+      try {
+        if (deliveryOTP.order.restaurant.email) {
+          await sendOrderStatusEmail({
+            orderNumber: deliveryOTP.order.orderNumber,
+            status: "DELIVERED",
+            restaurantName: deliveryOTP.order.restaurant.name,
+            customer: {
+              name: deliveryOTP.order.restaurant.name,
+              email: deliveryOTP.order.restaurant.email,
+            },
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send order delivered email:", emailError);
+      }
+
       return {
         success: true,
         message: "OTP verified successfully. Order marked as delivered.",
@@ -332,6 +353,11 @@ export class DeliveryService {
       // Validate order exists and is eligible
       const order = await prisma.order.findUnique({
         where: { id: orderId },
+        include: {
+          restaurant: {
+            select: { name: true, email: true },
+          },
+        },
       });
 
       if (!order) {
@@ -409,6 +435,27 @@ export class DeliveryService {
           },
         });
       });
+
+      // Notify the restaurant of the delivery progress. Isolated so an
+      // email failure can never affect the already-committed status update.
+      if (order.restaurant?.email) {
+        try {
+          await sendOrderStatusEmail({
+            orderNumber: order.orderNumber,
+            status: orderStatus,
+            restaurantName: order.restaurant.name,
+            customer: {
+              name: order.restaurant.name,
+              email: order.restaurant.email,
+            },
+          });
+        } catch (emailError) {
+          console.error(
+            "Failed to send delivery status email:",
+            emailError,
+          );
+        }
+      }
 
       return {
         success: true,

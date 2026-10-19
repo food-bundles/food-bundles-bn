@@ -363,6 +363,14 @@ model Admin {
   @@index([adminRoleId])
 }
 
+/// Admin-editable settings stored as JSON by key (e.g. "delivery_fee").
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
 /// Dashboard role created by a super admin. `permissions` holds keys from the
 /// backend permission catalog (src/config/permissions.ts), e.g. "orders.view".
 model AdminRole {
@@ -415,6 +423,7 @@ model Product {
   customerTypePrices   ProductCustomerPrice[]
   WishlistItem         WishlistItem[]
 }
+
 
 model CustomerType {
   id                    String                 @id @default(uuid())
@@ -1203,6 +1212,7 @@ model NotificationRecipient {
   id          String               @id @default(uuid())
   name        String
   phoneNumber String
+  email       String?
   category    NotificationCategory
   isActive    Boolean              @default(true)
   createdBy   String?
@@ -1783,6 +1793,12 @@ enum CardStatus {
 }
 
 enum CardEnrollmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum KycConsentStatus {
   PENDING
   APPROVED
   REJECTED

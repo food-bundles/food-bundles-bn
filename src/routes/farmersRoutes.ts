@@ -4,6 +4,7 @@ import { Role } from "@prisma/client";
 import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 import FarmerController, {
   submitProductController,
+  adminCreateSubmissionController,
 } from "../controllers/farmer.controller";
 
 const farmersRoutes = Router();
@@ -12,6 +13,14 @@ farmersRoutes.post(
   "/submit-product/:productId",
   isAuthenticated,
   submitProductController
+);
+
+// Admin creates a submission on behalf of a farmer
+farmersRoutes.post(
+  "/admin-create-submission",
+  isAuthenticated,
+  allow("farmer_submissions"),
+  adminCreateSubmissionController
 );
 
 // Get pending feedback submissions (farmers only)

@@ -6,6 +6,7 @@ import {
 } from "../types/productVerifyTypes";
 import { PaginationService } from "./paginationService";
 import { createNotificationService } from "./notification.services";
+import { sendMessage } from "../utils/sms.utility";
 
 // NOTE: there is currently no service/route that transitions a FarmerSubmission
 // to status "PAID" — APPROVED is the last automated stage. A payout/mark-paid
@@ -78,19 +79,34 @@ export const purchaseProductService = async (
     },
   });
 
-  await createNotificationService({
-    title: "Submission Verified",
-    message: `Your submission of ${existingSubmission.productName} has been verified. Please review and respond to the offer.`,
-    eventType: "SUBMISSION_VERIFIED",
-    targetType: "SPECIFIC_USER",
-    targetId: updatedSubmission.farmerId,
-    metadata: {
-      submissionId: updatedSubmission.id,
-      productName: existingSubmission.productName,
-      acceptedQty,
-      acceptedPrice,
-    },
-  });
+  try {
+    await createNotificationService({
+      title: "Submission Verified",
+      message: `Your submission of ${existingSubmission.productName} has been verified. Please review and respond to the offer.`,
+      eventType: "SUBMISSION_VERIFIED",
+      targetType: "SPECIFIC_USER",
+      targetId: updatedSubmission.farmerId,
+      metadata: {
+        submissionId: updatedSubmission.id,
+        productName: existingSubmission.productName,
+        acceptedQty,
+        acceptedPrice,
+      },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-verified notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${existingSubmission.productName} has been verified: ${acceptedQty} units at ${acceptedPrice.toLocaleString()} RWF each (${totalAmount.toLocaleString()} RWF total). Please respond to the offer.`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-verified SMS:", smsError);
+  }
 
   return updatedSubmission;
 };
@@ -177,17 +193,32 @@ export const clearSubmissionService = async (submissionId: string) => {
     },
   });
 
-  await createNotificationService({
-    title: "Submission Reopened",
-    message: `Your submission of ${existingSubmission.productName} was reopened and is pending review again.`,
-    eventType: "SUBMISSION_REOPENED",
-    targetType: "SPECIFIC_USER",
-    targetId: updatedSubmission.farmerId,
-    metadata: {
-      submissionId: updatedSubmission.id,
-      productName: existingSubmission.productName,
-    },
-  });
+  try {
+    await createNotificationService({
+      title: "Submission Reopened",
+      message: `Your submission of ${existingSubmission.productName} was reopened and is pending review again.`,
+      eventType: "SUBMISSION_REOPENED",
+      targetType: "SPECIFIC_USER",
+      targetId: updatedSubmission.farmerId,
+      metadata: {
+        submissionId: updatedSubmission.id,
+        productName: existingSubmission.productName,
+      },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-reopened notification:", notifError);
+  }
+
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${existingSubmission.productName} was reopened and is pending review again.`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-reopened SMS:", smsError);
+  }
 
   return updatedSubmission;
 };
@@ -270,6 +301,37 @@ const getFilterConditions = async (
       contains: options.productName,
       mode: "insensitive",
     };
+  }
+
+  if (options?.feedbackStatus) {
+    whereCondition.farmerFeedbackStatus = options.feedbackStatus;
+  }
+
+  if (options?.province) {
+    whereCondition.province = options.province;
+  }
+
+  if (options?.dateFrom || options?.dateTo) {
+    whereCondition.submittedAt = {
+      ...(options.dateFrom && { gte: new Date(options.dateFrom) }),
+      ...(options.dateTo && { lte: new Date(options.dateTo) }),
+    };
+  }
+
+  if (options?.search) {
+    const search = options.search;
+    whereCondition.OR = [
+      { id: { equals: search } },
+      { productName: { contains: search, mode: "insensitive" } },
+      { village: { contains: search, mode: "insensitive" } },
+      { cell: { contains: search, mode: "insensitive" } },
+      { sector: { contains: search, mode: "insensitive" } },
+      { district: { contains: search, mode: "insensitive" } },
+      { province: { contains: search, mode: "insensitive" } },
+      { farmer: { phone: { contains: search, mode: "insensitive" } } },
+      { farmer: { email: { contains: search, mode: "insensitive" } } },
+      { aggregator: { username: { contains: search, mode: "insensitive" } } },
+    ];
   }
 
   return whereCondition;

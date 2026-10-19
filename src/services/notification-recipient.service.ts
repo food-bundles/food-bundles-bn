@@ -1,5 +1,7 @@
 import prisma from "../prisma";
 import { NotificationCategory } from "@prisma/client";
+import { sendMessage } from "../utils/sms.utility";
+import { getEmailTransporter } from "../utils/emails";
 
 /**
  * Add a notification recipient
@@ -7,10 +9,11 @@ import { NotificationCategory } from "@prisma/client";
 export const addNotificationRecipientService = async (data: {
   name: string;
   phoneNumber: string;
+  email?: string;
   category: NotificationCategory;
   createdBy?: string;
 }) => {
-  const { name, phoneNumber, category, createdBy } = data;
+  const { name, phoneNumber, email, category, createdBy } = data;
 
   // Check if phone number already exists for this category
   const existing = await prisma.notificationRecipient.findFirst({
@@ -31,6 +34,7 @@ export const addNotificationRecipientService = async (data: {
     data: {
       name,
       phoneNumber,
+      email: email || null,
       category,
       createdBy,
     },
@@ -72,6 +76,7 @@ export const updateNotificationRecipientService = async (
   data: {
     name?: string;
     phoneNumber?: string;
+    email?: string | null;
     category?: NotificationCategory;
     isActive?: boolean;
   }
@@ -109,4 +114,90 @@ export const getRecipientsByCategoryService = async (
   });
 
   return recipients;
+};
+
+/**
+ * Send a plain-text notification (SMS always, email when the recipient has
+ * one on file) to every active recipient of a category. This is the
+ * DB-driven replacement for ad hoc `process.env.PRIVATE_RECEIVER` SMS calls —
+ * new recipients can be added/removed via the NotificationRecipient admin
+ * endpoints without touching environment variables or redeploying.
+ *
+ * Each recipient's SMS/email is isolated in its own try/catch so one
+ * recipient's delivery failure can never block another's, or the caller's
+ * already-committed business operation.
+ */
+export const sendToRecipientsByCategoryService = async (
+  category: NotificationCategory,
+  message: { subject: string; body: string }
+) => {
+  const recipients = await getRecipientsByCategoryService(category);
+
+  for (const recipient of recipients) {
+    try {
+      if (recipient.phoneNumber) {
+        await sendMessage(message.body, recipient.phoneNumber);
+      }
+    } catch (smsError) {
+      console.error(
+        `Failed to send ${category} SMS to recipient ${recipient.id}:`,
+        smsError
+      );
+    }
+
+    try {
+      if (recipient.email) {
+        const transporter = getEmailTransporter();
+        await transporter.sendMail({
+          from: `"Food Bundles System" <${process.env.GOOGLE_EMAIL}>`,
+          to: recipient.email,
+          subject: message.subject,
+          text: message.body,
+        });
+      }
+    } catch (emailError) {
+      console.error(
+        `Failed to send ${category} email to recipient ${recipient.id}:`,
+        emailError
+      );
+    }
+  }
+
+  return { recipientCount: recipients.length };
+};
+
+/**
+ * Notify private receivers via BOTH channels:
+ *  1. process.env.PRIVATE_RECEIVER — SMS only (legacy env var, kept for
+ *     backward-compatibility so existing deployments keep working even before
+ *     the DB table is populated).
+ *  2. NotificationRecipient rows with category PRIVATE_RECEIVER — SMS always,
+ *     email when the recipient has one on file.
+ *
+ * Every send is isolated in its own try/catch so one failure never blocks
+ * the others or the caller's already-committed business operation.
+ */
+export const notifyPrivateReceiversService = async (message: {
+  subject: string;
+  body: string;
+}) => {
+  // 1. Legacy env-var SMS
+  const envPhone = process.env.PRIVATE_RECEIVER;
+  if (envPhone) {
+    try {
+      await sendMessage(message.body, envPhone);
+    } catch (err) {
+      console.error("[notifyPrivateReceivers] env SMS failed:", err);
+    }
+  }
+
+  // 2. DB recipients — SMS + optional email
+  try {
+    await sendToRecipientsByCategoryService(
+      NotificationCategory.PRIVATE_RECEIVER,
+      message
+    );
+  } catch (err) {
+    console.error("[notifyPrivateReceivers] DB recipients failed:", err);
+  }
 };

@@ -33,6 +33,7 @@ export const exportData = async (req: Request, res: Response) => {
       "loans",
       "deposits",
       "transactions",
+      "submissions",
     ];
 
     if (!validTypes.includes(type)) {
@@ -148,6 +149,7 @@ export const getExportTypes = async (req: Request, res: Response) => {
       { type: "loans", description: "Export loan applications and credit" },
       { type: "deposits", description: "Export wallet deposit transactions" },
       { type: "transactions", description: "Export detailed financial transactions" },
+      { type: "submissions", description: "Export farmer produce submissions" },
     ];
 
     const formats = [

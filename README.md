@@ -181,7 +181,7 @@ FoodBundles/
 │   │
 │   ├── utils/                              # Utility functions
 │   │   ├── cloudinary.utility.ts           # Image upload service
-│   │   ├── emailTemplates.ts               # Email templates
+│   │   ├── emails/                         # Email templates (per-domain modules)
 │   │   ├── jwt.ts                          # JWT token management
 │   │   ├── password.ts                     # Password utilities
 │   │   ├── sms.utility.ts                  # SMS services

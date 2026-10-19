@@ -28,6 +28,10 @@ import {
   convertLoanSessionToWalletService,
   repayLoanSessionService,
   verifyLoanRepaymentService,
+  submitKycConsentService,
+  approveKycConsentService,
+  rejectKycConsentService,
+  getAllKycConsentsService,
 } from "../services/voucher-card.service";
 import { CardStatus, LoanSessionStatus } from "@prisma/client";
 import { OTPService } from "../services/otp.service";
@@ -152,25 +156,13 @@ export const submitKycConsent = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: "At least one data-sharing consent must be granted" });
     }
 
-    const consent = await prisma.kycConsent.upsert({
-      where: { restaurantId },
-      update: {
-        restaurantName, tinNumber, phoneNumber, businessAddress,
-        district, sector: sector || null, ownerName, ownerNationalId,
-        businessType, yearsInOperation: parseInt(yearsInOperation),
-        consentVubaBuba: Boolean(consentVubaBuba),
-        consentKayko: Boolean(consentKayko),
-        consentRRA: Boolean(consentRRA),
-        submittedAt: new Date(),
-      },
-      create: {
-        restaurantId, restaurantName, tinNumber, phoneNumber, businessAddress,
-        district, sector: sector || null, ownerName, ownerNationalId,
-        businessType, yearsInOperation: parseInt(yearsInOperation),
-        consentVubaBuba: Boolean(consentVubaBuba),
-        consentKayko: Boolean(consentKayko),
-        consentRRA: Boolean(consentRRA),
-      },
+    const consent = await submitKycConsentService(restaurantId, {
+      restaurantName, tinNumber, phoneNumber, businessAddress,
+      district, sector: sector || null, ownerName, ownerNationalId,
+      businessType, yearsInOperation: parseInt(yearsInOperation),
+      consentVubaBuba: Boolean(consentVubaBuba),
+      consentKayko: Boolean(consentKayko),
+      consentRRA: Boolean(consentRRA),
     });
 
     res.status(201).json({ success: true, data: consent, message: "KYC consent submitted successfully" });
@@ -184,6 +176,42 @@ export const getMyKycConsent = async (req: Request, res: Response) => {
     const restaurantId = (req as any).user?.id;
     const consent = await prisma.kycConsent.findUnique({ where: { restaurantId } });
     res.json({ success: true, data: consent ?? null });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const getAllKycConsents = async (req: Request, res: Response) => {
+  try {
+    const { status } = req.query;
+    const consents = await getAllKycConsentsService(
+      status as "PENDING" | "APPROVED" | "REJECTED" | undefined,
+    );
+    res.json({ success: true, data: consents });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const approveKycConsent = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user?.id;
+    const { restaurantId } = req.params;
+    const { notes } = req.body;
+    const consent = await approveKycConsentService(restaurantId, adminId, notes);
+    res.json({ success: true, data: consent, message: "KYC consent approved" });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const rejectKycConsent = async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).user?.id;
+    const { restaurantId } = req.params;
+    const { notes } = req.body;
+    const consent = await rejectKycConsentService(restaurantId, adminId, notes);
+    res.json({ success: true, data: consent, message: "KYC consent rejected" });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }

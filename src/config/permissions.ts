@@ -24,6 +24,7 @@ export const PERMISSION_MODULES = [
   { key: "vouchers", label: "Voucher management", group: "Finance" },
   { key: "deposits", label: "Deposits, wallets & traders", group: "Finance" },
   { key: "promo_codes", label: "Promo codes", group: "Finance" },
+  { key: "delivery_settings", label: "Delivery fees", group: "Finance" },
   { key: "markets", label: "Market prices", group: "Markets" },
   { key: "intelligence", label: "Intelligence reports", group: "Markets" },
   { key: "restaurant_kyc", label: "Restaurant KYC", group: "Users" },

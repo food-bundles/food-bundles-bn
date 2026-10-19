@@ -145,6 +145,17 @@ interface WalletUpdate {
   };
 }
 
+interface DelegationUpdate {
+  traderId: string;
+  action: "REQUESTED" | "APPROVED" | "ACCEPTED" | "REVOKED" | "REVERSED";
+  timestamp: string;
+  data?: {
+    commission?: number;
+    delegationStatus?: string;
+    reason?: string;
+  };
+}
+
 class WebSocketManager {
   private wss: WebSocketServer | null = null;
   private clients: Map<string, WebSocketClient> = new Map();
@@ -495,6 +506,31 @@ class WebSocketManager {
 
     console.log(
       `Wallet update broadcasted: ${walletUpdate.action} - ${walletUpdate.walletId}`,
+    );
+  }
+
+  /**
+   * Broadcast delegation updates
+   */
+  broadcastDelegationUpdate(delegationUpdate: DelegationUpdate) {
+    if (!this.wss) return;
+
+    const message = {
+      type: "DELEGATION_UPDATE",
+      data: delegationUpdate,
+    };
+
+    // Broadcast to the specific trader
+    this.broadcastToSubscription(
+      `delegation:${delegationUpdate.traderId}`,
+      message,
+    );
+
+    // Also broadcast to all admins subscribed to all delegations
+    this.broadcastToSubscription("delegation:all", message);
+
+    console.log(
+      `Delegation update broadcasted: ${delegationUpdate.action} - ${delegationUpdate.traderId}`,
     );
   }
 
