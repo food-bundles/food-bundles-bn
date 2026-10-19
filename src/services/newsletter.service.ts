@@ -3,7 +3,7 @@ import prisma from "../prisma";
 import {
   sendNewsletterWelcomeEmail,
   sendNewsletterCampaignEmail,
-} from "../utils/emailTemplates";
+} from "../utils/emails";
 
 // Subscribe to newsletter
 export const subscribeToNewsletterService = async (data: {

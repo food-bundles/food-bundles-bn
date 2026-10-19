@@ -191,7 +191,13 @@ components:
         deliveryDate:
           type: string
           format: date-time
-          description: Requested delivery date
+          description: >-
+            Date and time the customer wants the order delivered (ISO 8601).
+            Decides the delivery fee together with the order amount, using the
+            admin settings (GET /delivery-settings): the fee is charged when the
+            order is below the free-delivery minimum or delivery is sooner than
+            the free-delivery timing (same day / next day / N days). Missing =
+            treated as same-day delivery.
 
         createdAt:
           type: string
@@ -255,7 +261,13 @@ components:
         deliveryDate:
           type: string
           format: date-time
-          description: Requested delivery date
+          description: >-
+            Date and time the customer wants the order delivered (ISO 8601).
+            Decides the delivery fee together with the order amount, using the
+            admin settings (GET /delivery-settings): the fee is charged when the
+            order is below the free-delivery minimum or delivery is sooner than
+            the free-delivery timing (same day / next day / N days). Missing =
+            treated as same-day delivery.
         clientIp:
           type: string
           description: Client IP address
@@ -371,7 +383,13 @@ components:
         deliveryDate:
           type: string
           format: date-time
-          description: Optional requested delivery date
+          description: >-
+            Date and time the customer wants the order delivered (ISO 8601).
+            Decides the delivery fee together with the order amount, using the
+            admin settings (GET /delivery-settings): the fee is charged when the
+            order is below the free-delivery minimum or delivery is sooner than
+            the free-delivery timing (same day / next day / N days). Missing =
+            treated as same-day delivery.
           example: "2024-01-15T10:00:00Z"
 
     AdminOrderResponse:
@@ -750,7 +768,7 @@ paths:
                   billingPhone: "250788123456"
                   billingAddress: "123 Main St"
                   notes: "Special instructions"
-                  deliveryDate: "2023-06-30"
+                  deliveryDate: "2023-07-01T10:00:00+02:00"
                   otherServices: false
               cash_payment:
                 summary: Cash Payment
@@ -759,7 +777,7 @@ paths:
                   paymentMethodId: "pm_cash_123"
                   billingAddress: "123 Main St"
                   notes: "Special instructions"
-                  deliveryDate: "2023-06-30"
+                  deliveryDate: "2023-07-01T10:00:00+02:00"
                   otherServices: false
               card_payment:
                 summary: Card Payment
@@ -778,7 +796,7 @@ paths:
                     expiryYear: "29"
                     pin: "3310"
                   notes: "Special instructions"
-                  deliveryDate: "2023-06-30"
+                  deliveryDate: "2023-07-01T10:00:00+02:00"
                   currency: "RWF"
                   otherServices: false
               bank_transfer:
@@ -790,7 +808,7 @@ paths:
                   billingPhone: "250788123456"
                   billingAddress: "123 Main St"
                   notes: "Special instructions"
-                  deliveryDate: "2023-06-30"
+                  deliveryDate: "2023-07-01T10:00:00+02:00"
                   currency: "RWF"
                   bankDetails:
                     clientIp: "192.168.1.100"

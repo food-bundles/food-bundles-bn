@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import { inviteServices } from "../services/invite.services";
-import { sendInvitationEmail, sendAdminUserCreatedEmail } from "../utils/emailTemplates";
+import { sendInvitationEmail, sendAdminUserCreatedEmail } from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "../services/notification.services";
+import { notifyPrivateReceiversService } from "../services/notification-recipient.service";
 import { Role } from "@prisma/client";
 import { AccessError, resolveRoleAssignment } from "../services/access.service";
 import prisma from "../prisma";
@@ -172,17 +173,14 @@ export const inviteController = {
       // Notify admin: SMS, email, and system notification (fire-and-forget)
       const adminNotificationErrors: string[] = [];
 
-      // 1. SMS to admin private number
-      const privateReceiver = process.env.PRIVATE_RECEIVER;
-      if (privateReceiver) {
-        sendMessage(
-          `invitation accepted so account created. New user: ${user.username} (${user.email}) with role: ${user.role}`,
-          privateReceiver,
-        ).catch((err) => {
-          console.error("Failed to send admin SMS for invitation accepted:", err);
-          adminNotificationErrors.push("SMS");
-        });
-      }
+      // 1. SMS + email to private receivers (env var + DB)
+      notifyPrivateReceiversService({
+        subject: "FoodBundles — New User Joined",
+        body: `invitation accepted so account created. New user: ${user.username} (${user.email}) with role: ${user.role}`,
+      }).catch((err) => {
+        console.error("Failed to notify private receivers for invitation accepted:", err);
+        adminNotificationErrors.push("PrivateReceiver");
+      });
 
       // 2. Email to all ADMIN role users
       prisma.admin

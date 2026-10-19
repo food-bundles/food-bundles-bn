@@ -1,6 +1,6 @@
 import prisma from "../prisma";
 import { hashPassword } from "../utils/password";
-import { sendAffiliatorWelcomeEmail } from "../utils/emailTemplates";
+import { sendAffiliatorWelcomeEmail } from "../utils/emails";
 import { sendMessage } from "../utils/sms.utility";
 import crypto from "crypto";
 import { checkExistingUser } from "./userServices";

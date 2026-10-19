@@ -95,6 +95,7 @@ model Restaurant {
   Wallet                Wallet?
   walletTransactions    WalletTransaction[]
   WalletTransfer        WalletTransfer[]
+  wishlistItems         WishlistItem[]
 }
 
 model Affiliator {
@@ -360,6 +361,14 @@ model Admin {
   @@index([adminRoleId])
 }
 
+/// Admin-editable settings stored as JSON by key (e.g. "delivery_fee").
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
 /// Dashboard role created by a super admin. `permissions` holds keys from the
 /// backend permission catalog (src/config/permissions.ts), e.g. "orders.view".
 model AdminRole {
@@ -410,7 +419,21 @@ model Product {
   admin                Admin                  @relation(fields: [createdBy], references: [id])
   productUnit          ProductUnit?           @relation(fields: [unitId], references: [id])
   customerTypePrices   ProductCustomerPrice[]
+  wishlistItems        WishlistItem[]
 }
+/// Products a restaurant saved to its wishlist (heart button on the shop)
+model WishlistItem {
+  id           String     @id @default(uuid())
+  restaurantId String
+  productId    String
+  createdAt    DateTime   @default(now())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, productId])
+  @@index([restaurantId])
+}
+
 
 model CustomerType {
   id                    String                 @id @default(uuid())
@@ -882,6 +905,7 @@ model Voucher {
   repaymentDays      Int                  @default(7)
   serviceFeeRate     Float                @default(0)
   usedAt             DateTime?
+  maturingSoonNotified Boolean            @default(false)
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   orders             Order[]
@@ -1198,6 +1222,7 @@ model NotificationRecipient {
   id          String               @id @default(uuid())
   name        String
   phoneNumber String
+  email       String?
   category    NotificationCategory
   isActive    Boolean              @default(true)
   createdBy   String?
@@ -1287,8 +1312,8 @@ model CardEnrollmentRequest {
 }
 
 model KycConsent {
-  id               String     @id @default(uuid())
-  restaurantId     String     @unique
+  id               String           @id @default(uuid())
+  restaurantId     String           @unique
   restaurantName   String
   tinNumber        String
   phoneNumber      String
@@ -1299,15 +1324,20 @@ model KycConsent {
   ownerNationalId  String
   businessType     String
   yearsInOperation Int
-  consentVubaBuba  Boolean    @default(false)
-  consentKayko     Boolean    @default(false)
-  consentRRA       Boolean    @default(false)
-  submittedAt      DateTime   @default(now())
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  restaurant       Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  consentVubaBuba  Boolean          @default(false)
+  consentKayko     Boolean          @default(false)
+  consentRRA       Boolean          @default(false)
+  status           KycConsentStatus @default(PENDING)
+  reviewedAt       DateTime?
+  reviewedBy       String?
+  reviewNotes      String?
+  submittedAt      DateTime         @default(now())
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  restaurant       Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
+  @@index([status])
 }
 
 model LoanSession {
@@ -1758,6 +1788,12 @@ enum CardEnrollmentStatus {
   REJECTED
 }
 
+enum KycConsentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum LoanSessionStatus {
   REQUESTED
   APPROVED_LOCKED
@@ -1789,6 +1825,7 @@ enum OTPPurpose {
   VOUCHER_CHECKOUT
   ADMIN_WALLET_OPERATION
   PASSWORD_RESET
+  SUBMISSION_PAYOUT
 }
 
 enum NotificationEvent {
@@ -1809,6 +1846,21 @@ enum NotificationEvent {
   SUBMISSION_FEEDBACK_RECEIVED
   SUBMISSION_REOPENED
   SUBMISSION_PAID
+  SUBMISSION_FORCE_COMPLETED
+  VOUCHER_PENALTY_APPLIED
+  VOUCHER_SUSPENDED
+  SUBSCRIPTION_ACTIVATED
+  KYC_SUBMITTED
+  KYC_APPROVED
+  KYC_REJECTED
+  WALLET_TRANSACTION
+  ADMIN_ROLE_CHANGED
+  ORDER_CANCELLED
+  VOUCHER_MATURING_SOON
+  SUBMISSION_CREATED
+  SUBMISSION_REJECTED
+  SUBMISSION_STATUS_REVERSED
+  SUBMISSION_PAYOUT_FAILED
 }
 
 enum NotificationTarget {
@@ -1841,6 +1893,7 @@ enum NotificationCategory {
   LOW_STOCK
   PAYMENT_ISSUES
   SYSTEM_ALERTS
+  PRIVATE_RECEIVER
 }
 
 enum NewsletterStatus {

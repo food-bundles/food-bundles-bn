@@ -18,7 +18,8 @@ export type ExportType =
   | "wallets"
   | "loans"
   | "deposits"
-  | "transactions";
+  | "transactions"
+  | "submissions";
 
 interface ExportHeader {
   title: string;
@@ -255,6 +256,12 @@ const EXPORT_HEADERS: Record<ExportType, ExportHeader> = {
   transactions: {
     title: "Wallet Transactions Export",
     description: "Detailed financial transactions log for all wallet activities",
+    logo: "https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png",
+  },
+  submissions: {
+    title: "Farmer Submissions Export",
+    description:
+      "Farmer produce submissions with status, feedback, quantities, and pricing details",
     logo: "https://res.cloudinary.com/dzxyelclu/image/upload/v1760111270/Food_bundle_logo_cfsnsw.png",
   },
 };
@@ -804,6 +811,66 @@ const EXPORT_CONFIG: Record<ExportType, ExportConfig> = {
       total: records.length,
       completed: records.filter((t) => t.status === "COMPLETED").length,
       totalAmount: records.reduce((sum, t) => sum + (t.amount || 0), 0),
+    }),
+  },
+  submissions: {
+    modelName: "farmerSubmission",
+    buildWhere: (options, dateFilter) => {
+      const where: any = {};
+      if (options?.status && options.status !== "ALL") {
+        where.status = options.status;
+      }
+      if (options?.farmerId) where.farmerId = options.farmerId;
+      if (options?.province) where.province = options.province;
+      if (options?.search) {
+        where.OR = [
+          { productName: { contains: options.search, mode: "insensitive" } },
+          { farmer: { phone: { contains: options.search, mode: "insensitive" } } },
+          { farmer: { email: { contains: options.search, mode: "insensitive" } } },
+        ];
+      }
+      if (dateFilter) where.submittedAt = dateFilter;
+      return where;
+    },
+    select: {
+      productName: true,
+      submittedQty: true,
+      acceptedQty: true,
+      wishedPrice: true,
+      acceptedPrice: true,
+      totalAmount: true,
+      status: true,
+      farmerFeedbackStatus: true,
+      province: true,
+      district: true,
+      submittedAt: true,
+      verifiedAt: true,
+      approvedAt: true,
+      paidAt: true,
+      farmer: { select: { name: true, phone: true, email: true } },
+      aggregator: { select: { username: true } },
+    },
+    formatRecord: (s) => ({
+      farmerName: s.farmer?.name || "-",
+      farmerPhone: s.farmer?.phone || "-",
+      productName: s.productName,
+      submittedQty: s.submittedQty || 0,
+      acceptedQty: s.acceptedQty || 0,
+      wishedPrice: s.wishedPrice || 0,
+      acceptedPrice: s.acceptedPrice || 0,
+      totalAmount: s.totalAmount || 0,
+      status: s.status,
+      feedbackStatus: s.farmerFeedbackStatus || "-",
+      verifiedBy: s.aggregator?.username || "-",
+      province: s.province || "-",
+      district: s.district || "-",
+      submittedAt: s.submittedAt,
+    }),
+    calculateStats: (records) => ({
+      total: records.length,
+      approved: records.filter((s) => s.status === "APPROVED").length,
+      paid: records.filter((s) => s.status === "PAID").length,
+      totalAmount: records.reduce((sum, s) => sum + (s.totalAmount || 0), 0),
     }),
   },
 };

@@ -4,13 +4,18 @@ import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
 import { wsManager } from "../index";
 import { transferVoucherAmountToWalletService } from "./wallet-transfer.service";
-import { cleanPhoneNumber, isValidRwandaPhone } from "../utils/emailTemplates";
+import {
+  cleanPhoneNumber,
+  isValidRwandaPhone,
+  sendLoanApplicationSubmittedEmail,
+} from "../utils/emails";
 import { retryDatabaseOperation } from "../utils/db-retry.utls";
 import {
   debitWalletService,
   getWalletByRestaurantIdService,
 } from "./wallet.service";
 import axios from "axios";
+import { notifyPrivateReceiversService } from "./notification-recipient.service";
 
 // Payment clients — lazy initialized to ensure env vars are loaded
 let _paypack: any = null;
@@ -200,6 +205,202 @@ async function generateUniqueRrn(): Promise<string> {
 function generateStan(): string {
   return `STAN-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 }
+
+// ============================================
+// KYC CONSENT
+// ============================================
+
+interface KycConsentInput {
+  restaurantName: string;
+  tinNumber: string;
+  phoneNumber: string;
+  businessAddress: string;
+  district: string;
+  sector?: string | null;
+  ownerName: string;
+  ownerNationalId: string;
+  businessType: string;
+  yearsInOperation: number;
+  consentVubaBuba: boolean;
+  consentKayko: boolean;
+  consentRRA: boolean;
+}
+
+/**
+ * Restaurant submits (or re-submits after rejection) KYC consent.
+ * Re-submission resets the review status back to PENDING.
+ */
+export const submitKycConsentService = async (
+  restaurantId: string,
+  input: KycConsentInput,
+) => {
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+  });
+  if (!restaurant) throw new Error("Restaurant not found");
+
+  const consent = await prisma.kycConsent.upsert({
+    where: { restaurantId },
+    update: {
+      ...input,
+      status: "PENDING",
+      reviewedAt: null,
+      reviewedBy: null,
+      reviewNotes: null,
+      submittedAt: new Date(),
+    },
+    create: {
+      restaurantId,
+      ...input,
+    },
+  });
+
+  try {
+    await createNotificationService({
+      title: "KYC Consent Submitted",
+      message: "Your KYC consent has been received and is pending review.",
+      eventType: "KYC_SUBMITTED",
+      targetType: "SPECIFIC_USER",
+      targetId: restaurantId,
+      metadata: { kycConsentId: consent.id },
+    });
+
+    if (restaurant.phone) {
+      await sendMessage(
+        `Dear ${restaurant.name}, your KYC consent has been received and is pending review. We'll notify you once it's reviewed.`,
+        restaurant.phone,
+      );
+    }
+  } catch (e) {
+    console.error("Failed to notify restaurant of KYC submission:", e);
+  }
+
+  try {
+    await createNotificationService({
+      title: "New KYC Consent Submitted",
+      message: `${restaurant.name} has submitted KYC consent for review.`,
+      eventType: "KYC_SUBMITTED",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: { restaurantId, restaurantName: restaurant.name, kycConsentId: consent.id },
+    });
+  } catch (e) {
+    console.error("Failed to notify admin of KYC submission:", e);
+  }
+
+  return consent;
+};
+
+/**
+ * Admin approves a restaurant's KYC consent.
+ */
+export const approveKycConsentService = async (
+  restaurantId: string,
+  adminId: string,
+  notes?: string,
+) => {
+  const existing = await prisma.kycConsent.findUnique({ where: { restaurantId } });
+  if (!existing) throw new Error("KYC consent not found for this restaurant");
+  if (existing.status === "APPROVED") throw new Error("KYC consent already approved");
+
+  const consent = await prisma.kycConsent.update({
+    where: { restaurantId },
+    data: {
+      status: "APPROVED",
+      reviewedAt: new Date(),
+      reviewedBy: adminId,
+      reviewNotes: notes || null,
+    },
+    include: {
+      restaurant: { select: { id: true, name: true, email: true, phone: true } },
+    },
+  });
+
+  try {
+    await createNotificationService({
+      title: "KYC Consent Approved",
+      message: "Your KYC consent has been approved.",
+      eventType: "KYC_APPROVED",
+      targetType: "SPECIFIC_USER",
+      targetId: restaurantId,
+      metadata: { kycConsentId: consent.id },
+    });
+
+    if (consent.restaurant.phone) {
+      await sendMessage(
+        `Dear ${consent.restaurant.name}, your KYC consent has been approved. You can now proceed with your voucher card request.`,
+        consent.restaurant.phone,
+      );
+    }
+  } catch (e) {
+    console.error("Failed to notify restaurant of KYC approval:", e);
+  }
+
+  return consent;
+};
+
+/**
+ * Admin rejects a restaurant's KYC consent.
+ */
+export const rejectKycConsentService = async (
+  restaurantId: string,
+  adminId: string,
+  notes?: string,
+) => {
+  const existing = await prisma.kycConsent.findUnique({ where: { restaurantId } });
+  if (!existing) throw new Error("KYC consent not found for this restaurant");
+  if (existing.status === "REJECTED") throw new Error("KYC consent already rejected");
+
+  const consent = await prisma.kycConsent.update({
+    where: { restaurantId },
+    data: {
+      status: "REJECTED",
+      reviewedAt: new Date(),
+      reviewedBy: adminId,
+      reviewNotes: notes || null,
+    },
+    include: {
+      restaurant: { select: { id: true, name: true, email: true, phone: true } },
+    },
+  });
+
+  try {
+    await createNotificationService({
+      title: "KYC Consent Rejected",
+      message: notes
+        ? `Your KYC consent was rejected: ${notes}`
+        : "Your KYC consent was rejected. Please review and re-submit.",
+      eventType: "KYC_REJECTED",
+      targetType: "SPECIFIC_USER",
+      targetId: restaurantId,
+      metadata: { kycConsentId: consent.id, reason: notes },
+    });
+
+    if (consent.restaurant.phone) {
+      await sendMessage(
+        `Dear ${consent.restaurant.name}, your KYC consent was rejected.${notes ? ` Reason: ${notes}` : ""} Please review and re-submit.`,
+        consent.restaurant.phone,
+      );
+    }
+  } catch (e) {
+    console.error("Failed to notify restaurant of KYC rejection:", e);
+  }
+
+  return consent;
+};
+
+/**
+ * Admin lists all KYC consent submissions (optionally filtered by status).
+ */
+export const getAllKycConsentsService = async (status?: "PENDING" | "APPROVED" | "REJECTED") => {
+  return prisma.kycConsent.findMany({
+    where: status ? { status } : undefined,
+    include: {
+      restaurant: { select: { id: true, name: true, email: true, phone: true } },
+    },
+    orderBy: { submittedAt: "desc" },
+  });
+};
 
 // ============================================
 // CARD ENROLLMENT
@@ -729,12 +930,53 @@ export const requestLoanSessionService = async (
   });
 
   try {
-    await sendMessage(
-      `New loan request: ${restaurant?.name} — ${requestedAmount.toLocaleString()} RWF via ${providerName}. RRN: ${rrn}`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles - New Loan Request`,
+      body: `New loan request: ${restaurant?.name} - ${requestedAmount.toLocaleString()} RWF via ${providerName}. RRN: ${rrn}`,
+    });
   } catch (e) {
-    console.error("SMS failed:", e);
+    console.error("Failed to notify private receivers for loan request:", e);
+  }
+
+  // Acknowledge receipt to the applicant — isolated so a notification
+  // failure can never affect the already-committed session request.
+  try {
+    if (restaurant?.phone) {
+      await sendMessage(
+        `Dear ${restaurant.name}, we have received your loan request for ${requestedAmount.toLocaleString()} RWF (RRN: ${rrn}) and it is pending review.`,
+        restaurant.phone,
+      );
+    }
+  } catch (e) {
+    console.error("Failed to send loan session SMS to restaurant:", e);
+  }
+
+  try {
+    if (restaurant?.email) {
+      await sendLoanApplicationSubmittedEmail({
+        email: restaurant.email,
+        restaurantName: restaurant.name,
+        requestedAmount,
+        purpose,
+        repaymentDays,
+        rrn,
+      });
+    }
+  } catch (e) {
+    console.error("Failed to send loan session email to restaurant:", e);
+  }
+
+  try {
+    await createNotificationService({
+      title: "Application Submitted",
+      message: `Your loan request for ${requestedAmount.toLocaleString()} RWF (RRN: ${rrn}) has been submitted and is pending review.`,
+      eventType: "VOUCHER_APPLIED",
+      targetType: "SPECIFIC_USER",
+      targetId: restaurantId,
+      metadata: { sessionId: session.id, rrn, requestedAmount },
+    });
+  } catch (e) {
+    console.error("Failed to create loan session notification:", e);
   }
 
   return session;

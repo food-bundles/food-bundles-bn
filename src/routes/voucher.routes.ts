@@ -40,6 +40,9 @@ import {
   getMyCardEnrollmentRequest,
   submitKycConsent,
   getMyKycConsent,
+  getAllKycConsents,
+  approveKycConsent,
+  rejectKycConsent,
   requestLoanSession,
   approveLoanSession,
   rejectLoanSession,
@@ -379,6 +382,28 @@ voucherRoutes.get(
   isAuthenticated,
   checkPermission("RESTAURANT", "HOTEL"),
   getMyKycConsent,
+);
+
+// KYC consent review (admin)
+voucherRoutes.get(
+  "/card/kyc-consents",
+  isAuthenticated,
+  allow("vouchers"),
+  getAllKycConsents,
+);
+
+voucherRoutes.patch(
+  "/card/kyc-consent/:restaurantId/approve",
+  isAuthenticated,
+  allow("vouchers"),
+  approveKycConsent,
+);
+
+voucherRoutes.patch(
+  "/card/kyc-consent/:restaurantId/reject",
+  isAuthenticated,
+  allow("vouchers"),
+  rejectKycConsent,
 );
 
 // Card enrollment (restaurant requests a card)

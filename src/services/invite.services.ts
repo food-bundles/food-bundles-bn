@@ -3,6 +3,8 @@ import { Role } from "@prisma/client";
 import { hashPassword } from "../utils/password";
 import crypto from "crypto";
 import { checkExistingUser } from "./userServices";
+import { createNotificationService } from "./notification.services";
+import { sendAdminUserCreatedEmail } from "../utils/emails";
 
 interface CreateInviteData {
   email: string;
@@ -167,6 +169,34 @@ export const inviteServices = {
         where: { id: invitation.id },
       }),
     ]);
+
+    try {
+      await createNotificationService({
+        title: "New User Registration",
+        message: `New ${user.role.toLowerCase()} ${user.email} has registered`,
+        eventType: "USER_SIGNUP",
+        targetType: "ROLE_BASED",
+        targetRole: "ADMIN",
+        metadata: {
+          userId: user.id,
+          userRole: user.role,
+          email: user.email,
+          registeredAt: new Date().toISOString(),
+        },
+      });
+    } catch (notifError) {
+      console.error("Failed to create new-user notification:", notifError);
+    }
+
+    try {
+      await sendAdminUserCreatedEmail({
+        userType: user.role === "TRADER" ? "Trader" : "Admin",
+        userName: user.username,
+        userEmail: user.email,
+      });
+    } catch (emailError) {
+      console.error("Failed to send new-user admin email:", emailError);
+    }
 
     return user;
   },
