@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import { farmerWhere } from "../utils/farmerKey";
 import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "./notification.services";
 
