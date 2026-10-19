@@ -79,6 +79,7 @@ export const createProduct = async (req: Request, res: Response) => {
     wsManager.broadcastNewProduct(product);
 
     res.status(201).json({
+      success: true,
       message: "Product created successfully",
       data: product,
     });

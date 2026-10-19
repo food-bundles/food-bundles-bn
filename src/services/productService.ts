@@ -13,7 +13,7 @@ export interface ProductData {
   categoryId: string;
   category?: Category;
   bonus?: number;
-  sku: string;
+  sku?: string; // optional: generated from the product name when empty
   quantity: number;
   images: string[];
   expiryDate: Date | null;
@@ -21,6 +21,24 @@ export interface ProductData {
   createdBy: string;
   customerTypePrices?: { customerTypeId: string; price: number; purchasePrice?: number }[];
 }
+
+/**
+ * Simple unique SKU, generated behind the scenes: the first 3 letters of the
+ * product name + 5 random characters, e.g. "TOM-4F7K2" for Tomatoes.
+ */
+export const generateSku = async (productName: string): Promise<string> => {
+  const prefix =
+    (productName || "").replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase().padEnd(3, "X");
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O, 1/I lookalikes
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let code = "";
+    for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    const sku = `${prefix}-${code}`;
+    const taken = await prisma.product.findUnique({ where: { sku }, select: { id: true } });
+    if (!taken) return sku;
+  }
+  return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+};
 
 interface Category {
   id: string;
@@ -38,9 +56,10 @@ export const createProductService = async (productData: ProductData) => {
     throw new Error("Only dashboard admins can create products");
   }
 
-  // Check if SKU already exists
+  // Use the given SKU, or generate one behind the scenes
+  const sku = productData.sku?.trim() || (await generateSku(productData.productName));
   const existingSku = await prisma.product.findUnique({
-    where: { sku: productData.sku },
+    where: { sku },
   });
 
   if (existingSku) {
@@ -67,7 +86,7 @@ export const createProductService = async (productData: ProductData) => {
         purchasePrice: Number(productData.purchasePrice),
         categoryId: productData.categoryId,
         bonus: Number(productData.bonus) || 0,
-        sku: productData.sku,
+        sku,
         quantity: Number(productData.quantity),
         images: productData.images,
         expiryDate: productData.expiryDate,
@@ -416,9 +435,10 @@ export const createProductFromSubmissionService = async ({
     throw new Error("Only dashboard admins can create products");
   }
 
-  // Check if SKU already exists
+  // Use the given SKU, or generate one behind the scenes
+  const sku = productData.sku?.trim() || (await generateSku(productData.productName));
   const existingSku = await prisma.product.findUnique({
-    where: { sku: productData.sku },
+    where: { sku },
   });
 
   if (existingSku) {
@@ -435,7 +455,7 @@ export const createProductFromSubmissionService = async ({
         purchasePrice: productData.purchasePrice,
         categoryId: productData.categoryId,
         bonus: productData.bonus ?? 0,
-        sku: productData.sku,
+        sku,
         quantity: productData.quantity,
         images: productData.images,
         expiryDate: productData.expiryDate,
