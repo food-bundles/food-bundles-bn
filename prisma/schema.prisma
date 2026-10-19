@@ -95,7 +95,7 @@ model Restaurant {
   Wallet                Wallet?
   walletTransactions    WalletTransaction[]
   WalletTransfer        WalletTransfer[]
-  wishlistItems         WishlistItem[]
+  WishlistItem          WishlistItem[]
 }
 
 model Affiliator {
@@ -126,6 +126,8 @@ model FarmerSubmission {
   acceptedQty          Float?
   totalAmount          Float?
   categoryId           String?
+  status               SubmissionStatus          @default(PENDING)
+  farmerFeedbackStatus FarmerFeedbackStatus?     @default(PENDING)
   status               SubmissionStatus          @default(PENDING)
   farmerFeedbackStatus FarmerFeedbackStatus?     @default(PENDING)
   farmerFeedbackAt     DateTime?
@@ -421,19 +423,7 @@ model Product {
   admin                Admin                  @relation(fields: [createdBy], references: [id])
   productUnit          ProductUnit?           @relation(fields: [unitId], references: [id])
   customerTypePrices   ProductCustomerPrice[]
-  wishlistItems        WishlistItem[]
-}
-/// Products a restaurant saved to its wishlist (heart button on the shop)
-model WishlistItem {
-  id           String     @id @default(uuid())
-  restaurantId String
-  productId    String
-  createdAt    DateTime   @default(now())
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@unique([restaurantId, productId])
-  @@index([restaurantId])
+  WishlistItem         WishlistItem[]
 }
 
 
@@ -1617,6 +1607,8 @@ model support_requests {
   @@index([ticketNumber])
 }
 
+
+
 model WishlistItem {
   id           String     @id
   restaurantId String
@@ -1802,11 +1794,7 @@ enum CardEnrollmentStatus {
   REJECTED
 }
 
-enum KycConsentStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
+
 
 enum LoanSessionStatus {
   REQUESTED
@@ -1921,3 +1909,11 @@ enum CommissionMode {
   NORMAL
   FIXED
 }
+
+enum KycConsentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+
