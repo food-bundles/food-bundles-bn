@@ -119,22 +119,22 @@ model Affiliator {
 }
 
 model FarmerSubmission {
-  id                   String                @id @default(uuid())
+  id                   String                    @id @default(uuid())
   farmerId             String
   productName          String
   submittedQty         Float?
   acceptedQty          Float?
   totalAmount          Float?
   categoryId           String?
-  status               SubmissionStatus      @default(PENDING)
-  farmerFeedbackStatus FarmerFeedbackStatus? @default(PENDING)
+  status               SubmissionStatus          @default(PENDING)
+  farmerFeedbackStatus FarmerFeedbackStatus?     @default(PENDING)
   farmerFeedbackAt     DateTime?
   farmerFeedbackNotes  String?
   farmerCounterOffer   Float?
   farmerCounterQty     Float?
   feedbackDeadline     DateTime?
   aggregatorId         String?
-  submittedAt          DateTime              @default(now())
+  submittedAt          DateTime                  @default(now())
   verifiedAt           DateTime?
   paymentMethod        String?
   approvedAt           DateTime?
@@ -148,12 +148,14 @@ model FarmerSubmission {
   sector               String?
   cell                 String?
   village              String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  aggregator           Admin?                @relation("Aggregator", fields: [aggregatorId], references: [id])
-  approvedProduct      Product?              @relation(fields: [approvedProductId], references: [id])
-  category             ProductCategory?      @relation(fields: [categoryId], references: [id])
-  farmer               Farmer                @relation(fields: [farmerId], references: [id])
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  deliveryDate         DateTime?
+  pickupPoint          String?
+  aggregator           Admin?                    @relation("Aggregator", fields: [aggregatorId], references: [id])
+  approvedProduct      Product?                  @relation(fields: [approvedProductId], references: [id])
+  category             ProductCategory?          @relation(fields: [categoryId], references: [id])
+  farmer               Farmer                    @relation(fields: [farmerId], references: [id])
   payouts              SubmissionPayout[]
   statusHistory        SubmissionStatusHistory[]
 }
@@ -883,41 +885,41 @@ model SubscriptionHistory {
 }
 
 model Voucher {
-  id                 String               @id @default(uuid())
-  voucherCode        String               @unique
-  voucherType        VoucherType
-  discountPercentage Float
-  creditLimit        Float
-  currency           VoucherCurrency      @default(RWF)
-  totalCredit        Float
-  usedCredit         Float                @default(0)
-  remainingCredit    Float
-  paidAmount         Float                @default(0)
-  remainingAmount    Float                @default(0)
-  commission         Float                @default(0)
-  status             VoucherStatus        @default(ACTIVE)
-  expiryDate         DateTime?
-  issuedDate         DateTime             @default(now())
-  approvedBy         String?
-  restaurantId       String?
-  farmerId           String?
-  loanId             String?
-  repaymentDays      Int                  @default(7)
-  serviceFeeRate     Float                @default(0)
-  usedAt             DateTime?
-  maturingSoonNotified Boolean            @default(false)
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  orders             Order[]
-  approver           Admin?               @relation(fields: [approvedBy], references: [id])
-  farmer             Farmer?              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  loan               LoanApplication?     @relation(fields: [loanId], references: [id])
-  restaurant         Restaurant?          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  creditTopUps       VoucherCreditTopUp[]
-  penalties          VoucherPenalty[]
-  repayments         VoucherRepayment[]
-  transactions       VoucherTransaction[]
-  walletTransfers    WalletTransfer[]
+  id                   String               @id @default(uuid())
+  voucherCode          String               @unique
+  voucherType          VoucherType
+  discountPercentage   Float
+  creditLimit          Float
+  currency             VoucherCurrency      @default(RWF)
+  totalCredit          Float
+  usedCredit           Float                @default(0)
+  remainingCredit      Float
+  paidAmount           Float                @default(0)
+  remainingAmount      Float                @default(0)
+  commission           Float                @default(0)
+  status               VoucherStatus        @default(ACTIVE)
+  expiryDate           DateTime?
+  issuedDate           DateTime             @default(now())
+  approvedBy           String?
+  restaurantId         String?
+  farmerId             String?
+  loanId               String?
+  repaymentDays        Int                  @default(7)
+  serviceFeeRate       Float                @default(0)
+  usedAt               DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  maturingSoonNotified Boolean              @default(false)
+  orders               Order[]
+  approver             Admin?               @relation(fields: [approvedBy], references: [id])
+  farmer               Farmer?              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  loan                 LoanApplication?     @relation(fields: [loanId], references: [id])
+  restaurant           Restaurant?          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  creditTopUps         VoucherCreditTopUp[]
+  penalties            VoucherPenalty[]
+  repayments           VoucherRepayment[]
+  transactions         VoucherTransaction[]
+  walletTransfers      WalletTransfer[]
 
   @@index([restaurantId])
   @@index([farmerId])
@@ -1228,6 +1230,7 @@ model NotificationRecipient {
   createdBy   String?
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
+  email       String?
 
   @@index([category])
   @@index([isActive])
@@ -1327,13 +1330,13 @@ model KycConsent {
   consentVubaBuba  Boolean          @default(false)
   consentKayko     Boolean          @default(false)
   consentRRA       Boolean          @default(false)
-  status           KycConsentStatus @default(PENDING)
-  reviewedAt       DateTime?
-  reviewedBy       String?
-  reviewNotes      String?
   submittedAt      DateTime         @default(now())
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
+  reviewNotes      String?
+  reviewedAt       DateTime?
+  reviewedBy       String?
+  status           KycConsentStatus @default(PENDING)
   restaurant       Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
@@ -1535,13 +1538,13 @@ model LoanRepayment {
 }
 
 model SubmissionStatusHistory {
-  id           String   @id @default(uuid())
+  id           String           @id @default(uuid())
   submissionId String
   fromStatus   String
   toStatus     String
   reason       String?
   changedBy    String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime         @default(now())
   submission   FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
   @@index([submissionId])
@@ -1549,18 +1552,18 @@ model SubmissionStatusHistory {
 }
 
 model SubmissionPayout {
-  id           String   @id @default(uuid())
-  submissionId String
-  amount       Float
-  phoneNumber  String
-  initiatedBy  String
-  status       String   @default("PENDING")
-  paypackRef   String?
+  id            String           @id @default(uuid())
+  submissionId  String
+  amount        Float
+  phoneNumber   String
+  initiatedBy   String
+  status        String           @default("PENDING")
+  paypackRef    String?
   paypackStatus String?
-  confirmedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  submission   FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  confirmedAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  submission    FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
   @@index([submissionId])
   @@index([status])
@@ -1586,11 +1589,11 @@ model WfpMarketPrice {
   usdPrice    Float?
   createdAt   DateTime @default(now())
 
+  @@unique([date, marketName, commodity, priceType])
   @@index([date])
   @@index([commodity])
   @@index([marketName])
   @@index([province])
-  @@unique([date, marketName, commodity, priceType])
 }
 
 model support_requests {
@@ -1613,6 +1616,25 @@ model support_requests {
   @@index([email])
   @@index([status])
   @@index([ticketNumber])
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime
+}
+
+model WishlistItem {
+  id           String     @id
+  restaurantId String
+  productId    String
+  createdAt    DateTime   @default(now())
+  Product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  Restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, productId])
+  @@index([restaurantId])
 }
 
 enum TraderTransactionType {
@@ -1907,3 +1929,11 @@ enum CommissionMode {
   NORMAL
   FIXED
 }
+
+enum KycConsentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+
