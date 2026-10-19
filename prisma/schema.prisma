@@ -128,8 +128,6 @@ model FarmerSubmission {
   categoryId           String?
   status               SubmissionStatus          @default(PENDING)
   farmerFeedbackStatus FarmerFeedbackStatus?     @default(PENDING)
-  status               SubmissionStatus          @default(PENDING)
-  farmerFeedbackStatus FarmerFeedbackStatus?     @default(PENDING)
   farmerFeedbackAt     DateTime?
   farmerFeedbackNotes  String?
   farmerCounterOffer   Float?
@@ -1610,12 +1608,12 @@ model support_requests {
 
 
 model WishlistItem {
-  id           String     @id
+  id           String     @id @default(uuid())
   restaurantId String
   productId    String
   createdAt    DateTime   @default(now())
-  Product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  Restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@unique([restaurantId, productId])
   @@index([restaurantId])

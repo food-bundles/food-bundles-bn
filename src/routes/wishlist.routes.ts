@@ -11,7 +11,7 @@ wishlistRoutes.get("/", async (req: Request, res: Response) => {
   try {
     const items = await prisma.wishlistItem.findMany({
       where: { restaurantId: (req as any).user.id },
-      include: { Product: true },
+      include: { product: true },
       orderBy: { createdAt: "desc" },
     });
     res.json({ success: true, data: items });
