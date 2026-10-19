@@ -53,7 +53,7 @@ export const uploadWfpCsv = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
-      message: `Successfully processed ${result.totalRows.toLocaleString()} rows. Inserted ${result.insertedCount.toLocaleString()} price records across ${result.marketsDiscovered} markets in ${result.durationSeconds}s.`,
+      message: `Successfully processed ${result.totalRows.toLocaleString()} rows. Added ${result.insertedCount.toLocaleString()} new price records (${result.skippedExisting.toLocaleString()} already existed and were skipped) across ${result.marketsDiscovered} markets in ${result.durationSeconds}s.`,
       data: result,
     });
   } catch (error: any) {

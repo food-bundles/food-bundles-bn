@@ -497,6 +497,8 @@ export async function submitProductService(
       categoryId: productData.categoryId,
       submittedQty: submissionData.submittedQty,
       wishedPrice: submissionData.wishedPrice,
+      deliveryDate: submissionData.deliveryDate,
+      pickupPoint: submissionData.pickupPoint,
       status: "PENDING",
       location: submissionData.location || farmer.location,
       province: submissionData.province || farmer.province,

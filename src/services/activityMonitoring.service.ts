@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import { farmerWhere } from "../utils/farmerKey";
 
 export class ActivityMonitoringService {
   static async logLoginAttempt(
@@ -8,7 +9,7 @@ export class ActivityMonitoringService {
   ): Promise<void> {
     try {
       const farmer = await prisma.farmer.findUnique({
-        where: { phone: phoneNumber },
+        where: farmerWhere(phoneNumber),
       });
 
       if (farmer) {
@@ -69,7 +70,7 @@ export class ActivityMonitoringService {
   static async getRecentActivity(phoneNumber: string): Promise<any[]> {
     try {
       const farmer = await prisma.farmer.findUnique({
-        where: { phone: phoneNumber },
+        where: farmerWhere(phoneNumber),
         include: {
           FarmerLoginAttempt: {
             orderBy: { attemptTime: "desc" },

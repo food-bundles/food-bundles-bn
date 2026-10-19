@@ -19,12 +19,7 @@ export default class SubmissionPayoutController {
       const { phoneNumber } = req.body;
       const initiatedBy = (req as any).user.id;
 
-      if (!phoneNumber) {
-        return res
-          .status(400)
-          .json({ success: false, message: "phoneNumber is required" });
-      }
-
+      // phoneNumber is optional: the service falls back to the farmer's own phone
       const result = await initiateSubmissionPayoutService(
         submissionId,
         phoneNumber,

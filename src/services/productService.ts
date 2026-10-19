@@ -593,15 +593,18 @@ export const getAllProductsService = async ({
   search,
   page = 1,
   limit = 10,
+  includeOutOfStock = false,
 }: {
   categoryId?: string;
   search?: string;
   page?: number;
   limit?: number;
+  /** Farmers choose what they grow/sell regardless of shop stock */
+  includeOutOfStock?: boolean;
 }) => {
   const where: any = {
     status: "ACTIVE",
-    quantity: { gt: 0 },
+    ...(!includeOutOfStock && { quantity: { gt: 0 } }),
   };
 
   if (categoryId) {
@@ -988,43 +991,44 @@ export const approveSubmissionService = async (
     );
   }
 
-  const updatedSubmission = await prisma.farmerSubmission.update({
-    where: { id: submissionId },
-    data: {
-      status: "APPROVED",
-      approvedAt: new Date(),
-    },
-    include: {
-      farmer: {
-        select: {
-          id: true,
-          phone: true,
+  // Approve and add stock atomically, so a failure can't leave the submission
+  // APPROVED without its quantity added (which also blocked any retry).
+  const updatedSubmission = await prisma.$transaction(async (tx) => {
+    const approved = await tx.farmerSubmission.update({
+      where: { id: submissionId },
+      data: {
+        status: "APPROVED",
+        approvedAt: new Date(),
+      },
+      include: {
+        farmer: {
+          select: {
+            id: true,
+            phone: true,
+          },
+        },
+        aggregator: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
         },
       },
-      aggregator: {
-        select: {
-          id: true,
-          username: true,
-          email: true,
+    });
+
+    // Add stock to the product with the same name, if one exists yet.
+    // updateMany doesn't throw when there is no matching product.
+    await tx.product.updateMany({
+      where: { productName: submission.productName },
+      data: {
+        quantity: {
+          increment: submission.acceptedQty ?? 0,
         },
       },
-    },
-  });
+    });
 
-  if (!updatedSubmission) {
-    throw new Error("Submission not found");
-  }
-
-  // Update product quantity of same name of farmer submission
-  await prisma.product.update({
-    where: {
-      productName: submission.productName,
-    },
-    data: {
-      quantity: {
-        increment: submission.acceptedQty ?? 0,
-      },
-    },
+    return approved;
   });
 
   await createNotificationService({

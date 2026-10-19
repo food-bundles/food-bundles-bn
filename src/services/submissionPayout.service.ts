@@ -56,7 +56,7 @@ async function getPaypackCashoutStatus(paypackRef: string) {
 
 export const initiateSubmissionPayoutService = async (
   submissionId: string,
-  phoneNumber: string,
+  phoneNumber: string | undefined,
   initiatedBy: string
 ) => {
   const submission = await prisma.farmerSubmission.findUnique({
@@ -89,7 +89,16 @@ export const initiateSubmissionPayoutService = async (
     );
   }
 
-  const cleanedPhoneNumber = cleanPhoneNumber(phoneNumber);
+  // The admin's number wins; otherwise the farmer's own phone. Farmers who signed up with an
+  // email have no phone until they add one in the app (Settings > Payout).
+  const targetNumber = phoneNumber || submission.farmer?.phone;
+  if (!targetNumber) {
+    throw new Error(
+      "This farmer has no phone number yet. Ask them to add one in the app (Settings > Payout), or enter a number."
+    );
+  }
+
+  const cleanedPhoneNumber = cleanPhoneNumber(targetNumber);
   if (!isValidRwandaPhone(cleanedPhoneNumber)) {
     throw new Error(
       "Invalid mobile number. Please use format: 078XXXXXXX, 079XXXXXXX, 072XXXXXXX, or 073XXXXXXX"

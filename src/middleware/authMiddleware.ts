@@ -35,7 +35,9 @@ export const isAuthenticated = async (
 
     (req as any).user = user;
     next();
-  } catch (err) {
+  } catch (err: any) {
+    // Reason is logged server-side only (TokenExpiredError, JsonWebTokenError: invalid signature, DB errors…)
+    console.warn(`[auth] ${req.method} ${req.originalUrl} rejected: ${err?.name}: ${err?.message}`);
     return res.status(401).json({ message: "Invalid token" });
   }
 };

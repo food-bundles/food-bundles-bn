@@ -304,13 +304,14 @@ export const deleteProduct = async (req: Request, res: Response) => {
 // Get all products
 export const getAllProducts = async (req: Request, res: Response) => {
   try {
-    const { categoryId, search, page = 1, limit = 10 } = req.query;
+    const { categoryId, search, page = 1, limit = 10, includeOutOfStock } = req.query;
 
     const result = await getAllProductsService({
       categoryId: categoryId as string,
       search: search as string,
       page: parseInt(page as string),
       limit: parseInt(limit as string),
+      includeOutOfStock: includeOutOfStock === "true",
     });
 
     res.status(200).json({
@@ -421,9 +422,13 @@ export const approveSubmission = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error: any) {
-    res.status(500).json({
-      message: error.message || "Failed to approve submission",
-    });
+    const message = error.message || "Failed to approve submission";
+    const statusCode = message.includes("not found")
+      ? 404
+      : message.startsWith("Only ")
+      ? 400
+      : 500;
+    res.status(statusCode).json({ message });
   }
 };
 
