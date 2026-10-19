@@ -165,3 +165,16 @@ export const sendToRecipientsByCategoryService = async (
 
   return { recipientCount: recipients.length };
 };
+
+/**
+ * Convenience wrapper: notify all active PRIVATE_RECEIVER recipients.
+ */
+export const notifyPrivateReceiversService = async (message: {
+  subject: string;
+  body: string;
+}) => {
+  return sendToRecipientsByCategoryService(
+    NotificationCategory.PRIVATE_RECEIVER,
+    message
+  );
+};

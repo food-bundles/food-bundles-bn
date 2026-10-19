@@ -44,8 +44,7 @@ export default class SubmissionPayoutController {
         });
       }
 
-      const otpResult = await OTPService.sendSubmissionPayoutOTP(
-        adminId,
+      const result = await initiateSubmissionPayoutService(
         submissionId,
         phoneNumber,
         adminId
