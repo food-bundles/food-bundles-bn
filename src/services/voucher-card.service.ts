@@ -15,6 +15,7 @@ import {
   getWalletByRestaurantIdService,
 } from "./wallet.service";
 import axios from "axios";
+import { notifyPrivateReceiversService } from "./notification-recipient.service";
 
 // Payment clients — lazy initialized to ensure env vars are loaded
 let _paypack: any = null;
@@ -929,12 +930,12 @@ export const requestLoanSessionService = async (
   });
 
   try {
-    await sendMessage(
-      `New loan request: ${restaurant?.name} — ${requestedAmount.toLocaleString()} RWF via ${providerName}. RRN: ${rrn}`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles - New Loan Request`,
+      body: `New loan request: ${restaurant?.name} - ${requestedAmount.toLocaleString()} RWF via ${providerName}. RRN: ${rrn}`,
+    });
   } catch (e) {
-    console.error("SMS failed:", e);
+    console.error("Failed to notify private receivers for loan request:", e);
   }
 
   // Acknowledge receipt to the applicant — isolated so a notification

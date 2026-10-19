@@ -14,6 +14,7 @@ import {
 } from "../utils/emails";
 import { VoucherType } from "@prisma/client";
 import { wsManager } from "../index";
+import { notifyPrivateReceiversService } from "./notification-recipient.service";
 
 // Create trader transaction record
 export const createTraderTransactionService = async (data: {
@@ -578,12 +579,12 @@ async function sendLoanApprovalNotifications(
 
     // Send SMS notification to private receiver
     try {
-      await sendMessage(
-        `Loan approved by ${trader?.username || "Trader"}: ${approvedAmount} RWF for ${loan?.restaurant?.name || "Restaurant"}`,
-        process.env.PRIVATE_RECEIVER || "",
-      );
+      await notifyPrivateReceiversService({
+        subject: `FoodBundles — Loan Approved by ${trader?.username || "Trader"}`,
+        body: `Loan approved by ${trader?.username || "Trader"}: ${approvedAmount} RWF for ${loan?.restaurant?.name || "Restaurant"}`,
+      });
     } catch (smsError) {
-      console.error("Failed to send SMS notification:", smsError);
+      console.error("Failed to notify private receivers for loan approval:", smsError);
     }
   } catch (error) {
     console.error("Error sending loan approval notifications:", error);
@@ -1114,11 +1115,11 @@ const sendCommissionEarnedNotifications = async (
       trader?.phone || "",
     );
 
-    // SMS to admin/private receiver
-    await sendMessage(
-      `Trader ${trader?.username} earned commission of ${commissionAmount} RWF from voucher usage`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    // SMS + email to private receivers
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles — Commission Earned: ${trader?.username}`,
+      body: `Trader ${trader?.username} earned commission of ${commissionAmount} RWF from voucher usage`,
+    }).catch((err) => console.error("Failed to notify private receivers for commission:", err));
 
     // System notification
     await createNotificationService({
@@ -1212,10 +1213,14 @@ export const sendCommissionOTPService = async (
       },
     });
 
-    await sendMessage(
-      `Commission update OTP: ${otp}. Trader: ${wallet.trader?.username}. New rate: ${commission}%. Valid for 10 minutes.`,
-      privateReceiver,
-    );
+    const otpMessage = `Commission update OTP: ${otp}. Trader: ${wallet.trader?.username}. New rate: ${commission}%. Valid for 10 minutes.`;
+    // Send to env var phone (required for OTP verification lookup)
+    await sendMessage(otpMessage, privateReceiver);
+    // Also send to DB PRIVATE_RECEIVER recipients (SMS + email)
+    notifyPrivateReceiversService({
+      subject: `FoodBundles — Commission Update OTP`,
+      body: otpMessage,
+    }).catch((err) => console.error("Failed to notify DB private receivers for commission OTP:", err));
 
     const sessionData = {
       traderId,
@@ -1572,10 +1577,10 @@ export const requestDelegationService = async (traderId: string) => {
     targetId: traderId,
   });
 
-  await sendMessage(
-    `Delegation request submitted by trader ${wallet.trader?.username}. Awaiting admin approval.`,
-    process.env.PRIVATE_RECEIVER || "",
-  );
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles — Delegation Request: ${wallet.trader?.username}`,
+      body: `Delegation request submitted by trader ${wallet.trader?.username}. Awaiting admin approval.`,
+    }).catch((err) => console.error("Failed to notify private receivers for delegation request:", err));
 
   try {
     wsManager.broadcastDelegationUpdate({
@@ -1656,10 +1661,10 @@ export const approveDelegationService = async (
       );
     }
 
-    await sendMessage(
-      `Delegation approved for trader ${wallet.trader?.username} with ${commission}% commission.`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles — Delegation Approved: ${wallet.trader?.username}`,
+      body: `Delegation approved for trader ${wallet.trader?.username} with ${commission}% commission.`,
+    }).catch((err) => console.error("Failed to notify private receivers for delegation approval:", err));
 
     try {
       wsManager.broadcastDelegationUpdate({
@@ -1856,10 +1861,10 @@ export const verifyDelegationOTPService = async (
       );
     }
 
-    await sendMessage(
-      `Delegation approved for trader ${wallet.trader?.username} with ${delegationData.commission}% commission.`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles — Delegation Approved: ${wallet.trader?.username}`,
+      body: `Delegation approved for trader ${wallet.trader?.username} with ${delegationData.commission}% commission.`,
+    }).catch((err) => console.error("Failed to notify private receivers for delegation OTP verify:", err));
 
     return { success: true, message: "Delegation approved successfully" };
   } catch (error: any) {
@@ -2376,10 +2381,10 @@ export const requestWithdrawService = async (
     targetRole: "ADMIN",
   });
 
-  await sendMessage(
-    `Withdraw request: ${amount} RWF from ${withdrawType.toLowerCase()} by ${wallet.trader?.username}`,
-    process.env.PRIVATE_RECEIVER || "",
-  );
+  await notifyPrivateReceiversService({
+    subject: `FoodBundles — Withdraw Request: ${wallet.trader?.username}`,
+    body: `Withdraw request: ${amount} RWF from ${withdrawType.toLowerCase()} by ${wallet.trader?.username}`,
+  }).catch((err) => console.error("Failed to notify private receivers for withdraw request:", err));
 
   return withdrawRequest;
 };
@@ -2465,10 +2470,10 @@ export const adminApproveWithdrawService = async (
       );
     }
 
-    await sendMessage(
-      `Withdrawal approved for trader ${withdrawRequest.wallet.trader?.username}: ${amount} RWF.`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles — Withdrawal Approved: ${withdrawRequest.wallet.trader?.username}`,
+      body: `Withdrawal approved for trader ${withdrawRequest.wallet.trader?.username}: ${amount} RWF.`,
+    }).catch((err) => console.error("Failed to notify private receivers for withdrawal approval:", err));
 
     return {
       success: true,
@@ -2618,10 +2623,10 @@ export const verifyWithdrawOTPService = async (
       );
     }
 
-    await sendMessage(
-      `Withdraw approved for ${wallet.trader?.username}: ${amount} RWF by admin`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles — Withdraw Approved: ${wallet.trader?.username}`,
+      body: `Withdraw approved for ${wallet.trader?.username}: ${amount} RWF by admin`,
+    }).catch((err) => console.error("Failed to notify private receivers for withdraw OTP verify:", err));
 
     return { success: true, message: "Withdraw approved successfully" };
   } catch (error: any) {
@@ -2884,12 +2889,12 @@ export const cancelWithdrawRequestService = async (
   }
 
   try {
-    await sendMessage(
-      `Withdraw request cancelled: ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()} by ${wallet.trader?.username}`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles — Withdraw Cancelled: ${wallet.trader?.username}`,
+      body: `Withdraw request cancelled: ${amount} RWF from ${withdrawRequest.withdrawType?.toLowerCase()} by ${wallet.trader?.username}`,
+    });
   } catch (smsError) {
-    console.error("Failed to send admin withdraw-cancelled SMS:", smsError);
+    console.error("Failed to notify private receivers for withdraw cancellation:", smsError);
   }
 
   return { success: true, message: "Withdraw request cancelled successfully" };

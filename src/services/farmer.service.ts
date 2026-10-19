@@ -7,6 +7,7 @@ import { ProductSubmissionInput } from "../types/productTypes";
 import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
 import { sendAdminSubmissionCreatedEmail } from "../utils/emails";
+import { notifyPrivateReceiversService } from "./notification-recipient.service";
 
 // Interface for farmer feedback request
 export interface IFarmerFeedbackRequest {
@@ -180,14 +181,22 @@ export const submitFarmerFeedbackService = async (
     feedbackData.feedbackStatus === "EXTENDED" ||
     feedbackData.feedbackStatus === "ACCEPTED"
   ) {
-    try {
-      const recipientPhone =
-        updatedSubmission.aggregator?.phone || process.env.PRIVATE_RECEIVER || "";
-      if (recipientPhone) {
-        await sendMessage(notificationPayload.message, recipientPhone);
+    const aggregatorPhone = updatedSubmission.aggregator?.phone;
+    if (aggregatorPhone) {
+      // Aggregator is assigned — SMS only to them
+      try {
+        await sendMessage(notificationPayload.message, aggregatorPhone);
+      } catch (smsError) {
+        console.error("Failed to send feedback-received SMS:", smsError);
       }
-    } catch (smsError) {
-      console.error("Failed to send feedback-received SMS:", smsError);
+    } else {
+      // No aggregator — notify private receivers (env + DB, SMS + email)
+      notifyPrivateReceiversService({
+        subject: `FoodBundles — Farmer Feedback: ${feedbackData.feedbackStatus}`,
+        body: notificationPayload.message,
+      }).catch((err) =>
+        console.error("Failed to notify private receivers for farmer feedback:", err)
+      );
     }
   }
 
@@ -442,14 +451,20 @@ export const updateFarmerFeedbackService = async (
   }
 
   if (effectiveStatus === "REJECTED" || effectiveStatus === "EXTENDED" || effectiveStatus === "ACCEPTED") {
-    try {
-      const recipientPhone =
-        updatedSubmission.aggregator?.phone || process.env.PRIVATE_RECEIVER || "";
-      if (recipientPhone) {
-        await sendMessage(updateNotificationPayload.message, recipientPhone);
+    const aggregatorPhone = updatedSubmission.aggregator?.phone;
+    if (aggregatorPhone) {
+      try {
+        await sendMessage(updateNotificationPayload.message, aggregatorPhone);
+      } catch (smsError) {
+        console.error("Failed to send feedback-updated SMS:", smsError);
       }
-    } catch (smsError) {
-      console.error("Failed to send feedback-updated SMS:", smsError);
+    } else {
+      notifyPrivateReceiversService({
+        subject: `FoodBundles — Farmer Feedback Updated: ${effectiveStatus}`,
+        body: updateNotificationPayload.message,
+      }).catch((err) =>
+        console.error("Failed to notify private receivers for feedback update:", err)
+      );
     }
   }
 
@@ -585,12 +600,12 @@ export async function submitProductService(
   }
 
   try {
-    await sendMessage(
-      `New submission: ${farmer.name || farmer.phone || "A farmer"} submitted ${submissionData.submittedQty} of ${productData.productName} for review.`,
-      process.env.PRIVATE_RECEIVER || "",
-    );
+    await notifyPrivateReceiversService({
+      subject: "FoodBundles — New Farmer Submission",
+      body: `New submission: ${farmer.name || farmer.phone || "A farmer"} submitted ${submissionData.submittedQty} of ${productData.productName} for review.`,
+    });
   } catch (smsError) {
-    console.error("Failed to send admin submission-created SMS:", smsError);
+    console.error("Failed to notify private receivers for submission-created:", smsError);
   }
 
   try {
