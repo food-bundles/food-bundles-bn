@@ -11,6 +11,7 @@ import {
 } from "../types/userTypes";
 import { comparePassword, hashPassword } from "../utils/password";
 import { getUserByEmail, getUserByPhone } from "./userGets";
+import { phoneVariants } from "../utils/phone";
 import {
   sendEmail,
   sendPasswordResetTemplate,
@@ -1049,10 +1050,12 @@ export const loginService = async (loginData: ILoginData) => {
   let user: any = null;
   let foundUserType = "";
 
+  const phoneMatch = phone ? { phone: { in: phoneVariants(phone) } } : null;
+
   // Farmer login
   user = await prisma.farmer.findFirst({
     where: {
-      OR: [{ phone: phone || undefined }, { email: email || undefined }],
+      OR: [...(phoneMatch ? [phoneMatch] : []), ...(email ? [{ email }] : [])],
     },
   });
 
@@ -1063,9 +1066,9 @@ export const loginService = async (loginData: ILoginData) => {
     user = await prisma.restaurant.findFirst({
       where: {
         OR: [
-          { phone: phone || undefined },
-          { email: email || undefined },
-          { tin: tin || undefined },
+          ...(phoneMatch ? [phoneMatch] : []),
+          ...(email ? [{ email }] : []),
+          ...(tin ? [{ tin }] : []),
         ],
       },
     });

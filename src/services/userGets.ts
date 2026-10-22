@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import { phoneVariants } from "../utils/phone";
 
 export const getUserById = async (id: string) => {
   const farmer = await prisma.farmer.findUnique({
@@ -647,8 +648,8 @@ export const getUserByEmail = async (email: string) => {
 };
 
 export const getUserByPhone = async (phone: string) => {
-  const farmer = await prisma.farmer.findUnique({
-    where: { phone },
+  const farmer = await prisma.farmer.findFirst({
+    where: { phone: { in: phoneVariants(phone) } },
     include: {
       submissions: {
         include: {
