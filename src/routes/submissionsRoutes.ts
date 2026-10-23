@@ -25,7 +25,7 @@ submissionsRoutes.get(
 submissionsRoutes.get(
   "/awaiting-feedback",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow("farmer_submissions"),
   ProductVerifyController.getSubmissionsAwaitingFeedback
 );
 
@@ -62,7 +62,7 @@ submissionsRoutes.get(
 submissionsRoutes.patch(
   "/:submissionId/products/:productId/update-quantity",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.update_stock"),
   updateProductQuantityFromSubmission
 );
 
@@ -70,7 +70,7 @@ submissionsRoutes.patch(
 submissionsRoutes.post(
   "/:submissionId/create-product",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.create_product"),
   upload.array("images", 4),
   validateImages,
   createProductFromSubmission
@@ -80,7 +80,7 @@ submissionsRoutes.post(
 submissionsRoutes.patch(
   "/:submissionId/approve",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.approve"),
   approveSubmission
 );
 
@@ -88,7 +88,7 @@ submissionsRoutes.patch(
 submissionsRoutes.post(
   "/:submissionId/purchase",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow.to("farmer_submissions.verify"),
   ProductVerifyController.purchaseProduct
 );
 
@@ -96,7 +96,7 @@ submissionsRoutes.post(
 submissionsRoutes.put(
   "/:submissionId/clear",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow.to("farmer_submissions.edit"),
   ProductVerifyController.clearSubmission
 );
 
@@ -104,7 +104,7 @@ submissionsRoutes.put(
 submissionsRoutes.patch(
   "/:submissionId/reject",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.reject"),
   SubmissionPayoutController.reject
 );
 
@@ -120,7 +120,7 @@ submissionsRoutes.delete(
 submissionsRoutes.patch(
   "/:submissionId/force-complete",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.force_complete"),
   SubmissionPayoutController.forceComplete
 );
 
@@ -128,7 +128,7 @@ submissionsRoutes.patch(
 submissionsRoutes.patch(
   "/:submissionId/reverse-status",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.reverse_status"),
   SubmissionPayoutController.reverseStatus
 );
 
@@ -136,7 +136,7 @@ submissionsRoutes.patch(
 submissionsRoutes.get(
   "/:submissionId/status-history",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow("farmer_submissions"),
   SubmissionPayoutController.getStatusHistory
 );
 
@@ -144,7 +144,7 @@ submissionsRoutes.get(
 submissionsRoutes.post(
   "/:submissionId/payout",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow.to("farmer_submissions.request_payout"),
   SubmissionPayoutController.initiatePayout
 );
 
@@ -152,7 +152,7 @@ submissionsRoutes.post(
 submissionsRoutes.patch(
   "/:submissionId/payout/:payoutId/confirm",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.confirm_payout"),
   SubmissionPayoutController.confirmPayout
 );
 
@@ -160,7 +160,7 @@ submissionsRoutes.patch(
 submissionsRoutes.get(
   "/:submissionId/payouts",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow("farmer_submissions"),
   SubmissionPayoutController.getPayouts
 );
 

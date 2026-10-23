@@ -115,7 +115,7 @@ walletRoutes.get(
 walletRoutes.post(
   "/transfers",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("deposits.transfer"),
   transferToWallet
 );
 
@@ -224,7 +224,7 @@ walletRoutes.get(
 walletRoutes.patch(
   "/:walletId",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("deposits.edit_wallet"),
   updateWalletStatus
 );
 
@@ -236,7 +236,7 @@ walletRoutes.patch(
 walletRoutes.post(
   "/admin-deposit",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("deposits.admin_deposit"),
   adminDepositToWallet
 );
 
@@ -248,7 +248,7 @@ walletRoutes.post(
 walletRoutes.post(
   "/admin-deposit/request-otp",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("deposits.admin_deposit"),
   requestAdminDepositOTP
 );
 
@@ -260,7 +260,7 @@ walletRoutes.post(
 walletRoutes.post(
   "/admin-deposit/verify-otp",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("deposits.admin_deposit"),
   verifyAdminDepositOTP
 );
 
@@ -272,7 +272,7 @@ walletRoutes.post(
 walletRoutes.post(
   "/:walletId/adjust",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("deposits.adjust_wallet"),
   adjustWalletBalance
 );
 
@@ -284,7 +284,7 @@ walletRoutes.post(
 walletRoutes.post(
   "/:walletId/adjust/request-otp",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("deposits.adjust_wallet"),
   requestWalletAdjustmentOTP
 );
 
@@ -296,7 +296,7 @@ walletRoutes.post(
 walletRoutes.post(
   "/:walletId/adjust/verify-otp",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("deposits.adjust_wallet"),
   verifyWalletAdjustmentOTP
 );
 

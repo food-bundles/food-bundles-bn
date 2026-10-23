@@ -207,6 +207,7 @@ export const getAllFarmersService = async (query: IPaginationQuery) => {
   );
 
   const options = {
+    where: { deletedAt: null }, // trashed farmers are listed in the trash only
     select: {
       id: true,
       location: true,
@@ -572,15 +573,17 @@ export const getAllRestaurantsService = async (
 
   const term = search?.trim();
   const options = {
+    // Trashed restaurants are listed in the trash only
     where: term
       ? {
+          deletedAt: null,
           OR: [
             { name: { contains: term, mode: "insensitive" } },
             { email: { contains: term, mode: "insensitive" } },
             { phone: { contains: term } },
           ],
         }
-      : undefined,
+      : { deletedAt: null },
     select: {
       id: true,
       name: true,
@@ -892,6 +895,7 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
   );
 
   const options = {
+    where: { deletedAt: null }, // trashed users are listed in the trash only
     select: {
       id: true,
       username: true,
@@ -1107,6 +1111,9 @@ export const loginService = async (loginData: ILoginData) => {
 
   if (!user) throw new Error("User not found");
 
+  // Accounts in the trash can't sign in (a super admin can restore them)
+  if (user.deletedAt) throw new Error("This account has been deleted. Please contact Food Bundles support.");
+
   if (!user.password) throw new Error("Password not set for this user");
 
   const isPasswordValid = await comparePassword(password, user.password);
@@ -1191,6 +1198,9 @@ export const googleLoginService = async (googleUser: {
       message: "No account found. Please complete registration.",
     };
   }
+
+  // Accounts in the trash can't sign in (a super admin can restore them)
+  if (user.deletedAt) throw new Error("This account has been deleted. Please contact Food Bundles support.");
 
   const { password: _, ...userWithoutPassword } = user;
 

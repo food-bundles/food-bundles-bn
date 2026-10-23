@@ -43,7 +43,7 @@ deliverySettingsRoutes.put(
 deliverySettingsRoutes.delete(
   "/",
   isAuthenticated,
-  allow("delivery_settings"),
+  allow.to("delivery_settings.reset"),
   async (_req: Request, res: Response) => {
     try {
       const data = await resetDeliverySettings();

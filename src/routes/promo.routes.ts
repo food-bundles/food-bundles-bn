@@ -43,13 +43,13 @@ router.delete(
 router.post(
   "/:id/exclude",
   isAuthenticated,
-  allow("promo_codes"),
+  allow.to("promo_codes.manage_restaurants"),
   excludeRestaurant
 );
 router.delete(
   "/:id/exclude/:restaurantId",
   isAuthenticated,
-  allow("promo_codes"),
+  allow.to("promo_codes.manage_restaurants"),
   removeRestaurantExclusion
 );
 
@@ -57,13 +57,13 @@ router.delete(
 router.post(
   "/:id/include",
   isAuthenticated,
-  allow("promo_codes"),
+  allow.to("promo_codes.manage_restaurants"),
   includeRestaurant
 );
 router.delete(
   "/:id/include/:restaurantId",
   isAuthenticated,
-  allow("promo_codes"),
+  allow.to("promo_codes.manage_restaurants"),
   removeRestaurantInclusion
 );
 

@@ -70,7 +70,7 @@ checkoutRoutes.post(
 checkoutRoutes.get(
   "/admin-order/loan-sessions/:restaurantId",
   isAuthenticated,
-  allow("orders", "LOGISTICS"),
+  allow.to("orders.create"),
   getAdminOrderLoanSessions
 );
 
@@ -82,7 +82,7 @@ checkoutRoutes.get(
 checkoutRoutes.post(
   "/admin-order/request-otp",
   isAuthenticated,
-  allow("orders", "LOGISTICS"),
+  allow.to("orders.create"),
   requestAdminOrderOTP
 );
 
@@ -94,7 +94,7 @@ checkoutRoutes.post(
 checkoutRoutes.post(
   "/admin-order",
   isAuthenticated,
-  allow("orders", "LOGISTICS"),
+  allow.to("orders.create"),
   createAdminOrder
 );
 

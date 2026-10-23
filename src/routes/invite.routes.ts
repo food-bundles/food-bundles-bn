@@ -38,7 +38,7 @@ inviteRoutes.post("/accept", inviteController.acceptInvite);
 inviteRoutes.post(
   "/:id/resend",
   isAuthenticated,
-  allow("invitations"),
+  allow.to("invitations.resend"),
   inviteController.resendInvite
 );
 

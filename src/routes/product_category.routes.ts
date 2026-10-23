@@ -19,7 +19,7 @@ productCategoryRoutes.get("/active", getActiveProductCategories);
 productCategoryRoutes.patch(
   "/bulk-status",
   isAuthenticated,
-  allow(["categories", "markets"]),
+  allow.to(["categories.change_status", "markets.edit"]),
   updateCategoryStatus
 );
 
@@ -35,7 +35,7 @@ productCategoryRoutes.post(
 productCategoryRoutes.get(
   "/",
   isAuthenticated,
-  allow(["categories", "markets", "products"], "AGGREGATOR", "LOGISTICS"),
+  allow(["categories", "markets", "products"]),
   getAllProductCategories
 );
 

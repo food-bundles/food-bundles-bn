@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { UserController } from "../controllers/userController";
 import { Role } from "@prisma/client";
-import { isAuthenticated, allow } from "../middleware/authMiddleware";
+import { isAuthenticated, allow, superAdminOnly } from "../middleware/authMiddleware";
 
 const restaurantsRoutes = Router();
 
@@ -12,7 +12,8 @@ restaurantsRoutes.post("/resend-otp", UserController.resendOTP);
 restaurantsRoutes.post("/accept", UserController.acceptTerms);
 restaurantsRoutes.get("/", UserController.getAllRestaurants);
 restaurantsRoutes.get("/:id", UserController.getRestaurantById);
-restaurantsRoutes.put("/:id", UserController.updateRestaurant);
-restaurantsRoutes.delete("/:id", UserController.deleteRestaurant);
+// Edit: the restaurant itself or restaurants.edit; delete (to trash): super admin
+restaurantsRoutes.put("/:id", isAuthenticated, UserController.updateRestaurant);
+restaurantsRoutes.delete("/:id", isAuthenticated, superAdminOnly, UserController.deleteRestaurant);
 
 export default restaurantsRoutes;
