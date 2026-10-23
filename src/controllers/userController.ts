@@ -781,6 +781,10 @@ export class UserController {
       if (hasDashboardAccess(user.role)) {
         userWithoutPassword.permissions = await getEffectivePermissions(user);
       }
+      // The dashboard reads the role as "adminRole" (the relation is named AdminRole)
+      if (userRole === "admin") {
+        userWithoutPassword.adminRole = user.AdminRole ?? null;
+      }
 
       return res.json({
         success: true,

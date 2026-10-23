@@ -909,7 +909,7 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
       cell: true,
       village: true,
       createdAt: true,
-      adminRole: { select: { id: true, name: true } },
+      AdminRole: { select: { id: true, name: true } }, // relation is named AdminRole in the schema
     },
     orderBy: {
       createdAt: "desc",
@@ -922,8 +922,9 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
     options,
   );
 
+  // The dashboard reads the role as "adminRole"
   return {
-    admins: result.data,
+    admins: result.data.map(({ AdminRole, ...admin }: any) => ({ ...admin, adminRole: AdminRole ?? null })),
     pagination: result.pagination,
   };
 };
