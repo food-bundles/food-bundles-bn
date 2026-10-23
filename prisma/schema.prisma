@@ -158,6 +158,18 @@ model FarmerSubmission {
   updatedAt            DateTime                  @updatedAt
   deliveryDate         DateTime?
   pickupPoint          String?
+  /// GPS pin the farmer dropped on the map (optional; used to find the nearest market)
+  latitude             Float?
+  longitude            Float?
+  /// Food Bundles buying price (product purchase price) when the price was decided
+  foodBundlesPrice     Float?
+  /// Price per unit Food Bundles offered when the farmer asked more (waits for the farmer)
+  counterOfferPrice    Float?
+  /// Price per unit both sides agreed at approval (verification starts from it)
+  agreedPrice          Float?
+  negotiatedAt         DateTime?
+  rejectedAt           DateTime?
+  rejectionReason      String?
   aggregator           Admin?                    @relation("Aggregator", fields: [aggregatorId], references: [id])
   approvedProduct      Product?                  @relation(fields: [approvedProductId], references: [id])
   category             ProductCategory?          @relation(fields: [categoryId], references: [id])
@@ -1553,6 +1565,8 @@ model SubmissionPayout {
   amount        Float
   phoneNumber   String
   initiatedBy   String
+  /// MOMO (PayPack cashout) or CASH (paid by hand at the market)
+  method        String           @default("MOMO")
   status        String           @default("PENDING")
   paypackRef    String?
   paypackStatus String?
@@ -1651,11 +1665,17 @@ enum Role {
   STAFF
 }
 
+/// Farmer submission flow, one stage at a time:
+/// PENDING (submitted) → APPROVED (price agreed) → VERIFIED (weighed face to face) → PAID.
+/// NEGOTIATING = Food Bundles sent a counter offer and waits for the farmer.
+/// REJECTED = closed without a purchase.
 enum SubmissionStatus {
   PENDING
   VERIFIED
   APPROVED
   PAID
+  NEGOTIATING
+  REJECTED
 }
 
 enum FarmerFeedbackStatus {

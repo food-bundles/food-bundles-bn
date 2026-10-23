@@ -1,4 +1,5 @@
 import { FarmerFeedbackStatus, SubmissionStatus } from "@prisma/client";
+import { answerCounterOffer } from "./submission-flow.service";
 import { IPaginationOptions } from "../types/productVerifyTypes";
 import { PaginationService } from "./paginationService";
 import prisma from "../prisma";
@@ -18,189 +19,32 @@ export interface IFarmerFeedbackRequest {
 }
 
 // Service to handle farmer feedback on verified submissions
+/**
+ * The farmer answers Food Bundles' counter offer (submission NEGOTIATING):
+ * ACCEPTED → approved at the offer, REJECTED → declined, EXTENDED → their new
+ * price goes back for review. See submission-flow.service.ts.
+ */
 export const submitFarmerFeedbackService = async (
   submissionId: string,
   farmerId: string,
   feedbackData: IFarmerFeedbackRequest
 ) => {
-  const existingSubmission = await prisma.farmerSubmission.findUnique({
-    where: { id: submissionId },
-    include: {
-      farmer: {
-        select: {
-          id: true,
-          phone: true,
-        },
-      },
-      aggregator: {
-        select: {
-          id: true,
-          phone: true,
-          username: true,
-        },
-      },
-    },
-  });
-
-  if (!existingSubmission) {
-    throw new Error("Submission not found");
-  }
-
-  // Verify farmer owns this submission
-  if (existingSubmission.farmerId !== farmerId) {
-    throw new Error("You can only provide feedback on your own submissions");
-  }
-
-  // Check if submission is verified (ready for farmer feedback)
-  if (existingSubmission.status !== "VERIFIED") {
-    throw new Error("Can only provide feedback on VERIFIED submissions");
-  }
-
-  // Check if feedback deadline has passed (if set)
-  if (
-    existingSubmission.feedbackDeadline &&
-    new Date() > existingSubmission.feedbackDeadline
-  ) {
-    throw new Error("Feedback deadline has passed");
-  }
-
-  // Check if farmer has already provided feedback
-  if (
-    existingSubmission.farmerFeedbackStatus &&
-    existingSubmission.farmerFeedbackStatus !== "PENDING"
-  ) {
-    throw new Error("Feedback has already been submitted for this purchase");
-  }
-
-  // Validate counter offers if provided
-  if (feedbackData.feedbackStatus === "EXTENDED") {
-    if (feedbackData.counterOffer && feedbackData.counterOffer <= 0) {
-      throw new Error("Counter offer price must be positive");
-    }
-    if (
-      feedbackData.counterQty &&
-      (feedbackData.counterQty <= 0 ||
-        feedbackData.counterQty > existingSubmission.submittedQty!)
-    ) {
-      throw new Error(
-        "Counter offer quantity must be positive and not exceed submitted quantity"
-      );
-    }
-  }
-
-  const updatedSubmission = await prisma.farmerSubmission.update({
-    where: { id: submissionId },
-    data: {
-      farmerFeedbackStatus: feedbackData.feedbackStatus,
-      farmerFeedbackAt: new Date(),
-      farmerFeedbackNotes:
-        feedbackData.feedbackStatus === "ACCEPTED" ? null : feedbackData.notes,
-      farmerCounterOffer:
-        feedbackData.feedbackStatus === "ACCEPTED"
-          ? existingSubmission.acceptedPrice
-          : feedbackData.counterOffer,
-      farmerCounterQty:
-        feedbackData.feedbackStatus === "ACCEPTED"
-          ? existingSubmission.acceptedQty
-          : feedbackData.counterQty,
-      approvedAt:
-        feedbackData.feedbackStatus === "ACCEPTED" ? new Date() : null,
-    },
-    include: {
-      farmer: {
-        select: {
-          id: true,
-          phone: true,
-        },
-      },
-      aggregator: {
-        select: {
-          id: true,
-          phone: true,
-          username: true,
-        },
-      },
-    },
-  });
-
-  // Notify the assigned aggregator about the farmer's feedback, or ADMIN role-wide if unassigned
-  const feedbackTitle: Record<typeof feedbackData.feedbackStatus, string> = {
-    PENDING: "Farmer Feedback Received",
-    ACCEPTED: "Farmer Accepted Offer",
-    REJECTED: "Farmer Rejected Offer",
-    EXTENDED: "Farmer Requested Negotiation",
-  };
-
-  const feedbackMessage: Record<typeof feedbackData.feedbackStatus, string> = {
-    PENDING: `${existingSubmission.productName}: feedback pending.`,
-    ACCEPTED: `Farmer accepted the offer on ${existingSubmission.productName} — Qty: ${existingSubmission.acceptedQty}, Price: ${existingSubmission.acceptedPrice} RWF. Ready for approval.`,
-    REJECTED: `Farmer rejected the offer on ${existingSubmission.productName}.${
-      feedbackData.notes ? ` Reason: ${feedbackData.notes}` : ""
-    }`,
-    EXTENDED: `Farmer proposed a counter-offer on ${existingSubmission.productName}${
-      feedbackData.counterOffer ? ` — Price: ${feedbackData.counterOffer} RWF` : ""
-    }${feedbackData.counterQty ? `, Qty: ${feedbackData.counterQty}` : ""}.${
-      feedbackData.notes ? ` Notes: ${feedbackData.notes}` : ""
-    }`,
-  };
-
-  const notificationPayload = {
-    title: feedbackTitle[feedbackData.feedbackStatus],
-    message: feedbackMessage[feedbackData.feedbackStatus],
-    eventType: "SUBMISSION_FEEDBACK_RECEIVED",
-    metadata: {
-      submissionId: updatedSubmission.id,
-      productName: existingSubmission.productName,
-      feedbackStatus: feedbackData.feedbackStatus,
-      farmerId: existingSubmission.farmerId,
-    },
-  };
-
-  try {
-    if (existingSubmission.aggregatorId) {
-      await createNotificationService({
-        ...notificationPayload,
-        targetType: "SPECIFIC_USER",
-        targetId: existingSubmission.aggregatorId,
-      });
-    } else {
-      await createNotificationService({
-        ...notificationPayload,
-        targetType: "ROLE_BASED",
-        targetRole: "ADMIN",
-      });
-    }
-  } catch (notifError) {
-    console.error("Failed to create feedback-received notification:", notifError);
-  }
-
-  // SMS for the time-sensitive outcomes — a rejection or counter-offer needs
-  // prompt admin/aggregator attention, unlike a routine PENDING placeholder.
-  if (
-    feedbackData.feedbackStatus === "REJECTED" ||
-    feedbackData.feedbackStatus === "EXTENDED" ||
+  const decision =
     feedbackData.feedbackStatus === "ACCEPTED"
-  ) {
-    const aggregatorPhone = updatedSubmission.aggregator?.phone;
-    if (aggregatorPhone) {
-      // Aggregator is assigned — SMS only to them
-      try {
-        await sendMessage(notificationPayload.message, aggregatorPhone);
-      } catch (smsError) {
-        console.error("Failed to send feedback-received SMS:", smsError);
-      }
-    } else {
-      // No aggregator — notify private receivers (env + DB, SMS + email)
-      notifyPrivateReceiversService({
-        subject: `FoodBundles — Farmer Feedback: ${feedbackData.feedbackStatus}`,
-        body: notificationPayload.message,
-      }).catch((err) =>
-        console.error("Failed to notify private receivers for farmer feedback:", err)
-      );
-    }
+      ? "ACCEPT"
+      : feedbackData.feedbackStatus === "REJECTED"
+        ? "DECLINE"
+        : feedbackData.feedbackStatus === "EXTENDED"
+          ? "COUNTER"
+          : null;
+  if (!decision) {
+    throw new Error("Choose accept, decline, or propose your own price");
   }
-
-  return updatedSubmission;
+  return answerCounterOffer(submissionId, farmerId, {
+    decision,
+    counterPrice: feedbackData.counterOffer,
+    notes: feedbackData.notes,
+  });
 };
 
 // Service to get pending feedback submissions for farmer
@@ -224,7 +68,8 @@ export const getPendingFeedbackSubmissionsService = async (
 
   const whereCondition = {
     farmerId,
-    status: SubmissionStatus.VERIFIED,
+    // Counter offers waiting for the farmer's answer
+    status: SubmissionStatus.NEGOTIATING,
     farmerFeedbackStatus: FarmerFeedbackStatus.PENDING,
     // Only show submissions that haven't passed deadline
     OR: [{ feedbackDeadline: null }, { feedbackDeadline: { gt: new Date() } }],
@@ -557,6 +402,8 @@ export async function submitProductService(
       wishedPrice: submissionData.wishedPrice,
       deliveryDate: submissionData.deliveryDate,
       pickupPoint: submissionData.pickupPoint,
+      latitude: submissionData.latitude,
+      longitude: submissionData.longitude,
       status: "PENDING",
       location: submissionData.location || farmer.location,
       province: submissionData.province || farmer.province,

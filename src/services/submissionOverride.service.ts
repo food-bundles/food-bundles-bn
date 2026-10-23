@@ -99,7 +99,8 @@ export const forceCompleteSubmissionService = async (
   return updatedSubmission;
 };
 
-const VALID_STATUSES = ["PENDING", "VERIFIED", "APPROVED", "PAID"] as const;
+// Flow order: PENDING → APPROVED → VERIFIED → PAID (plus NEGOTIATING / REJECTED)
+const VALID_STATUSES = ["PENDING", "NEGOTIATING", "APPROVED", "VERIFIED", "PAID", "REJECTED"] as const;
 type SubmissionStatusValue = (typeof VALID_STATUSES)[number];
 
 /**
@@ -139,20 +140,30 @@ export const reverseSubmissionStatusService = async (
   // Null out fields inconsistent with the target status, preserving what's
   // still valid (e.g. reversing APPROVED -> VERIFIED keeps acceptedQty/Price
   // but clears the approval-specific fields).
-  if (toStatus === "PENDING") {
+  // Moving back clears what the later stages recorded (new order:
+  // PENDING → APPROVED → VERIFIED → PAID)
+  if (toStatus === "PENDING" || toStatus === "NEGOTIATING") {
     data.acceptedQty = null;
     data.acceptedPrice = null;
     data.totalAmount = null;
     data.aggregatorId = null;
     data.verifiedAt = null;
     data.approvedAt = null;
+    data.agreedPrice = null;
     data.approvedProductId = null;
     data.paidAt = null;
-  } else if (toStatus === "VERIFIED") {
-    data.approvedAt = null;
-    data.approvedProductId = null;
-    data.paidAt = null;
+    data.rejectedAt = null;
+    data.rejectionReason = null;
+    if (toStatus === "PENDING") data.counterOfferPrice = null;
   } else if (toStatus === "APPROVED") {
+    data.acceptedQty = null;
+    data.acceptedPrice = null;
+    data.totalAmount = null;
+    data.verifiedAt = null;
+    data.paidAt = null;
+    data.rejectedAt = null;
+    data.rejectionReason = null;
+  } else if (toStatus === "VERIFIED") {
     data.paidAt = null;
   }
 

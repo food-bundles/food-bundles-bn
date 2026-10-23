@@ -70,8 +70,9 @@ export const initiateSubmissionPayoutService = async (
     throw new Error("Submission not found");
   }
 
-  if (submission.status !== "APPROVED") {
-    throw new Error("Only APPROVED submissions can be paid out");
+  // Pay is the last stage: only verified (weighed) submissions
+  if (submission.status !== "VERIFIED") {
+    throw new Error("Only verified submissions can be paid");
   }
 
   if (!submission.totalAmount || submission.totalAmount <= 0) {

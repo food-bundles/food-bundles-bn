@@ -278,7 +278,15 @@ export const submitProductController = catchAsyncError(
       sector,
       cell,
       village,
+      latitude,
+      longitude,
     } = req.body;
+
+    // Optional GPS pin: keep it only when both values are real coordinates
+    const lat = latitude !== undefined && latitude !== null ? Number(latitude) : NaN;
+    const lng = longitude !== undefined && longitude !== null ? Number(longitude) : NaN;
+    const hasPin =
+      Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 
     // Validate required fields
     if (!quantity || !wishedPrice) {
@@ -365,6 +373,7 @@ export const submitProductController = catchAsyncError(
       sector,
       cell,
       village,
+      ...(hasPin ? { latitude: lat, longitude: lng } : {}),
     };
 
     const result = await submitProductService(submissionData);

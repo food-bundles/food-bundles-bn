@@ -10,6 +10,13 @@ import {
 } from "../controllers/productController";
 import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 import { upload, validateImages } from "../utils/imageUpload";
+import {
+  approveOrCounterSubmission,
+  getSubmissionPrice,
+  paySubmissionInCash,
+  rejectSubmissionController,
+  verifySubmissionController,
+} from "../controllers/submission-flow.controller";
 
 const submissionsRoutes = Router();
 
@@ -81,7 +88,23 @@ submissionsRoutes.patch(
   "/:submissionId/approve",
   isAuthenticated,
   allow.to("farmer_submissions.approve"),
-  approveSubmission
+  approveOrCounterSubmission
+);
+
+// Stage 2 prices: what the farmer asks and the Food Bundles price
+submissionsRoutes.get(
+  "/:submissionId/price",
+  isAuthenticated,
+  allow("farmer_submissions"),
+  getSubmissionPrice
+);
+
+// Stage 4 (cash): the farmer was paid by hand at the market
+submissionsRoutes.post(
+  "/:submissionId/pay-cash",
+  isAuthenticated,
+  allow.to("farmer_submissions.request_payout"),
+  paySubmissionInCash
 );
 
 // Purchase product from submission
@@ -89,7 +112,7 @@ submissionsRoutes.post(
   "/:submissionId/purchase",
   isAuthenticated,
   allow.to("farmer_submissions.verify"),
-  ProductVerifyController.purchaseProduct
+  verifySubmissionController
 );
 
 // Clear submission
@@ -105,7 +128,7 @@ submissionsRoutes.patch(
   "/:submissionId/reject",
   isAuthenticated,
   allow.to("farmer_submissions.reject"),
-  SubmissionPayoutController.reject
+  rejectSubmissionController
 );
 
 // Delete a submission (pre-approval only)
