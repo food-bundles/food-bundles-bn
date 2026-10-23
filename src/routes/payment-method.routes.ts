@@ -19,7 +19,7 @@ paymentMethodRoutes.get("/active", getActivePaymentMethods);
 paymentMethodRoutes.patch(
   "/bulk-status",
   isAuthenticated,
-  allow("payment_methods"),
+  allow.to("payment_methods.change_status"),
   updateMethodStatus
 );
 
@@ -35,7 +35,7 @@ paymentMethodRoutes.post(
 paymentMethodRoutes.get(
   "/",
   isAuthenticated,
-  allow(["payment_methods", "orders"], "AGGREGATOR", "LOGISTICS"),
+  allow(["payment_methods", "orders"]),
   getAllPaymentMethods
 );
 

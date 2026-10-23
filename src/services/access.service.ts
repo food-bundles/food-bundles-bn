@@ -2,17 +2,26 @@ import prisma from "../prisma";
 import { Role } from "@prisma/client";
 import {
   ALL_PERMISSIONS,
+  FIELD_ROLES,
   normalizePermissions,
   Permission,
   SYSTEM_ROLES,
+  userRoleForAdminRole,
 } from "../config/permissions";
+
+const isFieldRole = (role?: string | null) =>
+  !!role && (FIELD_ROLES as readonly string[]).includes(role);
+
+// System role whose account role (Role enum) is this one, if any
+const systemRoleFor = (role: string) =>
+  Object.values(SYSTEM_ROLES).find((r) => r.userRole === role);
 
 /**
  * Effective dashboard permissions for a user.
  * - SUPERUSER: everything (and only they manage roles)
  * - admin with an AdminRole: that role's permissions
- * - legacy fallbacks keep today's behaviour until the backfill has run:
- *   ADMIN → everything, MARKET_PRICES → market prices only
+ * - fallbacks until the startup backfill has run: ADMIN → everything; MARKET_PRICES,
+ *   AGGREGATOR, LOGISTICS → their system role's default permissions
  * - everyone else (restaurants, farmers, traders, logistics…): none
  */
 export const getEffectivePermissions = async (user: {
@@ -31,19 +40,23 @@ export const getEffectivePermissions = async (user: {
   }
 
   if (user.role === "ADMIN") return ALL_PERMISSIONS;
-  if (user.role === "MARKET_PRICES") return SYSTEM_ROLES.MARKET_PRICES_MANAGER.permissions;
-  return [];
+  const fallback = systemRoleFor(user.role);
+  return fallback ? [...fallback.permissions] : [];
 };
 
 /**
  * Validate the role an actor wants to give a new/updated admin account and
  * return what to store. Blocks privilege escalation:
  * - only SUPERUSER can create SUPERUSERs or assign dynamic roles
- * - a dynamic role maps to enum role ADMIN (Administrator) or STAFF (others)
+ * - a system role maps to its account role (Administrator → ADMIN, Aggregator →
+ *   AGGREGATOR…); a custom role keeps a field user's role (an aggregator stays an
+ *   aggregator, so they still only see their own submissions), otherwise STAFF
+ * - picking a plain account role (e.g. AGGREGATOR) attaches its system role
  */
 export const resolveRoleAssignment = async (
   actor: { role?: string | null } | undefined,
   input: { role?: string | null; adminRoleId?: string | null },
+  currentRole?: string | null,
 ): Promise<{ role: Role; adminRoleId: string | null }> => {
   const actorIsSuper = actor?.role === "SUPERUSER";
 
@@ -55,10 +68,10 @@ export const resolveRoleAssignment = async (
       where: { id: input.adminRoleId },
     });
     if (!adminRole) throw new AccessError("Selected role does not exist", 400);
-    return {
-      role: adminRole.name === SYSTEM_ROLES.ADMINISTRATOR.name ? Role.ADMIN : Role.STAFF,
-      adminRoleId: adminRole.id,
-    };
+    const mapped = userRoleForAdminRole(adminRole.name);
+    const role =
+      mapped === "STAFF" && isFieldRole(currentRole) ? (currentRole as Role) : (mapped as Role);
+    return { role, adminRoleId: adminRole.id };
   }
 
   const role = input.role as Role;
@@ -70,6 +83,14 @@ export const resolveRoleAssignment = async (
   }
   if (role === Role.STAFF) {
     throw new AccessError("Choose a dashboard role for staff users", 400);
+  }
+  const system = systemRoleFor(role);
+  if (system) {
+    const adminRole = await prisma.adminRole.findUnique({
+      where: { name: system.name },
+      select: { id: true },
+    });
+    if (adminRole) return { role, adminRoleId: adminRole.id };
   }
   return { role, adminRoleId: null };
 };
@@ -86,49 +107,50 @@ export class AccessError extends Error {
 /**
  * Idempotent startup sync (safe on every boot, never deletes data):
  * 1. "Administrator" exists and always has every permission in the catalog
- * 2. "Market Prices Manager" exists (created with defaults once; editable after)
- * 3. Existing ADMIN / MARKET_PRICES users without a role get the matching one
+ * 2. The other system roles exist (created with defaults once; editable after)
+ * 3. Users without a role get the system role matching their account role
+ * 4. Saved roles are rewritten to current permission keys (legacy
+ *    "<module>.manage" becomes every action of that module — same access)
  */
 export const ensureSystemRoles = async () => {
   try {
-    const administrator = await prisma.adminRole.upsert({
-      where: { name: SYSTEM_ROLES.ADMINISTRATOR.name },
-      update: { permissions: ALL_PERMISSIONS, isSystem: true },
-      create: {
-        name: SYSTEM_ROLES.ADMINISTRATOR.name,
-        description: SYSTEM_ROLES.ADMINISTRATOR.description,
-        permissions: ALL_PERMISSIONS,
-        isSystem: true,
-      },
-    });
+    for (const system of Object.values(SYSTEM_ROLES)) {
+      const isAdministrator = system.name === SYSTEM_ROLES.ADMINISTRATOR.name;
+      const adminRole = await prisma.adminRole.upsert({
+        where: { name: system.name },
+        update: isAdministrator
+          ? { permissions: ALL_PERMISSIONS, isSystem: true }
+          : { isSystem: true },
+        create: {
+          name: system.name,
+          description: system.description,
+          permissions: [...system.permissions],
+          isSystem: true,
+        },
+      });
 
-    const marketManager = await prisma.adminRole.upsert({
-      where: { name: SYSTEM_ROLES.MARKET_PRICES_MANAGER.name },
-      update: { isSystem: true },
-      create: {
-        name: SYSTEM_ROLES.MARKET_PRICES_MANAGER.name,
-        description: SYSTEM_ROLES.MARKET_PRICES_MANAGER.description,
-        permissions: SYSTEM_ROLES.MARKET_PRICES_MANAGER.permissions,
-        isSystem: true,
-      },
-    });
-
-    const [admins, marketUsers] = await Promise.all([
-      prisma.admin.updateMany({
-        where: { role: "ADMIN", adminRoleId: null },
-        data: { adminRoleId: administrator.id },
-      }),
-      prisma.admin.updateMany({
-        where: { role: "MARKET_PRICES", adminRoleId: null },
-        data: { adminRoleId: marketManager.id },
-      }),
-    ]);
-
-    if (admins.count || marketUsers.count) {
-      console.log(
-        `[roles] Assigned Administrator to ${admins.count} and Market Prices Manager to ${marketUsers.count} existing user(s)`,
-      );
+      const assigned = await prisma.admin.updateMany({
+        where: { role: system.userRole as Role, adminRoleId: null },
+        data: { adminRoleId: adminRole.id },
+      });
+      if (assigned.count) {
+        console.log(`[roles] Assigned "${system.name}" to ${assigned.count} existing user(s)`);
+      }
     }
+
+    const roles = await prisma.adminRole.findMany({ select: { id: true, name: true, permissions: true } });
+    let migrated = 0;
+    for (const role of roles) {
+      const normalized = normalizePermissions(role.permissions);
+      const same =
+        normalized.length === role.permissions.length &&
+        normalized.every((p, i) => p === role.permissions[i]);
+      if (!same) {
+        await prisma.adminRole.update({ where: { id: role.id }, data: { permissions: normalized } });
+        migrated++;
+      }
+    }
+    if (migrated) console.log(`[roles] Updated ${migrated} role(s) to the current permission keys`);
   } catch (error: any) {
     console.warn("[roles] Warning: Could not sync system roles at startup:", error?.message || error);
   }

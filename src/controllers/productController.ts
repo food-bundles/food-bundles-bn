@@ -16,7 +16,7 @@ import prisma from "../prisma";
 import cloudinary from "../utils/cloudinary.utility";
 import { wsManager } from "../index";
 
-import { isDashboardRole } from "../config/permissions";
+import { hasDashboardAccess, isDashboardRole } from "../config/permissions";
 export const createProduct = async (req: Request, res: Response) => {
   try {
     const {
@@ -103,7 +103,7 @@ export const updateProductQuantityFromSubmission = async (
       where: { id: adminId },
     });
 
-    if (!admin || !isDashboardRole(admin.role)) {
+    if (!admin || !hasDashboardAccess(admin.role)) {
       throw new Error("Only dashboard admins can perform this action");
     }
 
@@ -441,7 +441,7 @@ export const updateProductStatus = async (req: Request, res: Response) => {
       where: { id: adminId },
     });
 
-    if (!admin || !isDashboardRole(admin.role)) {
+    if (!admin || !hasDashboardAccess(admin.role)) {
       return res.status(403).json({
         message: "Only dashboard admins can update product status",
       });

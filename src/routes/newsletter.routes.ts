@@ -60,7 +60,7 @@ newsletterRoutes.delete(
 newsletterRoutes.post(
   "/campaigns/:campaignId/send",
   isAuthenticated,
-  allow("newsletter"),
+  allow.to("newsletter.send"),
   sendNewsletterCampaign,
 );
 
@@ -68,7 +68,7 @@ newsletterRoutes.post(
 newsletterRoutes.post(
   "/weekly-update",
   isAuthenticated,
-  allow("newsletter"),
+  allow.to("newsletter.send"),
   sendWeeklyPriceUpdate,
 );
 

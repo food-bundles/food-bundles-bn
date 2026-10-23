@@ -3,7 +3,7 @@ import { createNotificationService } from "./notification.services";
 import { getProductUnitByIdService } from "./unit.service";
 import { sendMessage } from "../utils/sms.utility";
 
-import { isDashboardRole } from "../config/permissions";
+import { hasDashboardAccess } from "../config/permissions";
 export interface ProductData {
   tableTronicProductId?: number | null;
   unitId?: string | null;
@@ -52,7 +52,7 @@ export const createProductService = async (productData: ProductData) => {
     where: { id: productData.createdBy },
   });
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can create products");
   }
 
@@ -234,7 +234,7 @@ export const updateProductService = async (
 
   console.log("admin:", admin);
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can update products");
   }
 
@@ -431,7 +431,7 @@ export const createProductFromSubmissionService = async ({
     where: { id: productData.createdBy },
   });
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can create products");
   }
 

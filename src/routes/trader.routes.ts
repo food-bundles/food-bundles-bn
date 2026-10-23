@@ -141,21 +141,21 @@ traderRoutes.get(
 traderRoutes.get(
   "/:traderId/wallet",
   isAuthenticated,
-  allow("deposits"),
+  allow("traders"),
   getAdminTraderWallet,
 );
 
 traderRoutes.post(
   "/:traderId/commission/send-otp",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("traders.manage_commission"),
   sendCommissionOTP,
 );
 
 traderRoutes.patch(
   "/:traderId/commission",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("traders.manage_commission"),
   setTraderWalletCommission,
 );
 
@@ -163,7 +163,7 @@ traderRoutes.patch(
 traderRoutes.post(
   "/commission/process-all",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("traders.process_commission"),
   processAllTradersCommission,
 );
 
@@ -171,7 +171,7 @@ traderRoutes.post(
 traderRoutes.post(
   "/vouchers/process-existing",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.process_existing"),
   processExistingUsedVouchers,
 );
 
@@ -186,7 +186,7 @@ traderRoutes.post(
 traderRoutes.post(
   "/delegation/:traderId/approve",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("traders.manage_delegations"),
   approveDelegation,
 );
 
@@ -200,14 +200,14 @@ traderRoutes.post(
 traderRoutes.post(
   "/delegation/verify-otp",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("traders.manage_delegations"),
   verifyDelegationOTP,
 );
 
 traderRoutes.delete(
   "/delegation/:traderId/revoke",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("traders.manage_delegations"),
   revokeDelegation,
 );
 
@@ -215,7 +215,7 @@ traderRoutes.delete(
 traderRoutes.get(
   "/delegation/requests",
   isAuthenticated,
-  allow("deposits"),
+  allow("traders"),
   getAllDelegationRequests,
 );
 
@@ -231,7 +231,7 @@ traderRoutes.get(
 traderRoutes.post(
   "/admin/:traderId/approve-loan",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to(["traders.approve_loans", "vouchers.approve_loans"]),
   adminApproveLoanOnBehalf,
 );
 
@@ -254,21 +254,21 @@ traderRoutes.post(
 traderRoutes.post(
   "/withdraw/:withdrawId/approve",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("traders.approve_withdrawals"),
   adminApproveWithdraw,
 );
 
 traderRoutes.post(
   "/withdraw/verify-otp",
   isAuthenticated,
-  allow("deposits"),
+  allow.to(["traders.approve_withdrawals", "traders.complete_withdrawals"]),
   verifyWithdrawOTP,
 );
 
 traderRoutes.post(
   "/withdraw/:withdrawId/complete",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("traders.complete_withdrawals"),
   completeWithdraw,
 );
 
@@ -282,7 +282,7 @@ traderRoutes.get(
 traderRoutes.get(
   "/withdraw/all-requests",
   isAuthenticated,
-  allow("deposits"),
+  allow("traders"),
   getAllWithdrawRequests,
 );
 
@@ -297,7 +297,7 @@ traderRoutes.delete(
 traderRoutes.get(
   "/delegation/history",
   isAuthenticated,
-  allow("deposits"),
+  allow("traders"),
   getAllDelegationHistory,
 );
 
@@ -313,7 +313,7 @@ traderRoutes.get(
 traderRoutes.get(
   "/accepted-delegations",
   isAuthenticated,
-  allow("deposits"),
+  allow("traders"),
   getTradersWithAcceptedDelegations,
 );
 
@@ -329,7 +329,7 @@ traderRoutes.post(
 traderRoutes.post(
   "/commission/process-all-monthly",
   isAuthenticated,
-  allow("deposits"),
+  allow.to("traders.process_commission"),
   processAllFixedModeMonthlyCommissions,
 );
 
@@ -337,7 +337,7 @@ traderRoutes.post(
 traderRoutes.get(
   "/all",
   isAuthenticated,
-  allow("deposits"),
+  allow("traders"),
   getAllTraders,
 );
 
@@ -345,7 +345,7 @@ traderRoutes.get(
 traderRoutes.get(
   "/search/:identifier",
   isAuthenticated,
-  allow("deposits"),
+  allow("traders"),
   getTraderByIdOrEmail,
 );
 

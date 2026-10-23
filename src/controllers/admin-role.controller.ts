@@ -4,7 +4,7 @@ import {
   normalizePermissions,
   PERMISSION_MODULES,
   SYSTEM_ROLES,
-  isDashboardRole,
+  hasDashboardAccess,
 } from "../config/permissions";
 import { AccessError, resolveRoleAssignment } from "../services/access.service";
 import { createNotificationService } from "../services/notification.services";
@@ -131,8 +131,8 @@ export const deleteAdminRole = async (req: Request, res: Response) => {
 
 /**
  * PATCH /admin-roles/assign/:adminId  { adminRoleId }
- * Give a dashboard user a role. Traders, logistics, aggregators and super
- * admins keep their own access model and can't be reassigned here.
+ * Give a dashboard user a role (office staff, aggregators, logistics). Traders
+ * and super admins keep their own access model and can't be reassigned here.
  */
 export const assignAdminRole = async (req: Request, res: Response) => {
   try {
@@ -144,16 +144,18 @@ export const assignAdminRole = async (req: Request, res: Response) => {
 
     const target = await prisma.admin.findUnique({ where: { id: adminId } });
     if (!target) throw new AccessError("User not found", 404);
-    if (!isDashboardRole(target.role) || target.role === "SUPERUSER") {
+    if (!hasDashboardAccess(target.role) || target.role === "SUPERUSER") {
       throw new AccessError(
         `${target.role} users don't use dashboard roles`,
         400,
       );
     }
 
-    const { role, adminRoleId } = await resolveRoleAssignment(actor, {
-      adminRoleId: req.body.adminRoleId,
-    });
+    const { role, adminRoleId } = await resolveRoleAssignment(
+      actor,
+      { adminRoleId: req.body.adminRoleId },
+      target.role,
+    );
 
     const updated = await prisma.admin.update({
       where: { id: adminId },

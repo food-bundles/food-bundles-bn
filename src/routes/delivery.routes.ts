@@ -8,7 +8,7 @@ import {
   getDeliveryDetails,
   getDeliveryOTPStatus,
 } from "../controllers/delivery.controller";
-import { isAuthenticated, checkPermission } from "../middleware/authMiddleware";
+import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 
 const deliveryRoutes = Router();
 
@@ -64,7 +64,7 @@ deliveryRoutes.get(
 deliveryRoutes.get(
   "/orders",
   isAuthenticated,
-  checkPermission("LOGISTICS"),
+  allow("deliveries"),
   getLogisticsOrders
 );
 
@@ -76,7 +76,7 @@ deliveryRoutes.get(
 deliveryRoutes.post(
   "/:orderId/otp/verify",
   isAuthenticated,
-  checkPermission("LOGISTICS"),
+  allow.to("deliveries.confirm_delivery"),
   verifyDeliveryOTP
 );
 
@@ -88,7 +88,7 @@ deliveryRoutes.post(
 deliveryRoutes.patch(
   "/:orderId/status",
   isAuthenticated,
-  checkPermission("LOGISTICS"),
+  allow.to("deliveries.update_status"),
   updateDeliveryStatus
 );
 
@@ -100,7 +100,7 @@ deliveryRoutes.patch(
 deliveryRoutes.get(
   "/:orderId",
   isAuthenticated,
-  checkPermission("LOGISTICS"),
+  allow("deliveries"),
   getDeliveryDetails
 );
 

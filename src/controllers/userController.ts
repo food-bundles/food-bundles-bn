@@ -42,7 +42,14 @@ import {
   getEffectivePermissions,
   resolveRoleAssignment,
 } from "../services/access.service";
-import { isDashboardRole } from "../config/permissions";
+import { hasDashboardAccess, isDashboardRole, Permission } from "../config/permissions";
+import { userCan } from "../middleware/authMiddleware";
+import {
+  ManagedUserType,
+  moveUserToTrash,
+  updateManagedUser,
+  UserManagementError,
+} from "../services/user-management.service";
 import { createNotificationService } from "../services/notification.services";
 import { sendRoleChangedEmail } from "../utils/emails";
 
@@ -354,44 +361,49 @@ export class UserController {
     }
   };
 
-  static updateFarmer = async (req: Request, res: Response) => {
+  // Farmers and restaurants: the user themselves, or a dashboard user with the
+  // "Edit" permission. A new password only from the user or a super admin.
+  static updateFarmer = async (req: Request, res: Response) =>
+    UserController.updateAccount(req, res, "farmer", "farmers.edit", "Farmer updated successfully");
+
+  static updateRestaurant = async (req: Request, res: Response) =>
+    UserController.updateAccount(
+      req,
+      res,
+      "restaurant",
+      "restaurants.edit",
+      "Restaurant updated successfully",
+    );
+
+  private static updateAccount = async (
+    req: Request,
+    res: Response,
+    type: ManagedUserType,
+    permission: Permission,
+    message: string,
+  ) => {
     try {
-      const { id } = req.params;
-      const updateData = req.body;
+      const id = req.params.id as string;
+      const actor = (req as any).user;
+      const isSelf = actor?.id === id;
+      if (!isSelf && !userCan(actor, permission)) {
+        throw new UserManagementError("You don't have permission to edit this user", 403);
+      }
 
-      const updatedFarmer = await updateFarmerService(id, updateData);
-
-      res.status(200).json({
-        success: true,
-        message: "Farmer updated successfully",
-        data: updatedFarmer,
+      const data = await updateManagedUser(type, id, req.body || {}, {
+        allowPassword: isSelf || actor?.role === Role.SUPERUSER,
       });
+
+      res.status(200).json({ success: true, message, data });
     } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+      UserController.sendManagementError(res, error);
     }
   };
 
-  static updateRestaurant = async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const updateData = req.body;
-
-      const updatedRestaurant = await updateRestaurantService(id, updateData);
-
-      res.status(200).json({
-        success: true,
-        message: "Restaurant updated successfully",
-        data: updatedRestaurant,
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
+  private static sendManagementError = (res: Response, error: any) => {
+    const status =
+      error instanceof UserManagementError || error instanceof AccessError ? error.status : 400;
+    res.status(status).json({ success: false, message: error.message });
   };
 
   static updateAdmin = async (req: Request, res: Response) => {
@@ -410,11 +422,26 @@ export class UserController {
       let roleChanged = false;
       if (role !== undefined || adminRoleId !== undefined) {
         if (id === actor.id) throw new AccessError("You cannot change your own role", 400);
-        Object.assign(updateData, await resolveRoleAssignment(actor, { role, adminRoleId }));
+        Object.assign(
+          updateData,
+          await resolveRoleAssignment(actor, { role, adminRoleId }, target.role),
+        );
         roleChanged = true;
       }
 
-      const updatedAdmin = await updateAdminService(id, updateData);
+      // Details (whitelisted fields, email/phone duplicate checks); a new
+      // password only from a super admin or the admin themselves
+      let updatedAdmin: any = await updateManagedUser("admin", id, updateData, {
+        allowPassword: actor.role === Role.SUPERUSER || id === actor.id,
+      });
+      if (roleChanged) {
+        const { role: newRole, adminRoleId: newAdminRoleId } = updateData;
+        updatedAdmin = await prisma.admin.update({
+          where: { id },
+          data: { role: newRole, adminRoleId: newAdminRoleId },
+          select: { id: true, username: true, email: true, role: true, adminRoleId: true },
+        });
+      }
 
       if (roleChanged) {
         const roleName = updateData.adminRoleId
@@ -459,62 +486,32 @@ export class UserController {
     }
   };
 
-  static deleteFarmer = async (req: Request, res: Response) => {
+  // Delete = move to the trash (soft delete), super admin only (also enforced
+  // by the routes). Restore / permanent delete live in the trash routes.
+  static deleteFarmer = async (req: Request, res: Response) =>
+    UserController.trashAccount(req, res, "farmer", "Farmer moved to the trash");
+
+  static deleteRestaurant = async (req: Request, res: Response) =>
+    UserController.trashAccount(req, res, "restaurant", "Restaurant moved to the trash");
+
+  static deleteAdmin = async (req: Request, res: Response) =>
+    UserController.trashAccount(req, res, "admin", "User moved to the trash");
+
+  private static trashAccount = async (
+    req: Request,
+    res: Response,
+    type: ManagedUserType,
+    message: string,
+  ) => {
     try {
-      const { id } = req.params;
-      await deleteFarmerService(id);
-
-      res.status(200).json({
-        success: true,
-        message: "Farmer deleted successfully",
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  };
-
-  static deleteRestaurant = async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      await deleteRestaurantService(id);
-
-      res.status(200).json({
-        success: true,
-        message: "Restaurant deleted successfully",
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  };
-
-  static deleteAdmin = async (req: Request, res: Response) => {
-    try {
-      const id = req.params.id as string;
       const actor = (req as any).user;
-      if (id === actor.id) throw new AccessError("You cannot delete your own account", 400);
-
-      const target = await prisma.admin.findUnique({ where: { id }, select: { role: true } });
-      if (target?.role === Role.SUPERUSER && actor.role !== Role.SUPERUSER) {
-        throw new AccessError("Only a super admin can delete a super admin");
+      if (actor?.role !== Role.SUPERUSER) {
+        throw new UserManagementError("Only a super admin can delete users", 403);
       }
-
-      await deleteAdminService(id);
-
-      res.status(200).json({
-        success: true,
-        message: "Admin deleted successfully",
-      });
+      await moveUserToTrash(type, req.params.id as string, actor.id);
+      res.status(200).json({ success: true, message });
     } catch (error: any) {
-      res.status(error instanceof AccessError ? error.status : 400).json({
-        success: false,
-        message: error.message,
-      });
+      UserController.sendManagementError(res, error);
     }
   };
 
@@ -780,8 +777,8 @@ export class UserController {
         ...userWithoutPassword
       } = user;
 
-      // Dashboard users get their effective permissions (drives the sidebar)
-      if (isDashboardRole(user.role)) {
+      // Dashboard users (office and field) get their effective permissions (drives the sidebar)
+      if (hasDashboardAccess(user.role)) {
         userWithoutPassword.permissions = await getEffectivePermissions(user);
       }
 

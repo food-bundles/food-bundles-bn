@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { UserController } from "../controllers/userController";
 import { Role } from "@prisma/client";
-import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
+import {
+  isAuthenticated,
+  checkPermission,
+  allow,
+  superAdminOnly,
+} from "../middleware/authMiddleware";
 import FarmerController, {
   submitProductController,
   adminCreateSubmissionController,
@@ -56,10 +61,11 @@ farmersRoutes.patch(
 );
 
 farmersRoutes.post("/", UserController.createFarmer);
-farmersRoutes.post("/admin/create", isAuthenticated, allow("farmers", "AGGREGATOR"), UserController.createFarmerByAdmin);
+farmersRoutes.post("/admin/create", isAuthenticated, allow.to("farmers.create"), UserController.createFarmerByAdmin);
 farmersRoutes.get("/", UserController.getAllFarmers);
 farmersRoutes.get("/:id", UserController.getFarmerById);
-farmersRoutes.put("/:id", UserController.updateFarmer);
-farmersRoutes.delete("/:id", UserController.deleteFarmer);
+// Edit: the farmer themselves or farmers.edit; delete (to trash): super admin
+farmersRoutes.put("/:id", isAuthenticated, UserController.updateFarmer);
+farmersRoutes.delete("/:id", isAuthenticated, superAdminOnly, UserController.deleteFarmer);
 
 export default farmersRoutes;

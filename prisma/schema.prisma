@@ -48,6 +48,9 @@ model Farmer {
   VoucherPenalty         VoucherPenalty[]
   VoucherRepayment       VoucherRepayment[]
   VoucherTransaction     VoucherTransaction[]
+  /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
+  deletedAt              DateTime?
+  deletedBy              String?
 }
 
 model Restaurant {
@@ -96,6 +99,9 @@ model Restaurant {
   walletTransactions    WalletTransaction[]
   WalletTransfer        WalletTransfer[]
   wishlistItems         WishlistItem[]
+  /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
+  deletedAt              DateTime?
+  deletedBy              String?
 }
 
 model Affiliator {
@@ -359,6 +365,9 @@ model Admin {
   traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
 
   @@index([adminRoleId])
+  /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
+  deletedAt              DateTime?
+  deletedBy              String?
 }
 
 /// Admin-editable settings stored as JSON by key (e.g. "delivery_fee").

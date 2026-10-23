@@ -1,6 +1,6 @@
 import prisma from "../prisma";
 
-import { isDashboardRole } from "../config/permissions";
+import { hasDashboardAccess } from "../config/permissions";
 export interface ProductUnitData {
   tableTronicUnitId?: number;
   name: string;
@@ -16,7 +16,7 @@ export const createProductUnitService = async (unitData: ProductUnitData) => {
     where: { id: unitData.createdBy },
   });
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can create product units");
   }
 
@@ -156,7 +156,7 @@ export const updateProductUnitService = async (
     where: { id: adminId },
   });
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can update product units");
   }
 
@@ -259,7 +259,7 @@ export const updateUnitStatusService = async (
     where: { id: adminId },
   });
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can update product units");
   }
 

@@ -1,6 +1,6 @@
 import prisma from "../prisma";
 
-import { isDashboardRole } from "../config/permissions";
+import { hasDashboardAccess } from "../config/permissions";
 export interface CustomerTypeData {
   name: string;
   description?: string;
@@ -9,7 +9,7 @@ export interface CustomerTypeData {
 
 export const createCustomerTypeService = async (data: CustomerTypeData) => {
   const admin = await prisma.admin.findUnique({ where: { id: data.createdBy } });
-  if (!admin || !isDashboardRole(admin.role)) throw new Error("Only dashboard admins can create customer types");
+  if (!admin || !hasDashboardAccess(admin.role)) throw new Error("Only dashboard admins can create customer types");
 
   const existing = await prisma.customerType.findFirst({
     where: { name: { equals: data.name, mode: "insensitive" } },
@@ -33,7 +33,7 @@ export const toggleCustomerTypeStatusService = async (id: string, adminId: strin
   if (!existing) throw new Error("Customer type not found");
 
   const admin = await prisma.admin.findUnique({ where: { id: adminId } });
-  if (!admin || !isDashboardRole(admin.role)) throw new Error("Only dashboard admins can toggle customer type status");
+  if (!admin || !hasDashboardAccess(admin.role)) throw new Error("Only dashboard admins can toggle customer type status");
 
   return prisma.customerType.update({
     where: { id },
@@ -56,7 +56,7 @@ export const updateCustomerTypeService = async (
   if (!existing) throw new Error("Customer type not found");
 
   const admin = await prisma.admin.findUnique({ where: { id: adminId } });
-  if (!admin || !isDashboardRole(admin.role)) throw new Error("Only dashboard admins can update customer types");
+  if (!admin || !hasDashboardAccess(admin.role)) throw new Error("Only dashboard admins can update customer types");
 
   if (data.name && data.name !== existing.name) {
     const nameTaken = await prisma.customerType.findFirst({
@@ -158,7 +158,7 @@ export const assignCustomerTypeService = async (
   adminId: string
 ) => {
   const admin = await prisma.admin.findUnique({ where: { id: adminId } });
-  if (!admin || !isDashboardRole(admin.role)) throw new Error("Only dashboard admins can assign customer types");
+  if (!admin || !hasDashboardAccess(admin.role)) throw new Error("Only dashboard admins can assign customer types");
 
   const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId } });
   if (!restaurant) throw new Error("Restaurant not found");
@@ -205,7 +205,7 @@ export const swapCustomerTypePricingService = async (
   adminId: string
 ) => {
   const admin = await prisma.admin.findUnique({ where: { id: adminId } });
-  if (!admin || !isDashboardRole(admin.role)) throw new Error("Only dashboard admins can swap customer type pricing");
+  if (!admin || !hasDashboardAccess(admin.role)) throw new Error("Only dashboard admins can swap customer type pricing");
 
   if (sourceCustomerTypeId === targetCustomerTypeId) {
     throw new Error("Source and target customer types must be different");
