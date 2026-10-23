@@ -161,21 +161,21 @@ export const importWfpCsvService = async (
     totalRows++;
 
     if (batch.length >= batchSize) {
-      await prisma.wfpMarketPrice.createMany({
+      const { count } = await prisma.wfpMarketPrice.createMany({
         data: batch,
         skipDuplicates: true,
       });
-      insertedCount += batch.length;
+      insertedCount += count;
       batch = [];
     }
   }
 
   if (batch.length > 0) {
-    await prisma.wfpMarketPrice.createMany({
+    const { count } = await prisma.wfpMarketPrice.createMany({
       data: batch,
       skipDuplicates: true,
     });
-    insertedCount += batch.length;
+    insertedCount += count;
     batch = [];
   }
 
@@ -187,6 +187,8 @@ export const importWfpCsvService = async (
     success: true,
     totalRows,
     insertedCount,
+    // rows already in the table (same date, market, commodity and price type) are skipped, never duplicated
+    skippedExisting: totalRows - insertedCount,
     marketsDiscovered: discoveredMarkets.size,
     marketsCreated: 0,
     dateRange: {
