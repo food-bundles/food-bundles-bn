@@ -11,6 +11,7 @@ import {
 } from "../types/userTypes";
 import { comparePassword, hashPassword } from "../utils/password";
 import { getUserByEmail, getUserByPhone } from "./userGets";
+import { phoneVariants } from "../utils/phone";
 import {
   sendEmail,
   sendPasswordResetTemplate,
@@ -74,9 +75,10 @@ export const checkExistingUser = async (phone?: string, email?: string) => {
 };
 // FARMER SERVICES
 export const createFarmerService = async (farmerData: ICreateFarmerData) => {
+  // Blank strings from forms count as "not provided" (phone and email are unique columns)
+  const phone = farmerData.phone?.trim() || undefined;
+  const email = farmerData.email?.trim() || undefined;
   const {
-    phone,
-    email,
     name,
     password,
     location,
@@ -101,16 +103,29 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
     throw new Error("Either phone or email is required");
   }
 
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Please enter a valid email address");
+  }
+
+  if (phone && !/^\+?\d{9,15}$/.test(phone)) {
+    throw new Error("Please enter a valid phone number");
+  }
+
+  if (!name || name.trim().length < 2) {
+    throw new Error("Name must be at least 2 characters");
+  }
+
+  if (!password || password.length < 6) {
+    throw new Error("Password must be at least 6 characters");
+  }
+
   // Check if phone/email exists in any user table
-  const existingUser = await checkExistingUser(
-    phone || undefined,
-    email || undefined,
-  );
+  const existingUser = await checkExistingUser(phone, email);
 
   console.log("Received existingUser data:---", existingUser);
 
   if (existingUser) {
-    const field = existingUser.phone === phone ? "phone" : "email";
+    const field = phone && existingUser.phone === phone ? "phone" : "email";
     throw new Error(`User with this ${field} already exists`);
   }
 
@@ -159,7 +174,7 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
     await createNotificationService({
       title: "New User Registration",
       message: `New ${farmer.role.toLowerCase()} ${
-        farmer.email
+        farmer.email || farmer.phone
       } has registered`,
       eventType: "USER_SIGNUP",
       targetType: "ROLE_BASED",
@@ -1039,10 +1054,12 @@ export const loginService = async (loginData: ILoginData) => {
   let user: any = null;
   let foundUserType = "";
 
+  const phoneMatch = phone ? { phone: { in: phoneVariants(phone) } } : null;
+
   // Farmer login
   user = await prisma.farmer.findFirst({
     where: {
-      OR: [{ phone: phone || undefined }, { email: email || undefined }],
+      OR: [...(phoneMatch ? [phoneMatch] : []), ...(email ? [{ email }] : [])],
     },
   });
 
@@ -1053,9 +1070,9 @@ export const loginService = async (loginData: ILoginData) => {
     user = await prisma.restaurant.findFirst({
       where: {
         OR: [
-          { phone: phone || undefined },
-          { email: email || undefined },
-          { tin: tin || undefined },
+          ...(phoneMatch ? [phoneMatch] : []),
+          ...(email ? [{ email }] : []),
+          ...(tin ? [{ tin }] : []),
         ],
       },
     });

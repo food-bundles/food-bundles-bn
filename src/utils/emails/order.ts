@@ -716,3 +716,42 @@ export async function sendAdminOrderCancelledEmail(
     console.error("Failed to send admin order cancelled email:", error);
   }
 }
+
+export interface AdminLowStockAlertData {
+  productName: string;
+  currentQuantity: number;
+  unit: string;
+}
+
+// Send admin low stock alert email
+export async function sendAdminLowStockAlertEmail(
+  data: AdminLowStockAlertData,
+) {
+  const transporter = getAdminEmailTransporter();
+
+  const lowStockEmail = {
+    from: `"Food Bundles System" <${process.env.GOOGLE_EMAIL}>`,
+    to: process.env.ADMIN_EMAIL,
+    subject: `Low Stock Alert - ${data.productName}`,
+    html: `<!DOCTYPE html>
+  <html>
+  <body style="font-family: Arial, sans-serif; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h2 style="color: #d9534f;">Low Stock Alert</h2>
+      <p><strong>${data.productName}</strong> is running low on stock.</p>
+      <p>Current quantity: <strong>${data.currentQuantity} ${data.unit}</strong></p>
+      <p style="font-size: 12px; margin-top: 15px;">
+        This is an automated message. Please do not reply to this email.
+      </p>
+    </div>
+  </body>
+  </html>`,
+  };
+
+  try {
+    await transporter.sendMail(lowStockEmail);
+    console.log("Admin low stock alert email sent successfully");
+  } catch (error) {
+    console.error("Failed to send admin low stock alert email:", error);
+  }
+}

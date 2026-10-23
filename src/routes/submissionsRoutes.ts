@@ -140,9 +140,9 @@ submissionsRoutes.get(
   SubmissionPayoutController.getStatusHistory
 );
 
-// Request OTP for a PayPack cashout payout on an APPROVED submission
+// Initiate the PayPack cashout payout on an APPROVED submission
 submissionsRoutes.post(
-  "/:submissionId/payout/request-otp",
+  "/:submissionId/payout",
   isAuthenticated,
   allow.to("farmer_submissions.request_payout"),
   SubmissionPayoutController.requestPayoutOTP

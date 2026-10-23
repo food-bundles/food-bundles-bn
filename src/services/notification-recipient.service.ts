@@ -167,37 +167,14 @@ export const sendToRecipientsByCategoryService = async (
 };
 
 /**
- * Notify private receivers via BOTH channels:
- *  1. process.env.PRIVATE_RECEIVER — SMS only (legacy env var, kept for
- *     backward-compatibility so existing deployments keep working even before
- *     the DB table is populated).
- *  2. NotificationRecipient rows with category PRIVATE_RECEIVER — SMS always,
- *     email when the recipient has one on file.
- *
- * Every send is isolated in its own try/catch so one failure never blocks
- * the others or the caller's already-committed business operation.
+ * Convenience wrapper: notify all active PRIVATE_RECEIVER recipients.
  */
 export const notifyPrivateReceiversService = async (message: {
   subject: string;
   body: string;
 }) => {
-  // 1. Legacy env-var SMS
-  const envPhone = process.env.PRIVATE_RECEIVER;
-  if (envPhone) {
-    try {
-      await sendMessage(message.body, envPhone);
-    } catch (err) {
-      console.error("[notifyPrivateReceivers] env SMS failed:", err);
-    }
-  }
-
-  // 2. DB recipients — SMS + optional email
-  try {
-    await sendToRecipientsByCategoryService(
-      NotificationCategory.PRIVATE_RECEIVER,
-      message
-    );
-  } catch (err) {
-    console.error("[notifyPrivateReceivers] DB recipients failed:", err);
-  }
+  return sendToRecipientsByCategoryService(
+    NotificationCategory.PRIVATE_RECEIVER,
+    message
+  );
 };

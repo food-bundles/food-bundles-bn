@@ -268,8 +268,17 @@ export const submitProductController = catchAsyncError(
     const userId = (req as any).user?.id;
     const { productId } = req.params;
 
-    const { quantity, wishedPrice, province, district, sector, cell, village } =
-      req.body;
+    const {
+      quantity,
+      wishedPrice,
+      deliveryDate,
+      pickupPoint,
+      province,
+      district,
+      sector,
+      cell,
+      village,
+    } = req.body;
 
     // Validate required fields
     if (!quantity || !wishedPrice) {
@@ -300,6 +309,40 @@ export const submitProductController = catchAsyncError(
       );
     }
 
+    // deliveryDate is optional; when given it must be a valid date that is not in the past
+    let parsedDeliveryDate: Date | undefined;
+    if (deliveryDate !== undefined && deliveryDate !== null && deliveryDate !== "") {
+      parsedDeliveryDate = new Date(deliveryDate);
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      if (
+        isNaN(parsedDeliveryDate.getTime()) ||
+        parsedDeliveryDate.getTime() < startOfToday.getTime()
+      ) {
+        return next(
+          new errorHandler({
+            message: "deliveryDate must be a valid date that is not in the past",
+            statusCode: 400,
+          })
+        );
+      }
+    }
+
+    // pickupPoint is optional; only the two known values are accepted
+    const PICKUP_POINTS = ["FARM_GATE", "COLLECTION_POINT"];
+    if (
+      pickupPoint !== undefined &&
+      pickupPoint !== null &&
+      !PICKUP_POINTS.includes(pickupPoint)
+    ) {
+      return next(
+        new errorHandler({
+          message: "pickupPoint must be FARM_GATE or COLLECTION_POINT",
+          statusCode: 400,
+        })
+      );
+    }
+
     // Validate user authentication
     if (!userId) {
       return next(
@@ -315,6 +358,8 @@ export const submitProductController = catchAsyncError(
       productId: productId,
       submittedQty: parseFloat(quantity),
       wishedPrice: parseFloat(wishedPrice),
+      deliveryDate: parsedDeliveryDate,
+      pickupPoint: pickupPoint ?? undefined,
       province,
       district,
       sector,

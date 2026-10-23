@@ -40,7 +40,21 @@ export const isAuthenticated = async (
 
     (req as any).user = user;
     next();
-  } catch (err) {
+  } catch (err: any) {
+    // Reason is logged server-side only (TokenExpiredError, JsonWebTokenError: invalid signature, DB errors…)
+    console.warn(`[auth] ${req.method} ${req.originalUrl} rejected: ${err?.name}: ${err?.message}`);
+    // Only token problems are an auth failure. DB/infra errors must not look like
+    // an expired session, or the client logs the user out during an outage.
+    const isTokenError =
+      err?.name === "TokenExpiredError" ||
+      err?.name === "JsonWebTokenError" ||
+      err?.name === "NotBeforeError" ||
+      err?.message === "Invalid token payload";
+    if (!isTokenError) {
+      return res
+        .status(503)
+        .json({ message: "Service temporarily unavailable, please retry" });
+    }
     return res.status(401).json({ message: "Invalid token" });
   }
 };
