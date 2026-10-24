@@ -1,8 +1,8 @@
 import prisma from "../prisma";
 import { DeliveryStatus, OrderStatus, PaymentStatus } from "@prisma/client";
-import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "./notification.services";
 import { sendOrderStatusEmail } from "../utils/emails";
+import { OTPService } from "./otp.service";
 
 export class DeliveryService {
   /**
@@ -17,7 +17,11 @@ export class DeliveryService {
    */
   static async createDeliveryOTP(
     orderId: string
-  ): Promise<{ success: boolean; message: string; otp?: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    otpDelivery?: Awaited<ReturnType<typeof OTPService.sendOTPNotification>>["channels"];
+  }> {
     try {
       // Validate order exists and is eligible for delivery
       const order = await prisma.order.findUnique({
@@ -64,16 +68,17 @@ export class DeliveryService {
         },
       });
 
-      // Send OTP to restaurant
-      await sendMessage(
-        `Your delivery OTP for order ${order.orderNumber} is: ${otp}. Valid for 24 hours.`,
-        order.restaurant.phone || ""
-      );
+      const notification = await OTPService.sendOTPNotification({
+        phone: order.restaurant.phone,
+        email: order.restaurant.email,
+        subject: `FoodBundles delivery OTP for order ${order.orderNumber}`,
+        message: `Your delivery OTP for order ${order.orderNumber} is ${otp}. It is valid for 24 hours. Do not share this code with anyone.`,
+      });
 
       return {
-        success: true,
-        message: "Delivery OTP sent successfully",
-        otp, // Only returned for testing/debugging, not sent to client
+        success: notification.success,
+        message: notification.message,
+        otpDelivery: notification.channels,
       };
     } catch (error: any) {
       return { success: false, message: error.message };
@@ -85,7 +90,11 @@ export class DeliveryService {
    */
   static async resendDeliveryOTP(
     orderId: string
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    otpDelivery?: Awaited<ReturnType<typeof OTPService.sendOTPNotification>>["channels"];
+  }> {
     try {
       const result = await this.createDeliveryOTP(orderId);
       return result;

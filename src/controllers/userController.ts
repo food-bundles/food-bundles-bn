@@ -73,15 +73,18 @@ export class UserController {
         verified: false,
       });
 
-      if (result.phone) {
-        await OTPService.sendRestaurantSignupOTP(result.phone);
-      }
+      const otpResult = result.phone
+        ? await OTPService.sendRestaurantSignupOTP(result.phone, result.email)
+        : null;
 
-      res.status(201).json({
-        success: true,
+      res.status(otpResult?.success ? 201 : 502).json({
+        success: Boolean(otpResult?.success),
+        accountCreated: true,
         message:
-          "Account created successfully. OTP sent to your phone for verification.",
+          otpResult?.message ??
+          "Account created, but no phone number was available for signup OTP delivery.",
         data: result,
+        otpDelivery: otpResult?.channels,
       });
     } catch (error: any) {
       res.status(400).json({
@@ -147,7 +150,7 @@ export class UserController {
 
       const result = await OTPService.sendRestaurantSignupOTP(phone);
 
-      res.status(result.success ? 200 : 400).json(result);
+      res.status(result.success ? 200 : 502).json(result);
     } catch (error: any) {
       res.status(500).json({
         success: false,
@@ -809,9 +812,10 @@ export class UserController {
 
       const result = await requestPasswordResetService(email);
 
-      res.status(200).json({
-        success: true,
+      res.status(result.success ? 200 : 502).json({
+        success: result.success,
         message: result.message,
+        otpDelivery: result.otpDelivery,
       });
     } catch (error: any) {
       res.status(400).json({
@@ -869,9 +873,10 @@ export class UserController {
 
       const result = await resetPasswordService(token, newPassword);
 
-      res.status(200).json({
-        success: true,
+      res.status(result.success ? 200 : 502).json({
+        success: result.success,
         message: result.message,
+        otpDelivery: result.otpDelivery,
       });
     } catch (error: any) {
       res.status(400).json({
@@ -894,9 +899,10 @@ export class UserController {
 
       const result = await requestPasswordResetViaPhoneService(phone);
 
-      res.status(200).json({
-        success: true,
+      res.status(result.success ? 200 : 502).json({
+        success: result.success,
         message: result.message,
+        otpDelivery: result.otpDelivery,
       });
     } catch (error: any) {
       res.status(400).json({
@@ -990,14 +996,18 @@ export class UserController {
       const restaurantData = req.body;
       const result = await createRestaurantByAdminService(restaurantData);
 
-      if (result.phone) {
-        await OTPService.sendRestaurantSignupOTP(result.phone);
-      }
+      const otpResult = result.phone
+        ? await OTPService.sendRestaurantSignupOTP(result.phone, result.email)
+        : null;
 
-      res.status(201).json({
-        success: true,
-        message: "Restaurant created successfully. Password sent via SMS.",
+      res.status(otpResult?.success ? 201 : 502).json({
+        success: Boolean(otpResult?.success),
+        accountCreated: true,
+        message:
+          otpResult?.message ??
+          "Restaurant created, but no phone number was available for signup OTP delivery.",
         data: result,
+        otpDelivery: otpResult?.channels,
       });
     } catch (error: any) {
       res.status(400).json({

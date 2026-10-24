@@ -1452,14 +1452,12 @@ export const requestPasswordResetViaPhoneService = async (phone: string) => {
     throw new Error("No account found with this phone number");
   }
 
-  const result = await OTPService.sendPasswordResetOTP(phone);
-
-  if (!result.success) {
-    throw new Error(result.message);
-  }
+  const result = await OTPService.sendPasswordResetOTP(phone, user.email);
 
   return {
-    message: "Password reset OTP has been sent to your phone number",
+    success: result.success,
+    message: result.message,
+    otpDelivery: result.channels,
   };
 };
 
@@ -1647,4 +1645,3 @@ export const createRestaurantByAdminService = async (
     throw new Error(`Failed to create restaurant: ${error.message}`);
   }
 };
-

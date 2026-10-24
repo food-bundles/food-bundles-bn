@@ -53,17 +53,19 @@ export default class SubmissionPayoutController {
       );
 
       if (!otpResult.success) {
-        return res.status(400).json({
+        return res.status(502).json({
           success: false,
           message: otpResult.message,
+          otpDelivery: otpResult.channels,
         });
       }
 
       res.status(200).json({
         success: true,
-        message: "OTP sent to private receiver for verification",
+        message: otpResult.message,
         requiresOTP: true,
         sessionId: otpResult.sessionId,
+        otpDelivery: otpResult.channels,
       });
     } catch (error: any) {
       res.status(500).json({
