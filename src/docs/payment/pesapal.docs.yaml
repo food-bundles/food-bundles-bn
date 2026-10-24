@@ -1,0 +1,708 @@
+tags:
+  - name: PesaPal Payments
+    description: PesaPal API 3.0 payment operations — card, mobile money, and more
+
+components:
+  schemas:
+    PesapalBillingAddress:
+      type: object
+      properties:
+        phone_number:
+          type: string
+          example: "0723xxxxxx"
+        email_address:
+          type: string
+          example: "customer@example.com"
+        country_code:
+          type: string
+          example: "RW"
+        first_name:
+          type: string
+          example: "John"
+        middle_name:
+          type: string
+          example: ""
+        last_name:
+          type: string
+          example: "Doe"
+        line_1:
+          type: string
+          example: "KG 123 St"
+        city:
+          type: string
+          example: "Kigali"
+        state:
+          type: string
+          example: ""
+        postal_code:
+          type: string
+          example: ""
+        zip_code:
+          type: string
+          example: ""
+
+    PesapalSubmitOrderRequest:
+      type: object
+      required:
+        - id
+        - currency
+        - amount
+        - description
+        - callback_url
+        - notification_id
+        - billing_address
+      properties:
+        id:
+          type: string
+          description: Your unique merchant reference (alphanumeric, dashes, underscores, dots, colons only — max 50 chars)
+          example: "ORDER-2024-001"
+        currency:
+          type: string
+          description: ISO currency code
+          example: "RWF"
+        amount:
+          type: number
+          example: 5000
+        description:
+          type: string
+          description: Order description (max 100 chars)
+          example: "FoodBundles order payment"
+        callback_url:
+          type: string
+          example: "https://food.rw/payment/callback"
+        cancellation_url:
+          type: string
+          example: "https://food.rw/payment/cancelled"
+        redirect_mode:
+          type: string
+          enum: [TOP_WINDOW, PARENT_WINDOW]
+          example: "TOP_WINDOW"
+        notification_id:
+          type: string
+          description: IPN ID from RegisterIPN
+          example: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
+        branch:
+          type: string
+          example: "FoodBundles HQ"
+        billing_address:
+          $ref: "#/components/schemas/PesapalBillingAddress"
+        account_number:
+          type: string
+          description: For recurring/subscription payments
+          example: "ACCT-001"
+        subscription_details:
+          type: object
+          properties:
+            start_date:
+              type: string
+              example: "01-01-2025"
+            end_date:
+              type: string
+              example: "31-12-2025"
+            frequency:
+              type: string
+              enum: [DAILY, WEEKLY, MONTHLY, YEARLY]
+              example: "MONTHLY"
+
+    PesapalOrderResponse:
+      type: object
+      properties:
+        order_tracking_id:
+          type: string
+          example: "b945e4af-80a5-4ec1-8706-e03f8332fb04"
+        merchant_reference:
+          type: string
+          example: "ORDER-2024-001"
+        redirect_url:
+          type: string
+          example: "https://pay.pesapal.com/iframe/PesapalIframe3/Index/?OrderTrackingId=b945e4af-80a5-4ec1-8706-e03f8332fb04"
+        error:
+          nullable: true
+        status:
+          type: string
+          example: "200"
+
+    PesapalTransactionStatus:
+      type: object
+      properties:
+        payment_method:
+          type: string
+          example: "MTN"
+        amount:
+          type: number
+          example: 5000
+        created_date:
+          type: string
+          example: "2024-01-15T10:30:00.000"
+        confirmation_code:
+          type: string
+          example: "6513008693186320103009"
+        payment_status_description:
+          type: string
+          enum: [INVALID, COMPLETED, FAILED, REVERSED]
+          example: "COMPLETED"
+        description:
+          type: string
+        message:
+          type: string
+          example: "Request processed successfully"
+        payment_account:
+          type: string
+          example: "2507812****67"
+        call_back_url:
+          type: string
+        status_code:
+          type: integer
+          description: "0=INVALID, 1=COMPLETED, 2=FAILED, 3=REVERSED"
+          example: 1
+        merchant_reference:
+          type: string
+          example: "ORDER-2024-001"
+        currency:
+          type: string
+          example: "RWF"
+        error:
+          nullable: true
+        status:
+          type: string
+          example: "200"
+
+    PesapalRegisterIPNRequest:
+      type: object
+      required:
+        - url
+        - ipn_notification_type
+      properties:
+        url:
+          type: string
+          example: "https://server.food.rw/webhooks/pesapal"
+        ipn_notification_type:
+          type: string
+          enum: [GET, POST]
+          example: "POST"
+
+    PesapalIPNResponse:
+      type: object
+      properties:
+        url:
+          type: string
+        created_date:
+          type: string
+        ipn_id:
+          type: string
+          example: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
+        ipn_notification_type_description:
+          type: string
+          example: "POST"
+        ipn_status_description:
+          type: string
+          example: "Active"
+        error:
+          nullable: true
+        status:
+          type: string
+          example: "200"
+
+    PesapalRefundRequest:
+      type: object
+      required:
+        - confirmation_code
+        - amount
+        - username
+        - remarks
+      properties:
+        confirmation_code:
+          type: string
+          example: "6513008693186320103009"
+        amount:
+          type: number
+          example: 5000
+        username:
+          type: string
+          example: "admin@food.rw"
+        remarks:
+          type: string
+          example: "Order cancelled by customer"
+
+    PesapalCancelOrderRequest:
+      type: object
+      required:
+        - order_tracking_id
+      properties:
+        order_tracking_id:
+          type: string
+          example: "b945e4af-80a5-4ec1-8706-e03f8332fb04"
+
+    PesapalIPNWebhookPayload:
+      type: object
+      properties:
+        OrderTrackingId:
+          type: string
+          example: "b945e4af-80a5-4ec1-8706-e03f8332fb04"
+        OrderMerchantReference:
+          type: string
+          example: "ORDER-2024-001"
+        OrderNotificationType:
+          type: string
+          enum: [IPNCHANGE, CALLBACKURL, RECURRING]
+          example: "IPNCHANGE"
+
+paths:
+  /payments/pesapal/register-ipn:
+    post:
+      tags:
+        - PesaPal Payments
+      summary: Register an IPN URL
+      description: |
+        Register your IPN endpoint with PesaPal. Returns an ipn_id required
+        for all SubmitOrderRequest calls. Register once per environment.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PesapalRegisterIPNRequest"
+            examples:
+              post_ipn:
+                summary: Register POST IPN
+                value:
+                  url: "https://server.food.rw/webhooks/pesapal"
+                  ipn_notification_type: "POST"
+              get_ipn:
+                summary: Register GET IPN
+                value:
+                  url: "https://server.food.rw/webhooks/pesapal"
+                  ipn_notification_type: "GET"
+      responses:
+        200:
+          description: IPN registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PesapalIPNResponse"
+              examples:
+                registered:
+                  summary: IPN registered
+                  value:
+                    url: "https://server.food.rw/webhooks/pesapal"
+                    created_date: "2024-06-14T07:50:22.2825997Z"
+                    ipn_id: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
+                    ipn_notification_type_description: "POST"
+                    ipn_status_description: "Active"
+                    error: null
+                    status: "200"
+        500:
+          description: Internal server error
+
+  /payments/pesapal/ipn-list:
+    get:
+      tags:
+        - PesaPal Payments
+      summary: Get all registered IPN URLs
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: IPN list retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PesapalIPNResponse"
+              examples:
+                multiple_ipns:
+                  summary: Multiple registered IPNs
+                  value:
+                    - url: "https://server.food.rw/webhooks/pesapal"
+                      created_date: "2024-06-14T07:50:22.2825997Z"
+                      ipn_id: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
+                      error: null
+                      status: "200"
+                single_ipn:
+                  summary: Single registered IPN
+                  value:
+                    - url: "https://server.food.rw/webhooks/pesapal"
+                      created_date: "2024-01-01T00:00:00.000Z"
+                      ipn_id: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
+                      error: null
+                      status: "200"
+
+  /payments/pesapal/submit-order:
+    post:
+      tags:
+        - PesaPal Payments
+      summary: Submit an order and get a payment redirect URL
+      description: |
+        Creates a payment order on PesaPal. Returns a redirect_url to send
+        the customer to for payment. Can be loaded as an iframe or full redirect.
+        The notification_id must be obtained from RegisterIPN first.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PesapalSubmitOrderRequest"
+            examples:
+              standard_order:
+                summary: Standard one-time payment
+                value:
+                  id: "ORDER-2024-001"
+                  currency: "RWF"
+                  amount: 5000
+                  description: "FoodBundles order payment"
+                  callback_url: "https://food.rw/payment/callback"
+                  notification_id: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
+                  billing_address:
+                    email_address: "customer@example.com"
+                    phone_number: "0781234567"
+                    country_code: "RW"
+                    first_name: "John"
+                    last_name: "Doe"
+              with_cancellation_url:
+                summary: Order with cancellation URL
+                value:
+                  id: "ORDER-2024-002"
+                  currency: "RWF"
+                  amount: 10000
+                  description: "FoodBundles bulk order"
+                  callback_url: "https://food.rw/payment/callback"
+                  cancellation_url: "https://food.rw/payment/cancelled"
+                  notification_id: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
+                  billing_address:
+                    phone_number: "0781234567"
+                    country_code: "RW"
+              recurring_payment:
+                summary: Subscription / recurring payment
+                value:
+                  id: "ORDER-2024-003"
+                  currency: "RWF"
+                  amount: 2000
+                  description: "Monthly subscription"
+                  callback_url: "https://food.rw/payment/callback"
+                  notification_id: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
+                  account_number: "ACCT-001"
+                  subscription_details:
+                    start_date: "01-01-2025"
+                    end_date: "31-12-2025"
+                    frequency: "MONTHLY"
+                  billing_address:
+                    email_address: "customer@example.com"
+                    phone_number: "0781234567"
+                    country_code: "RW"
+              iframe_mode:
+                summary: Load in iframe (PARENT_WINDOW)
+                value:
+                  id: "ORDER-2024-004"
+                  currency: "RWF"
+                  amount: 3000
+                  description: "FoodBundles payment"
+                  callback_url: "https://food.rw/payment/callback"
+                  redirect_mode: "PARENT_WINDOW"
+                  notification_id: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
+                  billing_address:
+                    email_address: "customer@example.com"
+                    country_code: "RW"
+      responses:
+        200:
+          description: Order created — redirect customer to redirect_url
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PesapalOrderResponse"
+              examples:
+                success:
+                  summary: Order created successfully
+                  value:
+                    order_tracking_id: "b945e4af-80a5-4ec1-8706-e03f8332fb04"
+                    merchant_reference: "ORDER-2024-001"
+                    redirect_url: "https://pay.pesapal.com/iframe/PesapalIframe3/Index/?OrderTrackingId=b945e4af-80a5-4ec1-8706-e03f8332fb04"
+                    error: null
+                    status: "200"
+        400:
+          description: Bad request
+        500:
+          description: Internal server error
+
+  /payments/pesapal/transaction-status/{orderTrackingId}:
+    get:
+      tags:
+        - PesaPal Payments
+      summary: Get transaction status
+      description: |
+        Fetch the payment status using the orderTrackingId.
+        Call this from your callback URL and IPN handler — PesaPal does not
+        include the status in the callback/IPN for security reasons.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderTrackingId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "b945e4af-80a5-4ec1-8706-e03f8332fb04"
+      responses:
+        200:
+          description: Transaction status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PesapalTransactionStatus"
+              examples:
+                completed:
+                  summary: Payment completed
+                  value:
+                    payment_method: "MTN"
+                    amount: 5000
+                    created_date: "2024-01-15T10:30:00.000"
+                    confirmation_code: "6513008693186320103009"
+                    payment_status_description: "COMPLETED"
+                    description: "Payment processed successfully"
+                    message: "Request processed successfully"
+                    payment_account: "2507812****67"
+                    status_code: 1
+                    merchant_reference: "ORDER-2024-001"
+                    currency: "RWF"
+                    error: null
+                    status: "200"
+                failed:
+                  summary: Payment failed
+                  value:
+                    payment_method: "Visa"
+                    amount: 5000
+                    created_date: "2024-01-15T10:30:00.000"
+                    confirmation_code: ""
+                    payment_status_description: "FAILED"
+                    description: "Unable to Authorize Transaction"
+                    message: "Request processed successfully"
+                    payment_account: "476173**0010"
+                    status_code: 2
+                    merchant_reference: "ORDER-2024-002"
+                    currency: "RWF"
+                    error: null
+                    status: "200"
+                invalid:
+                  summary: Invalid / not yet paid
+                  value:
+                    payment_status_description: "INVALID"
+                    status_code: 0
+                    merchant_reference: "ORDER-2024-003"
+                    currency: "RWF"
+                    status: "200"
+        404:
+          description: Order not found
+        500:
+          description: Internal server error
+
+  /payments/pesapal/refund:
+    post:
+      tags:
+        - PesaPal Payments
+      summary: Request a refund
+      description: |
+        Refund a completed payment. Partial refunds are supported for card payments.
+        Mobile money payments can only be fully refunded.
+        Requires the confirmation_code from GetTransactionStatus.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PesapalRefundRequest"
+            examples:
+              full_refund:
+                summary: Full refund
+                value:
+                  confirmation_code: "6513008693186320103009"
+                  amount: 5000
+                  username: "admin@food.rw"
+                  remarks: "Order cancelled by customer"
+              partial_refund:
+                summary: Partial refund (card only)
+                value:
+                  confirmation_code: "6513008693186320103009"
+                  amount: 2500
+                  username: "admin@food.rw"
+                  remarks: "Partial refund for returned items"
+      responses:
+        200:
+          description: Refund request submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "200"
+                  message:
+                    type: string
+                    example: "Refund request successfully"
+              examples:
+                accepted:
+                  summary: Refund request accepted
+                  value:
+                    status: "200"
+                    message: "Refund request successfully"
+                rejected:
+                  summary: Refund rejected
+                  value:
+                    status: "500"
+                    message: "Refund rejected: payment not in COMPLETED state"
+        400:
+          description: Bad request
+        500:
+          description: Internal server error
+
+  /payments/pesapal/cancel-order:
+    post:
+      tags:
+        - PesaPal Payments
+      summary: Cancel a pending or failed order
+      description: |
+        Cancel an order that has not yet been completed.
+        Only failed or pending orders can be cancelled.
+        Requires the order_tracking_id from SubmitOrderRequest.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PesapalCancelOrderRequest"
+            examples:
+              cancel_pending:
+                summary: Cancel a pending order
+                value:
+                  order_tracking_id: "b945e4af-80a5-4ec1-8706-e03f8332fb04"
+              cancel_failed:
+                summary: Cancel a failed order
+                value:
+                  order_tracking_id: "c945e4af-90a5-5ec1-9706-f03f8332fc05"
+      responses:
+        200:
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "200"
+                  message:
+                    type: string
+                    example: "Order successfully cancelled."
+              examples:
+                cancelled:
+                  summary: Order cancelled successfully
+                  value:
+                    status: "200"
+                    message: "Order successfully cancelled."
+                failed:
+                  summary: Cancellation failed
+                  value:
+                    status: "500"
+                    message: "Order could not be cancelled."
+        400:
+          description: Bad request
+        500:
+          description: Internal server error
+
+  /webhooks/pesapal:
+    get:
+      tags:
+        - PesaPal Payments
+      summary: PesaPal IPN callback (GET)
+      description: |
+        PesaPal triggers this when a payment status changes (if registered as GET IPN).
+        Fetch the actual status using GetTransactionStatus — the IPN does not include it.
+        Respond with the JSON acknowledgement.
+      parameters:
+        - name: OrderTrackingId
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "b945e4af-80a5-4ec1-8706-e03f8332fb04"
+        - name: OrderMerchantReference
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "ORDER-2024-001"
+        - name: OrderNotificationType
+          in: query
+          schema:
+            type: string
+            enum: [IPNCHANGE, RECURRING]
+          example: "IPNCHANGE"
+      responses:
+        200:
+          description: IPN acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orderNotificationType:
+                    type: string
+                  orderTrackingId:
+                    type: string
+                  orderMerchantReference:
+                    type: string
+                  status:
+                    type: integer
+                    example: 200
+    post:
+      tags:
+        - PesaPal Payments
+      summary: PesaPal IPN callback (POST)
+      description: |
+        PesaPal triggers this when a payment status changes (if registered as POST IPN).
+        Fetch the actual status using GetTransactionStatus — the IPN does not include it.
+        Respond with the JSON acknowledgement.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PesapalIPNWebhookPayload"
+            examples:
+              ipn_change:
+                summary: Standard IPN notification
+                value:
+                  OrderNotificationType: "IPNCHANGE"
+                  OrderTrackingId: "b945e4af-80a5-4ec1-8706-e03f8332fb04"
+                  OrderMerchantReference: "ORDER-2024-001"
+              recurring_ipn:
+                summary: Recurring payment IPN
+                value:
+                  OrderNotificationType: "RECURRING"
+                  OrderTrackingId: "c945e4af-90a5-5ec1-9706-f03f8332fc05"
+                  OrderMerchantReference: "ACCT-001"
+      responses:
+        200:
+          description: IPN acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orderNotificationType:
+                    type: string
+                  orderTrackingId:
+                    type: string
+                  orderMerchantReference:
+                    type: string
+                  status:
+                    type: integer
+                    example: 200
