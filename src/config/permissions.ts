@@ -54,6 +54,19 @@ export const PERMISSION_MODULES = [
     ],
   },
   {
+    key: "supply_requests",
+    label: "Supply requests (products needed from farmers)",
+    group: "Farmers & supply",
+    actions: [
+      VIEW,
+      { key: "view_all", label: "See every request (not only own customers)" },
+      { key: "create", label: "Create request lists" },
+      { key: "edit", label: "Edit request lists" },
+      { key: "close", label: "Close / cancel requests" },
+      { key: "assign_customers", label: "Assign customers to aggregators" },
+    ],
+  },
+  {
     key: "farmers",
     label: "Farmers",
     group: "Farmers & supply",
@@ -223,7 +236,8 @@ export const PERMISSION_MODULES = [
     actions: [VIEW, { key: "review", label: "Approve / reject KYC" }],
   },
   { key: "user_lookup", label: "User lookup", group: "Users", actions: [VIEW] },
-  { key: "restaurants", label: "Restaurants", group: "Users", actions: crud(EXPORT) },
+  // Customers = restaurants, schools, hotels… (one account model, told apart by customer type)
+  { key: "restaurants", label: "Customers", group: "Users", actions: crud(EXPORT) },
   { key: "affiliators", label: "Affiliators", group: "Users", actions: [VIEW, EDIT, DELETE, EXPORT] },
   { key: "admins", label: "Administration (team accounts)", group: "Users", actions: crud(EXPORT) },
   {
@@ -373,6 +387,10 @@ export const SYSTEM_ROLES = {
       "farmer_submissions.verify",
       "farmer_submissions.edit",
       "farmer_submissions.request_payout",
+      "supply_requests.view",
+      "supply_requests.create",
+      "supply_requests.edit",
+      "supply_requests.close",
       "farmers.create",
       ...FIELD_SHARED,
     ]),

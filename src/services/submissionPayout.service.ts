@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import { fulfillPaidRequestSubmission } from "./submission-flow.service";
 import { cleanPhoneNumber, isValidRwandaPhone, sendAdminPayoutFailedEmail } from "../utils/emails";
 import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
@@ -189,6 +190,8 @@ export const confirmSubmissionPayoutService = async (
       data: { status: "PAID", paidAt: new Date() },
       include: { farmer: { select: { phone: true } } },
     });
+    // Bought for a customer's supply request: goes into their order for that day
+    await fulfillPaidRequestSubmission(submissionId);
 
     await createNotificationService({
       title: "Submission Paid",

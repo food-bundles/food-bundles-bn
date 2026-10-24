@@ -2,7 +2,7 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../utils/jwt";
 import { getUserById } from "../services/userGets";
-import { getEffectivePermissions } from "../services/access.service";
+import { getCustomerTypeScope, getEffectivePermissions } from "../services/access.service";
 import { hasDashboardAccess, Permission, PermissionModule } from "../config/permissions";
 
 export const isAuthenticated = async (
@@ -37,6 +37,10 @@ export const isAuthenticated = async (
     user.permissions = hasDashboardAccess(user.role)
       ? await getEffectivePermissions(user)
       : [];
+    // Customer types the user works with (null = all); limits customer lists
+    user.customerTypeScope = hasDashboardAccess(user.role)
+      ? await getCustomerTypeScope(user)
+      : null;
 
     (req as any).user = user;
     next();
@@ -57,6 +61,28 @@ export const isAuthenticated = async (
     }
     return res.status(401).json({ message: "Invalid token" });
   }
+};
+
+/**
+ * Signs the user in when a valid token is sent, but lets the request through
+ * without one (for endpoints that are also used publicly). Dashboard users then
+ * get their permissions and customer-type scope like with isAuthenticated.
+ */
+export const attachUserIfPresent = async (req: Request, _res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return next();
+  try {
+    const decoded = verifyToken(authHeader.substring(7));
+    const user: any = await getUserById(decoded.id);
+    if (user && !user.deletedAt) {
+      user.permissions = hasDashboardAccess(user.role) ? await getEffectivePermissions(user) : [];
+      user.customerTypeScope = hasDashboardAccess(user.role) ? await getCustomerTypeScope(user) : null;
+      (req as any).user = user;
+    }
+  } catch {
+    // Bad or expired token: carry on as a public request
+  }
+  next();
 };
 
 /** Role-based guard for non-dashboard roles (restaurants, farmers, traders…). */

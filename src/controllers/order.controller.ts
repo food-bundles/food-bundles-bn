@@ -212,6 +212,9 @@ export const getAllOrders = async (req: Request, res: Response) => {
       dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
       dateTo: dateTo ? new Date(dateTo as string) : undefined,
       search: search as string,
+      customerTypeId: (req.query.customerTypeId as string) || undefined,
+      // Dashboard users only see orders of their customer types
+      customerTypeScope: (req as any).user?.customerTypeScope ?? null,
     });
 
     res.status(200).json({

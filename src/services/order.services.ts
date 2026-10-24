@@ -1,7 +1,7 @@
 import prisma from "../prisma";
 import {
   calculateDeliveryFee,
-  getDeliverySettings,
+  getDeliverySettingsForCustomer,
   hasFreeDeliveryPlan,
 } from "./delivery-fee.service";
 import crypto from "crypto";
@@ -360,14 +360,14 @@ export const createOrderFromCartService = async (
     },
   });
 
-  // Delivery fee from the admin's rules: order amount + requested delivery day
-  // (see delivery-fee.service.ts). Free-delivery plans pay nothing.
+  // Delivery fee from the admin's rules for this customer's type (or the
+  // default rules): order amount + requested delivery day. Free-delivery plans pay nothing.
   deliveryFee = calculateDeliveryFee({
     orderAmount: order.totalAmount, // products total after promo, before fees
     placedAt: order.createdAt,
     requestedDelivery: order.requestedDelivery,
     hasFreeDeliveryPlan: !!activeSubscription?.plan?.freeDelivery,
-    settings: await getDeliverySettings(),
+    settings: await getDeliverySettingsForCustomer(order.restaurantId),
   });
 
   if (
@@ -744,6 +744,8 @@ export const getAllOrdersService = async ({
   dateFrom,
   dateTo,
   search,
+  customerTypeId,
+  customerTypeScope,
 }: {
   page?: number;
   limit?: number;
@@ -753,10 +755,23 @@ export const getAllOrdersService = async ({
   dateFrom?: Date;
   dateTo?: Date;
   search?: string;
+  /** Only customers of this type */
+  customerTypeId?: string;
+  /** Customer types the viewer may see (null/undefined = all) */
+  customerTypeScope?: string[] | null;
 }) => {
   const skip = (page - 1) * limit;
 
   const where: any = {};
+  // Orders of the customer types the viewer works with (and the picked type)
+  if (customerTypeId || customerTypeScope) {
+    const allowed = customerTypeScope
+      ? customerTypeId
+        ? customerTypeScope.filter((id) => id === customerTypeId)
+        : customerTypeScope
+      : [customerTypeId as string];
+    where.restaurant = { customerTypeId: { in: allowed } };
+  }
   if (status) where.status = status;
   if (paymentStatus) where.paymentStatus = paymentStatus;
   if (restaurantId) where.restaurantId = restaurantId;
@@ -1559,7 +1574,7 @@ export const editOrderService = async (
   // Delivery fee follows the same rules as checkout. A paid order keeps the
   // fee it was charged, so an edit never changes what was already paid.
   const isPaid = ["COMPLETED", "VOUCHER_CREDIT"].includes(existingOrder.paymentStatus);
-  const deliverySettings = await getDeliverySettings();
+  const deliverySettings = await getDeliverySettingsForCustomer(existingOrder.restaurantId);
   const freeDeliveryPlan = await hasFreeDeliveryPlan(existingOrder.restaurantId);
   const requestedDelivery = data.requestedDelivery || existingOrder.requestedDelivery;
   const feeFor = (productsTotal: number) =>

@@ -34,16 +34,82 @@ const SETTINGS_KEY = "delivery_fee";
 // Calendar days are counted in Rwanda time, not the server's time zone
 const BUSINESS_TIME_ZONE = "Africa/Kigali";
 
-export const getDeliverySettings = async (): Promise<DeliveryFeeSettings> => {
+/**
+ * Stored setting: the default rules plus optional rules per customer type
+ * (schools, hotels…). A customer type without its own rules pays the default.
+ */
+interface StoredDeliveryConfig extends DeliveryFeeSettings {
+  byCustomerType?: Record<string, DeliveryFeeSettings>;
+}
+
+const pickRules = (value: Partial<DeliveryFeeSettings> | undefined): DeliveryFeeSettings => ({
+  enabled: value?.enabled ?? DEFAULT_DELIVERY_SETTINGS.enabled,
+  deliveryFee: value?.deliveryFee ?? DEFAULT_DELIVERY_SETTINGS.deliveryFee,
+  freeDeliveryMinOrder: value?.freeDeliveryMinOrder ?? DEFAULT_DELIVERY_SETTINGS.freeDeliveryMinOrder,
+  freeDeliveryMinDaysAhead: value?.freeDeliveryMinDaysAhead ?? DEFAULT_DELIVERY_SETTINGS.freeDeliveryMinDaysAhead,
+});
+
+/** Default rules and the customer types that have their own. */
+export const getDeliveryConfig = async () => {
   const row = await prisma.appSetting.findUnique({ where: { key: SETTINGS_KEY } });
-  return { ...DEFAULT_DELIVERY_SETTINGS, ...((row?.value as Partial<DeliveryFeeSettings>) ?? {}) };
+  const stored = (row?.value as StoredDeliveryConfig | null) ?? null;
+  const byCustomerType: Record<string, DeliveryFeeSettings> = {};
+  for (const [id, rules] of Object.entries(stored?.byCustomerType ?? {})) {
+    byCustomerType[id] = pickRules(rules);
+  }
+  return { default: pickRules(stored ?? undefined), byCustomerType };
 };
 
+const saveDeliveryConfig = async (
+  config: { default: DeliveryFeeSettings; byCustomerType: Record<string, DeliveryFeeSettings> },
+  adminId?: string,
+) => {
+  const value = { ...config.default, byCustomerType: config.byCustomerType } as any;
+  await prisma.appSetting.upsert({
+    where: { key: SETTINGS_KEY },
+    update: { value, updatedBy: adminId ?? null },
+    create: { key: SETTINGS_KEY, value, updatedBy: adminId ?? null },
+  });
+};
+
+/** Default rules (customers whose type has no rules of its own). */
+export const getDeliverySettings = async (): Promise<DeliveryFeeSettings> =>
+  (await getDeliveryConfig()).default;
+
+/** Rules for a customer of this type: its own rules, else the default. */
+export const getDeliverySettingsFor = async (
+  customerTypeId?: string | null,
+): Promise<DeliveryFeeSettings> => {
+  const config = await getDeliveryConfig();
+  return (customerTypeId && config.byCustomerType[customerTypeId]) || config.default;
+};
+
+/** Rules for a customer (by restaurant id), following their customer type. */
+export const getDeliverySettingsForCustomer = async (restaurantId: string) => {
+  const customer = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { customerTypeId: true },
+  });
+  return getDeliverySettingsFor(customer?.customerTypeId);
+};
+
+/**
+ * Update the default rules, or one customer type's own rules when
+ * customerTypeId is given (starting from what that type pays today).
+ */
 export const updateDeliverySettings = async (
   input: Partial<DeliveryFeeSettings>,
   adminId?: string,
+  customerTypeId?: string,
 ): Promise<DeliveryFeeSettings> => {
-  const current = await getDeliverySettings();
+  const config = await getDeliveryConfig();
+  if (customerTypeId) {
+    const type = await prisma.customerType.findUnique({ where: { id: customerTypeId }, select: { id: true } });
+    if (!type) throw new Error("Customer type not found");
+  }
+  const current = customerTypeId
+    ? config.byCustomerType[customerTypeId] ?? config.default
+    : config.default;
   const next: DeliveryFeeSettings = { ...current };
 
   const asWholeNumber = (value: unknown, field: string, max = Number.MAX_SAFE_INTEGER) => {
@@ -68,17 +134,31 @@ export const updateDeliverySettings = async (
     next.freeDeliveryMinDaysAhead = asWholeNumber(input.freeDeliveryMinDaysAhead, "Free delivery timing", 30);
   }
 
-  await prisma.appSetting.upsert({
-    where: { key: SETTINGS_KEY },
-    update: { value: next as any, updatedBy: adminId ?? null },
-    create: { key: SETTINGS_KEY, value: next as any, updatedBy: adminId ?? null },
-  });
+  if (customerTypeId) config.byCustomerType[customerTypeId] = next;
+  else config.default = next;
+  await saveDeliveryConfig(config, adminId);
   return next;
 };
 
-/** Delete the saved settings: back to the defaults (fee on, 5,000 / 150,000 / next day). */
+/** A customer type goes back to paying the default rules. */
+export const removeCustomerTypeDeliverySettings = async (customerTypeId: string, adminId?: string) => {
+  const config = await getDeliveryConfig();
+  delete config.byCustomerType[customerTypeId];
+  await saveDeliveryConfig(config, adminId);
+  return config;
+};
+
+/**
+ * Default rules back to the defaults (fee on, 5,000 / 150,000 / next day).
+ * Customer types with their own rules keep them.
+ */
 export const resetDeliverySettings = async (): Promise<DeliveryFeeSettings> => {
-  await prisma.appSetting.deleteMany({ where: { key: SETTINGS_KEY } });
+  const config = await getDeliveryConfig();
+  if (Object.keys(config.byCustomerType).length === 0) {
+    await prisma.appSetting.deleteMany({ where: { key: SETTINGS_KEY } });
+  } else {
+    await saveDeliveryConfig({ default: { ...DEFAULT_DELIVERY_SETTINGS }, byCustomerType: config.byCustomerType });
+  }
   return { ...DEFAULT_DELIVERY_SETTINGS };
 };
 

@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
+import { fulfillSupplyRequestSubmission, requestPriceFor } from "./supply-request.service";
 
 /**
  * Farmer submission flow — one stage at a time:
@@ -66,6 +67,18 @@ export const getFoodBundlesPrice = async (productName: string) => {
   return product && product.purchasePrice > 0 ? product.purchasePrice : null;
 };
 
+/**
+ * Price both sides agreed. Submissions approved before the new flow kept it
+ * in acceptedPrice (or only the farmer's price), so fall back to those.
+ */
+export const agreedPriceOf = (submission: {
+  agreedPrice: number | null;
+  acceptedPrice: number | null;
+  farmerCounterOffer: number | null;
+  wishedPrice: number | null;
+}) =>
+  submission.agreedPrice ?? submission.acceptedPrice ?? submission.farmerCounterOffer ?? submission.wishedPrice ?? 0;
+
 /** What the farmer currently asks per unit (their latest counter, else the original). */
 export const askedPrice = (submission: { wishedPrice: number | null; farmerCounterOffer: number | null }) =>
   submission.farmerCounterOffer ?? submission.wishedPrice ?? 0;
@@ -94,7 +107,9 @@ const writeHistory = (
 /** Prices shown when deciding: the farmer's asking price and the Food Bundles price. */
 export const getPriceContext = async (submissionId: string) => {
   const submission = await loadSubmission(submissionId);
-  const foodBundlesPrice = await getFoodBundlesPrice(submission.productName);
+  // Submissions to a supply request use the request price as the reference
+  const foodBundlesPrice =
+    (await requestPriceFor(submission)) ?? (await getFoodBundlesPrice(submission.productName));
   return {
     submissionId,
     status: submission.status,
@@ -125,7 +140,9 @@ export const decideSubmissionPrice = async (
     );
   }
 
-  const foodBundlesPrice = await getFoodBundlesPrice(submission.productName);
+  // Submissions to a supply request use the request price as the reference
+  const foodBundlesPrice =
+    (await requestPriceFor(submission)) ?? (await getFoodBundlesPrice(submission.productName));
   let price = foodBundlesPrice;
   if (options.price !== undefined && options.price !== null) {
     if (!options.canSetPrice) {
@@ -304,7 +321,7 @@ export const verifySubmission = async (
     );
   }
 
-  let price = submission.agreedPrice ?? 0;
+  let price = agreedPriceOf(submission);
   if (options.price !== undefined && options.price !== null && Number(options.price) !== price) {
     if (!options.canSetPrice) {
       throw new SubmissionFlowError("You can't change the agreed price", 403);
@@ -400,7 +417,18 @@ export const markSubmissionPaidInCash = async (submissionId: string, actorId: st
     "SUBMISSION_PAID",
     submission.farmer?.phone,
   );
+  // Bought for a customer's supply request: goes into their order for that day
+  await fulfillPaidRequestSubmission(submissionId);
   return updated;
+};
+
+/** Paid submission from a supply request → the customer's order (never blocks the payment). */
+export const fulfillPaidRequestSubmission = async (submissionId: string) => {
+  try {
+    await fulfillSupplyRequestSubmission(submissionId);
+  } catch (error) {
+    console.error("Failed to add the paid submission to the customer's order:", error);
+  }
 };
 
 /** Close a submission without buying (allowed before it is verified). */
