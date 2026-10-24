@@ -1,6 +1,7 @@
 import prisma from "../prisma";
 import { createNotificationService } from "./notification.services";
 import { sendMessage } from "../utils/sms.utility";
+import { fulfillSupplyRequestSubmission, requestPriceFor } from "./supply-request.service";
 
 /**
  * Farmer submission flow — one stage at a time:
@@ -106,7 +107,9 @@ const writeHistory = (
 /** Prices shown when deciding: the farmer's asking price and the Food Bundles price. */
 export const getPriceContext = async (submissionId: string) => {
   const submission = await loadSubmission(submissionId);
-  const foodBundlesPrice = await getFoodBundlesPrice(submission.productName);
+  // Submissions to a supply request use the request price as the reference
+  const foodBundlesPrice =
+    (await requestPriceFor(submission)) ?? (await getFoodBundlesPrice(submission.productName));
   return {
     submissionId,
     status: submission.status,
@@ -137,7 +140,9 @@ export const decideSubmissionPrice = async (
     );
   }
 
-  const foodBundlesPrice = await getFoodBundlesPrice(submission.productName);
+  // Submissions to a supply request use the request price as the reference
+  const foodBundlesPrice =
+    (await requestPriceFor(submission)) ?? (await getFoodBundlesPrice(submission.productName));
   let price = foodBundlesPrice;
   if (options.price !== undefined && options.price !== null) {
     if (!options.canSetPrice) {
@@ -412,7 +417,18 @@ export const markSubmissionPaidInCash = async (submissionId: string, actorId: st
     "SUBMISSION_PAID",
     submission.farmer?.phone,
   );
+  // Bought for a customer's supply request: goes into their order for that day
+  await fulfillPaidRequestSubmission(submissionId);
   return updated;
+};
+
+/** Paid submission from a supply request → the customer's order (never blocks the payment). */
+export const fulfillPaidRequestSubmission = async (submissionId: string) => {
+  try {
+    await fulfillSupplyRequestSubmission(submissionId);
+  } catch (error) {
+    console.error("Failed to add the paid submission to the customer's order:", error);
+  }
 };
 
 /** Close a submission without buying (allowed before it is verified). */

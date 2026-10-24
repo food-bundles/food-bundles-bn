@@ -565,6 +565,12 @@ export const acceptTermsService = async (identifier: string) => {
 export const getAllRestaurantsService = async (
   query: IPaginationQuery,
   search?: string,
+  filters: {
+    /** Only this customer type (a tab in the Customers page) */
+    customerTypeId?: string;
+    /** Customer types the viewer may see (null/undefined = all) */
+    customerTypeScope?: string[] | null;
+  } = {},
 ) => {
   const normalizedQuery = PaginationService.validatePaginationParams(
     query.page,
@@ -572,21 +578,34 @@ export const getAllRestaurantsService = async (
   );
 
   const term = search?.trim();
+  // Customer type: the picked tab, kept inside what the viewer may see
+  const { customerTypeId, customerTypeScope } = filters;
+  const typeFilter =
+    customerTypeId
+      ? customerTypeScope && !customerTypeScope.includes(customerTypeId)
+        ? { customerTypeId: "__none__" }
+        : { customerTypeId }
+      : customerTypeScope
+        ? { customerTypeId: { in: customerTypeScope } }
+        : {};
   const options = {
     // Trashed restaurants are listed in the trash only
     where: term
       ? {
           deletedAt: null,
+          ...typeFilter,
           OR: [
             { name: { contains: term, mode: "insensitive" } },
             { email: { contains: term, mode: "insensitive" } },
             { phone: { contains: term } },
           ],
         }
-      : { deletedAt: null },
+      : { deletedAt: null, ...typeFilter },
     select: {
       id: true,
       name: true,
+      customerTypeId: true,
+      customerType: { select: { id: true, name: true } },
       email: true,
       phone: true,
       location: true,
@@ -633,6 +652,8 @@ export const getRestaurantByIdService = async (id: string) => {
     select: {
       id: true,
       name: true,
+      customerTypeId: true,
+      customerType: { select: { id: true, name: true } },
       email: true,
       phone: true,
       location: true,

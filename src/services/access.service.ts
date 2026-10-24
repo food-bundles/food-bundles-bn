@@ -45,6 +45,34 @@ export const getEffectivePermissions = async (user: {
 };
 
 /**
+ * Customer types a dashboard user works with: null = all types (super admin,
+ * the Administrator role, or a role with no types picked); otherwise the ids
+ * of the types their role is limited to (e.g. only hotels and schools).
+ */
+export const getCustomerTypeScope = async (user: {
+  role?: string | null;
+  adminRoleId?: string | null;
+}): Promise<string[] | null> => {
+  if (!user?.role || user.role === "SUPERUSER" || !user.adminRoleId) return null;
+  const adminRole = await prisma.adminRole.findUnique({
+    where: { id: user.adminRoleId },
+    select: { name: true, customerTypeIds: true },
+  });
+  if (!adminRole || adminRole.name === SYSTEM_ROLES.ADMINISTRATOR.name) return null;
+  return adminRole.customerTypeIds.length > 0 ? adminRole.customerTypeIds : null;
+};
+
+/** Can this user see a customer of the given type? (null scope = every type) */
+export const canSeeCustomerType = (
+  user: { customerTypeScope?: string[] | null } | undefined,
+  customerTypeId: string | null | undefined,
+) => {
+  const scope = user?.customerTypeScope;
+  if (!scope) return true;
+  return !!customerTypeId && scope.includes(customerTypeId);
+};
+
+/**
  * Validate the role an actor wants to give a new/updated admin account and
  * return what to store. Blocks privilege escalation:
  * - only SUPERUSER can create SUPERUSERs or assign dynamic roles

@@ -50,12 +50,22 @@ export const getAdminRoles = async (_req: Request, res: Response) => {
   }
 };
 
+/** Keep only existing customer type ids (empty list = all customer types). */
+const cleanCustomerTypeIds = async (value: unknown): Promise<string[]> => {
+  if (!Array.isArray(value)) return [];
+  const ids = [...new Set(value.filter((v): v is string => typeof v === "string" && v.length > 0))];
+  if (ids.length === 0) return [];
+  const found = await prisma.customerType.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  if (found.length !== ids.length) throw new AccessError("One of the selected customer types no longer exists", 400);
+  return ids;
+};
+
 /**
- * POST /admin-roles  { name, description?, permissions: string[] }
+ * POST /admin-roles  { name, description?, permissions: string[], customerTypeIds?: string[] }
  */
 export const createAdminRole = async (req: Request, res: Response) => {
   try {
-    const { name, description, permissions } = req.body;
+    const { name, description, permissions, customerTypeIds } = req.body;
     if (!name || !String(name).trim()) {
       throw new AccessError("Role name is required", 400);
     }
@@ -64,6 +74,7 @@ export const createAdminRole = async (req: Request, res: Response) => {
         name: String(name).trim(),
         description: description?.trim() || null,
         permissions: normalizePermissions(Array.isArray(permissions) ? permissions : []),
+        customerTypeIds: await cleanCustomerTypeIds(customerTypeIds),
       },
     });
     res.status(201).json({ success: true, message: "Role created", data: role });
@@ -73,7 +84,7 @@ export const createAdminRole = async (req: Request, res: Response) => {
 };
 
 /**
- * PATCH /admin-roles/:id  { name?, description?, permissions? }
+ * PATCH /admin-roles/:id  { name?, description?, permissions?, customerTypeIds? }
  * The Administrator role always has every permission and cannot be edited.
  */
 export const updateAdminRole = async (req: Request, res: Response) => {
@@ -85,7 +96,7 @@ export const updateAdminRole = async (req: Request, res: Response) => {
       throw new AccessError("The Administrator role always has full access and cannot be edited", 400);
     }
 
-    const { name, description, permissions } = req.body;
+    const { name, description, permissions, customerTypeIds } = req.body;
     if (existing.isSystem && name && name.trim() !== existing.name) {
       throw new AccessError("System roles cannot be renamed", 400);
     }
@@ -96,6 +107,9 @@ export const updateAdminRole = async (req: Request, res: Response) => {
         ...(name !== undefined && { name: String(name).trim() }),
         ...(description !== undefined && { description: description?.trim() || null }),
         ...(Array.isArray(permissions) && { permissions: normalizePermissions(permissions) }),
+        ...(Array.isArray(customerTypeIds) && {
+          customerTypeIds: await cleanCustomerTypeIds(customerTypeIds),
+        }),
       },
     });
     res.json({ success: true, message: "Role updated", data: role });

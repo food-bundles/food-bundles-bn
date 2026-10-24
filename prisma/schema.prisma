@@ -102,6 +102,9 @@ model Restaurant {
   /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
   deletedAt              DateTime?
   deletedBy              String?
+  /// Aggregators who buy for this customer (e.g. a school)
+  aggregatorLinks       AggregatorCustomer[]
+  supplyRequests        SupplyRequest[]
 }
 
 model Affiliator {
@@ -176,6 +179,11 @@ model FarmerSubmission {
   farmer               Farmer                    @relation(fields: [farmerId], references: [id])
   payouts              SubmissionPayout[]
   statusHistory        SubmissionStatusHistory[]
+  /// Set when the farmer submitted against an aggregator's request list
+  supplyRequestItemId  String?
+  /// The request day this submission supplies
+  supplyDate           DateTime?
+  supplyRequestItem    SupplyRequestItem?        @relation(fields: [supplyRequestItemId], references: [id])
 }
 
 model FarmerSecurityEvent {
@@ -382,6 +390,9 @@ model Admin {
   /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
   deletedAt              DateTime?
   deletedBy              String?
+  /// Customers (schools…) this aggregator buys for
+  aggregatorCustomers      AggregatorCustomer[]       @relation("AggregatorCustomers")
+  supplyRequestsCreated    SupplyRequest[]            @relation("SupplyRequestCreator")
 }
 
 /// Admin-editable settings stored as JSON by key (e.g. "delivery_fee").
@@ -399,6 +410,8 @@ model AdminRole {
   name        String   @unique
   description String?
   permissions String[] @default([])
+  /// Customer types (CustomerType ids) this role works with. Empty = all types.
+  customerTypeIds String[] @default([])
   /// System roles are created by the backfill (Administrator, Market Prices
   /// Manager) and cannot be deleted.
   isSystem    Boolean  @default(false)
@@ -443,6 +456,7 @@ model Product {
   productUnit          ProductUnit?           @relation(fields: [unitId], references: [id])
   customerTypePrices   ProductCustomerPrice[]
   WishlistItem         WishlistItem[]
+  supplyRequestItems   SupplyRequestItem[]
 }
 
 
@@ -640,6 +654,10 @@ model Order {
   @@index([paymentLinkToken])
   @@index([flwStatus])
   @@index([cartId])
+  /// Order created from an aggregator's request list (bought on the customer's behalf)
+  supplyRequestId     String?
+  supplyDate          DateTime?
+  supplyRequest       SupplyRequest?       @relation(fields: [supplyRequestId], references: [id])
 }
 
 model OrderItem {
@@ -1944,3 +1962,59 @@ enum KycConsentStatus {
 }
 
 
+
+
+/// Customers (schools, hotels…) an aggregator buys for
+model AggregatorCustomer {
+  id           String     @id @default(uuid())
+  aggregatorId String
+  restaurantId String
+  assignedBy   String?
+  createdAt    DateTime   @default(now())
+  aggregator   Admin      @relation("AggregatorCustomers", fields: [aggregatorId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([aggregatorId, restaurantId])
+  @@index([restaurantId])
+}
+
+/// An aggregator's list of products a customer needs, with a weekly timetable.
+/// Farmers submit against its lines; paid submissions become one order per day.
+model SupplyRequest {
+  id           String              @id @default(uuid())
+  title        String?
+  restaurantId String
+  createdById  String
+  startDate    DateTime
+  endDate      DateTime
+  /// OPEN (farmers can submit), CLOSED, CANCELLED
+  status       String              @default("OPEN")
+  notes        String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  restaurant   Restaurant          @relation(fields: [restaurantId], references: [id])
+  createdBy    Admin               @relation("SupplyRequestCreator", fields: [createdById], references: [id])
+  items        SupplyRequestItem[]
+  orders       Order[]
+
+  @@index([restaurantId])
+  @@index([status])
+}
+
+/// One product needed on one weekday of a request (1 = Monday … 7 = Sunday)
+model SupplyRequestItem {
+  id          String             @id @default(uuid())
+  requestId   String
+  productId   String
+  weekday     Int
+  quantity    Float
+  /// Price per unit offered to farmers (starts at the Food Bundles purchase price)
+  price       Float
+  createdAt   DateTime           @default(now())
+  request     SupplyRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  product     Product            @relation(fields: [productId], references: [id])
+  submissions FarmerSubmission[]
+
+  @@index([requestId])
+  @@index([productId])
+}

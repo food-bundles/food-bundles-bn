@@ -41,6 +41,8 @@ import {
   AccessError,
   getEffectivePermissions,
   resolveRoleAssignment,
+  canSeeCustomerType,
+  getCustomerTypeScope,
 } from "../services/access.service";
 import { hasDashboardAccess, isDashboardRole, Permission } from "../config/permissions";
 import { userCan } from "../middleware/authMiddleware";
@@ -246,14 +248,19 @@ export class UserController {
 
   static getAllRestaurants = async (req: Request, res: Response) => {
     try {
-      const { page, limit, search } = req.query;
+      const { page, limit, search, customerTypeId } = req.query;
       const paginationQuery = PaginationService.validatePaginationParams(
         page as string,
         limit as string,
       );
+      // Dashboard users only see the customer types their role works with
       const restaurants = await getAllRestaurantsService(
         paginationQuery,
         typeof search === "string" ? search : undefined,
+        {
+          customerTypeId: typeof customerTypeId === "string" && customerTypeId ? customerTypeId : undefined,
+          customerTypeScope: (req as any).user?.customerTypeScope ?? null,
+        },
       );
 
       res.status(200).json({
@@ -317,6 +324,11 @@ export class UserController {
     try {
       const { id } = req.params;
       const restaurant = await getRestaurantByIdService(id);
+
+      // Outside the viewer's customer types → treat as not found
+      if (restaurant && !canSeeCustomerType((req as any).user, (restaurant as any).customerTypeId)) {
+        return res.status(404).json({ success: false, message: "Restaurant not found" });
+      }
 
       if (!restaurant) {
         return res.status(404).json({
@@ -388,6 +400,13 @@ export class UserController {
       const isSelf = actor?.id === id;
       if (!isSelf && !userCan(actor, permission)) {
         throw new UserManagementError("You don't have permission to edit this user", 403);
+      }
+      // Customers outside the editor's customer types are off limits
+      if (type === "restaurant" && !isSelf) {
+        const customer = await prisma.restaurant.findUnique({ where: { id }, select: { customerTypeId: true } });
+        if (customer && !canSeeCustomerType(actor, customer.customerTypeId)) {
+          throw new UserManagementError("You can only edit customers of your customer types", 403);
+        }
       }
 
       const data = await updateManagedUser(type, id, req.body || {}, {
@@ -780,6 +799,8 @@ export class UserController {
       // Dashboard users (office and field) get their effective permissions (drives the sidebar)
       if (hasDashboardAccess(user.role)) {
         userWithoutPassword.permissions = await getEffectivePermissions(user);
+        // Customer types they work with (null = all) for the Customers tabs
+        userWithoutPassword.customerTypeScope = await getCustomerTypeScope(user);
       }
       // The dashboard reads the role as "adminRole" (the relation is named AdminRole)
       if (userRole === "admin") {
