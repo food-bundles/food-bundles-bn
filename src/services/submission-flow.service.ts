@@ -66,6 +66,18 @@ export const getFoodBundlesPrice = async (productName: string) => {
   return product && product.purchasePrice > 0 ? product.purchasePrice : null;
 };
 
+/**
+ * Price both sides agreed. Submissions approved before the new flow kept it
+ * in acceptedPrice (or only the farmer's price), so fall back to those.
+ */
+export const agreedPriceOf = (submission: {
+  agreedPrice: number | null;
+  acceptedPrice: number | null;
+  farmerCounterOffer: number | null;
+  wishedPrice: number | null;
+}) =>
+  submission.agreedPrice ?? submission.acceptedPrice ?? submission.farmerCounterOffer ?? submission.wishedPrice ?? 0;
+
 /** What the farmer currently asks per unit (their latest counter, else the original). */
 export const askedPrice = (submission: { wishedPrice: number | null; farmerCounterOffer: number | null }) =>
   submission.farmerCounterOffer ?? submission.wishedPrice ?? 0;
@@ -304,7 +316,7 @@ export const verifySubmission = async (
     );
   }
 
-  let price = submission.agreedPrice ?? 0;
+  let price = agreedPriceOf(submission);
   if (options.price !== undefined && options.price !== null && Number(options.price) !== price) {
     if (!options.canSetPrice) {
       throw new SubmissionFlowError("You can't change the agreed price", 403);
