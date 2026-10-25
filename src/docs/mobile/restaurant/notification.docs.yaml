@@ -1,0 +1,68 @@
+tags:
+  - name: Mobile Restaurant — Notifications
+    description: In-app notification endpoints for the restaurant mobile app
+
+paths:
+  /mobile/restaurant/notifications:
+    get:
+      tags: [Mobile Restaurant — Notifications]
+      summary: List notifications for the authenticated restaurant
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: page,   in: query, schema: { type: integer, default: 1 } }
+        - { name: limit,  in: query, schema: { type: integer, default: 10 } }
+        - { name: isRead, in: query, schema: { type: boolean }, description: Filter by read status }
+      responses:
+        200:
+          description: Notifications retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:       { type: array, items: { type: object } }
+                  pagination: { type: object }
+
+  /mobile/restaurant/notifications/unread-count:
+    get:
+      tags: [Mobile Restaurant — Notifications]
+      summary: Get unread notification count
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      unreadCount: { type: integer }
+
+  /mobile/restaurant/notifications/mark-all-read:
+    patch:
+      tags: [Mobile Restaurant — Notifications]
+      summary: Mark all notifications as read
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+
+  /mobile/restaurant/notifications/{notificationId}/read:
+    patch:
+      tags: [Mobile Restaurant — Notifications]
+      summary: Mark a single notification as read
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: notificationId, in: path, required: true, schema: { type: string } }
+      responses:
+        200: { description: Notification marked as read }
+        404: { description: Notification not found }

@@ -1,0 +1,102 @@
+tags:
+  - name: Mobile Restaurant — Wallet
+    description: Prepaid wallet endpoints for the restaurant mobile app
+
+paths:
+  /mobile/restaurant/wallets:
+    get:
+      tags: [Mobile Restaurant — Wallet]
+      summary: Get the authenticated restaurant's wallet
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: Wallet retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      balance: { type: number }
+                      currency: { type: string, example: RWF }
+                      isActive: { type: boolean }
+                      createdAt: { type: string, format: date-time }
+        404: { description: Wallet not found }
+
+  /mobile/restaurant/wallets/top-up:
+    post:
+      tags: [Mobile Restaurant — Wallet]
+      summary: Top up the restaurant wallet
+      description: |
+        Initiates a wallet top-up via Mobile Money (PayPack → Flutterwave fallback) or Card (Flutterwave hosted checkout).
+        - **MOBILE_MONEY**: returns `status: pending` — restaurant confirms on phone; poll `/wallets/verify-topup/:transactionId`.
+        - **CARD**: returns `redirectUrl` — redirect user to complete payment.
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [walletId, amount, paymentMethod]
+              properties:
+                walletId: { type: string }
+                amount: { type: number, minimum: 1 }
+                paymentMethod: { type: string, enum: [MOBILE_MONEY, CARD] }
+                phoneNumber:
+                  {
+                    type: string,
+                    description: Required for MOBILE_MONEY,
+                    example: "0781234567",
+                  }
+                description: { type: string }
+      responses:
+        200:
+          description: Top-up initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      redirectUrl: { type: string, nullable: true }
+                      status: { type: string }
+        400: { description: Validation error or inactive wallet }
+
+  /mobile/restaurant/wallets/transactions:
+    get:
+      tags: [Mobile Restaurant — Wallet]
+      summary: Get wallet transaction history
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, default: 10 } }
+        - {
+            name: type,
+            in: query,
+            schema:
+              { type: string, enum: [TOP_UP, PAYMENT, REFUND, ADJUSTMENT] },
+          }
+        - {
+            name: status,
+            in: query,
+            schema: { type: string, enum: [PENDING, COMPLETED, FAILED] },
+          }
+        - { name: startDate, in: query, schema: { type: string, format: date } }
+        - { name: endDate, in: query, schema: { type: string, format: date } }
+      responses:
+        200:
+          description: Transactions retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { type: object } }
+                  pagination: { type: object }

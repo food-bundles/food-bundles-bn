@@ -1,0 +1,33 @@
+tags:
+  - name: Mobile Restaurant — Vouchers
+    description: Restaurant voucher operations for the mobile app
+
+paths:
+  /mobile/restaurant/vouchers:
+    get:
+      tags: [Mobile Restaurant — Vouchers]
+      summary: List vouchers for the authenticated restaurant
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: activeOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        200:
+          description: Vouchers retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data:
+                    type: array
+                    items: { type: object }
+        401:
+          description: Unauthorized

@@ -14,6 +14,7 @@ import { DeliveryService } from "./services/delivery.service";
 import { scheduleVoucherReminders } from "./jobs/voucher-reminder.job";
 import { scheduleWeeklyPriceUpdate } from "./services/newsletter.service";
 import { ensureSystemRoles } from "./services/access.service";
+import { scheduleOrderStatusNotifications } from "./jobs/order-status-notify.job";
 
 interface CustomIncomingMessage extends IncomingMessage {
   rawBody: Buffer;
@@ -112,6 +113,7 @@ httpServer.listen(PORT, () => {
   // Initialize cron jobs
   scheduleVoucherReminders();
   scheduleWeeklyPriceUpdate();
+  scheduleOrderStatusNotifications();
 
   // Create/sync system roles and give existing admins their default role
   ensureSystemRoles().catch((error) =>

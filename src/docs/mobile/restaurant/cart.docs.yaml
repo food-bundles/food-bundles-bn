@@ -1,0 +1,91 @@
+tags:
+  - name: Mobile Restaurant — Cart
+    description: Cart management for the restaurant mobile app
+
+paths:
+  /mobile/restaurant/carts:
+    post:
+      tags: [Mobile Restaurant — Cart]
+      summary: Add item to cart
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, quantity]
+              properties:
+                productId: { type: string }
+                quantity: { type: number, minimum: 0.01 }
+      responses:
+        200: { description: Item added }
+        400: { description: Validation error }
+    get:
+      tags: [Mobile Restaurant — Cart]
+      summary: Get current cart
+      security: [{ BearerAuth: [] }]
+      responses:
+        200: { description: Cart retrieved (null if empty) }
+
+  /mobile/restaurant/carts/summary:
+    get:
+      tags: [Mobile Restaurant — Cart]
+      summary: Get cart item count and total
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: Cart summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      itemCount: { type: number }
+                      totalAmount: { type: number }
+                      cartId: { type: string, nullable: true }
+
+  /mobile/restaurant/carts/items/{cartItemId}:
+    put:
+      tags: [Mobile Restaurant — Cart]
+      summary: Update cart item quantity
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: cartItemId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: number, minimum: 0.01 }
+      responses:
+        200: { description: Item updated }
+        400: { description: Validation error }
+    delete:
+      tags: [Mobile Restaurant — Cart]
+      summary: Remove item from cart
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: cartItemId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        200: { description: Item removed }
+
+  /mobile/restaurant/carts/clear:
+    delete:
+      tags: [Mobile Restaurant — Cart]
+      summary: Clear entire cart
+      security: [{ BearerAuth: [] }]
+      responses:
+        200: { description: Cart cleared }
