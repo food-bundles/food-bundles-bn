@@ -18,6 +18,9 @@ model Farmer {
   cell                   String?
   village                String?
   locationUpdatedAt      DateTime?
+  /// Farm position (GPS pin or typed by the farmer); the nearest aggregation site is worked out from it
+  latitude               Float?
+  longitude              Float?
   role                   Role                     @default(FARMER)
   preferredLanguage      String?                  @default("KINY")
   password               String?
@@ -180,6 +183,9 @@ model FarmerSubmission {
   payouts              SubmissionPayout[]
   statusHistory        SubmissionStatusHistory[]
   /// Set when the farmer submitted against an aggregator's request list
+  /// Nearest active aggregation site, assigned automatically when the harvest is submitted
+  aggregationSiteId    String?
+  aggregationSite      AggregationSite?          @relation(fields: [aggregationSiteId], references: [id])
   supplyRequestItemId  String?
   /// The request day this submission supplies
   supplyDate           DateTime?
@@ -1622,6 +1628,27 @@ model WfpMarketPrice {
   @@index([commodity])
   @@index([marketName])
   @@index([province])
+}
+
+/// Where farmers bring their harvest. Seeded from the markets in WfpMarketPrice (name, district and
+/// coordinates); admins can switch a site off or correct it, and a re-sync never overwrites those edits.
+model AggregationSite {
+  id            String             @id @default(uuid())
+  name          String
+  /// WfpMarketPrice.marketName this site came from
+  marketName    String             @unique
+  province      String?
+  district      String?
+  latitude      Float
+  longitude     Float
+  isActive      Boolean            @default(true)
+  lastPriceDate DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  submissions   FarmerSubmission[]
+
+  @@index([district])
+  @@index([isActive])
 }
 
 model support_requests {
