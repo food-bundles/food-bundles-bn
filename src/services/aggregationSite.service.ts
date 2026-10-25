@@ -40,9 +40,9 @@ export const isValidCoordinate = (lat: unknown, lng: unknown): boolean =>
   Math.abs(lng) <= 180;
 
 /**
- * Copy the markets of WfpMarketPrice into AggregationSite. New markets are added as active (a market that
- * stopped reporting prices still exists, so price age is not held against it); existing sites only get their
- * last price date refreshed, so an admin's edits and on/off choices are kept.
+ * Add the markets of WfpMarketPrice that are not in AggregationSite yet, as active sites (a market that
+ * stopped reporting prices still exists, so price age is not held against it). Sites already in the table
+ * are never touched, so an admin's edits and on/off choices are kept.
  */
 export async function syncSitesFromWfp() {
   const markets = await prisma.$queryRaw<
@@ -66,39 +66,30 @@ export async function syncSitesFromWfp() {
     GROUP BY "marketName"
   `;
 
-  const existing = new Map(
-    (await prisma.aggregationSite.findMany({ select: { id: true, marketName: true } })).map((s) => [
-      s.marketName,
-      s.id,
-    ])
+  const existing = new Set(
+    (await prisma.aggregationSite.findMany({ select: { marketName: true } })).map((s) => s.marketName)
   );
 
   let created = 0;
-  let refreshed = 0;
   for (const m of markets) {
     const latitude = Number(m.latitude);
     const longitude = Number(m.longitude);
     if (!isValidCoordinate(latitude, longitude)) continue;
-    const id = existing.get(m.marketName);
-    if (id) {
-      await prisma.aggregationSite.update({ where: { id }, data: { lastPriceDate: m.lastPriceDate } });
-      refreshed++;
-    } else {
-      await prisma.aggregationSite.create({
-        data: {
-          name: m.marketName,
-          marketName: m.marketName,
-          province: m.province,
-          district: m.district,
-          latitude,
-          longitude,
-          lastPriceDate: m.lastPriceDate,
-        },
-      });
-      created++;
-    }
+    if (existing.has(m.marketName)) continue;
+    await prisma.aggregationSite.create({
+      data: {
+        name: m.marketName,
+        marketName: m.marketName,
+        province: m.province,
+        district: m.district,
+        latitude,
+        longitude,
+        lastPriceDate: m.lastPriceDate,
+      },
+    });
+    created++;
   }
-  return { markets: markets.length, created, refreshed };
+  return { markets: markets.length, created };
 }
 
 /** Centre of the active sites in a district: the best guess for a farmer who never shared a pin. */

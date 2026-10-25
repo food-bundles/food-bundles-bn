@@ -20,6 +20,7 @@ import {
   getCropDemandController,
   getFarmerPreferencesController,
   getFarmerReportController,
+  getFarmerSubmissionDetailController,
   updateFarmerPreferencesController,
 } from "../controllers/farmerDashboard.controller";
 
@@ -44,6 +45,7 @@ farmerDashboardRoutes.get(
 farmerDashboardRoutes.get("/recent-activity", getRecentActivityController);
 farmerDashboardRoutes.get("/crop-demand", getCropDemandController);
 farmerDashboardRoutes.get("/report", getFarmerReportController);
+farmerDashboardRoutes.get("/submissions/:submissionId", getFarmerSubmissionDetailController);
 farmerDashboardRoutes.get("/farming-profile", getFarmingProfileController);
 farmerDashboardRoutes.patch(
   "/farming-profile",

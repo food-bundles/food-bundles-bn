@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { catchAsyncError } from "../utils/errorhandler.utlity";
 import errorHandler from "../utils/errorhandler.utlity";
+import { getFarmerSubmissionDetail } from "../services/farmerSubmissionDetail.service";
 import { getFarmerReport } from "../services/farmerReport.service";
 import { AnalyticsEarningsService } from "../services/analyticsEarnings.service";
 import { ActivityMonitoringService } from "../services/activityMonitoring.service";
@@ -551,5 +552,17 @@ export const getFarmerReportController = catchAsyncError(
       message: "Report retrieved successfully",
       data: await getFarmerReport(farmerId, from),
     });
+  }
+);
+
+// One of the farmer's own submissions with its timeline, prices, payment and drop-off site
+export const getFarmerSubmissionDetailController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const farmerId = (req as any).user.id;
+    const detail = await getFarmerSubmissionDetail(farmerId, req.params.submissionId);
+    if (!detail) {
+      return next(new errorHandler({ message: "Submission not found", statusCode: 404 }));
+    }
+    res.status(200).json({ success: true, message: "Submission retrieved successfully", data: detail });
   }
 );
