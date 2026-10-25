@@ -1146,7 +1146,8 @@ export const loginService = async (loginData: ILoginData) => {
   const isPasswordValid = await comparePassword(password, user.password);
   if (!isPasswordValid) throw new Error("Invalid password");
 
-  const { password: _, ...userWithoutPassword } = user;
+  // Strip credentials, including the 2FA secret and backup codes, before the user goes to the client
+  const { password: _, twoFactorSecret: __, twoFactorBackupCodes: ___, ...userWithoutPassword } = user;
 
   return {
     user: userWithoutPassword,

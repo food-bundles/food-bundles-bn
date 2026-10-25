@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { catchAsyncError } from "../utils/errorhandler.utlity";
 import errorHandler from "../utils/errorhandler.utlity";
+import { getFarmerReport } from "../services/farmerReport.service";
 import { AnalyticsEarningsService } from "../services/analyticsEarnings.service";
 import { ActivityMonitoringService } from "../services/activityMonitoring.service";
 import { FarmingProfileService } from "../services/farmingProfile.service";
@@ -528,6 +529,27 @@ export const updateFarmerPreferencesController = catchAsyncError(
       success: true,
       message: "Preferences updated successfully",
       data: preferences,
+    });
+  }
+);
+
+// Farmer's report: Mobile Money wallet, pending money (separate), and each submission with how it was paid
+export const getFarmerReportController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const farmerId = (req as any).user.id;
+
+    let from: Date | undefined;
+    if (req.query.from !== undefined) {
+      from = new Date(String(req.query.from));
+      if (Number.isNaN(from.getTime())) {
+        return next(new errorHandler({ message: "from must be a valid date", statusCode: 400 }));
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Report retrieved successfully",
+      data: await getFarmerReport(farmerId, from),
     });
   }
 );

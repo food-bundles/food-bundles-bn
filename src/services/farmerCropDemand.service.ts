@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import { nearestSitesForFarmer } from "./aggregationSite.service";
 
 const OPEN_ORDER_STATUSES = ["PENDING", "CONFIRMED", "PREPARING"] as const;
 
@@ -8,6 +9,8 @@ export interface FarmerCropDemand {
   neededKg: number;
   ratePerKg: number;
   orderCount: number;
+  /** Name of the aggregation site nearest to the farmer; null when their position is unknown */
+  deliveryPoint: string | null;
 }
 
 // Buyer demand = quantity in open restaurant orders, limited to the
@@ -34,6 +37,7 @@ export async function getFarmerCropDemand(
     _count: { _all: true },
   });
 
+  const [nearestSite] = await nearestSitesForFarmer(farmerId, 1).catch(() => []);
   const byProduct = new Map(grouped.map((g) => [g.productId, g]));
   return crops
     .map((c) => {
@@ -44,6 +48,7 @@ export async function getFarmerCropDemand(
         neededKg: g?._sum.quantity ?? 0,
         ratePerKg: c.product.purchasePrice,
         orderCount: g?._count._all ?? 0,
+        deliveryPoint: nearestSite?.name ?? null,
       };
     })
     .filter((d) => d.neededKg > 0)
