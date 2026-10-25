@@ -329,7 +329,13 @@ export const getWalletTransactionById = async (req: Request, res: Response) => {
  */
 export const getAllWallets = async (req: Request, res: Response) => {
   try {
-    const { page = 1, limit = 20, isActive, restaurantName, walletType } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      isActive,
+      restaurantName,
+      walletType,
+    } = req.query;
 
     const result = await getAllWalletsService({
       page: parseInt(page as string),
@@ -362,7 +368,13 @@ export const getAllWallets = async (req: Request, res: Response) => {
  */
 export const getRestaurantWallets = async (req: Request, res: Response) => {
   try {
-    const { page = 1, limit = 20, isActive, restaurantName, search } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      isActive,
+      restaurantName,
+      search,
+    } = req.query;
 
     const result = await getAllWalletsService({
       page: parseInt(page as string),
@@ -396,7 +408,13 @@ export const getRestaurantWallets = async (req: Request, res: Response) => {
  */
 export const getTraderWallets = async (req: Request, res: Response) => {
   try {
-    const { page = 1, limit = 20, isActive, restaurantName, search } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      isActive,
+      restaurantName,
+      search,
+    } = req.query;
 
     const result = await getAllWalletsService({
       page: parseInt(page as string),
@@ -694,7 +712,6 @@ export const verifyAdminDepositOTP = async (req: Request, res: Response) => {
     if (!otpResult.success) {
       return res.status(502).json({
         message: otpResult.message,
-        otpDelivery: otpResult.channels,
       });
     }
 
@@ -911,7 +928,10 @@ export const getAdminWalletTransactions = async (
  * Get restaurant transactions only
  * GET /wallets/restaurants/transactions
  */
-export const getRestaurantTransactions = async (req: Request, res: Response) => {
+export const getRestaurantTransactions = async (
+  req: Request,
+  res: Response,
+) => {
   try {
     const {
       restaurantId,
