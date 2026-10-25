@@ -69,7 +69,7 @@ export const getPendingFeedbackSubmissionsService = async (
 
   const whereCondition = {
     farmerId,
-    // Counter offers waiting for the farmer's answer
+    // Counter-offers sent to the farmer
     status: SubmissionStatus.NEGOTIATING,
     farmerFeedbackStatus: FarmerFeedbackStatus.PENDING,
     // Only show submissions that haven't passed deadline

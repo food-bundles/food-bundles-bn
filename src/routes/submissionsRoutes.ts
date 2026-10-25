@@ -139,7 +139,7 @@ submissionsRoutes.delete(
   SubmissionPayoutController.deleteSubmission
 );
 
-// Force-complete a submission without waiting for farmer feedback
+// Force-complete a submission without the farmer's answer to a counter-offer
 submissionsRoutes.patch(
   "/:submissionId/force-complete",
   isAuthenticated,

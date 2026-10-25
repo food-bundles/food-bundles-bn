@@ -135,7 +135,7 @@ export const decideSubmissionPrice = async (
   if (submission.status !== "PENDING") {
     throw new SubmissionFlowError(
       submission.status === "NEGOTIATING"
-        ? "A counter offer is already waiting for the farmer"
+        ? "A counter-offer was already sent to the farmer"
         : "Only submitted (pending) products can be approved",
     );
   }
