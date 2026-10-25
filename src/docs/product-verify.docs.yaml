@@ -589,7 +589,7 @@ paths:
       tags:
         - Submission API Management
       summary: Get submissions awaiting farmer feedback (Aggregators/Admins only)
-      description: Retrieve all verified submissions that are waiting for farmer feedback
+      description: Retrieve submissions with a counter-offer sent to the farmer
       security:
         - bearerAuth: []
       parameters:
