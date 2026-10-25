@@ -12,10 +12,10 @@ import {
   deleteSubmissionService,
   getSubmissionStatusHistoryService,
 } from "../services/submissionOverride.service";
-import { OTPService } from "../services/otp.service";
 
 export default class SubmissionPayoutController {
-  static requestPayoutOTP = async (req: Request, res: Response) => {
+  /** Initiates the PayPack cashout for an APPROVED submission (no OTP step). */
+  static initiatePayout = async (req: Request, res: Response) => {
     try {
       const { submissionId } = req.params;
       const { phoneNumber } = req.body;
@@ -44,73 +44,10 @@ export default class SubmissionPayoutController {
         });
       }
 
-      const otpResult = await OTPService.sendSubmissionPayoutOTP(
-        adminId,
+      const result = await initiateSubmissionPayoutService(
         submissionId,
         phoneNumber,
-        submission.totalAmount || 0,
-        submission.productName
-      );
-
-      if (!otpResult.success) {
-        return res.status(502).json({
-          success: false,
-          message: otpResult.message,
-          otpDelivery: otpResult.channels,
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        message: otpResult.message,
-        requiresOTP: true,
-        sessionId: otpResult.sessionId,
-        otpDelivery: otpResult.channels,
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: error.message || "Failed to send OTP",
-      });
-    }
-  };
-
-  static verifyPayoutOTP = async (req: Request, res: Response) => {
-    try {
-      const { otp, sessionId } = req.body;
-      const adminId = (req as any).user.id;
-
-      if (!otp || !sessionId) {
-        return res.status(400).json({
-          success: false,
-          message: "OTP and session ID are required",
-        });
-      }
-
-      const otpResult = await OTPService.verifySubmissionPayoutOTP(
-        otp,
-        sessionId
-      );
-
-      if (!otpResult.success) {
-        return res.status(400).json({
-          success: false,
-          message: otpResult.message,
-        });
-      }
-
-      const { sessionData } = otpResult;
-      if (sessionData.adminId !== adminId) {
-        return res.status(403).json({
-          success: false,
-          message: "Unauthorized: Admin ID mismatch",
-        });
-      }
-
-      const result = await initiateSubmissionPayoutService(
-        sessionData.submissionId,
-        sessionData.phoneNumber,
-        sessionData.adminId
+        adminId
       );
 
       res.status(200).json({

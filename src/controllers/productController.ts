@@ -16,7 +16,7 @@ import prisma from "../prisma";
 import cloudinary from "../utils/cloudinary.utility";
 import { wsManager } from "../index";
 
-import { isDashboardRole } from "../config/permissions";
+import { hasDashboardAccess, isDashboardRole } from "../config/permissions";
 export const createProduct = async (req: Request, res: Response) => {
   try {
     const {
@@ -79,6 +79,7 @@ export const createProduct = async (req: Request, res: Response) => {
     wsManager.broadcastNewProduct(product);
 
     res.status(201).json({
+      success: true,
       message: "Product created successfully",
       data: product,
     });
@@ -102,7 +103,7 @@ export const updateProductQuantityFromSubmission = async (
       where: { id: adminId },
     });
 
-    if (!admin || !isDashboardRole(admin.role)) {
+    if (!admin || !hasDashboardAccess(admin.role)) {
       throw new Error("Only dashboard admins can perform this action");
     }
 
@@ -304,13 +305,14 @@ export const deleteProduct = async (req: Request, res: Response) => {
 // Get all products
 export const getAllProducts = async (req: Request, res: Response) => {
   try {
-    const { categoryId, search, page = 1, limit = 10 } = req.query;
+    const { categoryId, search, page = 1, limit = 10, includeOutOfStock } = req.query;
 
     const result = await getAllProductsService({
       categoryId: categoryId as string,
       search: search as string,
       page: parseInt(page as string),
       limit: parseInt(limit as string),
+      includeOutOfStock: includeOutOfStock === "true",
     });
 
     res.status(200).json({
@@ -422,10 +424,13 @@ export const approveSubmission = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Failed to approve submission",
-    });
+    const message = error.message || "Failed to approve submission";
+    const statusCode = message.includes("not found")
+      ? 404
+      : message.startsWith("Only ")
+      ? 400
+      : 500;
+    res.status(statusCode).json({ message });
   }
 };
 
@@ -440,7 +445,7 @@ export const updateProductStatus = async (req: Request, res: Response) => {
       where: { id: adminId },
     });
 
-    if (!admin || !isDashboardRole(admin.role)) {
+    if (!admin || !hasDashboardAccess(admin.role)) {
       return res.status(403).json({
         message: "Only dashboard admins can update product status",
       });

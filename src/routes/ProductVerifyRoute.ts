@@ -8,7 +8,7 @@ const ProductverifyRoutes = Router();
 ProductverifyRoutes.put(
   "/product/:submissionId/update",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow.to("farmer_submissions.edit"),
   ProductVerifyController.updateSubmission
 );
 

@@ -228,6 +228,7 @@ const getIncludeConfig = (userRole: Role) => {
     farmer: {
       select: {
         id: true,
+        name: true,
         phone: true,
         email: true,
       },

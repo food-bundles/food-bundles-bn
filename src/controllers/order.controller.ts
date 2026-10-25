@@ -22,7 +22,8 @@ import prisma from "../prisma";
 import { wsManager } from "../index";
 import { getRestaurantFromAffiliatorService } from "../services/affiliator.service";
 
-import { isDashboardRole } from "../config/permissions";
+import { hasDashboardAccess, isDashboardRole } from "../config/permissions";
+import { userCan } from "../middleware/authMiddleware";
 /**
  * Controller to create order from cart
  * POST /orders/from-cart
@@ -211,6 +212,9 @@ export const getAllOrders = async (req: Request, res: Response) => {
       dateFrom: dateFrom ? new Date(dateFrom as string) : undefined,
       dateTo: dateTo ? new Date(dateTo as string) : undefined,
       search: search as string,
+      customerTypeId: (req.query.customerTypeId as string) || undefined,
+      // Dashboard users only see orders of their customer types
+      customerTypeScope: (req as any).user?.customerTypeScope ?? null,
     });
 
     res.status(200).json({
@@ -333,11 +337,16 @@ export const updateOrder = async (req: Request, res: Response) => {
     const userRole = user.role;
     const userId = user.id;
     const restaurantId =
-      userRole === "RESTAURANT"
+      userRole === "RESTAURANT" || userRole === "HOTEL"
         ? userId
         : userRole === "AFFILIATOR"
         ? user.restaurantId
         : undefined;
+
+    // Restaurants edit their own orders; otherwise only dashboard users
+    if (!restaurantId && !hasDashboardAccess(userRole)) {
+      return res.status(403).json({ message: "You don't have permission to update this order" });
+    }
 
     // Validate status if provided
     if (status && !Object.values(OrderStatus).includes(status)) {
@@ -356,30 +365,66 @@ export const updateOrder = async (req: Request, res: Response) => {
       });
     }
 
-    // Only dashboard users who can manage orders (admins, super admins and
-    // roles with orders.manage) can update payment-related fields
-    const canManageOrders =
-      isDashboardRole(userRole) &&
-      (userRole === "SUPERUSER" || user.permissions?.includes("orders.manage"));
-    if ((paymentStatus || paymentReference) && !canManageOrders) {
+    // Payment fields: only dashboard users with "Update payment status"
+    if ((paymentStatus || paymentReference) && !userCan(user, "orders.update_payment_status")) {
       return res.status(403).json({
-        message: "Only admins can update payment information",
+        message: "You don't have permission to update payment information",
       });
     }
 
-    // Order status may be changed even on a cancelled order, but not while the
-    // payment failed — the payment status must be corrected first (admins do
-    // this via the payment stepper), then the order status can be edited.
-    if (status !== undefined && paymentStatus === undefined) {
+    // Order status by a dashboard user: "Update order status" (delivery staff
+    // may also use "Update delivery status"). Restaurants keep their own rules.
+    if (
+      status !== undefined &&
+      hasDashboardAccess(userRole) &&
+      !userCan(user, "orders.update_status") &&
+      !userCan(user, "deliveries.update_status")
+    ) {
+      return res.status(403).json({
+        message: "You don't have permission to update the order status",
+      });
+    }
+
+    // Paid = COMPLETED, or VOUCHER_CREDIT (paid with voucher credit)
+    const PAID_STATUSES: string[] = [PaymentStatus.COMPLETED, PaymentStatus.VOUCHER_CREDIT];
+    // Payment moving away from paid sends an unfinished order back here
+    let resetOrderStatus: OrderStatus | undefined;
+
+    if (status !== undefined || paymentStatus !== undefined) {
       const currentOrder = await prisma.order.findUnique({
         where: { id: orderId },
-        select: { paymentStatus: true },
+        select: { status: true, paymentStatus: true },
       });
-      if (currentOrder?.paymentStatus === PaymentStatus.FAILED) {
+      if (!currentOrder) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      const nextPaymentStatus = paymentStatus ?? currentOrder.paymentStatus;
+
+      // The order status can only change once the order is paid. Cancelling
+      // stays possible so unpaid orders can still be closed.
+      if (
+        status !== undefined &&
+        status !== currentOrder.status &&
+        status !== OrderStatus.CANCELLED &&
+        !PAID_STATUSES.includes(nextPaymentStatus)
+      ) {
         return res.status(409).json({
           message:
-            "Payment status is FAILED. Update the payment status first, then the order status can be changed.",
+            "The order status can only be changed after the payment is completed. Update the payment status first.",
         });
+      }
+
+      // Payment no longer completed (e.g. moved back to FAILED): an order that
+      // is still being processed goes back to PENDING until it is paid again.
+      // Delivered, cancelled and refunded orders keep their status.
+      if (
+        status === undefined &&
+        paymentStatus !== undefined &&
+        PAID_STATUSES.includes(currentOrder.paymentStatus) &&
+        !PAID_STATUSES.includes(paymentStatus) &&
+        !["PENDING", "DELIVERED", "CANCELLED", "REFUNDED"].includes(currentOrder.status)
+      ) {
+        resetOrderStatus = OrderStatus.PENDING;
       }
     }
 
@@ -430,6 +475,7 @@ export const updateOrder = async (req: Request, res: Response) => {
       updateData.actualDelivery = new Date(actualDelivery);
     if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod;
     if (paymentStatus !== undefined) updateData.paymentStatus = paymentStatus;
+    if (resetOrderStatus) updateData.status = resetOrderStatus;
     if (paymentReference !== undefined)
       updateData.paymentReference = paymentReference;
 
@@ -466,11 +512,16 @@ export const cancelOrder = async (req: Request, res: Response) => {
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT"
+      userRole === "RESTAURANT" || userRole === "HOTEL"
         ? user.id
         : userRole === "AFFILIATOR"
         ? user.restaurantId
         : undefined;
+
+    // Restaurants act on their own orders; anyone else needs the permission
+    if (!restaurantId && !userCan(user, "orders.cancel")) {
+      return res.status(403).json({ message: "You don't have permission to cancel orders" });
+    }
 
     const result = await cancelOrderService(orderId, restaurantId, reason);
 
@@ -782,11 +833,16 @@ export const sendPaymentLink = async (req: Request, res: Response) => {
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT"
+      userRole === "RESTAURANT" || userRole === "HOTEL"
         ? user.id
         : userRole === "AFFILIATOR"
         ? user.restaurantId
         : undefined;
+
+    // Restaurants act on their own orders; anyone else needs the permission
+    if (!restaurantId && !userCan(user, "orders.send_payment_link")) {
+      return res.status(403).json({ message: "You don't have permission to send payment links" });
+    }
 
     const paymentResult = await sendPaymentLinkService(orderId, restaurantId);
 
@@ -915,11 +971,16 @@ export const generatePaymentLink = async (req: Request, res: Response) => {
     const user = (req as any).user;
     const userRole = user.role;
     const restaurantId =
-      userRole === "RESTAURANT"
+      userRole === "RESTAURANT" || userRole === "HOTEL"
         ? user.id
         : userRole === "AFFILIATOR"
         ? user.restaurantId
         : undefined;
+
+    // Restaurants act on their own orders; anyone else needs the permission
+    if (!restaurantId && !userCan(user, "orders.send_payment_link")) {
+      return res.status(403).json({ message: "You don't have permission to create payment links" });
+    }
 
     const result = await generatePaymentLinkService(orderId, restaurantId);
 

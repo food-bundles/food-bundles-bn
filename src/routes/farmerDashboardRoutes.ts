@@ -10,11 +10,16 @@ import {
   getRecentActivityController,
   getFarmingProfileController,
   updateFarmingProfileController,
+  updatePrimaryCropsController,
+  addFarmerPhoneController,
   getVoucherSummaryController,
   getVouchersController,
   getLoanApplicationsController,
   getVoucherEligibilityController,
   getDashboardSummaryController,
+  getCropDemandController,
+  getFarmerPreferencesController,
+  updateFarmerPreferencesController,
 } from "../controllers/farmerDashboard.controller";
 
 const farmerDashboardRoutes = Router();
@@ -31,11 +36,16 @@ farmerDashboardRoutes.get(
   getEarningsTimeSeriesController
 );
 farmerDashboardRoutes.get("/recent-activity", getRecentActivityController);
+farmerDashboardRoutes.get("/crop-demand", getCropDemandController);
 farmerDashboardRoutes.get("/farming-profile", getFarmingProfileController);
 farmerDashboardRoutes.patch(
   "/farming-profile",
   updateFarmingProfileController
 );
+farmerDashboardRoutes.put("/primary-crops", updatePrimaryCropsController);
+farmerDashboardRoutes.patch("/phone", addFarmerPhoneController);
+farmerDashboardRoutes.get("/preferences", getFarmerPreferencesController);
+farmerDashboardRoutes.patch("/preferences", updateFarmerPreferencesController);
 farmerDashboardRoutes.get("/voucher-summary", getVoucherSummaryController);
 farmerDashboardRoutes.get("/vouchers", getVouchersController);
 farmerDashboardRoutes.get(

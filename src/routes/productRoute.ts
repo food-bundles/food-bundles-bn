@@ -17,7 +17,7 @@ const productRoutes = Router();
 productRoutes.get(
   "/role-based",
   isAuthenticated,
-  allow("products", "AGGREGATOR", "LOGISTICS"), // Allow these roles
+  allow("products"), // Allow these roles
   getProductsByRole
 );
 
@@ -59,7 +59,7 @@ productRoutes.delete(
 productRoutes.patch(
   "/:productId/status",
   isAuthenticated,
-  allow("products"),
+  allow.to("products.change_status"),
   updateProductStatus
 );
 

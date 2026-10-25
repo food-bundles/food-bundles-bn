@@ -48,6 +48,9 @@ model Farmer {
   VoucherPenalty         VoucherPenalty[]
   VoucherRepayment       VoucherRepayment[]
   VoucherTransaction     VoucherTransaction[]
+  /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
+  deletedAt              DateTime?
+  deletedBy              String?
 }
 
 model Restaurant {
@@ -95,7 +98,13 @@ model Restaurant {
   Wallet                Wallet?
   walletTransactions    WalletTransaction[]
   WalletTransfer        WalletTransfer[]
-  wishlistItems         WishlistItem[]
+  WishlistItem          WishlistItem[]
+  /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
+  deletedAt              DateTime?
+  deletedBy              String?
+  /// Aggregators who buy for this customer (e.g. a school)
+  aggregatorLinks       AggregatorCustomer[]
+  supplyRequests        SupplyRequest[]
 }
 
 model Affiliator {
@@ -119,22 +128,22 @@ model Affiliator {
 }
 
 model FarmerSubmission {
-  id                   String                @id @default(uuid())
+  id                   String                    @id @default(uuid())
   farmerId             String
   productName          String
   submittedQty         Float?
   acceptedQty          Float?
   totalAmount          Float?
   categoryId           String?
-  status               SubmissionStatus      @default(PENDING)
-  farmerFeedbackStatus FarmerFeedbackStatus? @default(PENDING)
+  status               SubmissionStatus          @default(PENDING)
+  farmerFeedbackStatus FarmerFeedbackStatus?     @default(PENDING)
   farmerFeedbackAt     DateTime?
   farmerFeedbackNotes  String?
   farmerCounterOffer   Float?
   farmerCounterQty     Float?
   feedbackDeadline     DateTime?
   aggregatorId         String?
-  submittedAt          DateTime              @default(now())
+  submittedAt          DateTime                  @default(now())
   verifiedAt           DateTime?
   paymentMethod        String?
   approvedAt           DateTime?
@@ -148,14 +157,33 @@ model FarmerSubmission {
   sector               String?
   cell                 String?
   village              String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  aggregator           Admin?                @relation("Aggregator", fields: [aggregatorId], references: [id])
-  approvedProduct      Product?              @relation(fields: [approvedProductId], references: [id])
-  category             ProductCategory?      @relation(fields: [categoryId], references: [id])
-  farmer               Farmer                @relation(fields: [farmerId], references: [id])
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  deliveryDate         DateTime?
+  pickupPoint          String?
+  /// GPS pin the farmer dropped on the map (optional; used to find the nearest market)
+  latitude             Float?
+  longitude            Float?
+  /// Food Bundles buying price (product purchase price) when the price was decided
+  foodBundlesPrice     Float?
+  /// Price per unit Food Bundles offered when the farmer asked more (waits for the farmer)
+  counterOfferPrice    Float?
+  /// Price per unit both sides agreed at approval (verification starts from it)
+  agreedPrice          Float?
+  negotiatedAt         DateTime?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+  aggregator           Admin?                    @relation("Aggregator", fields: [aggregatorId], references: [id])
+  approvedProduct      Product?                  @relation(fields: [approvedProductId], references: [id])
+  category             ProductCategory?          @relation(fields: [categoryId], references: [id])
+  farmer               Farmer                    @relation(fields: [farmerId], references: [id])
   payouts              SubmissionPayout[]
   statusHistory        SubmissionStatusHistory[]
+  /// Set when the farmer submitted against an aggregator's request list
+  supplyRequestItemId  String?
+  /// The request day this submission supplies
+  supplyDate           DateTime?
+  supplyRequestItem    SupplyRequestItem?        @relation(fields: [supplyRequestItemId], references: [id])
 }
 
 model FarmerSecurityEvent {
@@ -359,6 +387,12 @@ model Admin {
   traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
 
   @@index([adminRoleId])
+  /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
+  deletedAt              DateTime?
+  deletedBy              String?
+  /// Customers (schools…) this aggregator buys for
+  aggregatorCustomers      AggregatorCustomer[]       @relation("AggregatorCustomers")
+  supplyRequestsCreated    SupplyRequest[]            @relation("SupplyRequestCreator")
 }
 
 /// Admin-editable settings stored as JSON by key (e.g. "delivery_fee").
@@ -376,6 +410,8 @@ model AdminRole {
   name        String   @unique
   description String?
   permissions String[] @default([])
+  /// Customer types (CustomerType ids) this role works with. Empty = all types.
+  customerTypeIds String[] @default([])
   /// System roles are created by the backfill (Administrator, Market Prices
   /// Manager) and cannot be deleted.
   isSystem    Boolean  @default(false)
@@ -419,19 +455,8 @@ model Product {
   admin                Admin                  @relation(fields: [createdBy], references: [id])
   productUnit          ProductUnit?           @relation(fields: [unitId], references: [id])
   customerTypePrices   ProductCustomerPrice[]
-  wishlistItems        WishlistItem[]
-}
-/// Products a restaurant saved to its wishlist (heart button on the shop)
-model WishlistItem {
-  id           String     @id @default(uuid())
-  restaurantId String
-  productId    String
-  createdAt    DateTime   @default(now())
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@unique([restaurantId, productId])
-  @@index([restaurantId])
+  WishlistItem         WishlistItem[]
+  supplyRequestItems   SupplyRequestItem[]
 }
 
 
@@ -629,6 +654,10 @@ model Order {
   @@index([paymentLinkToken])
   @@index([flwStatus])
   @@index([cartId])
+  /// Order created from an aggregator's request list (bought on the customer's behalf)
+  supplyRequestId     String?
+  supplyDate          DateTime?
+  supplyRequest       SupplyRequest?       @relation(fields: [supplyRequestId], references: [id])
 }
 
 model OrderItem {
@@ -883,41 +912,41 @@ model SubscriptionHistory {
 }
 
 model Voucher {
-  id                 String               @id @default(uuid())
-  voucherCode        String               @unique
-  voucherType        VoucherType
-  discountPercentage Float
-  creditLimit        Float
-  currency           VoucherCurrency      @default(RWF)
-  totalCredit        Float
-  usedCredit         Float                @default(0)
-  remainingCredit    Float
-  paidAmount         Float                @default(0)
-  remainingAmount    Float                @default(0)
-  commission         Float                @default(0)
-  status             VoucherStatus        @default(ACTIVE)
-  expiryDate         DateTime?
-  issuedDate         DateTime             @default(now())
-  approvedBy         String?
-  restaurantId       String?
-  farmerId           String?
-  loanId             String?
-  repaymentDays      Int                  @default(7)
-  serviceFeeRate     Float                @default(0)
-  usedAt             DateTime?
-  maturingSoonNotified Boolean            @default(false)
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  orders             Order[]
-  approver           Admin?               @relation(fields: [approvedBy], references: [id])
-  farmer             Farmer?              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  loan               LoanApplication?     @relation(fields: [loanId], references: [id])
-  restaurant         Restaurant?          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  creditTopUps       VoucherCreditTopUp[]
-  penalties          VoucherPenalty[]
-  repayments         VoucherRepayment[]
-  transactions       VoucherTransaction[]
-  walletTransfers    WalletTransfer[]
+  id                   String               @id @default(uuid())
+  voucherCode          String               @unique
+  voucherType          VoucherType
+  discountPercentage   Float
+  creditLimit          Float
+  currency             VoucherCurrency      @default(RWF)
+  totalCredit          Float
+  usedCredit           Float                @default(0)
+  remainingCredit      Float
+  paidAmount           Float                @default(0)
+  remainingAmount      Float                @default(0)
+  commission           Float                @default(0)
+  status               VoucherStatus        @default(ACTIVE)
+  expiryDate           DateTime?
+  issuedDate           DateTime             @default(now())
+  approvedBy           String?
+  restaurantId         String?
+  farmerId             String?
+  loanId               String?
+  repaymentDays        Int                  @default(7)
+  serviceFeeRate       Float                @default(0)
+  usedAt               DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  maturingSoonNotified Boolean              @default(false)
+  orders               Order[]
+  approver             Admin?               @relation(fields: [approvedBy], references: [id])
+  farmer               Farmer?              @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  loan                 LoanApplication?     @relation(fields: [loanId], references: [id])
+  restaurant           Restaurant?          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  creditTopUps         VoucherCreditTopUp[]
+  penalties            VoucherPenalty[]
+  repayments           VoucherRepayment[]
+  transactions         VoucherTransaction[]
+  walletTransfers      WalletTransfer[]
 
   @@index([restaurantId])
   @@index([farmerId])
@@ -1222,12 +1251,12 @@ model NotificationRecipient {
   id          String               @id @default(uuid())
   name        String
   phoneNumber String
-  email       String?
   category    NotificationCategory
   isActive    Boolean              @default(true)
   createdBy   String?
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
+  email       String?
 
   @@index([category])
   @@index([isActive])
@@ -1327,13 +1356,13 @@ model KycConsent {
   consentVubaBuba  Boolean          @default(false)
   consentKayko     Boolean          @default(false)
   consentRRA       Boolean          @default(false)
-  status           KycConsentStatus @default(PENDING)
-  reviewedAt       DateTime?
-  reviewedBy       String?
-  reviewNotes      String?
   submittedAt      DateTime         @default(now())
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
+  reviewNotes      String?
+  reviewedAt       DateTime?
+  reviewedBy       String?
+  status           KycConsentStatus @default(PENDING)
   restaurant       Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
@@ -1535,13 +1564,13 @@ model LoanRepayment {
 }
 
 model SubmissionStatusHistory {
-  id           String   @id @default(uuid())
+  id           String           @id @default(uuid())
   submissionId String
   fromStatus   String
   toStatus     String
   reason       String?
   changedBy    String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime         @default(now())
   submission   FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
   @@index([submissionId])
@@ -1549,18 +1578,20 @@ model SubmissionStatusHistory {
 }
 
 model SubmissionPayout {
-  id           String   @id @default(uuid())
-  submissionId String
-  amount       Float
-  phoneNumber  String
-  initiatedBy  String
-  status       String   @default("PENDING")
-  paypackRef   String?
+  id            String           @id @default(uuid())
+  submissionId  String
+  amount        Float
+  phoneNumber   String
+  initiatedBy   String
+  /// MOMO (PayPack cashout) or CASH (paid by hand at the market)
+  method        String           @default("MOMO")
+  status        String           @default("PENDING")
+  paypackRef    String?
   paypackStatus String?
-  confirmedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  submission   FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  confirmedAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  submission    FarmerSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
 
   @@index([submissionId])
   @@index([status])
@@ -1586,11 +1617,11 @@ model WfpMarketPrice {
   usdPrice    Float?
   createdAt   DateTime @default(now())
 
+  @@unique([date, marketName, commodity, priceType])
   @@index([date])
   @@index([commodity])
   @@index([marketName])
   @@index([province])
-  @@unique([date, marketName, commodity, priceType])
 }
 
 model support_requests {
@@ -1613,6 +1644,20 @@ model support_requests {
   @@index([email])
   @@index([status])
   @@index([ticketNumber])
+}
+
+
+
+model WishlistItem {
+  id           String     @id @default(uuid())
+  restaurantId String
+  productId    String
+  createdAt    DateTime   @default(now())
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, productId])
+  @@index([restaurantId])
 }
 
 enum TraderTransactionType {
@@ -1638,11 +1683,17 @@ enum Role {
   STAFF
 }
 
+/// Farmer submission flow, one stage at a time:
+/// PENDING (submitted) → APPROVED (price agreed) → VERIFIED (weighed face to face) → PAID.
+/// NEGOTIATING = Food Bundles sent a counter offer and waits for the farmer.
+/// REJECTED = closed without a purchase.
 enum SubmissionStatus {
   PENDING
   VERIFIED
   APPROVED
   PAID
+  NEGOTIATING
+  REJECTED
 }
 
 enum FarmerFeedbackStatus {
@@ -1788,11 +1839,7 @@ enum CardEnrollmentStatus {
   REJECTED
 }
 
-enum KycConsentStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
+
 
 enum LoanSessionStatus {
   REQUESTED
@@ -1906,4 +1953,68 @@ enum NewsletterStatus {
 enum CommissionMode {
   NORMAL
   FIXED
+}
+
+enum KycConsentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+
+
+
+/// Customers (schools, hotels…) an aggregator buys for
+model AggregatorCustomer {
+  id           String     @id @default(uuid())
+  aggregatorId String
+  restaurantId String
+  assignedBy   String?
+  createdAt    DateTime   @default(now())
+  aggregator   Admin      @relation("AggregatorCustomers", fields: [aggregatorId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([aggregatorId, restaurantId])
+  @@index([restaurantId])
+}
+
+/// An aggregator's list of products a customer needs, with a weekly timetable.
+/// Farmers submit against its lines; paid submissions become one order per day.
+model SupplyRequest {
+  id           String              @id @default(uuid())
+  title        String?
+  restaurantId String
+  createdById  String
+  startDate    DateTime
+  endDate      DateTime
+  /// OPEN (farmers can submit), CLOSED, CANCELLED
+  status       String              @default("OPEN")
+  notes        String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  restaurant   Restaurant          @relation(fields: [restaurantId], references: [id])
+  createdBy    Admin               @relation("SupplyRequestCreator", fields: [createdById], references: [id])
+  items        SupplyRequestItem[]
+  orders       Order[]
+
+  @@index([restaurantId])
+  @@index([status])
+}
+
+/// One product needed on one weekday of a request (1 = Monday … 7 = Sunday)
+model SupplyRequestItem {
+  id          String             @id @default(uuid())
+  requestId   String
+  productId   String
+  weekday     Int
+  quantity    Float
+  /// Price per unit offered to farmers (starts at the Food Bundles purchase price)
+  price       Float
+  createdAt   DateTime           @default(now())
+  request     SupplyRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  product     Product            @relation(fields: [productId], references: [id])
+  submissions FarmerSubmission[]
+
+  @@index([requestId])
+  @@index([productId])
 }

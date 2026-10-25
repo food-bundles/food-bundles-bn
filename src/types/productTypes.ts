@@ -3,6 +3,10 @@ export interface ProductSubmissionInput {
   productId: string;
   submittedQty: number;
   wishedPrice: number;
+  deliveryDate?: Date;
+  pickupPoint?: "FARM_GATE" | "COLLECTION_POINT";
+  latitude?: number;
+  longitude?: number;
   location?: string;
   province?: string;
   district?: string;

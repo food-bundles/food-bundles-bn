@@ -10,6 +10,13 @@ import {
 } from "../controllers/productController";
 import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
 import { upload, validateImages } from "../utils/imageUpload";
+import {
+  approveOrCounterSubmission,
+  getSubmissionPrice,
+  paySubmissionInCash,
+  rejectSubmissionController,
+  verifySubmissionController,
+} from "../controllers/submission-flow.controller";
 
 const submissionsRoutes = Router();
 
@@ -25,7 +32,7 @@ submissionsRoutes.get(
 submissionsRoutes.get(
   "/awaiting-feedback",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow("farmer_submissions"),
   ProductVerifyController.getSubmissionsAwaitingFeedback
 );
 
@@ -62,7 +69,7 @@ submissionsRoutes.get(
 submissionsRoutes.patch(
   "/:submissionId/products/:productId/update-quantity",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.update_stock"),
   updateProductQuantityFromSubmission
 );
 
@@ -70,7 +77,7 @@ submissionsRoutes.patch(
 submissionsRoutes.post(
   "/:submissionId/create-product",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.create_product"),
   upload.array("images", 4),
   validateImages,
   createProductFromSubmission
@@ -80,23 +87,39 @@ submissionsRoutes.post(
 submissionsRoutes.patch(
   "/:submissionId/approve",
   isAuthenticated,
+  allow.to("farmer_submissions.approve"),
+  approveOrCounterSubmission
+);
+
+// Stage 2 prices: what the farmer asks and the Food Bundles price
+submissionsRoutes.get(
+  "/:submissionId/price",
+  isAuthenticated,
   allow("farmer_submissions"),
-  approveSubmission
+  getSubmissionPrice
+);
+
+// Stage 4 (cash): the farmer was paid by hand at the market
+submissionsRoutes.post(
+  "/:submissionId/pay-cash",
+  isAuthenticated,
+  allow.to("farmer_submissions.request_payout"),
+  paySubmissionInCash
 );
 
 // Purchase product from submission
 submissionsRoutes.post(
   "/:submissionId/purchase",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
-  ProductVerifyController.purchaseProduct
+  allow.to("farmer_submissions.verify"),
+  verifySubmissionController
 );
 
 // Clear submission
 submissionsRoutes.put(
   "/:submissionId/clear",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow.to("farmer_submissions.edit"),
   ProductVerifyController.clearSubmission
 );
 
@@ -104,8 +127,8 @@ submissionsRoutes.put(
 submissionsRoutes.patch(
   "/:submissionId/reject",
   isAuthenticated,
-  allow("farmer_submissions"),
-  SubmissionPayoutController.reject
+  allow.to("farmer_submissions.reject"),
+  rejectSubmissionController
 );
 
 // Delete a submission (pre-approval only)
@@ -120,7 +143,7 @@ submissionsRoutes.delete(
 submissionsRoutes.patch(
   "/:submissionId/force-complete",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.force_complete"),
   SubmissionPayoutController.forceComplete
 );
 
@@ -128,7 +151,7 @@ submissionsRoutes.patch(
 submissionsRoutes.patch(
   "/:submissionId/reverse-status",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.reverse_status"),
   SubmissionPayoutController.reverseStatus
 );
 
@@ -136,31 +159,23 @@ submissionsRoutes.patch(
 submissionsRoutes.get(
   "/:submissionId/status-history",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow("farmer_submissions"),
   SubmissionPayoutController.getStatusHistory
 );
 
-// Request OTP for a PayPack cashout payout on an APPROVED submission
+// Initiate the PayPack cashout payout on an APPROVED submission
 submissionsRoutes.post(
-  "/:submissionId/payout/request-otp",
+  "/:submissionId/payout",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
-  SubmissionPayoutController.requestPayoutOTP
-);
-
-// Verify OTP and initiate the PayPack cashout payout
-submissionsRoutes.post(
-  "/:submissionId/payout/verify-otp",
-  isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
-  SubmissionPayoutController.verifyPayoutOTP
+  allow.to("farmer_submissions.request_payout"),
+  SubmissionPayoutController.initiatePayout
 );
 
 // Confirm (or mark failed) a pending payout
 submissionsRoutes.patch(
   "/:submissionId/payout/:payoutId/confirm",
   isAuthenticated,
-  allow("farmer_submissions"),
+  allow.to("farmer_submissions.confirm_payout"),
   SubmissionPayoutController.confirmPayout
 );
 
@@ -168,7 +183,7 @@ submissionsRoutes.patch(
 submissionsRoutes.get(
   "/:submissionId/payouts",
   isAuthenticated,
-  allow("farmer_submissions", "AGGREGATOR"),
+  allow("farmer_submissions"),
   SubmissionPayoutController.getPayouts
 );
 

@@ -1,6 +1,6 @@
 import prisma from "../prisma";
 
-import { isDashboardRole } from "../config/permissions";
+import { hasDashboardAccess } from "../config/permissions";
 export interface PaymentMethodData {
   tableTronicPaymentMethodId?: number;
   name: string;
@@ -34,7 +34,7 @@ export const createPaymentMethodService = async (
     where: { id: methodData.createdBy },
   });
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can create payment methods");
   }
 
@@ -174,7 +174,7 @@ export const updatePaymentMethodService = async (
     where: { id: adminId },
   });
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can update payment methods");
   }
 
@@ -293,7 +293,7 @@ export const updateMethodStatusService = async (
     where: { id: adminId },
   });
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can update payment methods");
   }
 

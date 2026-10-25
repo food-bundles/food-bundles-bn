@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { UserController } from "../controllers/userController";
 import { Role } from "@prisma/client";
-import { isAuthenticated, allow } from "../middleware/authMiddleware";
+import {
+  attachUserIfPresent,
+  isAuthenticated,
+  allow,
+  superAdminOnly,
+} from "../middleware/authMiddleware";
 
 const restaurantsRoutes = Router();
 
@@ -10,9 +15,11 @@ restaurantsRoutes.post("/admin/create", isAuthenticated, allow("restaurants"), U
 restaurantsRoutes.post("/verify", UserController.verifyRestaurant);
 restaurantsRoutes.post("/resend-otp", UserController.resendOTP);
 restaurantsRoutes.post("/accept", UserController.acceptTerms);
-restaurantsRoutes.get("/", UserController.getAllRestaurants);
-restaurantsRoutes.get("/:id", UserController.getRestaurantById);
-restaurantsRoutes.put("/:id", UserController.updateRestaurant);
-restaurantsRoutes.delete("/:id", UserController.deleteRestaurant);
+// Public for now; when a dashboard user is signed in, their customer-type scope applies
+restaurantsRoutes.get("/", attachUserIfPresent, UserController.getAllRestaurants);
+restaurantsRoutes.get("/:id", attachUserIfPresent, UserController.getRestaurantById);
+// Edit: the restaurant itself or restaurants.edit; delete (to trash): super admin
+restaurantsRoutes.put("/:id", isAuthenticated, UserController.updateRestaurant);
+restaurantsRoutes.delete("/:id", isAuthenticated, superAdminOnly, UserController.deleteRestaurant);
 
 export default restaurantsRoutes;

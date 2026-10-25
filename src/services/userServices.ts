@@ -11,6 +11,7 @@ import {
 } from "../types/userTypes";
 import { comparePassword, hashPassword } from "../utils/password";
 import { getUserByEmail, getUserByPhone } from "./userGets";
+import { phoneVariants } from "../utils/phone";
 import {
   sendEmail,
   sendPasswordResetTemplate,
@@ -74,9 +75,10 @@ export const checkExistingUser = async (phone?: string, email?: string) => {
 };
 // FARMER SERVICES
 export const createFarmerService = async (farmerData: ICreateFarmerData) => {
+  // Blank strings from forms count as "not provided" (phone and email are unique columns)
+  const phone = farmerData.phone?.trim() || undefined;
+  const email = farmerData.email?.trim() || undefined;
   const {
-    phone,
-    email,
     name,
     password,
     location,
@@ -101,16 +103,29 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
     throw new Error("Either phone or email is required");
   }
 
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Please enter a valid email address");
+  }
+
+  if (phone && !/^\+?\d{9,15}$/.test(phone)) {
+    throw new Error("Please enter a valid phone number");
+  }
+
+  if (!name || name.trim().length < 2) {
+    throw new Error("Name must be at least 2 characters");
+  }
+
+  if (!password || password.length < 6) {
+    throw new Error("Password must be at least 6 characters");
+  }
+
   // Check if phone/email exists in any user table
-  const existingUser = await checkExistingUser(
-    phone || undefined,
-    email || undefined,
-  );
+  const existingUser = await checkExistingUser(phone, email);
 
   console.log("Received existingUser data:---", existingUser);
 
   if (existingUser) {
-    const field = existingUser.phone === phone ? "phone" : "email";
+    const field = phone && existingUser.phone === phone ? "phone" : "email";
     throw new Error(`User with this ${field} already exists`);
   }
 
@@ -159,7 +174,7 @@ export const createFarmerService = async (farmerData: ICreateFarmerData) => {
     await createNotificationService({
       title: "New User Registration",
       message: `New ${farmer.role.toLowerCase()} ${
-        farmer.email
+        farmer.email || farmer.phone
       } has registered`,
       eventType: "USER_SIGNUP",
       targetType: "ROLE_BASED",
@@ -192,6 +207,7 @@ export const getAllFarmersService = async (query: IPaginationQuery) => {
   );
 
   const options = {
+    where: { deletedAt: null }, // trashed farmers are listed in the trash only
     select: {
       id: true,
       location: true,
@@ -549,6 +565,12 @@ export const acceptTermsService = async (identifier: string) => {
 export const getAllRestaurantsService = async (
   query: IPaginationQuery,
   search?: string,
+  filters: {
+    /** Only this customer type (a tab in the Customers page) */
+    customerTypeId?: string;
+    /** Customer types the viewer may see (null/undefined = all) */
+    customerTypeScope?: string[] | null;
+  } = {},
 ) => {
   const normalizedQuery = PaginationService.validatePaginationParams(
     query.page,
@@ -556,19 +578,34 @@ export const getAllRestaurantsService = async (
   );
 
   const term = search?.trim();
+  // Customer type: the picked tab, kept inside what the viewer may see
+  const { customerTypeId, customerTypeScope } = filters;
+  const typeFilter =
+    customerTypeId
+      ? customerTypeScope && !customerTypeScope.includes(customerTypeId)
+        ? { customerTypeId: "__none__" }
+        : { customerTypeId }
+      : customerTypeScope
+        ? { customerTypeId: { in: customerTypeScope } }
+        : {};
   const options = {
+    // Trashed restaurants are listed in the trash only
     where: term
       ? {
+          deletedAt: null,
+          ...typeFilter,
           OR: [
             { name: { contains: term, mode: "insensitive" } },
             { email: { contains: term, mode: "insensitive" } },
             { phone: { contains: term } },
           ],
         }
-      : undefined,
+      : { deletedAt: null, ...typeFilter },
     select: {
       id: true,
       name: true,
+      customerTypeId: true,
+      customerType: { select: { id: true, name: true } },
       email: true,
       phone: true,
       location: true,
@@ -615,6 +652,8 @@ export const getRestaurantByIdService = async (id: string) => {
     select: {
       id: true,
       name: true,
+      customerTypeId: true,
+      customerType: { select: { id: true, name: true } },
       email: true,
       phone: true,
       location: true,
@@ -877,6 +916,7 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
   );
 
   const options = {
+    where: { deletedAt: null }, // trashed users are listed in the trash only
     select: {
       id: true,
       username: true,
@@ -890,7 +930,7 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
       cell: true,
       village: true,
       createdAt: true,
-      adminRole: { select: { id: true, name: true } },
+      AdminRole: { select: { id: true, name: true } }, // relation is named AdminRole in the schema
     },
     orderBy: {
       createdAt: "desc",
@@ -903,8 +943,9 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
     options,
   );
 
+  // The dashboard reads the role as "adminRole"
   return {
-    admins: result.data,
+    admins: result.data.map(({ AdminRole, ...admin }: any) => ({ ...admin, adminRole: AdminRole ?? null })),
     pagination: result.pagination,
   };
 };
@@ -1035,10 +1076,12 @@ export const loginService = async (loginData: ILoginData) => {
   let user: any = null;
   let foundUserType = "";
 
+  const phoneMatch = phone ? { phone: { in: phoneVariants(phone) } } : null;
+
   // Farmer login
   user = await prisma.farmer.findFirst({
     where: {
-      OR: [{ phone: phone || undefined }, { email: email || undefined }],
+      OR: [...(phoneMatch ? [phoneMatch] : []), ...(email ? [{ email }] : [])],
     },
   });
 
@@ -1049,9 +1092,9 @@ export const loginService = async (loginData: ILoginData) => {
     user = await prisma.restaurant.findFirst({
       where: {
         OR: [
-          { phone: phone || undefined },
-          { email: email || undefined },
-          { tin: tin || undefined },
+          ...(phoneMatch ? [phoneMatch] : []),
+          ...(email ? [{ email }] : []),
+          ...(tin ? [{ tin }] : []),
         ],
       },
     });
@@ -1089,6 +1132,9 @@ export const loginService = async (loginData: ILoginData) => {
   }
 
   if (!user) throw new Error("User not found");
+
+  // Accounts in the trash can't sign in (a super admin can restore them)
+  if (user.deletedAt) throw new Error("This account has been deleted. Please contact Food Bundles support.");
 
   if (!user.password) throw new Error("Password not set for this user");
 
@@ -1174,6 +1220,9 @@ export const googleLoginService = async (googleUser: {
       message: "No account found. Please complete registration.",
     };
   }
+
+  // Accounts in the trash can't sign in (a super admin can restore them)
+  if (user.deletedAt) throw new Error("This account has been deleted. Please contact Food Bundles support.");
 
   const { password: _, ...userWithoutPassword } = user;
 
