@@ -32,13 +32,15 @@ export const generateDeliveryOTP = async (req: Request, res: Response) => {
     const result = await DeliveryService.createDeliveryOTP(orderId);
 
     if (!result.success) {
-      return res.status(400).json({
+      return res.status(result.otpDelivery ? 502 : 400).json({
         message: result.message,
+        otpDelivery: result.otpDelivery,
       });
     }
 
     res.status(200).json({
       message: result.message,
+      otpDelivery: result.otpDelivery,
       data: {
         orderId,
         expiresIn: "24 hours",
@@ -80,13 +82,15 @@ export const resendDeliveryOTP = async (req: Request, res: Response) => {
     const result = await DeliveryService.resendDeliveryOTP(orderId);
 
     if (!result.success) {
-      return res.status(400).json({
+      return res.status(result.otpDelivery ? 502 : 400).json({
         message: result.message,
+        otpDelivery: result.otpDelivery,
       });
     }
 
     res.status(200).json({
       message: result.message,
+      otpDelivery: result.otpDelivery,
       data: {
         orderId,
         expiresIn: "24 hours",

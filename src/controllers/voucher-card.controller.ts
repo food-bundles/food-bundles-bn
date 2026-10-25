@@ -639,17 +639,24 @@ export const requestAdminRepayOTP = async (req: Request, res: Response) => {
       amount,
       session.rrn,
     );
-    if (!otpResult.success) throw new Error(otpResult.message);
+    if (!otpResult.success) {
+      return res.status(502).json({
+        success: false,
+        message: otpResult.message,
+        otpDelivery: otpResult.channels,
+      });
+    }
 
     res.json({
       success: true,
-      message: "OTP sent to the restaurant's phone number",
+      message: otpResult.message,
       data: {
         // Mask all but the last 3 digits so the admin knows which phone received it
         phone: otpResult.phone?.replace(/.(?=.{3})/g, "*"),
         amount,
         walletBalance: wallet.balance,
       },
+      otpDelivery: otpResult.channels,
     });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });

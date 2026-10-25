@@ -10,7 +10,6 @@ import { sendMessage } from "../utils/sms.utility";
 import {
   sendAdminVoucherApprovedEmail,
   sendTraderLoanApprovalEmail,
-  sendTraderDelegationOTPEmail,
 } from "../utils/emails";
 import { VoucherType } from "@prisma/client";
 import { wsManager } from "../index";
@@ -1213,14 +1212,12 @@ export const sendCommissionOTPService = async (
       },
     });
 
-    const otpMessage = `Commission update OTP: ${otp}. Trader: ${wallet.trader?.username}. New rate: ${commission}%. Valid for 10 minutes.`;
-    // Send to env var phone (required for OTP verification lookup)
-    await sendMessage(otpMessage, privateReceiver);
-    // Also send to DB PRIVATE_RECEIVER recipients (SMS + email)
-    notifyPrivateReceiversService({
-      subject: `FoodBundles — Commission Update OTP`,
-      body: otpMessage,
-    }).catch((err) => console.error("Failed to notify DB private receivers for commission OTP:", err));
+    const notification = await OTPService.sendOTPNotification({
+      phone: privateReceiver,
+      email: await OTPService.getPrivateReceiverEmail(privateReceiver),
+      subject: "FoodBundles commission update OTP",
+      message: `Commission update OTP: ${otp}. Trader: ${wallet.trader?.username}. New rate: ${commission}%. Valid for 10 minutes.`,
+    });
 
     const sessionData = {
       traderId,
@@ -1231,8 +1228,9 @@ export const sendCommissionOTPService = async (
     };
 
     return {
-      success: true,
-      message: "OTP sent to admin",
+      success: notification.success,
+      message: notification.message,
+      otpDelivery: notification.channels,
       sessionId: Buffer.from(JSON.stringify(sessionData)).toString("base64"),
     };
   }
@@ -1732,26 +1730,12 @@ export const approveDelegationService = async (
       },
     });
 
-    // Send OTP via email
-    await sendTraderDelegationOTPEmail({
-      traderEmail: wallet.trader.email,
-      traderName: wallet.trader.username,
-      otp,
-      commission,
+    const notification = await OTPService.sendOTPNotification({
+      phone: wallet.trader.phone,
+      email: wallet.trader.email,
+      subject: "FoodBundles delegation approval OTP",
+      message: `Your FoodBundles delegation approval OTP is ${otp}. Commission: ${commission}%. It is valid for 24 hours. Do not share this code with anyone.`,
     });
-
-    // Send OTP via SMS too — email should not be the only channel carrying
-    // the actual code, since every other OTP flow in the system is SMS-first.
-    if (wallet.trader?.phone) {
-      try {
-        await sendMessage(
-          `Your Food Bundles delegation acceptance OTP is: ${otp}. Valid for 24 hours.`,
-          wallet.trader.phone,
-        );
-      } catch (smsError) {
-        console.error("Failed to send delegation OTP SMS:", smsError);
-      }
-    }
 
     // Send notifications
     await createNotificationService({
@@ -1776,9 +1760,9 @@ export const approveDelegationService = async (
     }
 
     return {
-      success: true,
-      message:
-        "Delegation approved. OTP sent to trader email (valid for 24 hours).",
+      success: notification.success,
+      message: notification.message,
+      otpDelivery: notification.channels,
     };
   }
 };
@@ -2408,7 +2392,7 @@ export const adminApproveWithdrawService = async (
       include: {
         wallet: {
           include: {
-            trader: { select: { phone: true, username: true, id: true } },
+            trader: { select: { phone: true, email: true, username: true, id: true } },
           },
         },
       },
@@ -2527,17 +2511,17 @@ export const adminApproveWithdrawService = async (
       data: { status: "PROCESSING", adminId },
     });
 
-    // Send OTP to trader
-    if (withdrawRequest.wallet.trader?.phone) {
-      await sendMessage(
-        `Your withdraw OTP: ${otp}. Valid for 10 minutes. Amount: ${Math.abs(withdrawRequest.amount)} RWF`,
-        withdrawRequest.wallet.trader.phone,
-      );
-    }
+    const notification = await OTPService.sendOTPNotification({
+      phone: withdrawRequest.wallet.trader?.phone,
+      email: withdrawRequest.wallet.trader?.email,
+      subject: "FoodBundles trader withdrawal OTP",
+      message: `Your withdrawal OTP is ${otp}. It is valid for 10 minutes. Amount: ${Math.abs(withdrawRequest.amount)} RWF. Do not share this code with anyone.`,
+    });
 
     return {
-      success: true,
-      message: "OTP sent to trader for verification",
+      success: notification.success,
+      message: notification.message,
+      otpDelivery: notification.channels,
       sessionId: Buffer.from(JSON.stringify(withdrawSessionData)).toString(
         "base64",
       ),

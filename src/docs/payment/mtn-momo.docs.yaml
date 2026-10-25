@@ -1,0 +1,349 @@
+tags:
+  - name: MTN MoMo Payments
+    description: MTN Mobile Money direct API payment operations (Rwanda production proxy)
+
+components:
+  schemas:
+    MtnRequestToPayRequest:
+      type: object
+      required:
+        - amount
+        - phoneNumber
+        - externalId
+        - payerMessage
+        - payeeNote
+      properties:
+        amount:
+          type: number
+          example: 1000
+        phoneNumber:
+          type: string
+          description: MTN number (078x/079x). Accepts 07x, 25078x, or 9-digit formats.
+          example: "0781234567"
+        externalId:
+          type: string
+          example: "ORDER-2024-001"
+        payerMessage:
+          type: string
+          example: "FoodBundles Order Payment"
+        payeeNote:
+          type: string
+          example: "Order ORD-001"
+        callbackUrl:
+          type: string
+          example: "https://server.food.rw/webhooks/mtn-momo"
+
+    MtnPaymentResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        referenceId:
+          type: string
+          example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+        status:
+          type: string
+          enum: [PENDING, SUCCESSFUL, FAILED]
+        message:
+          type: string
+        error:
+          type: string
+          nullable: true
+
+    MtnPaymentStatusResult:
+      type: object
+      properties:
+        referenceId:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, SUCCESSFUL, FAILED]
+        amount:
+          type: string
+          example: "1000"
+        currency:
+          type: string
+          example: "RWF"
+        financialTransactionId:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        payer:
+          type: object
+          properties:
+            partyIdType:
+              type: string
+              example: "MSISDN"
+            partyId:
+              type: string
+              example: "250781234567"
+
+    MtnBalanceResult:
+      type: object
+      properties:
+        availableBalance:
+          type: string
+          example: "125000"
+        currency:
+          type: string
+          example: "RWF"
+
+    MtnMomoWebhookPayload:
+      type: object
+      properties:
+        referenceId:
+          type: string
+        externalId:
+          type: string
+        status:
+          type: string
+          enum: [SUCCESSFUL, FAILED, PENDING]
+        financialTransactionId:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        amount:
+          type: string
+        currency:
+          type: string
+        payer:
+          type: object
+          properties:
+            partyIdType:
+              type: string
+            partyId:
+              type: string
+
+paths:
+  /payments/mtn-momo/request:
+    post:
+      tags:
+        - MTN MoMo Payments
+      summary: Initiate a RequestToPay (C2B collection)
+      description: |
+        Sends a USSD push to the customer's MTN MoMo wallet.
+        Only MTN numbers (078x / 079x) are supported.
+        Final status arrives via the webhook callback URL.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MtnRequestToPayRequest"
+            examples:
+              standard_payment:
+                summary: Standard order payment
+                value:
+                  amount: 5000
+                  phoneNumber: "0781234567"
+                  externalId: "ORDER-2024-001"
+                  payerMessage: "FoodBundles Order Payment"
+                  payeeNote: "Order ORD-001"
+              international_format:
+                summary: Phone in international format
+                value:
+                  amount: 10000
+                  phoneNumber: "250791234567"
+                  externalId: "ORDER-2024-002"
+                  payerMessage: "FoodBundles Payment"
+                  payeeNote: "Order ORD-002"
+              with_custom_callback:
+                summary: With custom callback URL
+                value:
+                  amount: 2500
+                  phoneNumber: "0789876543"
+                  externalId: "ORDER-2024-003"
+                  payerMessage: "FoodBundles Order"
+                  payeeNote: "Order ORD-003"
+                  callbackUrl: "https://server.food.rw/webhooks/mtn-momo"
+              minimum_amount:
+                summary: Minimum test amount
+                value:
+                  amount: 100
+                  phoneNumber: "0781234567"
+                  externalId: "TEST-2024-001"
+                  payerMessage: "Test Payment"
+                  payeeNote: "Test"
+      responses:
+        200:
+          description: RequestToPay initiated — customer will receive USSD push
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MtnPaymentResult"
+              examples:
+                pending:
+                  summary: Payment pending customer approval
+                  value:
+                    success: true
+                    referenceId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                    status: "PENDING"
+                    message: "Payment request sent. Please approve on your phone."
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_phone:
+                  value:
+                    success: false
+                    message: "Invalid phone number. Use a valid MTN Rwanda number (078x / 079x)"
+                api_error:
+                  value:
+                    success: false
+                    status: "FAILED"
+                    message: "MoMo API Error: 400 - INVALID_CALLBACK_URL_HOST"
+        500:
+          description: Internal server error
+
+  /payments/mtn-momo/status/{referenceId}:
+    get:
+      tags:
+        - MTN MoMo Payments
+      summary: Get RequestToPay transaction status
+      description: Poll the status of a transaction. Prefer the webhook for real-time updates.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: referenceId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+      responses:
+        200:
+          description: Transaction status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MtnPaymentStatusResult"
+              examples:
+                pending:
+                  summary: Awaiting customer approval
+                  value:
+                    referenceId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                    status: "PENDING"
+                    amount: "1000"
+                    currency: "RWF"
+                    payer:
+                      partyIdType: "MSISDN"
+                      partyId: "250781234567"
+                successful:
+                  summary: Payment approved and completed
+                  value:
+                    referenceId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                    status: "SUCCESSFUL"
+                    amount: "1000"
+                    currency: "RWF"
+                    financialTransactionId: "1234567890"
+                    payer:
+                      partyIdType: "MSISDN"
+                      partyId: "250781234567"
+                failed:
+                  summary: Payment rejected or failed
+                  value:
+                    referenceId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                    status: "FAILED"
+                    amount: "1000"
+                    currency: "RWF"
+                    reason: "PAYER_LIMIT_REACHED"
+        404:
+          description: Transaction not found
+        500:
+          description: Internal server error
+
+  /payments/mtn-momo/balance:
+    get:
+      tags:
+        - MTN MoMo Payments
+      summary: Get collection account balance
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Balance retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MtnBalanceResult"
+              examples:
+                with_balance:
+                  summary: Account has balance
+                  value:
+                    availableBalance: "125000"
+                    currency: "RWF"
+                zero_balance:
+                  summary: Zero balance
+                  value:
+                    availableBalance: "0"
+                    currency: "RWF"
+        500:
+          description: Internal server error
+
+  /webhooks/mtn-momo:
+    post:
+      tags:
+        - MTN MoMo Payments
+      summary: MTN MoMo payment callback (webhook)
+      description: |
+        MTN MoMo POSTs to this endpoint when a RequestToPay resolves.
+        Respond with HTTP 200 immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MtnMomoWebhookPayload"
+            examples:
+              payment_successful:
+                summary: Customer approved the payment
+                value:
+                  referenceId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                  externalId: "ORDER-2024-001"
+                  status: "SUCCESSFUL"
+                  financialTransactionId: "1234567890"
+                  amount: "1000"
+                  currency: "RWF"
+                  payer:
+                    partyIdType: "MSISDN"
+                    partyId: "250781234567"
+              payment_failed:
+                summary: Customer rejected or payment failed
+                value:
+                  referenceId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                  externalId: "ORDER-2024-002"
+                  status: "FAILED"
+                  reason: "PAYER_LIMIT_REACHED"
+                  amount: "5000"
+                  currency: "RWF"
+                  payer:
+                    partyIdType: "MSISDN"
+                    partyId: "250791234567"
+              payment_pending:
+                summary: Transaction still pending
+                value:
+                  referenceId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                  externalId: "ORDER-2024-003"
+                  status: "PENDING"
+                  amount: "2000"
+                  currency: "RWF"
+      responses:
+        200:
+          description: Webhook received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Webhook received"

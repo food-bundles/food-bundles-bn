@@ -1,0 +1,537 @@
+tags:
+  - name: InTouch Payments
+    description: IntouchPay mobile money payment operations (MTN MoMo & Airtel Money via single API)
+
+components:
+  schemas:
+    IntouchPaymentRequest:
+      type: object
+      required:
+        - amount
+        - mobilephone
+        - requesttransactionid
+      properties:
+        amount:
+          type: number
+          description: Amount in RWF (minimum 100)
+          example: 1000
+        mobilephone:
+          type: string
+          description: Customer mobile number in international format
+          example: "250781234567"
+        requesttransactionid:
+          type: string
+          description: Your unique transaction reference (UUID recommended)
+          example: "ORDER-2024-001"
+        callbackurl:
+          type: string
+          description: Override the default callback URL for this transaction
+          example: "https://server.food.rw/webhooks/intouch"
+
+    IntouchDepositRequest:
+      type: object
+      required:
+        - amount
+        - mobilephone
+        - requesttransactionid
+        - reason
+      properties:
+        amount:
+          type: number
+          description: Amount to disburse in RWF (minimum 100)
+          example: 5000
+        mobilephone:
+          type: string
+          description: Recipient mobile number in international format
+          example: "250781234567"
+        requesttransactionid:
+          type: string
+          description: Your unique transaction reference
+          example: "DEPOSIT-2024-001"
+        reason:
+          type: string
+          description: Narration visible to the recipient
+          example: "Refund for order ORD-001"
+        withdrawcharge:
+          type: integer
+          description: Set to 1 to include withdraw charges in the amount
+          default: 1
+          example: 1
+        sid:
+          type: integer
+          description: Service ID. Set to 1 for Bulk Payments
+          default: 1
+          example: 1
+
+    IntouchTransactionStatusRequest:
+      type: object
+      required:
+        - requesttransactionid
+        - transactionid
+      properties:
+        requesttransactionid:
+          type: string
+          description: Your original unique transaction reference
+          example: "ORDER-2024-001"
+        transactionid:
+          type: string
+          description: IntouchPay internal transaction ID returned at initiation
+          example: "10KRNX42RKC532WPGPDXDRHRNA"
+
+    IntouchPaymentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+          example: "Pending"
+        transactionId:
+          type: string
+          example: "10KRNX42RKC532WPGPDXDRHRNA"
+        requestTransactionId:
+          type: string
+          example: "ORDER-2024-001"
+        responsecode:
+          type: string
+          example: "1000"
+        message:
+          type: string
+          example: "Your Payment transaction of 1000RWF Pending. Dial *182*7*1# to approve it."
+        provider:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "MTN"
+            name:
+              type: string
+              example: "MTN MOBILE MONEY RWANDA"
+
+    IntouchDepositResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+          example: "Successfull"
+        transactionId:
+          type: string
+        requestTransactionId:
+          type: string
+        responsecode:
+          type: string
+          example: "2001"
+        referenceid:
+          type: string
+        referenceno:
+          type: string
+        message:
+          type: string
+        provider:
+          type: object
+          properties:
+            code:
+              type: string
+            name:
+              type: string
+
+    IntouchBalanceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        balance:
+          type: number
+          example: 125000
+        currency:
+          type: string
+          example: "RWF"
+
+    IntouchTransactionStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+          example: "Pending"
+        responsecode:
+          type: string
+          example: "1000"
+        message:
+          type: string
+          example: "Transaction Pending"
+
+    IntouchWebhookPayload:
+      type: object
+      properties:
+        jsonpayload:
+          type: object
+          properties:
+            requesttransactionid:
+              type: string
+              example: "ORDER-2024-001"
+            transactionid:
+              type: string
+              example: "10KRNX42RKC532WPGPDXDRHRNA"
+            status:
+              type: string
+              example: "Successfull"
+            responsecode:
+              type: string
+              example: "01"
+            statusdesc:
+              type: string
+              example: "Successfully Processed Transaction"
+            referenceno:
+              type: string
+              example: "312333883"
+            amount:
+              type: number
+              example: 1000
+            currency:
+              type: string
+              example: "RWF"
+            transactionfee:
+              type: number
+              example: 0
+
+paths:
+  /payments/intouch/request:
+    post:
+      tags:
+        - InTouch Payments
+      summary: Request a C2B payment (collect from customer)
+      description: |
+        Initiates a mobile money collection from a customer's wallet.
+        The customer receives a USSD prompt to approve the payment.
+        Final status is delivered asynchronously via the callback URL.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntouchPaymentRequest"
+            examples:
+              mtn_payment:
+                summary: MTN MoMo payment (250 78x/79x)
+                value:
+                  amount: 1000
+                  mobilephone: "250781234567"
+                  requesttransactionid: "ORDER-2024-001"
+                  callbackurl: "https://server.food.rw/webhooks/intouch"
+              airtel_payment:
+                summary: Airtel Money payment (250 72x/73x)
+                value:
+                  amount: 5000
+                  mobilephone: "250721234567"
+                  requesttransactionid: "ORDER-2024-002"
+              minimum_amount:
+                summary: Minimum amount (100 RWF)
+                value:
+                  amount: 100
+                  mobilephone: "250781234567"
+                  requesttransactionid: "ORDER-2024-003"
+              large_payment:
+                summary: Large payment
+                value:
+                  amount: 500000
+                  mobilephone: "250791234567"
+                  requesttransactionid: "ORDER-2024-004"
+      responses:
+        200:
+          description: Payment request initiated — customer will receive USSD prompt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntouchPaymentResponse"
+              examples:
+                pending:
+                  summary: Payment pending customer approval
+                  value:
+                    success: true
+                    status: "Pending"
+                    transactionId: "10KRNX42RKC532WPGPDXDRHRNA"
+                    requestTransactionId: "ORDER-2024-001"
+                    responsecode: "1000"
+                    message: "Your Payment transaction of 1000RWF Pending. Dial *182*7*1# to approve it."
+                    provider:
+                      code: "MTN"
+                      name: "MTN MOBILE MONEY RWANDA"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                duplicate_id:
+                  value:
+                    success: false
+                    message: "Duplicate Transaction ID"
+                    responsecode: "2400"
+                invalid_number:
+                  value:
+                    success: false
+                    message: "Invalid Number"
+                    responsecode: "1200"
+        500:
+          description: Internal server error
+
+  /payments/intouch/deposit:
+    post:
+      tags:
+        - InTouch Payments
+      summary: Send a B2C deposit (disburse to customer wallet)
+      description: |
+        Pushes funds directly to a customer's mobile money wallet.
+        No customer approval required. Used for refunds, payroll, commissions.
+        Check account balance before bulk disbursements.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntouchDepositRequest"
+            examples:
+              refund:
+                summary: Refund to customer
+                value:
+                  amount: 1000
+                  mobilephone: "250781234567"
+                  requesttransactionid: "REFUND-2024-001"
+                  reason: "Refund for cancelled order ORD-001"
+                  withdrawcharge: 1
+                  sid: 1
+              commission:
+                summary: Agent commission payout
+                value:
+                  amount: 25000
+                  mobilephone: "250791234567"
+                  requesttransactionid: "COMMISSION-2024-001"
+                  reason: "Monthly agent commission"
+                  withdrawcharge: 1
+                  sid: 1
+              bulk_payment:
+                summary: Bulk payment disbursement
+                value:
+                  amount: 100000
+                  mobilephone: "250721234567"
+                  requesttransactionid: "BULK-2024-001"
+                  reason: "Supplier payment batch 001"
+                  withdrawcharge: 0
+                  sid: 1
+      responses:
+        200:
+          description: Deposit initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntouchDepositResponse"
+              examples:
+                successful:
+                  summary: Deposit successful
+                  value:
+                    success: true
+                    status: "Successfull"
+                    transactionId: "01KRP244POCW3042D849FTE4231CJ43FB"
+                    requestTransactionId: "REFUND-2024-001"
+                    responsecode: "2001"
+                    referenceid: "27930864613"
+                    referenceno: "27930864613"
+                    message: "Successfull"
+                    provider:
+                      code: "MTN"
+                      name: "MTN MOBILE MONEY RWANDA"
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                insufficient_balance:
+                  value:
+                    success: false
+                    message: "Insufficient Account Balance"
+                    responsecode: "1108"
+                invalid_phone:
+                  value:
+                    success: false
+                    message: "Invalid Mobile Phone Number"
+                    responsecode: "1102"
+
+  /payments/intouch/balance:
+    get:
+      tags:
+        - InTouch Payments
+      summary: Check IntouchPay account balance
+      description: Query the current available balance on your IntouchPay account. Run this before bulk disbursements.
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Balance retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntouchBalanceResponse"
+              examples:
+                with_balance:
+                  summary: Account has balance
+                  value:
+                    success: true
+                    balance: 125000
+                    currency: "RWF"
+                zero_balance:
+                  summary: Zero balance
+                  value:
+                    success: true
+                    balance: 0
+                    currency: "RWF"
+        401:
+          description: Unauthorized
+        500:
+          description: Internal server error
+
+  /payments/intouch/status:
+    post:
+      tags:
+        - InTouch Payments
+      summary: Get transaction status
+      description: |
+        Query the current status of any transaction.
+        Use this if your webhook was missed or for manual reconciliation.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntouchTransactionStatusRequest"
+            examples:
+              pending_check:
+                summary: Check a pending transaction
+                value:
+                  requesttransactionid: "ORDER-2024-001"
+                  transactionid: "10KRNX42RKC532WPGPDXDRHRNA"
+              completed_check:
+                summary: Verify a completed transaction
+                value:
+                  requesttransactionid: "ORDER-2024-002"
+                  transactionid: "194140620241027171800620970"
+      responses:
+        200:
+          description: Transaction status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntouchTransactionStatusResponse"
+              examples:
+                pending:
+                  summary: Transaction still pending
+                  value:
+                    success: true
+                    status: "Pending"
+                    responsecode: "1000"
+                    message: "Transaction Pending"
+                successful_payment:
+                  summary: Payment transaction successful
+                  value:
+                    success: true
+                    status: "Successfull"
+                    responsecode: "01"
+                    message: "Transaction Successful"
+                successful_deposit:
+                  summary: Deposit transaction successful
+                  value:
+                    success: true
+                    status: "Successfull"
+                    responsecode: "2001"
+                    message: "Transaction Successful"
+                not_found:
+                  summary: Transaction not found
+                  value:
+                    success: false
+                    responsecode: "3100"
+                    message: "Transaction Doesn't Exist"
+
+  /webhooks/intouch:
+    post:
+      tags:
+        - InTouch Payments
+      summary: InTouch payment callback (webhook)
+      description: |
+        IntouchPay POSTs to this endpoint when a transaction resolves.
+        Your server must respond with HTTP 200 and the acknowledgement JSON immediately.
+        Process the payment update asynchronously after responding.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntouchWebhookPayload"
+            examples:
+              payment_successful:
+                summary: Payment approved by customer
+                value:
+                  jsonpayload:
+                    requesttransactionid: "ORDER-2024-001"
+                    transactionid: "10KRNX42RKC532WPGPDXDRHRNA"
+                    status: "Successfull"
+                    responsecode: "01"
+                    statusdesc: "Successfully Processed Transaction"
+                    referenceno: "312333883"
+                    amount: 1000
+                    currency: "RWF"
+                    transactionfee: 0
+              payment_failed:
+                summary: Payment rejected or timed out
+                value:
+                  jsonpayload:
+                    requesttransactionid: "ORDER-2024-002"
+                    transactionid: "10KRNX42RKC532WPGPDXDRHRNA"
+                    status: "Failed"
+                    responsecode: "1008"
+                    statusdesc: "General Failure"
+                    referenceno: ""
+                    amount: 5000
+                    currency: "RWF"
+                    transactionfee: 0
+              payment_timeout:
+                summary: Customer did not respond in time
+                value:
+                  jsonpayload:
+                    requesttransactionid: "ORDER-2024-003"
+                    transactionid: "10KRNX42RKC532WPGPDXDRHRNA"
+                    status: "Timeout"
+                    responsecode: "1300"
+                    statusdesc: "Failed to Complete Transaction, Unknown Exception"
+                    referenceno: ""
+                    amount: 2000
+                    currency: "RWF"
+                    transactionfee: 0
+      responses:
+        200:
+          description: Webhook acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "success"
+                  success:
+                    type: boolean
+                    example: true
+                  request_id:
+                    type: string
+                    example: "ORDER-2024-001"

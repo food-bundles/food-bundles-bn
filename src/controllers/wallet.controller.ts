@@ -655,8 +655,9 @@ export const requestAdminDepositOTP = async (req: Request, res: Response) => {
     );
 
     if (!otpResult.success) {
-      return res.status(400).json({
+      return res.status(502).json({
         message: otpResult.message,
+        otpDelivery: otpResult.channels,
       });
     }
 
@@ -664,6 +665,7 @@ export const requestAdminDepositOTP = async (req: Request, res: Response) => {
       message: "OTP sent to private receiver for verification",
       requiresOTP: true,
       sessionId: otpResult.sessionId,
+      otpDelivery: otpResult.channels,
     });
   } catch (error: any) {
     res.status(500).json({
@@ -690,8 +692,9 @@ export const verifyAdminDepositOTP = async (req: Request, res: Response) => {
     const otpResult = await OTPService.verifyAdminWalletOTP(otp, sessionId);
 
     if (!otpResult.success) {
-      return res.status(400).json({
+      return res.status(502).json({
         message: otpResult.message,
+        otpDelivery: otpResult.channels,
       });
     }
 
@@ -759,8 +762,9 @@ export const requestWalletAdjustmentOTP = async (
     );
 
     if (!otpResult.success) {
-      return res.status(400).json({
+      return res.status(502).json({
         message: otpResult.message,
+        otpDelivery: otpResult.channels,
       });
     }
 
@@ -768,6 +772,7 @@ export const requestWalletAdjustmentOTP = async (
       message: "OTP sent to private receiver for verification",
       requiresOTP: true,
       sessionId: otpResult.sessionId,
+      otpDelivery: otpResult.channels,
     });
   } catch (error: any) {
     res.status(500).json({

@@ -1,0 +1,1442 @@
+tags:
+  - name: UrubutoPay Payments
+    description: UrubutoPay payment initiation, account validation, and transaction status operations
+  - name: UrubutoPay Invoices
+    description: UrubutoPay invoice creation and lifecycle operations
+  - name: UrubutoPay Recurring Payments
+    description: UrubutoPay recurring payment execution, status, and cancellation operations
+  - name: UrubutoPay Wallet
+    description: UrubutoPay merchant wallet operations
+  - name: UrubutoPay Disbursement
+    description: UrubutoPay bulk disbursement initiation and status operations
+  - name: UrubutoPay Webhooks
+    description: UrubutoPay callback and webhook authentication endpoints
+
+components:
+  schemas:
+    UrubutopayRecurringConfig:
+      type: object
+      required: [enabled, interval_unit, expires_at, automation_mode]
+      properties:
+        enabled:
+          type: boolean
+          example: true
+        interval_unit:
+          type: string
+          enum: [DAY, MONTH, YEAR]
+          example: MONTH
+        expires_at:
+          type: string
+          format: date
+          example: "2027-01-31"
+        automation_mode:
+          type: string
+          enum: [PLATFORM, MERCHANT]
+          example: PLATFORM
+
+    UrubutopayInitiatePaymentRequest:
+      type: object
+      required:
+        [
+          service_code,
+          payer_code,
+          payer_names,
+          payer_email,
+          amount,
+          channel_name,
+          phone_number,
+          transaction_id,
+        ]
+      properties:
+        merchant_code:
+          type: string
+          example: "MERCHANT001"
+        service_code:
+          type: string
+          example: "FOODBUNDLES"
+        payer_code:
+          type: string
+          example: "250781234567"
+        payer_names:
+          type: string
+          example: "Jean Claude"
+        payer_email:
+          type: string
+          format: email
+          example: "jean@example.com"
+        amount:
+          type: number
+          minimum: 1
+          example: 5000
+        channel_name:
+          type: string
+          enum: [MOMO, AIRTEL_MONEY, CARD]
+          example: MOMO
+        phone_number:
+          type: string
+          example: "250781234567"
+        transaction_id:
+          type: string
+          example: "ORDER-2026-001"
+        redirection_url:
+          type: string
+          format: uri
+          example: "https://foodbundles.rw/payment/callback"
+        recurring:
+          $ref: "#/components/schemas/UrubutopayRecurringConfig"
+
+    UrubutopayTransactionStatusRequest:
+      type: object
+      required: [transaction_id]
+      properties:
+        transaction_id:
+          type: string
+          example: "ORDER-2026-001"
+        merchant_code:
+          type: string
+          example: "MERCHANT001"
+
+    UrubutopayPaymentResult:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          example: "2026-10-25 10:30:00"
+        status:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: "Payment initiated successfully"
+        data:
+          type: object
+          properties:
+            internal_transaction_ref_number:
+              type: string
+              example: "URB-INT-20261025-001"
+            external_transaction_ref_number:
+              type: string
+              example: "ORDER-2026-001"
+            currency:
+              type: string
+              example: RWF
+            paid_mount:
+              type: number
+              example: 5000
+            payer_phone_number:
+              type: string
+              example: "250781234567"
+            payment_channel:
+              type: string
+              example: MOMO
+            payment_channel_name:
+              type: string
+              example: MTN_MOBILE_MONEY
+            card_processing_url:
+              type: string
+              format: uri
+              example: "https://checkout.urubutopay.rw/card/URB-INT-20261025-001"
+
+    UrubutopayTransactionStatusResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          example: "2026-10-25 10:35:00"
+        status:
+          type: integer
+          example: 200
+        data:
+          type: object
+          properties:
+            transaction_status:
+              type: string
+              enum: [INITIATED, PENDING, VALID, FAILED, PENDING_SETTLEMENT]
+              example: VALID
+            payer_code:
+              type: string
+              example: "250781234567"
+            payment_channel:
+              type: string
+              example: MOMO
+            payment_channel_name:
+              type: string
+              example: MTN_MOBILE_MONEY
+            currency:
+              type: string
+              example: RWF
+            merchant_code:
+              type: string
+              example: "MERCHANT001"
+            payer_names:
+              type: string
+              example: "Jean Claude"
+            payer_email:
+              type: string
+              example: "jean@example.com"
+            service_code:
+              type: string
+              example: "FOODBUNDLES"
+            transaction_id:
+              type: string
+              example: "ORDER-2026-001"
+            internal_transaction_id:
+              type: string
+              example: "URB-INT-20261025-001"
+            amount:
+              type: number
+              example: 5000
+            phone_number:
+              type: string
+              example: "250781234567"
+            payment_date_time:
+              type: string
+              example: "2026-10-25 10:34:12"
+
+    UrubutopayAccountRequest:
+      type: object
+      required: [payer_phone_number, payment_channel_name]
+      properties:
+        payer_phone_number:
+          type: string
+          example: "250781234567"
+        payment_channel_name:
+          type: string
+          enum: [MOMO, AIRTEL_MONEY, BK]
+          example: MOMO
+
+    UrubutopayAccountValidationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          example: true
+
+    UrubutopayKycResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          example: "2026-10-25 10:30:00"
+        status:
+          type: integer
+          example: 200
+        data:
+          type: object
+          properties:
+            given_name:
+              type: string
+              example: Jean
+            family_name:
+              type: string
+              example: Claude
+
+    UrubutopayCreateInvoiceRequest:
+      type: object
+      required: [service_code, payer_phone_number, amount, allow_custom_amount]
+      properties:
+        merchant_code:
+          type: string
+          example: "MERCHANT001"
+        service_code:
+          type: string
+          example: "FOODBUNDLES"
+        payer_phone_number:
+          type: string
+          example: "250781234567"
+        amount:
+          type: number
+          example: 12500
+        currency:
+          type: string
+          default: RWF
+          example: RWF
+        allow_custom_amount:
+          type: boolean
+          example: false
+
+    UrubutopayInvoiceNumberRequest:
+      type: object
+      required: [invoice_number]
+      properties:
+        invoice_number:
+          type: string
+          example: "INV-20261025-001"
+
+    UrubutopayExecuteRecurringRequest:
+      type: object
+      required: [recurring_token, transaction_id]
+      properties:
+        recurring_token:
+          type: string
+          example: "RT-8F3A6B2C"
+        transaction_id:
+          type: string
+          example: "SUB-2026-001"
+        metadata:
+          type: object
+          additionalProperties: true
+          example:
+            plan: monthly
+            customer_id: CUST-001
+
+    UrubutopayRecurringTokenRequest:
+      type: object
+      required: [recurring_token]
+      properties:
+        recurring_token:
+          type: string
+          example: "RT-8F3A6B2C"
+
+    UrubutopayWalletBalanceRequest:
+      type: object
+      properties:
+        wallet_account_id:
+          type: string
+          example: "WALLET-MAIN-001"
+
+    UrubutopayBeneficiary:
+      type: object
+      required:
+        [beneficiary_names, beneficiary_phone_number, amount, beneficiary_code]
+      properties:
+        beneficiary_names:
+          type: string
+          example: "Aline Mukamana"
+        beneficiary_phone_number:
+          type: string
+          example: "250722123456"
+        amount:
+          type: number
+          example: 15000
+        beneficiary_code:
+          type: string
+          example: "BEN-001"
+        description:
+          type: string
+          example: "Supplier settlement"
+
+    UrubutopayDisbursementRequest:
+      type: object
+      required:
+        [
+          source_of_funds,
+          source_payment_channel,
+          destination_payment_channel,
+          external_transaction_ref_number,
+          beneficiary_to_be_charged,
+          beneficiaries,
+        ]
+      properties:
+        source_of_funds:
+          type: string
+          example: "FoodBundles supplier settlement"
+        source_payment_channel:
+          type: string
+          enum: [MERCHANT_WALLET, MOMO, AIRTEL_MONEY]
+          example: MERCHANT_WALLET
+        destination_payment_channel:
+          type: string
+          enum: [MOMO, AIRTEL_MONEY, EKASH, BK]
+          example: MOMO
+        external_transaction_ref_number:
+          type: string
+          example: "DISB-2026-001"
+        beneficiary_to_be_charged:
+          type: string
+          enum: ["YES", "NO"]
+          example: "NO"
+        wallet_account_id:
+          type: string
+          example: "WALLET-MAIN-001"
+        beneficiaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/UrubutopayBeneficiary"
+
+    UrubutopayDisbursementTransactionRequest:
+      type: object
+      required: [internal_transaction_ref_number]
+      properties:
+        internal_transaction_ref_number:
+          type: string
+          example: "URB-DISB-20261025-001"
+
+    UrubutopayTransferStatusRequest:
+      type: object
+      required: [internal_transaction_ref_number, beneficiary_code]
+      properties:
+        internal_transaction_ref_number:
+          type: string
+          example: "URB-DISB-20261025-001"
+        beneficiary_code:
+          type: string
+          example: "BEN-001"
+
+    UrubutopayWebhookPayment:
+      type: object
+      required:
+        [
+          callback_type,
+          status,
+          transaction_status,
+          merchant_code,
+          internal_transaction_id,
+          amount,
+          currency,
+        ]
+      properties:
+        callback_type:
+          type: string
+          enum: [PAYMENT]
+          example: PAYMENT
+        status:
+          type: integer
+          example: 200
+        transaction_status:
+          type: string
+          enum: [SUCCESSFUL, FAILED, PENDING]
+          example: SUCCESSFUL
+        merchant_code:
+          type: string
+          example: "MERCHANT001"
+        payer_code:
+          type: string
+          example: "250781234567"
+        payment_channel_name:
+          type: string
+          example: MTN_MOBILE_MONEY
+        amount:
+          type: number
+          example: 5000
+        currency:
+          type: string
+          example: RWF
+        payment_date_time:
+          type: string
+          example: "2026-10-25 10:34:12"
+        internal_transaction_id:
+          type: string
+          example: "URB-INT-20261025-001"
+        transaction_id:
+          type: string
+          example: "ORDER-2026-001"
+        reason:
+          type: string
+          example: "INSUFFICIENT_FUNDS"
+
+    UrubutopayWebhookAuthRequest:
+      type: object
+      required: [user_name, password]
+      properties:
+        user_name:
+          type: string
+          example: "foodbundles-webhook"
+        password:
+          type: string
+          format: password
+          example: "replace-with-secret"
+
+paths:
+  /payments/urubutopay/payment/initiate:
+    post:
+      tags: [UrubutoPay Payments]
+      summary: Initiate a UrubutoPay payment
+      description: Starts a collection through MTN MoMo, Airtel Money, or card and optionally enables recurring payments.
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayInitiatePaymentRequest" }
+            examples:
+              momo:
+                summary: MTN MoMo checkout
+                value:
+                  service_code: "FOODBUNDLES"
+                  payer_code: "250781234567"
+                  payer_names: "Jean Claude"
+                  payer_email: "jean@example.com"
+                  amount: 5000
+                  channel_name: MOMO
+                  phone_number: "250781234567"
+                  transaction_id: "ORDER-2026-001"
+                  redirection_url: "https://foodbundles.rw/payment/callback"
+              airtel_money:
+                summary: Airtel Money checkout
+                value:
+                  service_code: "FOODBUNDLES"
+                  payer_code: "250722123456"
+                  payer_names: "Aline Mukamana"
+                  payer_email: "aline@example.com"
+                  amount: 12500
+                  channel_name: AIRTEL_MONEY
+                  phone_number: "250722123456"
+                  transaction_id: "ORDER-2026-002"
+              card:
+                summary: Card payment checkout
+                value:
+                  service_code: "FOODBUNDLES"
+                  payer_code: "CUSTOMER-2026-003"
+                  payer_names: "John Doe"
+                  payer_email: "john@example.com"
+                  amount: 25000
+                  channel_name: CARD
+                  phone_number: "250781234567"
+                  transaction_id: "ORDER-2026-003"
+              recurring_monthly:
+                summary: Monthly recurring payment
+                value:
+                  service_code: "FOODBUNDLES"
+                  payer_code: "250781234567"
+                  payer_names: "Jean Claude"
+                  payer_email: "jean@example.com"
+                  amount: 30000
+                  channel_name: MOMO
+                  phone_number: "250781234567"
+                  transaction_id: "SUB-2026-001"
+                  recurring:
+                    enabled: true
+                    interval_unit: MONTH
+                    expires_at: "2027-10-25"
+                    automation_mode: PLATFORM
+      responses:
+        "200":
+          description: Payment accepted for processing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UrubutopayPaymentResult" }
+              examples:
+                momo_pending:
+                  summary: Mobile-money approval pending
+                  value:
+                    timestamp: "2026-10-25 10:30:00"
+                    status: 200
+                    message: "Payment initiated successfully"
+                    data:
+                      internal_transaction_ref_number: "URB-INT-20261025-001"
+                      external_transaction_ref_number: "ORDER-2026-001"
+                      currency: RWF
+                      paid_mount: 5000
+                      payer_phone_number: "250781234567"
+                      payment_channel: MOMO
+                      payment_channel_name: MTN_MOBILE_MONEY
+                card_redirect:
+                  summary: Card processing URL
+                  value:
+                    timestamp: "2026-10-25 10:31:00"
+                    status: 200
+                    message: "Payment initiated successfully"
+                    data:
+                      internal_transaction_ref_number: "URB-INT-20261025-002"
+                      external_transaction_ref_number: "ORDER-2026-003"
+                      currency: RWF
+                      paid_mount: 25000
+                      payer_phone_number: "250781234567"
+                      payment_channel: CARD
+                      payment_channel_name: CARD
+                      card_processing_url: "https://checkout.urubutopay.rw/card/URB-INT-20261025-002"
+        "400":
+          description: Invalid payment request
+          content:
+            application/json:
+              examples:
+                missing_amount:
+                  value:
+                    {
+                      timestamp: "2026-10-25 10:30:00",
+                      status: 400,
+                      message: "amount is required",
+                    }
+                unsupported_channel:
+                  value:
+                    {
+                      timestamp: "2026-10-25 10:30:00",
+                      status: 400,
+                      message: "Unsupported payment channel",
+                    }
+        "401":
+          description: Invalid or missing provider credentials
+
+  /payments/urubutopay/payment/status:
+    post:
+      tags: [UrubutoPay Payments]
+      summary: Get UrubutoPay transaction status
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: "#/components/schemas/UrubutopayTransactionStatusRequest",
+              }
+            examples:
+              known_transaction:
+                value: { transaction_id: "ORDER-2026-001" }
+              merchant_override:
+                value:
+                  {
+                    transaction_id: "ORDER-2026-002",
+                    merchant_code: "MERCHANT002",
+                  }
+      responses:
+        "200":
+          description: Transaction status retrieved
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/UrubutopayTransactionStatusResponse",
+                }
+              examples:
+                valid:
+                  summary: Payment completed
+                  value:
+                    timestamp: "2026-10-25 10:35:00"
+                    status: 200
+                    data:
+                      {
+                        transaction_status: VALID,
+                        payer_code: "250781234567",
+                        payment_channel: MOMO,
+                        payment_channel_name: MTN_MOBILE_MONEY,
+                        currency: RWF,
+                        merchant_code: MERCHANT001,
+                        payer_names: "Jean Claude",
+                        payer_email: "jean@example.com",
+                        service_code: FOODBUNDLES,
+                        transaction_id: "ORDER-2026-001",
+                        internal_transaction_id: "URB-INT-20261025-001",
+                        amount: 5000,
+                        phone_number: "250781234567",
+                        payment_date_time: "2026-10-25 10:34:12",
+                      }
+                pending:
+                  summary: Customer action still pending
+                  value:
+                    {
+                      timestamp: "2026-10-25 10:31:00",
+                      status: 200,
+                      data:
+                        {
+                          transaction_status: PENDING,
+                          transaction_id: "ORDER-2026-001",
+                          internal_transaction_id: "URB-INT-20261025-001",
+                          amount: 5000,
+                          currency: RWF,
+                        },
+                    }
+                failed:
+                  summary: Payment failed
+                  value:
+                    {
+                      timestamp: "2026-10-25 10:33:00",
+                      status: 200,
+                      data:
+                        {
+                          transaction_status: FAILED,
+                          transaction_id: "ORDER-2026-001",
+                          internal_transaction_id: "URB-INT-20261025-001",
+                          amount: 5000,
+                          currency: RWF,
+                        },
+                    }
+
+  /payments/urubutopay/account-holder/validate:
+    post:
+      tags: [UrubutoPay Payments]
+      summary: Validate a mobile-money account holder
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UrubutopayAccountRequest" }
+            examples:
+              momo_valid:
+                summary: Validate MTN MoMo number
+                value:
+                  {
+                    payer_phone_number: "250781234567",
+                    payment_channel_name: MOMO,
+                  }
+              airtel_valid:
+                summary: Validate Airtel Money number
+                value:
+                  {
+                    payer_phone_number: "250722123456",
+                    payment_channel_name: AIRTEL_MONEY,
+                  }
+              bk_kyc:
+                summary: Validate BK account for KYC lookup
+                value:
+                  {
+                    payer_phone_number: "250781234567",
+                    payment_channel_name: BK,
+                  }
+      responses:
+        "200":
+          description: Account validation result
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/UrubutopayAccountValidationResponse",
+                }
+              examples:
+                valid: { value: { valid: true } }
+                invalid: { value: { valid: false } }
+
+  /payments/urubutopay/account-holder/detail:
+    post:
+      tags: [UrubutoPay Payments]
+      summary: Get account-holder KYC details
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UrubutopayAccountRequest" }
+            examples:
+              momo_kyc:
+                value:
+                  {
+                    payer_phone_number: "250781234567",
+                    payment_channel_name: MOMO,
+                  }
+              airtel_kyc:
+                value:
+                  {
+                    payer_phone_number: "250722123456",
+                    payment_channel_name: AIRTEL_MONEY,
+                  }
+              bk_kyc:
+                value:
+                  {
+                    payer_phone_number: "250781234567",
+                    payment_channel_name: BK,
+                  }
+      responses:
+        "200":
+          description: Account-holder identity details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UrubutopayKycResponse" }
+              examples:
+                found:
+                  value:
+                    {
+                      timestamp: "2026-10-25 10:30:00",
+                      status: 200,
+                      data: { given_name: Jean, family_name: Claude },
+                    }
+
+  /payments/urubutopay/invoice/create:
+    post:
+      tags: [UrubutoPay Invoices]
+      summary: Create an UrubutoPay invoice
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayCreateInvoiceRequest" }
+            examples:
+              fixed_invoice:
+                summary: Fixed invoice amount
+                value:
+                  {
+                    service_code: FOODBUNDLES,
+                    payer_phone_number: "250781234567",
+                    amount: 12500,
+                    currency: RWF,
+                    allow_custom_amount: false,
+                  }
+              custom_amount:
+                summary: Invoice allowing customer-entered amount
+                value:
+                  {
+                    service_code: FOODBUNDLES,
+                    payer_phone_number: "250722123456",
+                    amount: 10000,
+                    currency: RWF,
+                    allow_custom_amount: true,
+                  }
+      responses:
+        "200":
+          description: Invoice created
+          content:
+            application/json:
+              examples:
+                created:
+                  value:
+                    {
+                      timestamp: "2026-10-25 10:30:00",
+                      status: 200,
+                      message: "Invoice created",
+                      data:
+                        {
+                          invoice_number: "INV-20261025-001",
+                          amount: 12500,
+                          currency: RWF,
+                        },
+                    }
+        "400":
+          description: Invalid invoice request
+          content:
+            application/json:
+              examples:
+                invalid_phone:
+                  value:
+                    {
+                      timestamp: "2026-10-25 10:30:00",
+                      status: 400,
+                      message: "Invalid payer phone number",
+                    }
+
+  /payments/urubutopay/invoice/status:
+    post:
+      tags: [UrubutoPay Invoices]
+      summary: Get invoice status
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayInvoiceNumberRequest" }
+            examples:
+              paid_invoice: { value: { invoice_number: "INV-20261025-001" } }
+              pending_invoice: { value: { invoice_number: "INV-20261025-002" } }
+      responses:
+        "200":
+          description: Invoice status returned
+          content:
+            application/json:
+              examples:
+                paid:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:35:00",
+                        status: 200,
+                        data:
+                          {
+                            invoice_number: "INV-20261025-001",
+                            status: PAID,
+                            amount: 12500,
+                          },
+                      },
+                  }
+                unpaid:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:35:00",
+                        status: 200,
+                        data:
+                          {
+                            invoice_number: "INV-20261025-002",
+                            status: UNPAID,
+                            amount: 10000,
+                          },
+                      },
+                  }
+
+  /payments/urubutopay/invoice/validate:
+    post:
+      tags: [UrubutoPay Invoices]
+      summary: Validate an invoice
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayInvoiceNumberRequest" }
+            examples:
+              valid_invoice: { value: { invoice_number: "INV-20261025-001" } }
+              unknown_invoice: { value: { invoice_number: "INV-UNKNOWN" } }
+      responses:
+        "200":
+          description: Invoice validation result
+          content:
+            application/json:
+              examples:
+                valid:
+                  { value: { valid: true, invoice_number: "INV-20261025-001" } }
+                invalid:
+                  { value: { valid: false, invoice_number: "INV-UNKNOWN" } }
+
+  /payments/urubutopay/recurring/execute:
+    post:
+      tags: [UrubutoPay Recurring Payments]
+      summary: Execute a recurring payment
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayExecuteRecurringRequest" }
+            examples:
+              standard_execution:
+                value:
+                  {
+                    recurring_token: "RT-8F3A6B2C",
+                    transaction_id: "SUB-2026-001",
+                  }
+              execution_with_metadata:
+                value:
+                  {
+                    recurring_token: "RT-8F3A6B2C",
+                    transaction_id: "SUB-2026-002",
+                    metadata: { plan: monthly, cycle: 2 },
+                  }
+      responses:
+        "200":
+          description: Recurring payment executed
+          content:
+            application/json:
+              examples:
+                pending:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:30:00",
+                        status: 200,
+                        message: "Recurring payment initiated",
+                        data: { transaction_status: PENDING },
+                      },
+                  }
+                successful:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:31:00",
+                        status: 200,
+                        message: "Recurring payment successful",
+                        data: { transaction_status: VALID },
+                      },
+                  }
+
+  /payments/urubutopay/recurring/status:
+    post:
+      tags: [UrubutoPay Recurring Payments]
+      summary: Get recurring-payment status
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayRecurringTokenRequest" }
+            examples:
+              active: { value: { recurring_token: "RT-8F3A6B2C" } }
+              cancelled: { value: { recurring_token: "RT-CANCELLED" } }
+      responses:
+        "200":
+          description: Recurring-payment status returned
+          content:
+            application/json:
+              examples:
+                active:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:30:00",
+                        status: 200,
+                        data:
+                          {
+                            recurring_token: "RT-8F3A6B2C",
+                            status: ACTIVE,
+                            cycle_count: 2,
+                          },
+                      },
+                  }
+                cancelled:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:30:00",
+                        status: 200,
+                        data:
+                          {
+                            recurring_token: "RT-CANCELLED",
+                            status: CANCELLED,
+                            cycle_count: 1,
+                          },
+                      },
+                  }
+
+  /payments/urubutopay/recurring/cancel:
+    post:
+      tags: [UrubutoPay Recurring Payments]
+      summary: Cancel a recurring payment
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayRecurringTokenRequest" }
+            examples:
+              active_subscription: { value: { recurring_token: "RT-8F3A6B2C" } }
+              expired_subscription: { value: { recurring_token: "RT-EXPIRED" } }
+      responses:
+        "200":
+          description: Recurring payment cancelled
+          content:
+            application/json:
+              examples:
+                cancelled:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:30:00",
+                        status: 200,
+                        message: "Recurring payment cancelled",
+                        data:
+                          { recurring_token: "RT-8F3A6B2C", status: CANCELLED },
+                      },
+                  }
+
+  /payments/urubutopay/wallet/balance:
+    post:
+      tags: [UrubutoPay Wallet]
+      summary: Get UrubutoPay wallet balance
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayWalletBalanceRequest" }
+            examples:
+              default_wallet:
+                summary: Use the configured default wallet
+                value: {}
+              named_wallet:
+                summary: Query a specific wallet
+                value: { wallet_account_id: "WALLET-MAIN-001" }
+      responses:
+        "200":
+          description: Wallet balance returned
+          content:
+            application/json:
+              examples:
+                funded:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:30:00",
+                        status: 200,
+                        data:
+                          {
+                            wallet_account_id: "WALLET-MAIN-001",
+                            currency: RWF,
+                            available_balance: 1250000,
+                            pending_balance: 50000,
+                          },
+                      },
+                  }
+                empty:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:30:00",
+                        status: 200,
+                        data:
+                          {
+                            wallet_account_id: "WALLET-MAIN-001",
+                            currency: RWF,
+                            available_balance: 0,
+                            pending_balance: 0,
+                          },
+                      },
+                  }
+
+  /payments/urubutopay/disbursement/initiate:
+    post:
+      tags: [UrubutoPay Disbursement]
+      summary: Initiate a bulk disbursement
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayDisbursementRequest" }
+            examples:
+              mobile_money_batch:
+                summary: Pay multiple MTN MoMo beneficiaries
+                value:
+                  source_of_funds: "FoodBundles supplier settlement"
+                  source_payment_channel: MERCHANT_WALLET
+                  destination_payment_channel: MOMO
+                  external_transaction_ref_number: "DISB-2026-001"
+                  beneficiary_to_be_charged: "NO"
+                  wallet_account_id: "WALLET-MAIN-001"
+                  beneficiaries:
+                    - {
+                        beneficiary_names: "Aline Mukamana",
+                        beneficiary_phone_number: "250722123456",
+                        amount: 15000,
+                        beneficiary_code: "BEN-001",
+                        description: "Supplier settlement",
+                      }
+                    - {
+                        beneficiary_names: "Jean Claude",
+                        beneficiary_phone_number: "250781234567",
+                        amount: 22000,
+                        beneficiary_code: "BEN-002",
+                        description: "Supplier settlement",
+                      }
+              airtel_single_beneficiary:
+                summary: Single Airtel Money transfer
+                value:
+                  source_of_funds: "Refund"
+                  source_payment_channel: MERCHANT_WALLET
+                  destination_payment_channel: AIRTEL_MONEY
+                  external_transaction_ref_number: "DISB-2026-002"
+                  beneficiary_to_be_charged: "NO"
+                  beneficiaries:
+                    - {
+                        beneficiary_names: "Paul Niyonzima",
+                        beneficiary_phone_number: "250733123456",
+                        amount: 5000,
+                        beneficiary_code: "BEN-003",
+                        description: "Order refund",
+                      }
+      responses:
+        "200":
+          description: Disbursement initiated
+          content:
+            application/json:
+              examples:
+                accepted:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:30:00",
+                        status: 200,
+                        message: "Disbursement initiated",
+                        data:
+                          {
+                            internal_transaction_ref_number: "URB-DISB-20261025-001",
+                            external_transaction_ref_number: "DISB-2026-001",
+                            status: PENDING,
+                          },
+                      },
+                  }
+        "400":
+          description: Invalid disbursement
+          content:
+            application/json:
+              examples:
+                empty_beneficiaries:
+                  value:
+                    {
+                      timestamp: "2026-10-25 10:30:00",
+                      status: 400,
+                      message: "At least one beneficiary is required",
+                    }
+
+  /payments/urubutopay/disbursement/check-transaction:
+    post:
+      tags: [UrubutoPay Disbursement]
+      summary: Check a bulk-disbursement transaction
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: "#/components/schemas/UrubutopayDisbursementTransactionRequest",
+              }
+            examples:
+              pending_disbursement:
+                {
+                  value:
+                    {
+                      internal_transaction_ref_number: "URB-DISB-20261025-001",
+                    },
+                }
+              completed_disbursement:
+                {
+                  value:
+                    {
+                      internal_transaction_ref_number: "URB-DISB-20261025-002",
+                    },
+                }
+      responses:
+        "200":
+          description: Disbursement transaction status
+          content:
+            application/json:
+              examples:
+                pending:
+                  {
+                    value:
+                      {
+                        status: 200,
+                        data:
+                          {
+                            internal_transaction_ref_number: "URB-DISB-20261025-001",
+                            transaction_status: PENDING,
+                            disbursement_status: PROCESSING,
+                          },
+                      },
+                  }
+                completed:
+                  {
+                    value:
+                      {
+                        status: 200,
+                        data:
+                          {
+                            internal_transaction_ref_number: "URB-DISB-20261025-002",
+                            transaction_status: SUCCESSFUL,
+                            disbursement_status: COMPLETED,
+                          },
+                      },
+                  }
+
+  /payments/urubutopay/disbursement/check-transfer:
+    post:
+      tags: [UrubutoPay Disbursement]
+      summary: Check one disbursement beneficiary transfer
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayTransferStatusRequest" }
+            examples:
+              successful_transfer:
+                {
+                  value:
+                    {
+                      internal_transaction_ref_number: "URB-DISB-20261025-001",
+                      beneficiary_code: "BEN-001",
+                    },
+                }
+              failed_transfer:
+                {
+                  value:
+                    {
+                      internal_transaction_ref_number: "URB-DISB-20261025-001",
+                      beneficiary_code: "BEN-002",
+                    },
+                }
+      responses:
+        "200":
+          description: Beneficiary transfer status
+          content:
+            application/json:
+              examples:
+                successful:
+                  {
+                    value:
+                      {
+                        status: 200,
+                        data:
+                          {
+                            internal_transaction_ref_number: "URB-DISB-20261025-001",
+                            beneficiary_code: "BEN-001",
+                            transaction_status: SUCCESSFUL,
+                            amount: 15000,
+                          },
+                      },
+                  }
+                failed:
+                  {
+                    value:
+                      {
+                        status: 200,
+                        data:
+                          {
+                            internal_transaction_ref_number: "URB-DISB-20261025-001",
+                            beneficiary_code: "BEN-002",
+                            transaction_status: FAILED,
+                            amount: 22000,
+                            reason: "BENEFICIARY_ACCOUNT_NOT_FOUND",
+                          },
+                      },
+                  }
+
+  /webhooks/urubutopay:
+    post:
+      tags: [UrubutoPay Webhooks]
+      summary: Receive UrubutoPay callbacks
+      description: UrubutoPay sends payment, invoice, recurring, debit, and transfer callbacks here. Authentication uses the webhook Bearer token.
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UrubutopayWebhookPayment" }
+            examples:
+              payment_successful:
+                summary: Payment completed callback
+                value:
+                  {
+                    callback_type: PAYMENT,
+                    status: 200,
+                    transaction_status: SUCCESSFUL,
+                    merchant_code: MERCHANT001,
+                    payer_code: "250781234567",
+                    payment_channel: MOMO,
+                    payment_channel_name: MTN_MOBILE_MONEY,
+                    amount: 5000,
+                    currency: RWF,
+                    payment_date_time: "2026-10-25 10:34:12",
+                    internal_transaction_id: "URB-INT-20261025-001",
+                    transaction_id: "ORDER-2026-001",
+                  }
+              payment_failed:
+                summary: Payment failed callback
+                value:
+                  {
+                    callback_type: PAYMENT,
+                    status: 200,
+                    transaction_status: FAILED,
+                    merchant_code: MERCHANT001,
+                    payer_code: "250781234567",
+                    payment_channel: MOMO,
+                    payment_channel_name: MTN_MOBILE_MONEY,
+                    amount: 5000,
+                    currency: RWF,
+                    payment_date_time: "2026-10-25 10:34:12",
+                    internal_transaction_id: "URB-INT-20261025-001",
+                    transaction_id: "ORDER-2026-001",
+                    reason: INSUFFICIENT_FUNDS,
+                  }
+              invoice_paid:
+                summary: Invoice paid callback
+                value:
+                  {
+                    callback_type: INVOICE,
+                    invoice_number: "INV-20261025-001",
+                    status: PAID,
+                    amount: 12500,
+                    currency: RWF,
+                    payer_names: "Jean Claude",
+                    payer_phone_number: "250781234567",
+                    created_at: "2026-10-25 10:30:00",
+                    merchant_code: MERCHANT001,
+                    service_code: FOODBUNDLES,
+                  }
+              recurring_payment:
+                summary: Recurring cycle callback
+                value:
+                  {
+                    callback_type: RECURRING,
+                    token: "RT-8F3A6B2C",
+                    merchant_code: MERCHANT001,
+                    payer_code: "250781234567",
+                    service_code: FOODBUNDLES,
+                    amount: 30000,
+                    currency: RWF,
+                    payment_channel: MOMO,
+                    payment_channel_name: MTN_MOBILE_MONEY,
+                    next_payment_date: "2026-11-25",
+                    expires_at: "2027-10-25",
+                    interval_unit: MONTH,
+                    cycle_count: 2,
+                  }
+              disbursement_payment:
+                summary: Disbursement transfer callback
+                value:
+                  {
+                    callback_type: BULK_DISBURSEMENT_PAYMENT,
+                    internal_transaction_ref_number: "URB-DISB-20261025-001",
+                    transaction_date: "2026-10-25 10:30:00",
+                    transaction_status: SUCCESSFUL,
+                    amount: 15000,
+                    currency: RWF,
+                    beneficiary_names: "Aline Mukamana",
+                    beneficiary_phone_number: "250722123456",
+                    beneficiary_code: "BEN-001",
+                    source_payment_channel: MERCHANT_WALLET,
+                    destination_payment_channel: MOMO,
+                  }
+      responses:
+        "200":
+          description: Callback acknowledged
+          content:
+            application/json:
+              examples:
+                received:
+                  {
+                    value:
+                      {
+                        timestamp: "2026-10-25 10:35:00",
+                        status: 200,
+                        message: "Callback received successfully",
+                      },
+                  }
+        "401":
+          description: Invalid webhook bearer token
+          content:
+            application/json:
+              examples:
+                unauthorized: { value: { status: 401, message: Unauthorized } }
+
+  /webhooks/urubutopay/auth:
+    post:
+      tags: [UrubutoPay Webhooks]
+      summary: Authenticate a UrubutoPay webhook connection
+      description: Provider onboarding calls this endpoint with configured credentials to obtain the webhook bearer token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UrubutopayWebhookAuthRequest" }
+            examples:
+              valid_credentials:
+                summary: Valid webhook credentials
+                value:
+                  {
+                    user_name: "foodbundles-webhook",
+                    password: "replace-with-secret",
+                  }
+              invalid_credentials:
+                summary: Invalid credential selector
+                value:
+                  {
+                    user_name: "foodbundles-webhook",
+                    password: "wrong-password",
+                  }
+      responses:
+        "200":
+          description: Bearer token returned
+          content:
+            application/json:
+              examples:
+                authenticated:
+                  value:
+                    {
+                      timestamp: "2026-10-25 10:30:00",
+                      status: 200,
+                      message: Successful,
+                      data: { token: "Bearer replace-with-token" },
+                    }
+        "401":
+          description: Invalid webhook username or password
+          content:
+            application/json:
+              examples:
+                invalid_credentials:
+                  value:
+                    {
+                      timestamp: "2026-10-25 10:30:00",
+                      status: 401,
+                      message: "Invalid credentials",
+                    }
