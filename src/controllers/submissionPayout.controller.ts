@@ -47,7 +47,7 @@ export default class SubmissionPayoutController {
       const result = await initiateSubmissionPayoutService(
         submissionId,
         phoneNumber,
-        adminId
+        adminId,
       );
 
       res.status(200).json({
@@ -78,7 +78,7 @@ export default class SubmissionPayoutController {
       const result = await confirmSubmissionPayoutService(
         submissionId,
         payoutId,
-        outcome
+        outcome,
       );
 
       res.status(200).json({
@@ -118,7 +118,7 @@ export default class SubmissionPayoutController {
       const result = await forceCompleteSubmissionService(
         submissionId,
         adminId,
-        reason
+        reason,
       );
 
       res.status(200).json({
@@ -150,7 +150,7 @@ export default class SubmissionPayoutController {
         submissionId,
         toStatus,
         adminId,
-        reason
+        reason,
       );
 
       res.status(200).json({
@@ -192,7 +192,7 @@ export default class SubmissionPayoutController {
       const result = await rejectSubmissionService(
         submissionId,
         adminId,
-        reason
+        reason,
       );
 
       res.status(200).json({

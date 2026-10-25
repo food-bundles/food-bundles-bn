@@ -33,7 +33,7 @@ export class OTPService {
   }): Promise<OTPDispatchResult> {
     const smsPromise: Promise<OTPChannelDelivery> = data.phone
       ? sendMessage(data.message, data.phone)
-          .then((response) => {
+          .then((response): OTPChannelDelivery => {
             const providerStatus =
               typeof response?.status === "string"
                 ? response.status.toLowerCase()
@@ -65,7 +65,7 @@ export class OTPService {
               providerStatus,
             };
           })
-          .catch((error: unknown) => {
+          .catch((error: unknown): OTPChannelDelivery => {
             console.error("OTP SMS dispatch failed:", error);
             return {
               status: "failed",
@@ -76,7 +76,7 @@ export class OTPService {
                   : "SMS provider rejected the message.",
             };
           })
-      : Promise.resolve({
+      : Promise.resolve<OTPChannelDelivery>({
           status: "unavailable",
           deliveryStatus: "not_attempted",
           error: "No phone number is available.",
@@ -93,12 +93,14 @@ export class OTPService {
               text: data.message,
             }),
           )
-          .then(() => ({
-            status: "accepted_by_provider",
-            deliveryStatus: "unknown",
-            providerStatus: "accepted",
-          }))
-          .catch((error: unknown) => {
+          .then(
+            (): OTPChannelDelivery => ({
+              status: "accepted_by_provider",
+              deliveryStatus: "unknown",
+              providerStatus: "accepted",
+            }),
+          )
+          .catch((error: unknown): OTPChannelDelivery => {
             console.error("OTP email dispatch failed:", error);
             return {
               status: "failed",
@@ -109,7 +111,7 @@ export class OTPService {
                   : "Email provider rejected the message.",
             };
           })
-      : Promise.resolve({
+      : Promise.resolve<OTPChannelDelivery>({
           status: "unavailable",
           deliveryStatus: "not_attempted",
           error: "No email address is available.",
@@ -137,7 +139,9 @@ export class OTPService {
     };
   }
 
-  static async getPrivateReceiverEmail(phone: string): Promise<string | undefined> {
+  static async getPrivateReceiverEmail(
+    phone: string,
+  ): Promise<string | undefined> {
     const configuredEmail = process.env.PRIVATE_RECEIVER_EMAIL?.trim();
     if (configuredEmail) {
       return configuredEmail;
@@ -215,7 +219,9 @@ export class OTPService {
         message: `Your FoodBundles restaurant registration OTP is ${otp}. It is valid for 48 hours. Do not share this code with anyone.`,
       });
     } catch (error: any) {
-      return this.failedDispatch(`Could not prepare restaurant signup OTP: ${error.message}`);
+      return this.failedDispatch(
+        `Could not prepare restaurant signup OTP: ${error.message}`,
+      );
     }
   }
 
@@ -290,7 +296,9 @@ export class OTPService {
         message: `Your voucher checkout OTP is ${otp}. It is valid for 10 minutes. Do not share this code with anyone.`,
       });
     } catch (error: any) {
-      return this.failedDispatch(`Could not prepare voucher checkout OTP: ${error.message}`);
+      return this.failedDispatch(
+        `Could not prepare voucher checkout OTP: ${error.message}`,
+      );
     }
   }
 
@@ -349,7 +357,9 @@ export class OTPService {
         phone: restaurant.phone,
       };
     } catch (error: any) {
-      return this.failedDispatch(`Could not prepare order authorization OTP: ${error.message}`);
+      return this.failedDispatch(
+        `Could not prepare order authorization OTP: ${error.message}`,
+      );
     }
   }
 
@@ -405,7 +415,9 @@ export class OTPService {
         phone: restaurant.phone,
       };
     } catch (error: any) {
-      return this.failedDispatch(`Could not prepare voucher repayment OTP: ${error.message}`);
+      return this.failedDispatch(
+        `Could not prepare voucher repayment OTP: ${error.message}`,
+      );
     }
   }
 
@@ -475,7 +487,9 @@ export class OTPService {
         sessionId,
       };
     } catch (error: any) {
-      return this.failedDispatch(`Could not prepare admin wallet OTP: ${error.message}`);
+      return this.failedDispatch(
+        `Could not prepare admin wallet OTP: ${error.message}`,
+      );
     }
   }
 
@@ -595,7 +609,9 @@ export class OTPService {
         sessionId,
       };
     } catch (error: any) {
-      return this.failedDispatch(`Could not prepare farmer submission payout OTP: ${error.message}`);
+      return this.failedDispatch(
+        `Could not prepare farmer submission payout OTP: ${error.message}`,
+      );
     }
   }
 
@@ -622,7 +638,9 @@ export class OTPService {
         message: `Your FoodBundles password reset OTP is ${otp}. It is valid for 10 minutes. Do not share this code with anyone.`,
       });
     } catch (error: any) {
-      return this.failedDispatch(`Could not prepare password reset OTP: ${error.message}`);
+      return this.failedDispatch(
+        `Could not prepare password reset OTP: ${error.message}`,
+      );
     }
   }
 

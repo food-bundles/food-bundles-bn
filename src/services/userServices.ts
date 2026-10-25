@@ -580,14 +580,13 @@ export const getAllRestaurantsService = async (
   const term = search?.trim();
   // Customer type: the picked tab, kept inside what the viewer may see
   const { customerTypeId, customerTypeScope } = filters;
-  const typeFilter =
-    customerTypeId
-      ? customerTypeScope && !customerTypeScope.includes(customerTypeId)
-        ? { customerTypeId: "__none__" }
-        : { customerTypeId }
-      : customerTypeScope
-        ? { customerTypeId: { in: customerTypeScope } }
-        : {};
+  const typeFilter = customerTypeId
+    ? customerTypeScope && !customerTypeScope.includes(customerTypeId)
+      ? { customerTypeId: "__none__" }
+      : { customerTypeId }
+    : customerTypeScope
+      ? { customerTypeId: { in: customerTypeScope } }
+      : {};
   const options = {
     // Trashed restaurants are listed in the trash only
     where: term
@@ -945,7 +944,10 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
 
   // The dashboard reads the role as "adminRole"
   return {
-    admins: result.data.map(({ AdminRole, ...admin }: any) => ({ ...admin, adminRole: AdminRole ?? null })),
+    admins: result.data.map(({ AdminRole, ...admin }: any) => ({
+      ...admin,
+      adminRole: AdminRole ?? null,
+    })),
     pagination: result.pagination,
   };
 };
@@ -1134,7 +1136,10 @@ export const loginService = async (loginData: ILoginData) => {
   if (!user) throw new Error("User not found");
 
   // Accounts in the trash can't sign in (a super admin can restore them)
-  if (user.deletedAt) throw new Error("This account has been deleted. Please contact Food Bundles support.");
+  if (user.deletedAt)
+    throw new Error(
+      "This account has been deleted. Please contact Food Bundles support.",
+    );
 
   if (!user.password) throw new Error("Password not set for this user");
 
@@ -1222,7 +1227,10 @@ export const googleLoginService = async (googleUser: {
   }
 
   // Accounts in the trash can't sign in (a super admin can restore them)
-  if (user.deletedAt) throw new Error("This account has been deleted. Please contact Food Bundles support.");
+  if (user.deletedAt)
+    throw new Error(
+      "This account has been deleted. Please contact Food Bundles support.",
+    );
 
   const { password: _, ...userWithoutPassword } = user;
 
@@ -1318,7 +1326,9 @@ export const googleSignupService = async (data: {
       };
     } catch (error: any) {
       const friendlyMessage = getFriendlyPrismaError(error);
-      throw new Error(friendlyMessage || `Failed to create account: ${error.message}`);
+      throw new Error(
+        friendlyMessage || `Failed to create account: ${error.message}`,
+      );
     }
   } else if (role === "RESTAURANT" || role === "HOTEL") {
     if (!tin) {
@@ -1393,7 +1403,9 @@ export const googleSignupService = async (data: {
       };
     } catch (error: any) {
       const friendlyMessage = getFriendlyPrismaError(error);
-      throw new Error(friendlyMessage || `Failed to create account: ${error.message}`);
+      throw new Error(
+        friendlyMessage || `Failed to create account: ${error.message}`,
+      );
     }
   } else {
     throw new Error("Invalid role for Google signup");
@@ -1420,7 +1432,12 @@ export const requestPasswordResetService = async (email: string) => {
     userName = user.phone || "Farmer";
   } else if (user.userType === "RESTAURANT") {
     userName = (user as any).name || "Restaurant Owner";
-  } else if (user.userType === "ADMIN" || user.userType === "STAFF" || user.userType === "MARKET_PRICES" || user.userType === "SUPERUSER") {
+  } else if (
+    user.userType === "ADMIN" ||
+    user.userType === "STAFF" ||
+    user.userType === "MARKET_PRICES" ||
+    user.userType === "SUPERUSER"
+  ) {
     userName = (user as any).username || "Admin";
   }
 
@@ -1439,7 +1456,9 @@ export const requestPasswordResetService = async (email: string) => {
   });
 
   return {
+    success: true,
     message: "Password reset link has been sent to your email address",
+    otpDelivery: undefined,
   };
 };
 
@@ -1471,7 +1490,16 @@ export const resetPasswordService = async (
         where: { id: userId },
         data: { password: hashedPassword },
       });
-    } else if (userType === "ADMIN" || userType === "TRADER" || userType === "AGGREGATOR" || userType === "LOGISTICS" || userType === "FOOD_BUNDLE" || userType === "SUPERUSER" || userType === "MARKET_PRICES" || userType === "STAFF") {
+    } else if (
+      userType === "ADMIN" ||
+      userType === "TRADER" ||
+      userType === "AGGREGATOR" ||
+      userType === "LOGISTICS" ||
+      userType === "FOOD_BUNDLE" ||
+      userType === "SUPERUSER" ||
+      userType === "MARKET_PRICES" ||
+      userType === "STAFF"
+    ) {
       await prisma.admin.update({
         where: { id: userId },
         data: { password: hashedPassword },
@@ -1486,7 +1514,9 @@ export const resetPasswordService = async (
     }
 
     return {
+      success: true,
       message: "Password has been reset successfully",
+      otpDelivery: undefined,
     };
   } catch (error: any) {
     throw new Error(`Failed to reset password: ${error.message}`);
@@ -1546,7 +1576,9 @@ export const resetPasswordViaPhoneService = async (
         data: { password: hashedPassword },
       });
     } else {
-      throw new Error("Password reset via phone is not supported for this account type");
+      throw new Error(
+        "Password reset via phone is not supported for this account type",
+      );
     }
 
     return {
