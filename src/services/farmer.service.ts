@@ -2,6 +2,7 @@ import { FarmerFeedbackStatus, SubmissionStatus } from "@prisma/client";
 import { answerCounterOffer } from "./submission-flow.service";
 import { IPaginationOptions } from "../types/productVerifyTypes";
 import { PaginationService } from "./paginationService";
+import { nearestSitesForFarmer, siteForSubmission } from "./aggregationSite.service";
 import prisma from "../prisma";
 import { LocationValidationService } from "./location.service";
 import { ProductSubmissionInput } from "../types/productTypes";
@@ -68,7 +69,7 @@ export const getPendingFeedbackSubmissionsService = async (
 
   const whereCondition = {
     farmerId,
-    // Counter offers waiting for the farmer's answer
+    // Counter-offers sent to the farmer
     status: SubmissionStatus.NEGOTIATING,
     farmerFeedbackStatus: FarmerFeedbackStatus.PENDING,
     // Only show submissions that haven't passed deadline
@@ -89,6 +90,7 @@ export const getPendingFeedbackSubmissionsService = async (
           phone: true,
         },
       },
+      aggregationSite: true,
     },
     orderBy: {
       [sortBy]: sortOrder,
@@ -97,10 +99,22 @@ export const getPendingFeedbackSubmissionsService = async (
     take: limit,
   });
 
+  // Every offer comes with the aggregation site nearest to the farmer
+  const offers = await Promise.all(
+    submissions.map(async ({ aggregationSite, ...submission }) => ({
+      ...submission,
+      deliverySite: await siteForSubmission(farmerId, {
+        latitude: submission.latitude,
+        longitude: submission.longitude,
+        aggregationSite,
+      }).catch(() => null),
+    }))
+  );
+
   const totalPages = Math.ceil(totalCount / limit);
 
   return {
-    data: submissions,
+    data: offers,
     pagination: {
       currentPage: page,
       totalPages,
@@ -392,9 +406,20 @@ export async function submitProductService(
     }
   }
 
+  // The nearest active aggregation site is assigned automatically (this harvest's pin first, then
+  // the farmer's saved position, then their district). A lookup failure must not block the submission.
+  const [nearestSite] = await nearestSitesForFarmer(submissionData.farmerId, 1, {
+    latitude: submissionData.latitude,
+    longitude: submissionData.longitude,
+  }).catch((error) => {
+    console.error("Failed to find the nearest aggregation site:", error);
+    return [];
+  });
+
   // Create submission with farmer's location data
   const submission = await prisma.farmerSubmission.create({
     data: {
+      aggregationSiteId: nearestSite?.id,
       farmerId: submissionData.farmerId,
       productName: productData.productName,
       categoryId: productData.categoryId,

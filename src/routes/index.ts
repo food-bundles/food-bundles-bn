@@ -44,6 +44,7 @@ import customerTypeRoutes from "./customer-type.routes";
 import adminRoleRoutes from "./admin-role.routes";
 import wishlistRoutes from "./wishlist.routes";
 import deliverySettingsRoutes from "./delivery-settings.routes";
+import aggregationSiteRoutes from "./aggregationSite.routes";
 
 const routes = Router();
 
@@ -90,6 +91,7 @@ routes.use("/customer-types", customerTypeRoutes);
 routes.use("/admin-roles", adminRoleRoutes);
 routes.use("/wishlist", wishlistRoutes);
 routes.use("/delivery-settings", deliverySettingsRoutes);
+routes.use("/aggregation-sites", aggregationSiteRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

@@ -19,8 +19,15 @@ import {
   getDashboardSummaryController,
   getCropDemandController,
   getFarmerPreferencesController,
+  getFarmerReportController,
+  getFarmerSubmissionDetailController,
   updateFarmerPreferencesController,
 } from "../controllers/farmerDashboard.controller";
+
+import {
+  getNearestSitesController,
+  updateFarmerLocationController,
+} from "../controllers/aggregationSite.controller";
 
 const farmerDashboardRoutes = Router();
 
@@ -37,6 +44,8 @@ farmerDashboardRoutes.get(
 );
 farmerDashboardRoutes.get("/recent-activity", getRecentActivityController);
 farmerDashboardRoutes.get("/crop-demand", getCropDemandController);
+farmerDashboardRoutes.get("/report", getFarmerReportController);
+farmerDashboardRoutes.get("/submissions/:submissionId", getFarmerSubmissionDetailController);
 farmerDashboardRoutes.get("/farming-profile", getFarmingProfileController);
 farmerDashboardRoutes.patch(
   "/farming-profile",
@@ -44,6 +53,8 @@ farmerDashboardRoutes.patch(
 );
 farmerDashboardRoutes.put("/primary-crops", updatePrimaryCropsController);
 farmerDashboardRoutes.patch("/phone", addFarmerPhoneController);
+farmerDashboardRoutes.get("/nearest-site", getNearestSitesController);
+farmerDashboardRoutes.patch("/location", updateFarmerLocationController);
 farmerDashboardRoutes.get("/preferences", getFarmerPreferencesController);
 farmerDashboardRoutes.patch("/preferences", updateFarmerPreferencesController);
 farmerDashboardRoutes.get("/voucher-summary", getVoucherSummaryController);

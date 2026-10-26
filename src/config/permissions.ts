@@ -55,7 +55,7 @@ export const PERMISSION_MODULES = [
   },
   {
     key: "supply_requests",
-    label: "Supply requests (products needed from farmers)",
+    label: "Supply requests (buying offers to farmers)",
     group: "Farmers & supply",
     actions: [
       VIEW,

@@ -190,7 +190,10 @@ export class FarmingProfileService {
         };
       }
 
-      return farmer;
+      if (!farmer) return null;
+      // Never hand credentials out: this object goes straight into API responses and logs
+      const { password, twoFactorSecret, twoFactorBackupCodes, ...safeFarmer } = farmer;
+      return safeFarmer;
     } catch (error) {
       console.error("Error fetching farming profile:", error);
       return null;
