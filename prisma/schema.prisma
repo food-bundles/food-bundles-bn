@@ -99,12 +99,16 @@ model Restaurant {
   walletTransactions    WalletTransaction[]
   WalletTransfer        WalletTransfer[]
   WishlistItem          WishlistItem[]
+  deliveryAddresses     DeliveryAddress[]
   /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
   deletedAt              DateTime?
   deletedBy              String?
   /// Aggregators who buy for this customer (e.g. a school)
   aggregatorLinks       AggregatorCustomer[]
   supplyRequests        SupplyRequest[]
+  chatParticipants      ChatParticipant[]
+  /// Price alerts set by the restaurant via the mobile app (stored as JSON array)
+  priceAlerts           Json?                    @default("[]")
 }
 
 model Affiliator {
@@ -1660,6 +1664,21 @@ model WishlistItem {
   @@index([restaurantId])
 }
 
+model DeliveryAddress {
+  id           String     @id @default(uuid())
+  restaurantId String
+  label        String
+  street       String
+  landmark     String?
+  phone        String
+  isDefault    Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+}
+
 enum TraderTransactionType {
   LOAN_APPROVAL
   LOAN_REVERSAL
@@ -2017,4 +2036,41 @@ model SupplyRequestItem {
 
   @@index([requestId])
   @@index([productId])
+}
+
+// --- Chat ---
+
+model ChatConversation {
+  id           String            @id @default(cuid())
+  kind         String            @default("peer")
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  participants ChatParticipant[]
+  messages     ChatMessage[]
+}
+
+model ChatParticipant {
+  id             String           @id @default(cuid())
+  conversationId String
+  restaurantId   String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  restaurant     Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, restaurantId])
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  senderId       String
+  kind           String           @default("text")
+  body           String           @default("")
+  attachment     String?
+  durationMs     Int?
+  sentAt         DateTime         @default(now())
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, sentAt])
 }

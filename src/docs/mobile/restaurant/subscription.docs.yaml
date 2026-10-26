@@ -1,0 +1,79 @@
+tags:
+  - name: Mobile Restaurant — Subscriptions
+    description: Subscription plan management for the restaurant mobile app
+
+paths:
+  /mobile/restaurant/subscriptions/plans:
+    get:
+      tags: [Mobile Restaurant — Subscriptions]
+      summary: List all active subscription plans
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: Plans retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        price: { type: number }
+                        duration: { type: integer, description: Days }
+                        features: { type: array, items: { type: string } }
+                        voucherAccess: { type: boolean }
+                        freeDelivery: { type: boolean }
+
+  /mobile/restaurant/subscriptions/current:
+    get:
+      tags: [Mobile Restaurant — Subscriptions]
+      summary: Get the restaurant's current subscription
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: Current subscription (null if none)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, nullable: true }
+
+  /mobile/restaurant/subscriptions:
+    post:
+      tags: [Mobile Restaurant — Subscriptions]
+      summary: Subscribe to a plan
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planId]
+              properties:
+                planId: { type: string }
+                paymentMethod: { type: string, enum: [MOBILE_MONEY, CARD, CASH] }
+                phoneNumber: { type: string }
+      responses:
+        200: { description: Subscription initiated }
+        400: { description: Validation or payment error }
+    delete:
+      tags: [Mobile Restaurant — Subscriptions]
+      summary: Cancel current subscription
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        200: { description: Subscription cancelled }
+        400: { description: No active subscription }

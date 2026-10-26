@@ -5,6 +5,9 @@ import {
   mobileNotificationsUnreadCount,
   mobileNotificationMarkRead,
   mobileNotificationMarkAllRead,
+  mobileGetPriceAlerts,
+  mobileUpsertPriceAlert,
+  mobileDeletePriceAlert,
 } from "../../../controllers/mobile/restaurant/notification.controller";
 
 const router = Router();
@@ -21,5 +24,14 @@ router.patch("/mark-all-read", ...guard, mobileNotificationMarkAllRead);
 
 // PATCH /mobile/restaurant/notifications/:notificationId/read
 router.patch("/:notificationId/read", ...guard, mobileNotificationMarkRead);
+
+// GET /mobile/restaurant/notifications/price-alerts
+router.get("/price-alerts", ...guard, mobileGetPriceAlerts);
+
+// PUT /mobile/restaurant/notifications/price-alerts/:productId
+router.put("/price-alerts/:productId", ...guard, mobileUpsertPriceAlert);
+
+// DELETE /mobile/restaurant/notifications/price-alerts/:productId
+router.delete("/price-alerts/:productId", ...guard, mobileDeletePriceAlert);
 
 export default router;

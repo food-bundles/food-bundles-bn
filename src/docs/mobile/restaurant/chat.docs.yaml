@@ -1,0 +1,100 @@
+tags:
+  - name: Mobile Restaurant — Chat
+    description: Real-time peer-to-peer and support chat for restaurant mobile app
+
+paths:
+  /mobile/restaurant/chat/conversations:
+    get:
+      tags: [Mobile Restaurant — Chat]
+      summary: List all conversations for the authenticated restaurant
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: Conversations list
+    post:
+      tags: [Mobile Restaurant — Chat]
+      summary: Start a new conversation with a peer restaurant
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [peerId]
+              properties:
+                peerId: { type: string }
+                kind: { type: string, enum: [peer, support], default: peer }
+      responses:
+        201:
+          description: Conversation created or existing returned
+
+  /mobile/restaurant/chat/conversations/{conversationId}/messages:
+    get:
+      tags: [Mobile Restaurant — Chat]
+      summary: Get all messages in a conversation
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      responses:
+        200: { description: Messages list }
+        403: { description: Not a participant }
+    post:
+      tags: [Mobile Restaurant — Chat]
+      summary: Send a message in a conversation
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind: { type: string, enum: [text, voice, file, image], default: text }
+                body: { type: string }
+                attachment: { type: string }
+                durationMs: { type: integer }
+      responses:
+        201: { description: Message sent and broadcast via WebSocket }
+        403: { description: Not a participant }
+
+  /mobile/restaurant/chat/conversations/{conversationId}/read:
+    patch:
+      tags: [Mobile Restaurant — Chat]
+      summary: Mark all messages in a conversation as read
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      responses:
+        200: { description: Marked as read }
+
+  /mobile/restaurant/chat/conversations/{conversationId}/typing:
+    post:
+      tags: [Mobile Restaurant — Chat]
+      summary: Broadcast typing indicator via WebSocket
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isTyping: { type: boolean, default: true }
+      responses:
+        200: { description: Typing event broadcast }
