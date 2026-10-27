@@ -178,6 +178,8 @@ model FarmerSubmission {
   /// Price per unit both sides agreed at approval (verification starts from it)
   agreedPrice          Float?
   negotiatedAt         DateTime?
+  /// When the price was accepted (stage 2)
+  acceptedAt           DateTime?
   rejectedAt           DateTime?
   rejectionReason      String?
   aggregator           Admin?                    @relation("Aggregator", fields: [aggregatorId], references: [id])
@@ -1730,8 +1732,9 @@ enum Role {
 }
 
 /// Farmer submission flow, one stage at a time:
-/// PENDING (submitted) → APPROVED (price agreed) → VERIFIED (weighed face to face) → PAID.
-/// NEGOTIATING = Food Bundles sent a counter offer and waits for the farmer.
+/// PENDING (submitted) → ACCEPTED (price agreed) → APPROVED (meeting site confirmed)
+/// → VERIFIED (weighed face to face) → PAID.
+/// NEGOTIATING = Food Bundles sent a counter-offer to the farmer.
 /// REJECTED = closed without a purchase.
 enum SubmissionStatus {
   PENDING
@@ -1740,6 +1743,7 @@ enum SubmissionStatus {
   PAID
   NEGOTIATING
   REJECTED
+  ACCEPTED
 }
 
 enum FarmerFeedbackStatus {
