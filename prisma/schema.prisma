@@ -461,6 +461,7 @@ model Product {
   farmerSubmissions    FarmerSubmission[]
   marketPriceHistory   MarketPriceHistory[]
   orderItems           OrderItem[]
+  guestOrderItems      GuestOrderItem[]
   category             ProductCategory        @relation(fields: [categoryId], references: [id])
   admin                Admin                  @relation(fields: [createdBy], references: [id])
   productUnit          ProductUnit?           @relation(fields: [unitId], references: [id])
@@ -687,6 +688,39 @@ model OrderItem {
   product     Product? @relation(fields: [productId], references: [id])
 
   @@index([orderId])
+  @@index([productId])
+}
+
+model GuestOrder {
+  id              String           @id @default(uuid())
+  reference       String           @unique
+  contactName     String
+  contactPhone    String
+  deliveryAddress String
+  paymentMethod   String
+  subtotal        Float
+  deliveryFee     Float            @default(0)
+  total           Float
+  status          String           @default("PENDING")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  lines           GuestOrderItem[]
+
+  @@index([reference])
+  @@index([status])
+}
+
+model GuestOrderItem {
+  id          String     @id @default(uuid())
+  guestOrderId String
+  productId   String
+  qty         Float
+  unitPrice   Float
+  createdAt   DateTime   @default(now())
+  guestOrder  GuestOrder @relation(fields: [guestOrderId], references: [id], onDelete: Cascade)
+  product     Product    @relation(fields: [productId], references: [id])
+
+  @@index([guestOrderId])
   @@index([productId])
 }
 

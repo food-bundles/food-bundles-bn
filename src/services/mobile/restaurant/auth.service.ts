@@ -1,5 +1,28 @@
-import { loginService, requestPasswordResetViaPhoneService, resetPasswordViaPhoneService, updateRestaurantService } from "../../userServices";
+import { loginService, createRestaurantService, requestPasswordResetViaPhoneService, resetPasswordViaPhoneService, updateRestaurantService } from "../../userServices";
 import { generateToken } from "../../../utils/jwt";
+
+export const mobileRestaurantRegisterService = async (data: {
+  name: string;
+  email: string;
+  phone?: string;
+  tin: string;
+  password: string;
+  role: string;
+}) => {
+  const restaurant = await createRestaurantService({
+    name: data.name,
+    email: data.email,
+    phone: data.phone,
+    tin: data.tin,
+    password: data.password,
+    role: data.role as any,
+    agreed: true,
+  });
+
+  const token = generateToken({ id: restaurant.id });
+  const { password: _, ...user } = restaurant as any;
+  return { token, user };
+};
 
 export const mobileRestaurantLoginService = async (credentials: {
   phone?: string;

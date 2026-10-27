@@ -4,9 +4,23 @@ import {
   mobileForgotPasswordService,
   mobileResetPasswordService,
   mobileUpdateProfileService,
+  mobileRestaurantRegisterService,
 } from "../../../services/mobile/restaurant/auth.service";
 import prisma from "../../../prisma";
 import { verifyToken } from "../../../utils/jwt";
+
+export const mobileRegister = async (req: Request, res: Response) => {
+  try {
+    const { name, email, phone, tin, password, role } = req.body;
+    if (!name || !email || !tin || !password) {
+      return res.status(400).json({ success: false, message: "Name, email, TIN, and password are required" });
+    }
+    const result = await mobileRestaurantRegisterService({ name, email, phone, tin, password, role: role ?? "RESTAURANT" });
+    res.status(201).json({ success: true, message: "Account created", token: result.token, data: result.user });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
 
 export const mobileLogin = async (req: Request, res: Response) => {
   try {
@@ -122,3 +136,4 @@ export const mobileResetPassword = async (req: Request, res: Response) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
