@@ -402,6 +402,7 @@ export const createRestaurantService = async (
     village,
     customerTypeId,
     agreed,
+    verified = false,
   } = restaurantData;
   let role = restaurantData.role || "RESTAURANT"; // Default to RESTAURANT if not specified
 
@@ -497,6 +498,7 @@ export const createRestaurantService = async (
         village,
         role: role as any, // Set the role (RESTAURANT or HOTEL)
         customerTypeId: customerTypeId || null,
+        verified,
       },
     });
 

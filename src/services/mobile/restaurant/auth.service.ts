@@ -17,6 +17,7 @@ export const mobileRestaurantRegisterService = async (data: {
     password: data.password,
     role: data.role as any,
     agreed: true,
+    verified: true,
   });
 
   const token = generateToken({ id: restaurant.id });

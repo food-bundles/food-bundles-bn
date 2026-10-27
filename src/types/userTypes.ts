@@ -19,6 +19,8 @@ export interface ICreateRestaurantData extends UserLocationData {
   agreed?: boolean;
   /** Customer type picked at signup; sets the prices this customer pays */
   customerTypeId?: string | null;
+  /** Defaults to false; pass true for self-registered accounts that skip admin verification */
+  verified?: boolean;
 }
 
 export interface ICreateAdminData extends Partial<UserLocationData> {
