@@ -175,7 +175,7 @@ components:
       properties:
         url:
           type: string
-          example: "https://server.food.rw/webhooks/pesapal"
+          example: "https://server-test.food.rw/payments/pesapal"
         ipn_notification_type:
           type: string
           enum: [GET, POST]
@@ -268,12 +268,12 @@ paths:
               post_ipn:
                 summary: Register POST IPN
                 value:
-                  url: "https://server.food.rw/webhooks/pesapal"
+                  url: "https://server-test.food.rw/payments/pesapal"
                   ipn_notification_type: "POST"
               get_ipn:
                 summary: Register GET IPN
                 value:
-                  url: "https://server.food.rw/webhooks/pesapal"
+                  url: "https://server-test.food.rw/payments/pesapal"
                   ipn_notification_type: "GET"
       responses:
         200:
@@ -286,7 +286,7 @@ paths:
                 registered:
                   summary: IPN registered
                   value:
-                    url: "https://server.food.rw/webhooks/pesapal"
+                    url: "https://server-test.food.rw/payments/pesapal"
                     created_date: "2024-06-14T07:50:22.2825997Z"
                     ipn_id: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
                     ipn_notification_type_description: "POST"
@@ -316,7 +316,7 @@ paths:
                 multiple_ipns:
                   summary: Multiple registered IPNs
                   value:
-                    - url: "https://server.food.rw/webhooks/pesapal"
+                    - url: "https://server-test.food.rw/payments/pesapal"
                       created_date: "2024-06-14T07:50:22.2825997Z"
                       ipn_id: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
                       error: null
@@ -324,7 +324,7 @@ paths:
                 single_ipn:
                   summary: Single registered IPN
                   value:
-                    - url: "https://server.food.rw/webhooks/pesapal"
+                    - url: "https://server-test.food.rw/payments/pesapal"
                       created_date: "2024-01-01T00:00:00.000Z"
                       ipn_id: "84740ab4-3cd9-47da-8a4f-dd1db53494b5"
                       error: null
