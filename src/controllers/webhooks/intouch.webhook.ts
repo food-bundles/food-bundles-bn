@@ -3,7 +3,10 @@ import prisma from "../../prisma";
 import { retryDatabaseOperation } from "../../utils/db-retry.utls";
 import { PaymentStatus, OrderStatus } from "@prisma/client";
 import { createNotificationService } from "../../services/notification.services";
-import { sendPaymentConfirmationEmail, sendPaymentFailedEmail } from "../../utils/emails";
+import {
+  sendPaymentConfirmationEmail,
+  sendPaymentFailedEmail,
+} from "../../utils/emails";
 import { sendMessage } from "../../utils/sms.utility";
 
 interface IntouchCallbackPayload {
@@ -26,17 +29,27 @@ interface IntouchCallbackPayload {
  * Must respond with { message: "success", success: true, request_id: "..." }
  */
 export const handleIntouchWebhook = async (req: Request, res: Response) => {
+  console.log("Received InTouch Payment Webhook request", req);
+
   const body = req.body as IntouchCallbackPayload;
 
   console.log("InTouch webhook received:", JSON.stringify(body, null, 2));
 
   const payload = body?.jsonpayload;
 
+  console.log("Received InTouch Payment Webhook payload", payload);
+
   if (!payload?.requesttransactionid) {
     return res.status(400).json({ message: "Missing requesttransactionid" });
   }
 
-  const { requesttransactionid, transactionid, responsecode, status, statusdesc } = payload;
+  const {
+    requesttransactionid,
+    transactionid,
+    responsecode,
+    status,
+    statusdesc,
+  } = payload;
 
   // Acknowledge immediately as required by InTouch
   res.status(200).json({
@@ -47,7 +60,8 @@ export const handleIntouchWebhook = async (req: Request, res: Response) => {
 
   // Process asynchronously after acknowledgement
   try {
-    const isSuccess = responsecode === "01" || status?.toLowerCase() === "successfull";
+    const isSuccess =
+      responsecode === "01" || status?.toLowerCase() === "successfull";
     const isFailed = !isSuccess;
 
     const order = await retryDatabaseOperation(() =>
@@ -59,14 +73,19 @@ export const handleIntouchWebhook = async (req: Request, res: Response) => {
           ],
         },
         include: {
-          restaurant: { select: { id: true, name: true, email: true, phone: true } },
+          restaurant: {
+            select: { id: true, name: true, email: true, phone: true },
+          },
           orderItems: true,
         },
-      })
+      }),
     );
 
     if (!order) {
-      console.log("InTouch webhook: no matching order for", requesttransactionid);
+      console.log(
+        "InTouch webhook: no matching order for",
+        requesttransactionid,
+      );
       return;
     }
 
@@ -83,7 +102,7 @@ export const handleIntouchWebhook = async (req: Request, res: Response) => {
             flwStatus: "successful",
             paidAt: new Date(),
           },
-        })
+        }),
       );
 
       try {
@@ -112,7 +131,7 @@ export const handleIntouchWebhook = async (req: Request, res: Response) => {
         if (phone) {
           await sendMessage(
             `Your payment of ${order.totalAmount.toLocaleString()} RWF for order ${order.orderNumber} was successful.`,
-            phone
+            phone,
           );
         }
       } catch (e) {
@@ -136,7 +155,7 @@ export const handleIntouchWebhook = async (req: Request, res: Response) => {
             status: OrderStatus.CANCELLED,
             flwStatus: "failed",
           },
-        })
+        }),
       );
 
       try {

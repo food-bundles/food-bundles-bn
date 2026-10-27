@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response, Router } from "express";
+import mobileAppsRouter from "./mobile/index";
 import ussdRoutes from "./ussdRoute";
 import userRoutes from "./userRoute";
 import ProductverifyRoutes from "./ProductVerifyRoute";
@@ -46,6 +47,9 @@ import deliverySettingsRoutes from "./delivery-settings.routes";
 import aggregationSiteRoutes from "./aggregationSite.routes";
 
 const routes = Router();
+
+// Mobile apps routes — /mobile/restaurant/...
+routes.use("/mobile", mobileAppsRouter);
 
 // Order matters! Most specific routes should come first
 routes.use("/farmers/dashboard", farmerDashboardRoutes);

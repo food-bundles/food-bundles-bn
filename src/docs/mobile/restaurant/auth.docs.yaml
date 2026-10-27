@@ -1,0 +1,101 @@
+tags:
+  - name: Mobile Restaurant — Auth
+    description: Authentication endpoints for the restaurant mobile app
+
+paths:
+  /mobile/restaurant/login:
+    post:
+      tags: [Mobile Restaurant — Auth]
+      summary: Restaurant login
+      description: Authenticates a RESTAURANT or HOTEL account and returns a JWT token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone: { type: string, example: "0781234567" }
+                email: { type: string, example: "resto@example.com" }
+                tin: { type: string, example: "123456789" }
+                password: { type: string, example: "Secret@123" }
+              required: [password]
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  token: { type: string }
+                  data: { type: object }
+        401:
+          description: Invalid credentials or non-restaurant account
+
+  /mobile/restaurant/me:
+    get:
+      tags: [Mobile Restaurant — Auth]
+      summary: Get authenticated restaurant profile
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: Profile retrieved
+        401:
+          description: Unauthorized
+    patch:
+      tags: [Mobile Restaurant — Auth]
+      summary: Update authenticated restaurant profile
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                email: { type: string }
+                phone: { type: string }
+                tin: { type: string }
+      responses:
+        200: { description: Profile updated }
+        400: { description: Invalid profile update }
+        401: { description: Unauthorized }
+
+  /mobile/restaurant/forgot-password:
+    post:
+      tags: [Mobile Restaurant — Auth]
+      summary: Request password reset OTP via phone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { type: string, example: "0781234567" }
+      responses:
+        200: { description: OTP sent }
+        400: { description: Phone required }
+
+  /mobile/restaurant/reset-password:
+    post:
+      tags: [Mobile Restaurant — Auth]
+      summary: Reset password using OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otp, newPassword]
+              properties:
+                phone: { type: string }
+                otp: { type: string }
+                newPassword: { type: string }
+      responses:
+        200: { description: Password reset successful }
+        400: { description: Invalid OTP or missing fields }

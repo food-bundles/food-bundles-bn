@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage, Server } from "http";
-
+import { verifyToken } from "./jwt";
 import { isDashboardRole } from "../config/permissions";
 interface WebSocketClient {
   ws: WebSocket;
@@ -156,6 +156,20 @@ interface DelegationUpdate {
   };
 }
 
+interface ChatMessage {
+  conversationId: string;
+  messageId: string;
+  senderId: string;
+  senderName?: string;
+  kind: "text" | "voice" | "file" | "image";
+  body: string;
+  attachment?: string;
+  durationMs?: number;
+  sentAt: string;
+  deliveredAt?: string;
+  readAt?: string;
+}
+
 class WebSocketManager {
   private wss: WebSocketServer | null = null;
   private clients: Map<string, WebSocketClient> = new Map();
@@ -213,16 +227,20 @@ class WebSocketManager {
 
     switch (message.type) {
       case "AUTHENTICATE":
-        if (message.userId && message.role) {
-          client.userId = message.userId;
-          client.role = message.role;
-
-          this.sendMessage(client.ws, {
-            type: "AUTHENTICATED",
-            userId: message.userId,
-            role: message.role,
-            timestamp: new Date().toISOString(),
-          });
+        if (message.token) {
+          try {
+            const payload = verifyToken(message.token);
+            client.userId = payload.id;
+            client.role = message.role;
+            this.sendMessage(client.ws, {
+              type: "AUTHENTICATED",
+              userId: payload.id,
+              role: message.role,
+              timestamp: new Date().toISOString(),
+            });
+          } catch {
+            this.sendError(client.ws, "Invalid token");
+          }
         }
         break;
 
@@ -309,6 +327,19 @@ class WebSocketManager {
             subscription: `subscriptions:${message.restaurantId}`,
             timestamp: new Date().toISOString(),
           });
+        }
+        break;
+
+      case "SUBSCRIBE_CHAT":
+        if (message.conversationId && client.userId) {
+          client.subscriptions.add(`chat:${message.conversationId}`);
+          this.sendMessage(client.ws, {
+            type: "SUBSCRIPTION_CONFIRMED",
+            subscription: `chat:${message.conversationId}`,
+            timestamp: new Date().toISOString(),
+          });
+        } else if (!client.userId) {
+          this.sendError(client.ws, "Authentication required");
         }
         break;
 
@@ -532,6 +563,50 @@ class WebSocketManager {
     console.log(
       `Delegation update broadcasted: ${delegationUpdate.action} - ${delegationUpdate.traderId}`,
     );
+  }
+
+  /**
+   * Broadcast a chat message to all participants subscribed to a conversation
+   */
+  broadcastChatMessage(msg: ChatMessage) {
+    if (!this.wss) return;
+    this.broadcastToSubscription(`chat:${msg.conversationId}`, {
+      type: "CHAT_MESSAGE",
+      data: msg,
+    });
+  }
+
+  /**
+   * Broadcast typing indicator for a conversation
+   */
+  broadcastChatTyping(conversationId: string, senderId: string, isTyping: boolean) {
+    if (!this.wss) return;
+    this.broadcastToSubscription(`chat:${conversationId}`, {
+      type: "CHAT_TYPING",
+      data: { conversationId, senderId, isTyping, timestamp: new Date().toISOString() },
+    });
+  }
+
+  /**
+   * Broadcast message read receipt
+   */
+  broadcastChatRead(conversationId: string, messageId: string, readerId: string) {
+    if (!this.wss) return;
+    this.broadcastToSubscription(`chat:${conversationId}`, {
+      type: "CHAT_READ",
+      data: { conversationId, messageId, readerId, readAt: new Date().toISOString() },
+    });
+  }
+
+  /**
+   * Send a message to a specific user (by userId)
+   */
+  sendToUser(userId: string, message: any) {
+    for (const client of this.clients.values()) {
+      if (client.userId === userId && client.ws.readyState === WebSocket.OPEN) {
+        this.sendMessage(client.ws, message);
+      }
+    }
   }
 
   /**

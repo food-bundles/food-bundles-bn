@@ -1,0 +1,48 @@
+tags:
+  - name: Mobile Restaurant — Affiliators
+    description: Staff/affiliator management for the restaurant mobile app
+
+paths:
+  /mobile/restaurant/affiliators:
+    get:
+      tags: [Mobile Restaurant — Affiliators]
+      summary: List affiliators for the authenticated restaurant
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: Affiliators retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { type: object } }
+    post:
+      tags: [Mobile Restaurant — Affiliators]
+      summary: Invite a new affiliator (staff member)
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                email: { type: string }
+                phone: { type: string }
+      responses:
+        201: { description: Affiliator created and invite sent }
+        400: { description: Validation error }
+
+  /mobile/restaurant/affiliators/{affiliatorId}:
+    delete:
+      tags: [Mobile Restaurant — Affiliators]
+      summary: Remove an affiliator
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: affiliatorId, in: path, required: true, schema: { type: string } }
+      responses:
+        200: { description: Affiliator deleted }
+        400: { description: Cannot delete affiliator with existing orders }

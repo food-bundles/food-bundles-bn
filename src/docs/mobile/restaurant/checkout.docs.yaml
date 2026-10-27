@@ -1,0 +1,115 @@
+tags:
+  - name: Mobile Restaurant — Checkout
+    description: Checkout and payment endpoints for the restaurant mobile app
+
+paths:
+  /mobile/restaurant/checkouts:
+    post:
+      tags: [Mobile Restaurant — Checkout]
+      summary: Initiate checkout from cart
+      description: |
+        Creates a checkout from the restaurant's active cart.
+        - For non-voucher payments (MoMo, Card, Wallet) the order is created immediately.
+        - For VOUCHER payments an OTP or 2FA challenge is returned; complete with `/verify-voucher-otp`.
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cartId, paymentMethodId]
+              properties:
+                cartId:              { type: string }
+                paymentMethodId:     { type: string }
+                billingName:         { type: string }
+                billingEmail:        { type: string }
+                billingPhone:        { type: string }
+                billingAddress:      { type: string }
+                notes:               { type: string }
+                deliveryDate:        { type: string, format: date-time }
+                voucherCode:         { type: string }
+                loanSessionRrn:      { type: string }
+                promoCode:           { type: string }
+                verificationType:    { type: string, enum: [OTP, 2FA], default: OTP }
+      responses:
+        200:
+          description: Checkout initiated or OTP sent for voucher payment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:              { type: string }
+                  data:                 { type: object }
+                  requiresVerification: { type: boolean }
+                  verificationType:     { type: string }
+                  checkoutSessionId:    { type: string }
+        400: { description: Validation error or invalid cart/payment method }
+        401: { description: Unauthorized }
+
+  /mobile/restaurant/checkouts/verify-voucher-otp:
+    post:
+      tags: [Mobile Restaurant — Checkout]
+      summary: Verify OTP/2FA and complete voucher checkout
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp, checkoutSessionId]
+              properties:
+                otp:               { type: string, example: "123456" }
+                checkoutSessionId: { type: string, description: Base64 session token from checkout initiation }
+      responses:
+        200: { description: Payment processed successfully }
+        400: { description: Invalid OTP or session }
+
+  /mobile/restaurant/checkouts/loan-sessions:
+    get:
+      tags: [Mobile Restaurant — Checkout]
+      summary: Get usable loan sessions for checkout payment
+      description: Returns active voucher loan sessions the restaurant can use to pay at checkout.
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: Loan sessions retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { type: object } }
+
+  /mobile/restaurant/checkouts/{orderId}/status:
+    get:
+      tags: [Mobile Restaurant — Checkout]
+      summary: Poll payment status for an order
+      description: Lightweight polling endpoint — returns current payment and order status.
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      orderId:       { type: string }
+                      orderNumber:   { type: string }
+                      paymentStatus: { type: string }
+                      orderStatus:   { type: string }
+                      totalAmount:   { type: number }
+                      updatedAt:     { type: string, format: date-time }
+        403: { description: Order does not belong to this restaurant }
+        404: { description: Order not found }

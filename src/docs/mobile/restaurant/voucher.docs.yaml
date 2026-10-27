@@ -1,0 +1,71 @@
+tags:
+  - name: Mobile Restaurant — Vouchers
+    description: Restaurant voucher operations for the mobile app
+
+paths:
+  /mobile/restaurant/vouchers:
+    get:
+      tags: [Mobile Restaurant — Vouchers]
+      summary: List vouchers for the authenticated restaurant
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: activeOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        200:
+          description: Vouchers retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data:
+                    type: array
+                    items: { type: object }
+        401:
+          description: Unauthorized
+
+  /mobile/restaurant/vouchers/apply:
+    post:
+      tags: [Mobile Restaurant — Vouchers]
+      summary: Submit a voucher/loan application
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestedAmount]
+              properties:
+                requestedAmount:
+                  type: number
+                  description: Requested credit amount in RWF
+                purpose:
+                  type: string
+                voucherDays:
+                  type: number
+                  default: 30
+      responses:
+        201:
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      loanId: { type: string }
+                      status: { type: string }
+        400:
+          description: Validation error or ineligible

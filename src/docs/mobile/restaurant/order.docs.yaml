@@ -1,0 +1,93 @@
+tags:
+  - name: Mobile Restaurant — Orders
+    description: Order management endpoints for the restaurant mobile app
+
+paths:
+  /mobile/restaurant/orders/statistics:
+    get:
+      tags: [Mobile Restaurant — Orders]
+      summary: Get order statistics for the authenticated restaurant
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: dateFrom, in: query, schema: { type: string, format: date } }
+        - { name: dateTo,   in: query, schema: { type: string, format: date } }
+      responses:
+        200:
+          description: Statistics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object }
+
+  /mobile/restaurant/orders:
+    get:
+      tags: [Mobile Restaurant — Orders]
+      summary: List restaurant orders with filters
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: page,          in: query, schema: { type: integer, default: 1 } }
+        - { name: limit,         in: query, schema: { type: integer, default: 10 } }
+        - { name: status,        in: query, schema: { type: string, enum: [PENDING, CONFIRMED, PROCESSING, READY, OUT_FOR_DELIVERY, DELIVERED, CANCELLED, REFUNDED] } }
+        - { name: paymentStatus, in: query, schema: { type: string, enum: [PENDING, COMPLETED, FAILED, REFUNDED, VOUCHER_CREDIT] } }
+        - { name: dateFrom,      in: query, schema: { type: string, format: date } }
+        - { name: dateTo,        in: query, schema: { type: string, format: date } }
+      responses:
+        200:
+          description: Orders retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:       { type: array, items: { type: object } }
+                  pagination: { type: object, properties: { page: { type: integer }, limit: { type: integer }, total: { type: integer }, totalPages: { type: integer } } }
+
+  /mobile/restaurant/orders/{orderId}:
+    get:
+      tags: [Mobile Restaurant — Orders]
+      summary: Get a single order by ID
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: orderId, in: path, required: true, schema: { type: string } }
+      responses:
+        200: { description: Order retrieved }
+        403: { description: Order does not belong to this restaurant }
+        404: { description: Order not found }
+
+  /mobile/restaurant/orders/{orderId}/cancel:
+    post:
+      tags: [Mobile Restaurant — Orders]
+      summary: Cancel an order
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: orderId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        200: { description: Order cancelled }
+        400: { description: Cannot cancel order in current state }
+
+  /mobile/restaurant/orders/{orderId}/reorder:
+    post:
+      tags: [Mobile Restaurant — Orders]
+      summary: Re-order from an existing order
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: orderId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paymentMethodId: { type: string }
+      responses:
+        200: { description: Reorder processed }
+        400: { description: Reorder failed }

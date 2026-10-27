@@ -1,0 +1,80 @@
+tags:
+  - name: Mobile Restaurant — Addresses
+    description: Saved delivery address management for the restaurant mobile app
+
+paths:
+  /mobile/restaurant/addresses:
+    get:
+      tags: [Mobile Restaurant — Addresses]
+      summary: List saved delivery addresses
+      security: [{ BearerAuth: [] }]
+      responses:
+        200:
+          description: Addresses retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        label: { type: string }
+                        street: { type: string }
+                        landmark: { type: string, nullable: true }
+                        phone: { type: string }
+                        isDefault: { type: boolean }
+    post:
+      tags: [Mobile Restaurant — Addresses]
+      summary: Create a new delivery address
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label, street, phone]
+              properties:
+                label: { type: string }
+                street: { type: string }
+                landmark: { type: string }
+                phone: { type: string }
+                isDefault: { type: boolean }
+      responses:
+        201: { description: Address created }
+        400: { description: Validation error }
+
+  /mobile/restaurant/addresses/{addressId}:
+    put:
+      tags: [Mobile Restaurant — Addresses]
+      summary: Update a delivery address
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: addressId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string }
+                street: { type: string }
+                landmark: { type: string }
+                phone: { type: string }
+                isDefault: { type: boolean }
+      responses:
+        200: { description: Address updated }
+        404: { description: Address not found }
+    delete:
+      tags: [Mobile Restaurant — Addresses]
+      summary: Delete a delivery address
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: addressId, in: path, required: true, schema: { type: string } }
+      responses:
+        200: { description: Address deleted }
+        404: { description: Address not found }

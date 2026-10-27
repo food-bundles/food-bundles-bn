@@ -1,0 +1,392 @@
+openapi: 3.0.0
+paths:
+  /mobile/restaurant/market/prices:
+    get:
+      tags:
+        - Mobile Restaurant — Market Intelligence
+      summary: Get all commodity prices, OHLC, momentum, RSI and watchlist
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Market dashboard data parsed from RBA xlsx files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      commodities:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CommodityDashboard"
+                      watchlist:
+                        type: array
+                        items:
+                          type: string
+                      mostActive:
+                        type: array
+                        items:
+                          type: string
+                      updatedAt:
+                        type: string
+                        nullable: true
+
+  /mobile/restaurant/market/prices/{commodityId}/series:
+    get:
+      tags:
+        - Mobile Restaurant — Market Intelligence
+      summary: Get price time-series for a commodity
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: commodityId
+          required: true
+          schema:
+            type: string
+            enum: [irishPotatoes, tomatoes, redOnions, cabbage, carrots]
+        - in: query
+          name: range
+          schema:
+            type: string
+            enum: [1D, 7D, 1M, 3M]
+            default: 7D
+      responses:
+        "200":
+          description: Price series with market comparison and OHLC
+        "404":
+          description: Commodity not found
+
+  /mobile/restaurant/market/advice:
+    get:
+      tags:
+        - Mobile Restaurant — Market Intelligence
+      summary: Buying advice — buy now vs wait based on 7-day average
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Categorised buying advice per commodity
+
+  /mobile/restaurant/market/ranking:
+    get:
+      tags:
+        - Mobile Restaurant — Market Intelligence
+      summary: Peer benchmarking — purchasing power, cost-per-cover, ingredient costs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Anonymous peer benchmarking data
+
+  /mobile/restaurant/market/restaurant-directory:
+    get:
+      tags:
+        - Mobile Restaurant — Market Intelligence
+      summary: Peer restaurant directory for peer-to-peer chat (real DB)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of verified peer restaurants excluding the caller
+
+  /mobile/restaurant/market/substitutions:
+    get:
+      tags:
+        - Mobile Restaurant — Market Intelligence
+      summary: Ingredient substitution suggestions derived from live market prices
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of substitution suggestions with price-aware notes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        fromProductId: { type: string }
+                        toProductId: { type: string }
+                        note: { type: string }
+
+  /mobile/restaurant/market/order-timing-insights:
+    get:
+      tags:
+        - Mobile Restaurant — Market Intelligence
+      summary: Best and worst day-of-week to order each commodity (derived from RBA data)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Day-of-week buying pattern per commodity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        productId: { type: string }
+                        cheaperDay: { type: string }
+                        cheaperDayAvg: { type: number }
+                        pricierDay: { type: string }
+                        pricierDayAvg: { type: number }
+
+  /mobile/restaurant/ai/chat:
+    post:
+      tags:
+        - Mobile Restaurant — AI Assistant
+      summary: Chat with the FoodBundles AI assistant
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question
+              properties:
+                question:
+                  type: string
+                history:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, assistant]
+                      content:
+                        type: string
+      responses:
+        "200":
+          description: AI answer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      answer:
+                        type: string
+                      platform_url:
+                        type: string
+
+  /mobile/restaurant/ai/market-intelligence:
+    post:
+      tags:
+        - Mobile Restaurant — AI Assistant
+      summary: AI market intelligence — commodity prices, trends, buying advice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                history: { type: array, items: { type: object } }
+      responses:
+        "200":
+          description: Market intelligence AI answer
+
+  /mobile/restaurant/ai/support:
+    post:
+      tags:
+        - Mobile Restaurant — AI Assistant
+      summary: AI support chat — orders, vouchers, wallet, subscriptions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                history: { type: array, items: { type: object } }
+      responses:
+        "200":
+          description: Support AI answer scoped to authenticated user
+
+  /mobile/restaurant/ai/assistance:
+    post:
+      tags:
+        - Mobile Restaurant — AI Assistant
+      summary: Contextual AI assistance — menu planning, cost optimisation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                history: { type: array, items: { type: object } }
+                context: { type: object, description: Optional context such as current cart or menu items }
+      responses:
+        "200":
+          description: Contextual AI assistance answer
+
+  /mobile/restaurant/ai/chat/stream:
+    post:
+      tags:
+        - Mobile Restaurant — AI Assistant
+      summary: SSE streaming — AI chat (token-by-token)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                history: { type: array, items: { type: object } }
+      responses:
+        "200":
+          description: Server-Sent Events stream of tokens
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /mobile/restaurant/ai/market-intelligence/stream:
+    post:
+      tags:
+        - Mobile Restaurant — AI Assistant
+      summary: SSE streaming — market intelligence (token-by-token)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                history: { type: array, items: { type: object } }
+      responses:
+        "200":
+          description: Server-Sent Events stream of tokens
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /mobile/restaurant/ai/support/stream:
+    post:
+      tags:
+        - Mobile Restaurant — AI Assistant
+      summary: SSE streaming — support chat (token-by-token)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                history: { type: array, items: { type: object } }
+      responses:
+        "200":
+          description: Server-Sent Events stream of tokens
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /mobile/restaurant/ai/assistance/stream:
+    post:
+      tags:
+        - Mobile Restaurant — AI Assistant
+      summary: SSE streaming — contextual assistance (token-by-token)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                history: { type: array, items: { type: object } }
+                context: { type: object }
+      responses:
+        "200":
+          description: Server-Sent Events stream of tokens
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+components:
+  schemas:
+    CommodityDashboard:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        unit:
+          type: string
+        latestPrice:
+          type: number
+        momentum:
+          type: object
+          properties:
+            direction:
+              type: string
+              enum: [UP, FLAT, DOWN]
+            magnitudePct:
+              type: number
+        changePct:
+          type: number
+        rsi:
+          type: number
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              price:
+                type: number
