@@ -12,10 +12,8 @@ const guard = [isAuthenticated, checkPermission("RESTAURANT", "HOTEL", "AFFILIAT
 // GET /mobile/restaurant/products/categories  — must be before /:productId
 router.get("/categories", ...guard, mobileProductCategories);
 
-// GET /mobile/restaurant/products
-router.get("/", ...guard, mobileProductsList);
-
-// GET /mobile/restaurant/products/:productId
-router.get("/:productId", ...guard, mobileProductGet);
+// Public — guest shop needs product listing without a token
+router.get("/", mobileProductsList);
+router.get("/:productId", mobileProductGet);
 
 export default router;

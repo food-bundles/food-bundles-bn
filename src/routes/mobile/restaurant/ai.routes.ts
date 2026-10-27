@@ -9,6 +9,7 @@ import {
   mobileAiMarketIntelligenceStream,
   mobileAiSupportStream,
   mobileAiAssistanceStream,
+  mobileAiToolCall,
 } from "../../../controllers/mobile/restaurant/ai.controller";
 
 const router = Router();
@@ -24,5 +25,8 @@ router.post("/chat/stream", ...guard, mobileAiChatStream);
 router.post("/market-intelligence/stream", ...guard, mobileAiMarketIntelligenceStream);
 router.post("/support/stream", ...guard, mobileAiSupportStream);
 router.post("/assistance/stream", ...guard, mobileAiAssistanceStream);
+
+// Internal: AI service calls this to fetch live user data (service-secret auth, not user JWT)
+router.post("/tool-call", mobileAiToolCall);
 
 export default router;

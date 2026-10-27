@@ -14,7 +14,9 @@
     "create-superadmin": "node dist/scripts/create-superadmin.js",
     "create-superadmin:dev": "ts-node src/scripts/create-superadmin.ts",
     "seed:customer-types": "node dist/scripts/seed-customer-types.js",
-    "seed:customer-types:dev": "ts-node src/scripts/seed-customer-types.ts"
+    "seed:customer-types:dev": "ts-node src/scripts/seed-customer-types.ts",
+    "seed": "ts-node prisma/seed.ts",
+    "seed:dev": "ts-node prisma/seed.ts"
   },
   "keywords": [],
   "author": "",

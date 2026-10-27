@@ -3,6 +3,7 @@ import authRoutes from "./auth.routes";
 import cartRoutes from "./cart.routes";
 import checkoutRoutes from "./checkout.routes";
 import orderRoutes from "./order.routes";
+import guestOrderRoutes from "./guestOrder.routes";
 import walletRoutes from "./wallet.routes";
 import notificationRoutes from "./notification.routes";
 import productRoutes from "./products.routes";
@@ -18,6 +19,7 @@ import configRoutes from "./config.routes";
 const restaurantMobileRouter = Router();
 
 restaurantMobileRouter.use("/", authRoutes);
+restaurantMobileRouter.use("/guest", guestOrderRoutes);
 restaurantMobileRouter.use("/products", productRoutes);
 restaurantMobileRouter.use("/carts", cartRoutes);
 restaurantMobileRouter.use("/checkouts", checkoutRoutes);

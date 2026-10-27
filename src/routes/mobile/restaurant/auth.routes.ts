@@ -1,9 +1,12 @@
 import { Router } from "express";
 import { isAuthenticated, checkPermission } from "../../../middleware/authMiddleware";
-import { mobileLogin, mobileMe, mobileForgotPassword, mobileResetPassword, mobileUpdateProfile } from "../../../controllers/mobile/restaurant/auth.controller";
+import { mobileRegister, mobileLogin, mobileMe, mobileForgotPassword, mobileResetPassword, mobileUpdateProfile } from "../../../controllers/mobile/restaurant/auth.controller";
 
 const router = Router();
 const guard = [isAuthenticated, checkPermission("RESTAURANT", "HOTEL", "AFFILIATOR")];
+
+// POST /mobile/restaurant/register
+router.post("/register", mobileRegister);
 
 // POST /mobile/restaurant/login
 router.post("/login", mobileLogin);
