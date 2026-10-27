@@ -1,7 +1,8 @@
 import prisma from "../prisma";
 import { DeliveryStatus, OrderStatus, PaymentStatus } from "@prisma/client";
-import { sendMessage } from "../utils/sms.utility";
 import { createNotificationService } from "./notification.services";
+import { sendOrderStatusEmail } from "../utils/emails";
+import { OTPService } from "./otp.service";
 
 export class DeliveryService {
   /**
@@ -16,7 +17,11 @@ export class DeliveryService {
    */
   static async createDeliveryOTP(
     orderId: string
-  ): Promise<{ success: boolean; message: string; otp?: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    otpDelivery?: Awaited<ReturnType<typeof OTPService.sendOTPNotification>>["channels"];
+  }> {
     try {
       // Validate order exists and is eligible for delivery
       const order = await prisma.order.findUnique({
@@ -63,16 +68,17 @@ export class DeliveryService {
         },
       });
 
-      // Send OTP to restaurant
-      await sendMessage(
-        `Your delivery OTP for order ${order.orderNumber} is: ${otp}. Valid for 24 hours.`,
-        order.restaurant.phone || ""
-      );
+      const notification = await OTPService.sendOTPNotification({
+        phone: order.restaurant.phone,
+        email: order.restaurant.email,
+        subject: `FoodBundles delivery OTP for order ${order.orderNumber}`,
+        message: `Your delivery OTP for order ${order.orderNumber} is ${otp}. It is valid for 24 hours. Do not share this code with anyone.`,
+      });
 
       return {
-        success: true,
-        message: "Delivery OTP sent successfully",
-        otp, // Only returned for testing/debugging, not sent to client
+        success: notification.success,
+        message: notification.message,
+        otpDelivery: notification.channels,
       };
     } catch (error: any) {
       return { success: false, message: error.message };
@@ -84,7 +90,11 @@ export class DeliveryService {
    */
   static async resendDeliveryOTP(
     orderId: string
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    otpDelivery?: Awaited<ReturnType<typeof OTPService.sendOTPNotification>>["channels"];
+  }> {
     try {
       const result = await this.createDeliveryOTP(orderId);
       return result;
@@ -207,6 +217,26 @@ export class DeliveryService {
           deliveredAt: new Date().toISOString(),
         },
       });
+
+      // Email confirmation — previously no email was ever sent for order
+      // delivery, despite the template already supporting a DELIVERED
+      // status. Isolated so a failure here can never flip the already-
+      // confirmed delivery into a reported failure.
+      try {
+        if (deliveryOTP.order.restaurant.email) {
+          await sendOrderStatusEmail({
+            orderNumber: deliveryOTP.order.orderNumber,
+            status: "DELIVERED",
+            restaurantName: deliveryOTP.order.restaurant.name,
+            customer: {
+              name: deliveryOTP.order.restaurant.name,
+              email: deliveryOTP.order.restaurant.email,
+            },
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send order delivered email:", emailError);
+      }
 
       return {
         success: true,
@@ -332,6 +362,11 @@ export class DeliveryService {
       // Validate order exists and is eligible
       const order = await prisma.order.findUnique({
         where: { id: orderId },
+        include: {
+          restaurant: {
+            select: { name: true, email: true },
+          },
+        },
       });
 
       if (!order) {
@@ -409,6 +444,27 @@ export class DeliveryService {
           },
         });
       });
+
+      // Notify the restaurant of the delivery progress. Isolated so an
+      // email failure can never affect the already-committed status update.
+      if (order.restaurant?.email) {
+        try {
+          await sendOrderStatusEmail({
+            orderNumber: order.orderNumber,
+            status: orderStatus,
+            restaurantName: order.restaurant.name,
+            customer: {
+              name: order.restaurant.name,
+              email: order.restaurant.email,
+            },
+          });
+        } catch (emailError) {
+          console.error(
+            "Failed to send delivery status email:",
+            emailError,
+          );
+        }
+      }
 
       return {
         success: true,

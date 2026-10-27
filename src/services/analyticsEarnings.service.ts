@@ -1,10 +1,11 @@
 import prisma from "../prisma";
+import { farmerWhere } from "../utils/farmerKey";
 
 export class AnalyticsEarningsService {
   static async getIncomesSummary(phoneNumber: string): Promise<any> {
     try {
       const farmer = await prisma.farmer.findUnique({
-        where: { phone: phoneNumber },
+        where: farmerWhere(phoneNumber),
       });
 
       if (!farmer) return null;
@@ -37,7 +38,7 @@ export class AnalyticsEarningsService {
   static async getPerformanceMetrics(phoneNumber: string): Promise<any> {
     try {
       const farmer = await prisma.farmer.findUnique({
-        where: { phone: phoneNumber },
+        where: farmerWhere(phoneNumber),
       });
 
       if (!farmer) return null;
@@ -65,7 +66,7 @@ export class AnalyticsEarningsService {
   static async getComparisonAnalytics(phoneNumber: string): Promise<any> {
     try {
       const farmer = await prisma.farmer.findUnique({
-        where: { phone: phoneNumber },
+        where: farmerWhere(phoneNumber),
       });
 
       if (!farmer) return null;
@@ -104,7 +105,7 @@ export class AnalyticsEarningsService {
   > {
     try {
       const farmer = await prisma.farmer.findUnique({
-        where: { phone: phoneNumber },
+        where: farmerWhere(phoneNumber),
       });
 
       if (!farmer) return [];
@@ -172,7 +173,7 @@ export class AnalyticsEarningsService {
   ): Promise<{ month: string; submissions: number; earnings: number }[]> {
     try {
       const farmer = await prisma.farmer.findUnique({
-        where: { phone: phoneNumber },
+        where: farmerWhere(phoneNumber),
       });
 
       if (!farmer) return [];

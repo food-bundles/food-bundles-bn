@@ -1,9 +1,20 @@
 import { Request, Response, NextFunction } from "express";
 import { catchAsyncError } from "../utils/errorhandler.utlity";
 import errorHandler from "../utils/errorhandler.utlity";
+import { getFarmerSubmissionDetail } from "../services/farmerSubmissionDetail.service";
+import { getFarmerReport } from "../services/farmerReport.service";
 import { AnalyticsEarningsService } from "../services/analyticsEarnings.service";
 import { ActivityMonitoringService } from "../services/activityMonitoring.service";
 import { FarmingProfileService } from "../services/farmingProfile.service";
+import { getFarmerCropDemand } from "../services/farmerCropDemand.service";
+import {
+  FARMER_LANGUAGES,
+  FarmerLanguage,
+  getFarmerPreferences,
+  updateFarmerPreferences,
+  addFarmerPhone,
+  PhoneUpdateError,
+} from "../services/farmerPreferences.service";
 import {
   getFarmerVoucherApplications,
   getFarmerVouchers,
@@ -37,18 +48,16 @@ const DELIVERY_PREFERENCES = [
   "MARKET_DELIVERY",
 ];
 
+// Key the farmer services look the farmer up by: the phone when there is one, otherwise the id
+// (farmers who signed up with an email have no phone yet). See utils/farmerKey.ts.
 const requirePhone = (req: Request, next: NextFunction): string | null => {
-  const phone = (req as any).user?.phone;
-  if (!phone) {
-    next(
-      new errorHandler({
-        message: "A phone number is required on your account for this feature",
-        statusCode: 400,
-      })
-    );
+  const user = (req as any).user;
+  const key = user?.phone || user?.id;
+  if (!key) {
+    next(new errorHandler({ message: "Farmer account not found", statusCode: 400 }));
     return null;
   }
-  return phone;
+  return key;
 };
 
 export const getEarningsSummaryController = catchAsyncError(
@@ -217,6 +226,65 @@ export const getFarmingProfileController = catchAsyncError(
   }
 );
 
+export const addFarmerPhoneController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const farmerId = (req as any).user.id;
+    try {
+      const result = await addFarmerPhone(farmerId, req.body?.phone);
+      res.status(200).json({
+        success: true,
+        message: "Phone number saved",
+        data: result,
+      });
+    } catch (e: any) {
+      if (e instanceof PhoneUpdateError) {
+        return next(new errorHandler({ message: e.message, statusCode: e.statusCode }));
+      }
+      throw e;
+    }
+  }
+);
+
+export const updatePrimaryCropsController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const farmerId = (req as any).user.id;
+    const { productIds } = req.body || {};
+
+    if (
+      !Array.isArray(productIds) ||
+      productIds.length > 100 ||
+      !productIds.every((id) => typeof id === "string" && id)
+    ) {
+      return next(
+        new errorHandler({
+          message: "productIds must be an array of product ids",
+          statusCode: 400,
+        })
+      );
+    }
+
+    const result = await FarmingProfileService.setPrimaryCropsById(
+      farmerId,
+      productIds
+    );
+    if (!result.ok) {
+      return next(
+        new errorHandler({
+          message: "Some selected crops are not available",
+          statusCode: 400,
+        })
+      );
+    }
+
+    const profile = await FarmingProfileService.getFarmingProfile(farmerId);
+    res.status(200).json({
+      success: true,
+      message: "Crops updated successfully",
+      data: profile,
+    });
+  }
+);
+
 export const updateFarmingProfileController = catchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     const farmerId = (req as any).user.id;
@@ -379,5 +447,122 @@ export const getDashboardSummaryController = catchAsyncError(
       message: "Dashboard summary retrieved successfully",
       data: { earnings, vouchers, profileComplete },
     });
+  }
+);
+
+export const getCropDemandController = catchAsyncError(
+  async (req: Request, res: Response) => {
+    const farmerId = (req as any).user.id;
+
+    res.status(200).json({
+      success: true,
+      message: "Crop demand retrieved successfully",
+      data: await getFarmerCropDemand(farmerId),
+    });
+  }
+);
+
+export const getFarmerPreferencesController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const farmerId = (req as any).user?.id;
+    const preferences = farmerId ? await getFarmerPreferences(farmerId) : null;
+
+    if (!preferences) {
+      return next(
+        new errorHandler({ message: "Farmer not found", statusCode: 404 })
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Preferences retrieved successfully",
+      data: preferences,
+    });
+  }
+);
+
+export const updateFarmerPreferencesController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const farmerId = (req as any).user?.id;
+    const { smsNotifications, preferredLanguage } = req.body ?? {};
+
+    const changes: {
+      smsNotifications?: boolean;
+      preferredLanguage?: FarmerLanguage;
+    } = {};
+
+    if (smsNotifications !== undefined) {
+      if (typeof smsNotifications !== "boolean") {
+        return next(
+          new errorHandler({
+            message: "smsNotifications must be true or false",
+            statusCode: 400,
+          })
+        );
+      }
+      changes.smsNotifications = smsNotifications;
+    }
+
+    if (preferredLanguage !== undefined) {
+      if (!FARMER_LANGUAGES.includes(preferredLanguage)) {
+        return next(
+          new errorHandler({
+            message: `preferredLanguage must be one of: ${FARMER_LANGUAGES.join(", ")}`,
+            statusCode: 400,
+          })
+        );
+      }
+      changes.preferredLanguage = preferredLanguage;
+    }
+
+    if (Object.keys(changes).length === 0) {
+      return next(
+        new errorHandler({
+          message: "Nothing to update",
+          statusCode: 400,
+        })
+      );
+    }
+
+    const preferences = await updateFarmerPreferences(farmerId, changes);
+
+    res.status(200).json({
+      success: true,
+      message: "Preferences updated successfully",
+      data: preferences,
+    });
+  }
+);
+
+// Farmer's report: Mobile Money wallet, pending money (separate), and each submission with how it was paid
+export const getFarmerReportController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const farmerId = (req as any).user.id;
+
+    let from: Date | undefined;
+    if (req.query.from !== undefined) {
+      from = new Date(String(req.query.from));
+      if (Number.isNaN(from.getTime())) {
+        return next(new errorHandler({ message: "from must be a valid date", statusCode: 400 }));
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Report retrieved successfully",
+      data: await getFarmerReport(farmerId, from),
+    });
+  }
+);
+
+// One of the farmer's own submissions with its timeline, prices, payment and drop-off site
+export const getFarmerSubmissionDetailController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const farmerId = (req as any).user.id;
+    const detail = await getFarmerSubmissionDetail(farmerId, req.params.submissionId);
+    if (!detail) {
+      return next(new errorHandler({ message: "Submission not found", statusCode: 404 }));
+    }
+    res.status(200).json({ success: true, message: "Submission retrieved successfully", data: detail });
   }
 );

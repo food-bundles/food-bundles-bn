@@ -4,9 +4,11 @@ import {
   normalizePermissions,
   PERMISSION_MODULES,
   SYSTEM_ROLES,
-  isDashboardRole,
+  hasDashboardAccess,
 } from "../config/permissions";
 import { AccessError, resolveRoleAssignment } from "../services/access.service";
+import { createNotificationService } from "../services/notification.services";
+import { sendRoleChangedEmail } from "../utils/emails";
 
 const sendError = (res: Response, error: any, fallback: string) => {
   const status = error instanceof AccessError ? error.status : error.code === "P2002" ? 409 : 500;
@@ -48,12 +50,22 @@ export const getAdminRoles = async (_req: Request, res: Response) => {
   }
 };
 
+/** Keep only existing customer type ids (empty list = all customer types). */
+const cleanCustomerTypeIds = async (value: unknown): Promise<string[]> => {
+  if (!Array.isArray(value)) return [];
+  const ids = [...new Set(value.filter((v): v is string => typeof v === "string" && v.length > 0))];
+  if (ids.length === 0) return [];
+  const found = await prisma.customerType.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  if (found.length !== ids.length) throw new AccessError("One of the selected customer types no longer exists", 400);
+  return ids;
+};
+
 /**
- * POST /admin-roles  { name, description?, permissions: string[] }
+ * POST /admin-roles  { name, description?, permissions: string[], customerTypeIds?: string[] }
  */
 export const createAdminRole = async (req: Request, res: Response) => {
   try {
-    const { name, description, permissions } = req.body;
+    const { name, description, permissions, customerTypeIds } = req.body;
     if (!name || !String(name).trim()) {
       throw new AccessError("Role name is required", 400);
     }
@@ -62,6 +74,7 @@ export const createAdminRole = async (req: Request, res: Response) => {
         name: String(name).trim(),
         description: description?.trim() || null,
         permissions: normalizePermissions(Array.isArray(permissions) ? permissions : []),
+        customerTypeIds: await cleanCustomerTypeIds(customerTypeIds),
       },
     });
     res.status(201).json({ success: true, message: "Role created", data: role });
@@ -71,7 +84,7 @@ export const createAdminRole = async (req: Request, res: Response) => {
 };
 
 /**
- * PATCH /admin-roles/:id  { name?, description?, permissions? }
+ * PATCH /admin-roles/:id  { name?, description?, permissions?, customerTypeIds? }
  * The Administrator role always has every permission and cannot be edited.
  */
 export const updateAdminRole = async (req: Request, res: Response) => {
@@ -83,7 +96,7 @@ export const updateAdminRole = async (req: Request, res: Response) => {
       throw new AccessError("The Administrator role always has full access and cannot be edited", 400);
     }
 
-    const { name, description, permissions } = req.body;
+    const { name, description, permissions, customerTypeIds } = req.body;
     if (existing.isSystem && name && name.trim() !== existing.name) {
       throw new AccessError("System roles cannot be renamed", 400);
     }
@@ -94,6 +107,9 @@ export const updateAdminRole = async (req: Request, res: Response) => {
         ...(name !== undefined && { name: String(name).trim() }),
         ...(description !== undefined && { description: description?.trim() || null }),
         ...(Array.isArray(permissions) && { permissions: normalizePermissions(permissions) }),
+        ...(Array.isArray(customerTypeIds) && {
+          customerTypeIds: await cleanCustomerTypeIds(customerTypeIds),
+        }),
       },
     });
     res.json({ success: true, message: "Role updated", data: role });
@@ -129,8 +145,8 @@ export const deleteAdminRole = async (req: Request, res: Response) => {
 
 /**
  * PATCH /admin-roles/assign/:adminId  { adminRoleId }
- * Give a dashboard user a role. Traders, logistics, aggregators and super
- * admins keep their own access model and can't be reassigned here.
+ * Give a dashboard user a role (office staff, aggregators, logistics). Traders
+ * and super admins keep their own access model and can't be reassigned here.
  */
 export const assignAdminRole = async (req: Request, res: Response) => {
   try {
@@ -142,16 +158,18 @@ export const assignAdminRole = async (req: Request, res: Response) => {
 
     const target = await prisma.admin.findUnique({ where: { id: adminId } });
     if (!target) throw new AccessError("User not found", 404);
-    if (!isDashboardRole(target.role) || target.role === "SUPERUSER") {
+    if (!hasDashboardAccess(target.role) || target.role === "SUPERUSER") {
       throw new AccessError(
         `${target.role} users don't use dashboard roles`,
         400,
       );
     }
 
-    const { role, adminRoleId } = await resolveRoleAssignment(actor, {
-      adminRoleId: req.body.adminRoleId,
-    });
+    const { role, adminRoleId } = await resolveRoleAssignment(
+      actor,
+      { adminRoleId: req.body.adminRoleId },
+      target.role,
+    );
 
     const updated = await prisma.admin.update({
       where: { id: adminId },
@@ -164,6 +182,33 @@ export const assignAdminRole = async (req: Request, res: Response) => {
         AdminRole: { select: { id: true, name: true } },
       },
     });
+
+    const roleName = updated.AdminRole?.name || updated.role;
+
+    try {
+      await createNotificationService({
+        title: "Your Role Was Updated",
+        message: `Your role has been changed to ${roleName}.`,
+        eventType: "ADMIN_ROLE_CHANGED",
+        targetType: "SPECIFIC_USER",
+        targetId: updated.id,
+        metadata: { roleName, changedBy: actor.id },
+      });
+    } catch (notifError) {
+      console.error("Failed to create role-change notification:", notifError);
+    }
+
+    try {
+      await sendRoleChangedEmail({
+        email: updated.email,
+        username: updated.username,
+        roleName,
+        changedBy: actor.username,
+      });
+    } catch (emailError) {
+      console.error("Failed to send role-change email:", emailError);
+    }
+
     res.json({ success: true, message: "Role assigned", data: updated });
   } catch (error: any) {
     sendError(res, error, "Failed to assign role");

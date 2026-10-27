@@ -17,7 +17,7 @@ export const addNotificationRecipient = async (
 ) => {
   try {
     const adminId = (req as any).user.id;
-    const { name, phoneNumber, category } = req.body;
+    const { name, phoneNumber, email, category } = req.body;
 
     if (!name || !phoneNumber || !category) {
       return res.status(400).json({
@@ -32,9 +32,16 @@ export const addNotificationRecipient = async (
       });
     }
 
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        message: "Invalid email address",
+      });
+    }
+
     const recipient = await addNotificationRecipientService({
       name,
       phoneNumber,
+      email,
       category,
       createdBy: adminId,
     });
@@ -89,11 +96,18 @@ export const updateNotificationRecipient = async (
 ) => {
   try {
     const { id } = req.params;
-    const { name, phoneNumber, category, isActive } = req.body;
+    const { name, phoneNumber, email, category, isActive } = req.body;
+
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        message: "Invalid email address",
+      });
+    }
 
     const updateData: any = {};
     if (name) updateData.name = name;
     if (phoneNumber) updateData.phoneNumber = phoneNumber;
+    if (email !== undefined) updateData.email = email || null;
     if (category) updateData.category = category;
     if (isActive !== undefined) updateData.isActive = isActive;
 

@@ -1,4 +1,7 @@
 import prisma from "../prisma";
+import { farmerWhere } from "../utils/farmerKey";
+import { sendMessage } from "../utils/sms.utility";
+import { createNotificationService } from "./notification.services";
 
 export class ActivityMonitoringService {
   static async logLoginAttempt(
@@ -8,7 +11,7 @@ export class ActivityMonitoringService {
   ): Promise<void> {
     try {
       const farmer = await prisma.farmer.findUnique({
-        where: { phone: phoneNumber },
+        where: farmerWhere(phoneNumber),
       });
 
       if (farmer) {
@@ -60,6 +63,37 @@ export class ActivityMonitoringService {
             lockedUntil: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
           },
         });
+
+        // Notify the farmer (SMS, minimal wording) and admins (in-app) —
+        // durable notifications for a real fraud signal that was previously
+        // completely silent outside this one DB row.
+        try {
+          const farmer = await prisma.farmer.findUnique({
+            where: { id: farmerId },
+            select: { phone: true },
+          });
+
+          if (farmer?.phone) {
+            await sendMessage(
+              "Your Food Bundles account has been temporarily locked due to repeated failed login attempts. Try again in 30 minutes.",
+              farmer.phone,
+            );
+          }
+
+          await createNotificationService({
+            title: "Farmer Account Locked",
+            message: `Farmer account locked after ${failedAttempts} failed login attempts in the last hour.`,
+            eventType: "SYSTEM_MAINTENANCE",
+            targetType: "ROLE_BASED",
+            targetRole: "ADMIN",
+            metadata: { farmerId, failedAttempts },
+          });
+        } catch (notifyError) {
+          console.error(
+            "Failed to send account lockout notification:",
+            notifyError,
+          );
+        }
       }
     } catch (error) {
       console.error("Suspicious activity check error:", error);
@@ -69,7 +103,7 @@ export class ActivityMonitoringService {
   static async getRecentActivity(phoneNumber: string): Promise<any[]> {
     try {
       const farmer = await prisma.farmer.findUnique({
-        where: { phone: phoneNumber },
+        where: farmerWhere(phoneNumber),
         include: {
           FarmerLoginAttempt: {
             orderBy: { attemptTime: "desc" },

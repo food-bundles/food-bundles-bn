@@ -43,7 +43,7 @@ orderRoutes.get("/statistics", isAuthenticated, getOrderStatistics);
 orderRoutes.post(
   "/test-websocket",
   isAuthenticated,
-  allow("orders"),
+  allow.to("orders.update_status"),
   testWebSocket
 );
 
@@ -182,7 +182,7 @@ orderRoutes.post(
 orderRoutes.post(
   "/:orderId/generate-ebm-invoice",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow.to("orders.generate_invoice"),
   generateEBMInvoice
 );
 

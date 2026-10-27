@@ -6,35 +6,40 @@ import {
   getWfpFilterOptionsService,
   clearWfpPricesService,
 } from "../services/wfp-market.service";
+import prisma from "../prisma";
 import fs from "fs";
 
 // Upload and ingest WFP CSV
 export const uploadWfpCsv = async (req: Request, res: Response) => {
   try {
-    let filePath = "";
     const adminId = (req as any).user?.id;
 
-    if (req.file) {
-      filePath = req.file.path;
-    } else if (req.body?.filePath && fs.existsSync(req.body.filePath)) {
-      filePath = req.body.filePath;
-    } else {
-      // Default fallback path on server if present
-      const defaultLocalPath =
-        "C:\\Users\\muvunyi\\Documents\\FOODBUNDLES\\wfp_food_prices_rwa.csv";
-      if (fs.existsSync(defaultLocalPath)) {
-        filePath = defaultLocalPath;
-      }
-    }
-
-    if (!filePath || !fs.existsSync(filePath)) {
+    if (!req.file) {
       return res.status(400).json({
         success: false,
-        message:
-          "No CSV file uploaded and default local dataset not found. Please upload a .csv file.",
+        message: "No CSV file uploaded. Please upload a .csv file.",
       });
     }
 
+    // Once-per-day guard: block if data was already uploaded today
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const todayCount = await prisma.wfpMarketPrice.count({
+      where: { createdAt: { gte: todayStart, lte: todayEnd } },
+    });
+
+    if (todayCount > 0) {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(409).json({
+        success: false,
+        message: `WFP data has already been uploaded today (${todayCount.toLocaleString()} records). Upload is allowed once per day.`,
+      });
+    }
+
+    const filePath = req.file.path;
     const result = await importWfpCsvService(filePath, adminId);
 
     // Clean up temporary uploaded file if uploaded via multer
@@ -48,7 +53,7 @@ export const uploadWfpCsv = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
-      message: `Successfully processed ${result.totalRows.toLocaleString()} rows. Inserted ${result.insertedCount.toLocaleString()} price records across ${result.marketsDiscovered} markets in ${result.durationSeconds}s.`,
+      message: `Successfully processed ${result.totalRows.toLocaleString()} rows. Added ${result.insertedCount.toLocaleString()} new price records (${result.skippedExisting.toLocaleString()} already existed and were skipped) across ${result.marketsDiscovered} markets in ${result.durationSeconds}s.`,
       data: result,
     });
   } catch (error: any) {

@@ -7,6 +7,8 @@ import errorHandler from "../utils/errorhandler.utlity";
 import { globalErrorController } from "../controllers/error.controller";
 import submissionsRoutes from "./submissionsRoutes";
 import adminsRoutes from "./adminsRoutes";
+import userTrashRoutes from "./user-trash.routes";
+import supplyRequestRoutes from "./supply-request.routes";
 import restaurantsRoutes from "./restaurantsRoutes";
 import farmersRoutes from "./farmersRoutes";
 import farmerDashboardRoutes from "./farmerDashboardRoutes";
@@ -39,6 +41,9 @@ import newsletterRoutes from "./newsletter.routes";
 import authenticatorRoutes from "./authenticator.routes";
 import customerTypeRoutes from "./customer-type.routes";
 import adminRoleRoutes from "./admin-role.routes";
+import wishlistRoutes from "./wishlist.routes";
+import deliverySettingsRoutes from "./delivery-settings.routes";
+import aggregationSiteRoutes from "./aggregationSite.routes";
 
 const routes = Router();
 
@@ -48,6 +53,8 @@ routes.use("/farmers", farmersRoutes);
 routes.use("/restaurants", restaurantsRoutes);
 routes.use("/affiliators", affiliatorRoutes);
 routes.use("/admins", adminsRoutes);
+routes.use("/user-admin", userTrashRoutes);
+routes.use("/supply-requests", supplyRequestRoutes);
 routes.use("/submissions", submissionsRoutes);
 routes.use("/products", productRoutes);
 routes.use("/carts", cartRoutes);
@@ -78,6 +85,9 @@ routes.use("/newsletter", newsletterRoutes);
 routes.use("/authenticator", authenticatorRoutes);
 routes.use("/customer-types", customerTypeRoutes);
 routes.use("/admin-roles", adminRoleRoutes);
+routes.use("/wishlist", wishlistRoutes);
+routes.use("/delivery-settings", deliverySettingsRoutes);
+routes.use("/aggregation-sites", aggregationSiteRoutes);
 
 // These should come after the specific routes above
 routes.use("/", ProductverifyRoutes);

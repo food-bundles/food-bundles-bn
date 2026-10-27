@@ -1,8 +1,9 @@
 import prisma from "../prisma";
 import { createNotificationService } from "./notification.services";
 import { getProductUnitByIdService } from "./unit.service";
+import { sendMessage } from "../utils/sms.utility";
 
-import { isDashboardRole } from "../config/permissions";
+import { hasDashboardAccess } from "../config/permissions";
 export interface ProductData {
   tableTronicProductId?: number | null;
   unitId?: string | null;
@@ -12,7 +13,7 @@ export interface ProductData {
   categoryId: string;
   category?: Category;
   bonus?: number;
-  sku: string;
+  sku?: string; // optional: generated from the product name when empty
   quantity: number;
   images: string[];
   expiryDate: Date | null;
@@ -20,6 +21,24 @@ export interface ProductData {
   createdBy: string;
   customerTypePrices?: { customerTypeId: string; price: number; purchasePrice?: number }[];
 }
+
+/**
+ * Simple unique SKU, generated behind the scenes: the first 3 letters of the
+ * product name + 5 random characters, e.g. "TOM-4F7K2" for Tomatoes.
+ */
+export const generateSku = async (productName: string): Promise<string> => {
+  const prefix =
+    (productName || "").replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase().padEnd(3, "X");
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O, 1/I lookalikes
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let code = "";
+    for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    const sku = `${prefix}-${code}`;
+    const taken = await prisma.product.findUnique({ where: { sku }, select: { id: true } });
+    if (!taken) return sku;
+  }
+  return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+};
 
 interface Category {
   id: string;
@@ -33,13 +52,14 @@ export const createProductService = async (productData: ProductData) => {
     where: { id: productData.createdBy },
   });
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can create products");
   }
 
-  // Check if SKU already exists
+  // Use the given SKU, or generate one behind the scenes
+  const sku = productData.sku?.trim() || (await generateSku(productData.productName));
   const existingSku = await prisma.product.findUnique({
-    where: { sku: productData.sku },
+    where: { sku },
   });
 
   if (existingSku) {
@@ -66,7 +86,7 @@ export const createProductService = async (productData: ProductData) => {
         purchasePrice: Number(productData.purchasePrice),
         categoryId: productData.categoryId,
         bonus: Number(productData.bonus) || 0,
-        sku: productData.sku,
+        sku,
         quantity: Number(productData.quantity),
         images: productData.images,
         expiryDate: productData.expiryDate,
@@ -214,7 +234,7 @@ export const updateProductService = async (
 
   console.log("admin:", admin);
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can update products");
   }
 
@@ -411,13 +431,14 @@ export const createProductFromSubmissionService = async ({
     where: { id: productData.createdBy },
   });
 
-  if (!admin || !isDashboardRole(admin.role)) {
+  if (!admin || !hasDashboardAccess(admin.role)) {
     throw new Error("Only dashboard admins can create products");
   }
 
-  // Check if SKU already exists
+  // Use the given SKU, or generate one behind the scenes
+  const sku = productData.sku?.trim() || (await generateSku(productData.productName));
   const existingSku = await prisma.product.findUnique({
-    where: { sku: productData.sku },
+    where: { sku },
   });
 
   if (existingSku) {
@@ -434,7 +455,7 @@ export const createProductFromSubmissionService = async ({
         purchasePrice: productData.purchasePrice,
         categoryId: productData.categoryId,
         bonus: productData.bonus ?? 0,
-        sku: productData.sku,
+        sku,
         quantity: productData.quantity,
         images: productData.images,
         expiryDate: productData.expiryDate,
@@ -492,19 +513,34 @@ export const createProductFromSubmissionService = async ({
     };
   });
 
-  await createNotificationService({
-    title: "Product Approved",
-    message: `Your product "${submission.productName}" has been approved and is now available`,
-    eventType: "PRODUCT_APPROVED",
-    targetType: "SPECIFIC_USER",
-    targetId: submission.farmerId,
-    metadata: {
-      productId: result.product.id,
-      productName: submission.productName,
-      submissionId: submission.id,
-      approvedBy: productData.createdBy,
-    },
-  });
+  try {
+    await createNotificationService({
+      title: "Product Approved",
+      message: `Your product "${submission.productName}" has been approved and is now available`,
+      eventType: "PRODUCT_APPROVED",
+      targetType: "SPECIFIC_USER",
+      targetId: submission.farmerId,
+      metadata: {
+        productId: result.product.id,
+        productName: submission.productName,
+        submissionId: submission.id,
+        approvedBy: productData.createdBy,
+      },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-approved notification:", notifError);
+  }
+
+  try {
+    if (result.submission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${submission.productName} has been approved and will be paid out soon.`,
+        result.submission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-approved SMS:", smsError);
+  }
 
   return result;
 };
@@ -593,15 +629,18 @@ export const getAllProductsService = async ({
   search,
   page = 1,
   limit = 10,
+  includeOutOfStock = false,
 }: {
   categoryId?: string;
   search?: string;
   page?: number;
   limit?: number;
+  /** Farmers choose what they grow/sell regardless of shop stock */
+  includeOutOfStock?: boolean;
 }) => {
   const where: any = {
     status: "ACTIVE",
-    quantity: { gt: 0 },
+    ...(!includeOutOfStock && { quantity: { gt: 0 } }),
   };
 
   if (categoryId) {
@@ -988,58 +1027,74 @@ export const approveSubmissionService = async (
     );
   }
 
-  const updatedSubmission = await prisma.farmerSubmission.update({
-    where: { id: submissionId },
-    data: {
-      status: "APPROVED",
-      approvedAt: new Date(),
-    },
-    include: {
-      farmer: {
-        select: {
-          id: true,
-          phone: true,
+  // Approve and add stock atomically, so a failure can't leave the submission
+  // APPROVED without its quantity added (which also blocked any retry).
+  const updatedSubmission = await prisma.$transaction(async (tx) => {
+    const approved = await tx.farmerSubmission.update({
+      where: { id: submissionId },
+      data: {
+        status: "APPROVED",
+        approvedAt: new Date(),
+      },
+      include: {
+        farmer: {
+          select: {
+            id: true,
+            phone: true,
+          },
+        },
+        aggregator: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
         },
       },
-      aggregator: {
-        select: {
-          id: true,
-          username: true,
-          email: true,
+    });
+
+    // Add stock to the product with the same name, if one exists yet.
+    // updateMany doesn't throw when there is no matching product.
+    await tx.product.updateMany({
+      where: { productName: submission.productName },
+      data: {
+        quantity: {
+          increment: submission.acceptedQty ?? 0,
         },
       },
-    },
+    });
+
+    return approved;
   });
 
-  if (!updatedSubmission) {
-    throw new Error("Submission not found");
+  try {
+    await createNotificationService({
+      title: "Product Approved",
+      message: `Your product "${submission.productName}" has been approved and is now available`,
+      eventType: "PRODUCT_APPROVED",
+      targetType: "SPECIFIC_USER",
+      targetId: submission.farmerId,
+      metadata: {
+        productId: submission.id,
+        productName: submission.productName,
+        submissionId: submission.id,
+        approvedBy: adminId,
+      },
+    });
+  } catch (notifError) {
+    console.error("Failed to create submission-approved notification:", notifError);
   }
 
-  // Update product quantity of same name of farmer submission
-  await prisma.product.update({
-    where: {
-      productName: submission.productName,
-    },
-    data: {
-      quantity: {
-        increment: submission.acceptedQty ?? 0,
-      },
-    },
-  });
-
-  await createNotificationService({
-    title: "Product Approved",
-    message: `Your product "${submission.productName}" has been approved and is now available`,
-    eventType: "PRODUCT_APPROVED",
-    targetType: "SPECIFIC_USER",
-    targetId: submission.farmerId,
-    metadata: {
-      productId: submission.id,
-      productName: submission.productName,
-      submissionId: submission.id,
-      approvedBy: adminId,
-    },
-  });
+  try {
+    if (updatedSubmission.farmer?.phone) {
+      await sendMessage(
+        `Your submission of ${submission.productName} has been approved and will be paid out soon.`,
+        updatedSubmission.farmer.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send submission-approved SMS:", smsError);
+  }
 
   return updatedSubmission;
 };

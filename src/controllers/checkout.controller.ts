@@ -145,6 +145,11 @@ export const createCheckout = async (req: Request, res: Response) => {
           }
 
           const verifyType = verificationType || "OTP";
+          let otpDelivery:
+            | Awaited<
+                ReturnType<typeof OTPService.sendOTPNotification>
+              >["channels"]
+            | undefined;
 
           // Only send OTP if verification type is OTP
           if (verifyType === "OTP") {
@@ -152,10 +157,12 @@ export const createCheckout = async (req: Request, res: Response) => {
               await OTPService.sendOTPToRestaurant(restaurantId);
 
             if (!otpResult.success) {
-              return res.status(400).json({
+              return res.status(502).json({
                 message: otpResult.message,
+                otpDelivery: otpResult.channels,
               });
             }
+            otpDelivery = otpResult.channels;
           }
 
           // Store checkout data temporarily for verification
@@ -195,6 +202,7 @@ export const createCheckout = async (req: Request, res: Response) => {
                 : "Please verify using your authenticator app to complete voucher payment.",
             requiresVerification: true,
             verificationType: verifyType,
+            otpDelivery,
             checkoutSessionId: Buffer.from(
               JSON.stringify(checkoutData),
             ).toString("base64"),
@@ -804,11 +812,15 @@ export const requestAdminOrderOTP = async (req: Request, res: Response) => {
     );
 
     if (!otpResult.success) {
-      return res.status(400).json({ message: otpResult.message });
+      return res.status(502).json({
+        message: otpResult.message,
+        otpDelivery: otpResult.channels,
+      });
     }
 
     res.status(200).json({
-      message: "OTP sent to the restaurant's phone number",
+      message: otpResult.message,
+      otpDelivery: otpResult.channels,
       data: {
         // Mask all but the last 3 digits so the admin knows which phone received it
         phone: otpResult.phone?.replace(/.(?=.{3})/g, "*"),

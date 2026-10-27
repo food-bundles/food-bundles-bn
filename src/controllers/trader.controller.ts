@@ -426,10 +426,11 @@ export const sendCommissionOTP = async (req: Request, res: Response) => {
         data: result.wallet,
       });
     } else {
-      res.status(200).json({
-        success: true,
+      res.status(result.success ? 200 : 502).json({
+        success: result.success,
         message: result.message,
         sessionId: result.sessionId,
+        otpDelivery: result.otpDelivery,
       });
     }
   } catch (error: any) {
@@ -611,9 +612,10 @@ export const approveDelegation = async (req: Request, res: Response) => {
       commission,
     );
 
-    res.status(200).json({
-      success: true,
+    res.status(result.success ? 200 : 502).json({
+      success: result.success,
       message: result.message,
+      otpDelivery: result.otpDelivery,
     });
   } catch (error: any) {
     res.status(400).json({
@@ -850,10 +852,11 @@ export const adminApproveWithdraw = async (req: Request, res: Response) => {
         message: result.message,
       });
     } else {
-      res.status(200).json({
-        success: true,
+      res.status(result.success ? 200 : 502).json({
+        success: result.success,
         message: result.message,
         sessionId: result.sessionId,
+        otpDelivery: result.otpDelivery,
       });
     }
   } catch (error: any) {

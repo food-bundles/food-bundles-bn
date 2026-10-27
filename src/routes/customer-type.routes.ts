@@ -21,13 +21,13 @@ customerTypeRoutes.get("/usage", isAuthenticated, allow("customer_types"), getCu
 
 customerTypeRoutes.get("/price-usage", isAuthenticated, allow("customer_types"), getPriceUsage);
 
-customerTypeRoutes.patch("/assign-customer-type", isAuthenticated, allow("customer_types"), assignCustomerType);
+customerTypeRoutes.patch("/assign-customer-type", isAuthenticated, allow.to("customer_types.assign"), assignCustomerType);
 
-customerTypeRoutes.post("/swap-pricing", isAuthenticated, allow("customer_types"), swapCustomerTypePricing);
+customerTypeRoutes.post("/swap-pricing", isAuthenticated, allow.to("customer_types.swap_pricing"), swapCustomerTypePricing);
 
 customerTypeRoutes.post("/", isAuthenticated, allow("customer_types"), createCustomerType);
 
-customerTypeRoutes.patch("/:customerTypeId/status", isAuthenticated, allow("customer_types"), toggleCustomerTypeStatus);
+customerTypeRoutes.patch("/:customerTypeId/status", isAuthenticated, allow.to("customer_types.change_status"), toggleCustomerTypeStatus);
 
 customerTypeRoutes.get("/:customerTypeId", isAuthenticated, allow("customer_types"), getCustomerTypeById);
 

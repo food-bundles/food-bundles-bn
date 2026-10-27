@@ -64,7 +64,7 @@ notificationRoutes.delete(
 notificationRoutes.post(
   "/price-update",
   isAuthenticated,
-  allow("markets", "LOGISTICS", "AGGREGATOR"),
+  allow.to("markets.send_price_update"),
   sendPriceUpdateNotifications
 );
 

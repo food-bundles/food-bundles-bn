@@ -37,7 +37,7 @@ const marketRoutes = Router();
 marketRoutes.post(
   "/wfp/upload",
   isAuthenticated,
-  allow("markets", "ADMIN", "LOGISTICS", "AGGREGATOR", "MARKET_PRICES"),
+  allow.to("markets.upload_wfp"),
   csvUpload.single("file"),
   uploadWfpCsv
 );
@@ -49,7 +49,7 @@ marketRoutes.get("/wfp/filter-options", getWfpFilterOptions);
 marketRoutes.delete(
   "/wfp/clear",
   isAuthenticated,
-  allow("markets", "ADMIN"),
+  allow.to("markets.clear_wfp"),
   clearWfpPrices
 );
 
@@ -59,7 +59,7 @@ marketRoutes.delete(
 marketRoutes.post(
   "/",
   isAuthenticated,
-  allow("markets", "LOGISTICS", "AGGREGATOR"),
+  allow.to("markets.create"),
   createMarket,
 );
 
@@ -69,21 +69,21 @@ marketRoutes.get("/", isAuthenticated, getAllMarkets);
 marketRoutes.patch(
   "/bulk-status",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow.to("markets.edit"),
   bulkUpdateMarketStatus,
 );
 
 marketRoutes.delete(
   "/bulk",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow.to("markets.delete"),
   bulkDeleteMarkets,
 );
 
 marketRoutes.delete(
   "/prices/bulk",
   isAuthenticated,
-  checkPermission("ADMIN"),
+  allow.to("markets.delete_prices"),
   bulkDeletePriceHistory,
 );
 
@@ -92,7 +92,7 @@ marketRoutes.get("/:marketId", isAuthenticated, getMarketById);
 marketRoutes.put(
   "/:marketId",
   isAuthenticated,
-  allow("markets", "LOGISTICS", "AGGREGATOR"),
+  allow.to("markets.edit"),
   updateMarket,
 );
 
@@ -109,7 +109,7 @@ marketRoutes.delete(
 marketRoutes.post(
   "/prices",
   isAuthenticated,
-  allow("markets", "LOGISTICS", "AGGREGATOR"),
+  allow.to("markets.update_prices"),
   recordMarketPrice,
 );
 
@@ -122,21 +122,21 @@ marketRoutes.post("/prices/analyze", isAuthenticated, analyzePrice);
 marketRoutes.get(
   "/prices/by-product",
   isAuthenticated,
-  allow("markets", "LOGISTICS", "AGGREGATOR"),
+  allow("markets"),
   getMarketPricesByProduct,
 );
 
 marketRoutes.put(
   "/prices/:historyId",
   isAuthenticated,
-  allow("markets", "LOGISTICS", "AGGREGATOR"),
+  allow.to("markets.update_prices"),
   updateMarketPriceHistory,
 );
 
 marketRoutes.delete(
   "/prices/:historyId",
   isAuthenticated,
-  allow("markets"),
+  allow.to("markets.delete_prices"),
   deleteMarketPriceHistory,
 );
 
@@ -146,21 +146,21 @@ marketRoutes.delete(
 marketRoutes.get(
   "/export/markets",
   isAuthenticated,
-  allow("markets", "LOGISTICS", "AGGREGATOR"),
+  allow.to("markets.export"),
   exportMarkets,
 );
 
 marketRoutes.get(
   "/export/price-history",
   isAuthenticated,
-  allow("markets", "LOGISTICS", "AGGREGATOR"),
+  allow.to("markets.export"),
   exportPriceHistory,
 );
 
 marketRoutes.get(
   "/export/comparison",
   isAuthenticated,
-  allow("markets", "LOGISTICS", "AGGREGATOR"),
+  allow.to("markets.export"),
   exportComparison,
 );
 

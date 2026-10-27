@@ -80,6 +80,8 @@ export const importWfpCsvService = async (
   let insertedCount = 0;
   const batchSize = 2000;
   let batch: any[] = [];
+  // Deduplicate within the CSV itself using a Set keyed by date+market+commodity+priceType
+  const seenKeys = new Set<string>();
   const discoveredMarkets = new Map<
     string,
     { province?: string; district?: string; location?: string }
@@ -111,6 +113,13 @@ export const importWfpCsvService = async (
     if (isNaN(priceVal)) continue;
 
     const date = parseCsvDate(row["date"]);
+    const priceType = row["pricetype"] || "Wholesale";
+
+    // Skip duplicate rows within this CSV file
+    const rowKey = `${date.toISOString()}|${marketName}|${commodity}|${priceType}`;
+    if (seenKeys.has(rowKey)) continue;
+    seenKeys.add(rowKey);
+
     if (!earliestDate || date < earliestDate) earliestDate = date;
     if (!latestDate || date > latestDate) latestDate = date;
 
@@ -143,7 +152,7 @@ export const importWfpCsvService = async (
         : null,
       unit: row["unit"] || "KG",
       priceFlag: row["priceflag"] || null,
-      priceType: row["pricetype"] || "Wholesale",
+      priceType,
       currency: row["currency"] || "RWF",
       price: priceVal,
       usdPrice: row["usdprice"] ? parseFloat(row["usdprice"]) : null,
@@ -152,21 +161,21 @@ export const importWfpCsvService = async (
     totalRows++;
 
     if (batch.length >= batchSize) {
-      await prisma.wfpMarketPrice.createMany({
+      const { count } = await prisma.wfpMarketPrice.createMany({
         data: batch,
         skipDuplicates: true,
       });
-      insertedCount += batch.length;
+      insertedCount += count;
       batch = [];
     }
   }
 
   if (batch.length > 0) {
-    await prisma.wfpMarketPrice.createMany({
+    const { count } = await prisma.wfpMarketPrice.createMany({
       data: batch,
       skipDuplicates: true,
     });
-    insertedCount += batch.length;
+    insertedCount += count;
     batch = [];
   }
 
@@ -178,6 +187,8 @@ export const importWfpCsvService = async (
     success: true,
     totalRows,
     insertedCount,
+    // rows already in the table (same date, market, commodity and price type) are skipped, never duplicated
+    skippedExisting: totalRows - insertedCount,
     marketsDiscovered: discoveredMarkets.size,
     marketsCreated: 0,
     dateRange: {

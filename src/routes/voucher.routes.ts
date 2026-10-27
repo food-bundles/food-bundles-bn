@@ -40,6 +40,9 @@ import {
   getMyCardEnrollmentRequest,
   submitKycConsent,
   getMyKycConsent,
+  getAllKycConsents,
+  approveKycConsent,
+  rejectKycConsent,
   requestLoanSession,
   approveLoanSession,
   rejectLoanSession,
@@ -60,6 +63,9 @@ import {
   repayLoanSession,
   verifyLoanRepayment,
   getVoucherCardStats,
+  requestAdminRepayOTP,
+  adminRepayLoanSession,
+  adminVerifyLoanRepayment,
   getRecentActivities,
 } from "../controllers/voucher-card.controller";
 import { isAuthenticated, checkPermission, allow } from "../middleware/authMiddleware";
@@ -202,7 +208,7 @@ voucherRoutes.get("/loans/:id", isAuthenticated, getLoanApplicationById);
 voucherRoutes.patch(
   "/loans/:id/approve",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.approve_loans"),
   approveLoan,
 );
 
@@ -213,7 +219,7 @@ voucherRoutes.patch(
 voucherRoutes.post(
   "/loans/:id/disburse",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.disburse"),
   disburseLoan,
 );
 
@@ -224,7 +230,7 @@ voucherRoutes.post(
 voucherRoutes.patch(
   "/loans/:id/reject",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.approve_loans"),
   rejectLoan,
 );
 
@@ -305,7 +311,7 @@ voucherRoutes.get("/:id/penalties", isAuthenticated, getVoucherPenalties);
 voucherRoutes.post(
   "/penalties/calculate",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.penalties"),
   calculatePenalties,
 );
 
@@ -316,7 +322,7 @@ voucherRoutes.post(
 voucherRoutes.post(
   "/penalties/:id/waive",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.penalties"),
   waivePenalty,
 );
 
@@ -342,7 +348,7 @@ voucherRoutes.get(
 voucherRoutes.patch(
   "/loans/:id/accept",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.approve_loans"),
   markLoanApplicationAsAccepted,
 );
 
@@ -355,7 +361,7 @@ voucherRoutes.get("/code/:voucherCode", isAuthenticated, getVoucherByCode);
 voucherRoutes.post(
   "/reminders/send",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.send_reminders"),
   sendVoucherReminders,
 );
 
@@ -376,6 +382,28 @@ voucherRoutes.get(
   isAuthenticated,
   checkPermission("RESTAURANT", "HOTEL"),
   getMyKycConsent,
+);
+
+// KYC consent review (admin)
+voucherRoutes.get(
+  "/card/kyc-consents",
+  isAuthenticated,
+  allow("vouchers"),
+  getAllKycConsents,
+);
+
+voucherRoutes.patch(
+  "/card/kyc-consent/:restaurantId/approve",
+  isAuthenticated,
+  allow.to("vouchers.approve_kyc"),
+  approveKycConsent,
+);
+
+voucherRoutes.patch(
+  "/card/kyc-consent/:restaurantId/reject",
+  isAuthenticated,
+  allow.to("vouchers.approve_kyc"),
+  rejectKycConsent,
 );
 
 // Card enrollment (restaurant requests a card)
@@ -406,7 +434,7 @@ voucherRoutes.get(
 voucherRoutes.post(
   "/card/issue",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.issue_cards"),
   issueVoucherCard,
 );
 
@@ -509,7 +537,7 @@ voucherRoutes.get(
 voucherRoutes.patch(
   "/sessions/:id/approve",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.approve_sessions"),
   approveLoanSession,
 );
 
@@ -517,7 +545,7 @@ voucherRoutes.patch(
 voucherRoutes.patch(
   "/sessions/:id/reject",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.approve_sessions"),
   rejectLoanSession,
 );
 
@@ -525,7 +553,7 @@ voucherRoutes.patch(
 voucherRoutes.patch(
   "/sessions/:id/accept",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.approve_sessions"),
   acceptLoanSession,
 );
 
@@ -549,7 +577,7 @@ voucherRoutes.post(
 voucherRoutes.post(
   "/sessions/:id/trader-approve-on-behalf/:traderId",
   isAuthenticated,
-  allow("vouchers"),
+  allow.to("vouchers.approve_sessions"),
   adminApproveLoanSessionOnBehalf,
 );
 
@@ -592,6 +620,26 @@ voucherRoutes.get(
   isAuthenticated,
   allow("vouchers", "RESTAURANT", "HOTEL", "AFFILIATOR"),
   verifyLoanRepayment,
+);
+
+// Admin pays a voucher on behalf of a restaurant (needs vouchers.manage)
+voucherRoutes.post(
+  "/sessions/:sessionId/admin-repay/request-otp",
+  isAuthenticated,
+  allow.to("vouchers.admin_repay"),
+  requestAdminRepayOTP,
+);
+voucherRoutes.post(
+  "/sessions/:sessionId/admin-repay",
+  isAuthenticated,
+  allow.to("vouchers.admin_repay"),
+  adminRepayLoanSession,
+);
+voucherRoutes.get(
+  "/sessions/:sessionId/admin-repay/verify",
+  isAuthenticated,
+  allow.to("vouchers.admin_repay"),
+  adminVerifyLoanRepayment,
 );
 
 // Voucher card system stats (admin)

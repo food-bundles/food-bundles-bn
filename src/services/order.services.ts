@@ -1,4 +1,9 @@
 import prisma from "../prisma";
+import {
+  calculateDeliveryFee,
+  getDeliverySettingsForCustomer,
+  hasFreeDeliveryPlan,
+} from "./delivery-fee.service";
 import crypto from "crypto";
 import { OrderStatus, PaymentStatus, SubscriptionStatus } from "@prisma/client";
 import { ProductData } from "./productService";
@@ -8,7 +13,14 @@ import { wsManager } from "../index";
 import { createNotificationService } from "./notification.services";
 import { applyPromoCodeService } from "./promo.service";
 import { sendMessage } from "../utils/sms.utility";
-import { sendOrderPendingPaymentEmail } from "../utils/emailTemplates";
+import {
+  sendOrderPendingPaymentEmail,
+  sendAdminOrderPendingPaymentEmail,
+  sendOrderStatusEmail,
+  sendAdminLowStockAlertEmail,
+  sendAdminOrderCancelledEmail,
+} from "../utils/emails";
+import { notifyPrivateReceiversService } from "./notification-recipient.service";
 
 // Interface for creating an order from cart
 interface CreateOrderFromCartData {
@@ -170,6 +182,18 @@ export const createOrderFromCartService = async (
             unit: product.unit,
           },
         });
+
+        try {
+          if (process.env.ADMIN_EMAIL) {
+            await sendAdminLowStockAlertEmail({
+              productName: product.productName,
+              currentQuantity: product.quantity,
+              unit: product.unit,
+            });
+          }
+        } catch (emailError) {
+          console.error("Failed to send low stock alert email:", emailError);
+        }
       }
 
       throw new Error(
@@ -336,17 +360,15 @@ export const createOrderFromCartService = async (
     },
   });
 
-  if (!activeSubscription?.plan?.freeDelivery) {
-    // Time-based delivery fee: 0 between 4:00 AM to 9:00 AM, 5000 RWF otherwise
-    const currentHour = new Date().getHours();
-    const isOffPeakHours = currentHour >= 4 && currentHour < 9;
-
-    if (!isOffPeakHours) {
-      deliveryFee = 5000; // Outside 4:00 AM to 9:00 AM
-    } else {
-      deliveryFee = 0; // Inside 4:00 AM to 9:00 AM (free delivery)
-    }
-  }
+  // Delivery fee from the admin's rules for this customer's type (or the
+  // default rules): order amount + requested delivery day. Free-delivery plans pay nothing.
+  deliveryFee = calculateDeliveryFee({
+    orderAmount: order.totalAmount, // products total after promo, before fees
+    placedAt: order.createdAt,
+    requestedDelivery: order.requestedDelivery,
+    hasFreeDeliveryPlan: !!activeSubscription?.plan?.freeDelivery,
+    settings: await getDeliverySettingsForCustomer(order.restaurantId),
+  });
 
   if (
     otherServices &&
@@ -399,6 +421,48 @@ export const createOrderFromCartService = async (
       recipientPhone,
     ).catch((err) => console.error("Failed to send order-pending SMS:", err));
   }
+
+  if (recipientEmail) {
+    sendAdminOrderPendingPaymentEmail({
+      orderNumber: order.orderNumber,
+      restaurantName: cart.restaurant.name,
+      totalAmount,
+      products: cart.cartItems.map((item) => ({
+        name: item.product.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      customer: {
+        name: order.billingName || cart.restaurant.name,
+        email: recipientEmail,
+      },
+      paymentMethod: order.paymentMethod || "CASH",
+    }).catch((err) =>
+      console.error("Failed to send admin order-pending email:", err),
+    );
+  }
+
+  createNotificationService({
+    title: "Order Placed",
+    message: `Your order #${order.orderNumber} has been received and is awaiting payment.`,
+    eventType: "NEW_ORDER_PLACED",
+    targetType: "SPECIFIC_USER",
+    targetId: order.restaurantId,
+    metadata: { orderId: order.id, orderNumber: order.orderNumber, totalAmount },
+  }).catch((err) =>
+    console.error("Failed to create order-pending notification:", err),
+  );
+
+  createNotificationService({
+    title: "New Order Received",
+    message: `${cart.restaurant.name} placed order #${order.orderNumber} (${totalAmount.toLocaleString()} RWF), awaiting payment.`,
+    eventType: "NEW_ORDER_PLACED",
+    targetType: "ROLE_BASED",
+    targetRole: "ADMIN",
+    metadata: { orderId: order.id, orderNumber: order.orderNumber, restaurantId: order.restaurantId, totalAmount },
+  }).catch((err) =>
+    console.error("Failed to create admin order-pending notification:", err),
+  );
 
   return await getOrderByIdService(order.id);
 };
@@ -564,6 +628,48 @@ export const createDirectOrderService = async (data: CreateDirectOrderData) => {
     ).catch((err) => console.error("Failed to send order-pending SMS:", err));
   }
 
+  if (recipientEmail) {
+    sendAdminOrderPendingPaymentEmail({
+      orderNumber: order.orderNumber,
+      restaurantName: restaurant.name,
+      totalAmount: order.totalAmount,
+      products: validatedItems.map((item) => ({
+        name: item.product.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      customer: {
+        name: order.billingName || restaurant.name,
+        email: recipientEmail,
+      },
+      paymentMethod: order.paymentMethod || "CASH",
+    }).catch((err) =>
+      console.error("Failed to send admin order-pending email:", err),
+    );
+  }
+
+  createNotificationService({
+    title: "Order Placed",
+    message: `Your order #${order.orderNumber} has been received and is awaiting payment.`,
+    eventType: "NEW_ORDER_PLACED",
+    targetType: "SPECIFIC_USER",
+    targetId: order.restaurantId,
+    metadata: { orderId: order.id, orderNumber: order.orderNumber, totalAmount: order.totalAmount },
+  }).catch((err) =>
+    console.error("Failed to create order-pending notification:", err),
+  );
+
+  createNotificationService({
+    title: "New Order Received",
+    message: `${restaurant.name} placed order #${order.orderNumber} (${order.totalAmount.toLocaleString()} RWF), awaiting payment.`,
+    eventType: "NEW_ORDER_PLACED",
+    targetType: "ROLE_BASED",
+    targetRole: "ADMIN",
+    metadata: { orderId: order.id, orderNumber: order.orderNumber, restaurantId: order.restaurantId, totalAmount: order.totalAmount },
+  }).catch((err) =>
+    console.error("Failed to create admin order-pending notification:", err),
+  );
+
   return await getOrderByIdService(order.id);
 };
 
@@ -638,6 +744,8 @@ export const getAllOrdersService = async ({
   dateFrom,
   dateTo,
   search,
+  customerTypeId,
+  customerTypeScope,
 }: {
   page?: number;
   limit?: number;
@@ -647,10 +755,23 @@ export const getAllOrdersService = async ({
   dateFrom?: Date;
   dateTo?: Date;
   search?: string;
+  /** Only customers of this type */
+  customerTypeId?: string;
+  /** Customer types the viewer may see (null/undefined = all) */
+  customerTypeScope?: string[] | null;
 }) => {
   const skip = (page - 1) * limit;
 
   const where: any = {};
+  // Orders of the customer types the viewer works with (and the picked type)
+  if (customerTypeId || customerTypeScope) {
+    const allowed = customerTypeScope
+      ? customerTypeId
+        ? customerTypeScope.filter((id) => id === customerTypeId)
+        : customerTypeScope
+      : [customerTypeId as string];
+    where.restaurant = { customerTypeId: { in: allowed } };
+  }
   if (status) where.status = status;
   if (paymentStatus) where.paymentStatus = paymentStatus;
   if (restaurantId) where.restaurantId = restaurantId;
@@ -798,6 +919,24 @@ export const updateOrderService = async (
     }
   }
 
+  // Notify the restaurant of a status change. Isolated so an email
+  // failure can never affect the already-committed status update.
+  if (data.status && existingOrder.restaurant?.email) {
+    try {
+      await sendOrderStatusEmail({
+        orderNumber: updatedOrder.orderNumber,
+        status: updatedOrder.status,
+        restaurantName: existingOrder.restaurant.name,
+        customer: {
+          name: existingOrder.restaurant.name,
+          email: existingOrder.restaurant.email,
+        },
+      });
+    } catch (emailError) {
+      console.error("Failed to send order status email:", emailError);
+    }
+  }
+
   // Return complete order details
   return await getOrderByIdService(updatedOrder.id);
 };
@@ -860,6 +999,84 @@ export const cancelOrderService = async (
     });
   } catch (error) {
     console.error("Failed to broadcast order cancellation:", error);
+  }
+
+  // Notify the restaurant of the cancellation. Isolated so a notification
+  // failure can never affect the already-committed cancellation.
+  if (order.restaurant?.email) {
+    try {
+      await sendOrderStatusEmail({
+        orderNumber: order.orderNumber,
+        status: "CANCELLED",
+        restaurantName: order.restaurant.name,
+        customer: {
+          name: order.restaurant.name,
+          email: order.restaurant.email,
+        },
+      });
+    } catch (emailError) {
+      console.error("Failed to send order cancellation email:", emailError);
+    }
+  }
+
+  try {
+    if (order.restaurant?.phone) {
+      await sendMessage(
+        `Your order ${order.orderNumber} has been cancelled.${reason ? ` Reason: ${reason}` : ""}`,
+        order.restaurant.phone,
+      );
+    }
+  } catch (smsError) {
+    console.error("Failed to send order cancellation SMS:", smsError);
+  }
+
+  try {
+    await createNotificationService({
+      title: "Order Cancelled",
+      message: `Your order #${order.orderNumber} has been cancelled.${reason ? ` Reason: ${reason}` : ""}`,
+      eventType: "ORDER_CANCELLED",
+      targetType: "SPECIFIC_USER",
+      targetId: order.restaurantId,
+      metadata: { orderId: order.id, orderNumber: order.orderNumber, reason },
+    });
+  } catch (notifError) {
+    console.error("Failed to create order cancellation notification:", notifError);
+  }
+
+  // Notify admin of the cancellation across all channels.
+  try {
+    await createNotificationService({
+      title: "Order Cancelled",
+      message: `Order #${order.orderNumber} from ${order.restaurant?.name || "a restaurant"} has been cancelled.${reason ? ` Reason: ${reason}` : ""}`,
+      eventType: "ORDER_CANCELLED",
+      targetType: "ROLE_BASED",
+      targetRole: "ADMIN",
+      metadata: { orderId: order.id, orderNumber: order.orderNumber, reason },
+    });
+  } catch (notifError) {
+    console.error("Failed to create admin order cancellation notification:", notifError);
+  }
+
+  try {
+    await notifyPrivateReceiversService({
+      subject: `FoodBundles — Order Cancelled #${order.orderNumber}`,
+      body: `Order #${order.orderNumber} from ${order.restaurant?.name || "a restaurant"} has been cancelled.${reason ? ` Reason: ${reason}` : ""}`,
+    });
+  } catch (smsError) {
+    console.error("Failed to notify private receivers for order cancellation:", smsError);
+  }
+
+  try {
+    if (process.env.ADMIN_EMAIL) {
+      await sendAdminOrderCancelledEmail({
+        orderNumber: order.orderNumber,
+        restaurantName: order.restaurant?.name || "",
+        totalAmount: order.totalAmount,
+        reason,
+      });
+    }
+  } catch (emailError) {
+    console.error("Failed to send admin order cancellation email:", emailError);
   }
 
   return { message: "Order cancelled successfully" };
@@ -1354,6 +1571,23 @@ export const editOrderService = async (
     );
   }
 
+  // Delivery fee follows the same rules as checkout. A paid order keeps the
+  // fee it was charged, so an edit never changes what was already paid.
+  const isPaid = ["COMPLETED", "VOUCHER_CREDIT"].includes(existingOrder.paymentStatus);
+  const deliverySettings = await getDeliverySettingsForCustomer(existingOrder.restaurantId);
+  const freeDeliveryPlan = await hasFreeDeliveryPlan(existingOrder.restaurantId);
+  const requestedDelivery = data.requestedDelivery || existingOrder.requestedDelivery;
+  const feeFor = (productsTotal: number) =>
+    isPaid
+      ? existingOrder.deliveryFee || 0
+      : calculateDeliveryFee({
+          orderAmount: productsTotal,
+          placedAt: existingOrder.createdAt,
+          requestedDelivery,
+          hasFreeDeliveryPlan: freeDeliveryPlan,
+          settings: deliverySettings,
+        });
+
   const updatedOrder = await prisma.$transaction(async (tx) => {
     // Update items if provided
     if (data.items && data.items.length > 0) {
@@ -1450,14 +1684,16 @@ export const editOrderService = async (
         }
       }
 
-      // Update order total amount (keep delivery/packaging fees)
+      // Update order total amount (packaging fee kept; delivery fee re-checked)
+      const newDeliveryFee = feeFor(newTotalAmount);
       await tx.order.update({
         where: { id: orderId },
         data: {
-          totalAmount: newTotalAmount + (existingOrder.deliveryFee || 0) + (existingOrder.packagingFee || 0),
-          originalAmount: newTotalAmount + (existingOrder.deliveryFee || 0) + (existingOrder.packagingFee || 0),
+          deliveryFee: newDeliveryFee,
+          totalAmount: newTotalAmount + newDeliveryFee + (existingOrder.packagingFee || 0),
+          originalAmount: newTotalAmount + newDeliveryFee + (existingOrder.packagingFee || 0),
           notes: data.notes !== undefined ? data.notes : existingOrder.notes,
-          requestedDelivery: data.requestedDelivery || existingOrder.requestedDelivery,
+          requestedDelivery,
           billingName: data.billingName || existingOrder.billingName,
           billingPhone: data.billingPhone || existingOrder.billingPhone,
           billingEmail: data.billingEmail || existingOrder.billingEmail,
@@ -1466,12 +1702,17 @@ export const editOrderService = async (
         },
       });
     } else {
-      // No items change, just update metadata
+      // No items change, just update metadata. A new delivery time can change the fee.
+      const productsTotal =
+        existingOrder.totalAmount - (existingOrder.deliveryFee || 0) - (existingOrder.packagingFee || 0);
+      const newDeliveryFee = feeFor(productsTotal);
       await tx.order.update({
         where: { id: orderId },
         data: {
+          deliveryFee: newDeliveryFee,
+          totalAmount: productsTotal + newDeliveryFee + (existingOrder.packagingFee || 0),
           notes: data.notes !== undefined ? data.notes : existingOrder.notes,
-          requestedDelivery: data.requestedDelivery || existingOrder.requestedDelivery,
+          requestedDelivery,
           billingName: data.billingName || existingOrder.billingName,
           billingPhone: data.billingPhone || existingOrder.billingPhone,
           billingEmail: data.billingEmail || existingOrder.billingEmail,

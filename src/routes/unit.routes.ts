@@ -19,7 +19,7 @@ unitRoutes.get("/active", getActiveProductUnits);
 unitRoutes.patch(
   "/bulk-status",
   isAuthenticated,
-  allow("units"),
+  allow.to("units.change_status"),
   updateUnitStatus
 );
 
@@ -35,7 +35,7 @@ unitRoutes.post(
 unitRoutes.get(
   "/",
   isAuthenticated,
-  allow(["units", "products"], "AGGREGATOR", "LOGISTICS"),
+  allow(["units", "products"]),
   getAllProductUnits
 );
 

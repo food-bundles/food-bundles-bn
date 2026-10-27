@@ -1,4 +1,6 @@
 import prisma from "../prisma";
+import { sendMessage } from "../utils/sms.utility";
+import { createNotificationService } from "./notification.services";
 
 export class SupportService {
   static async submitSupportTicket(
@@ -94,6 +96,24 @@ export class SupportService {
           status: "PENDING",
         },
       });
+
+      // Alert admins that a callback is pending — previously this request
+      // was only ever written to the database with no outward notification.
+      try {
+        await createNotificationService({
+          title: "Callback Requested",
+          message: `Farmer ${phoneNumber} requested a callback (preferred time: ${preferredTime}). Issue: ${issue}`,
+          eventType: "SYSTEM_MAINTENANCE",
+          targetType: "ROLE_BASED",
+          targetRole: "ADMIN",
+          metadata: { farmerId: farmer.id, phoneNumber, preferredTime, issue },
+        });
+      } catch (notifyError) {
+        console.error(
+          "Failed to send callback request notification:",
+          notifyError
+        );
+      }
 
       return true;
     } catch (error) {
@@ -193,8 +213,14 @@ export class SupportService {
     ticketNumber: string,
     language?: string
   ): Promise<void> {
-    // TODO: Implement SMS sending logic
-    console.log(`SMS sent to ${phoneNumber} for ticket ${ticketNumber}`);
+    try {
+      await sendMessage(
+        `Your support ticket ${ticketNumber} has been created. We'll get back to you soon.`,
+        phoneNumber
+      );
+    } catch (error) {
+      console.error("Failed to send ticket-created SMS:", error);
+    }
   }
 
   private static async checkDatabaseHealth(): Promise<boolean> {

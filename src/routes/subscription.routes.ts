@@ -54,7 +54,7 @@ const subscriptionRoutes = Router();
 subscriptionRoutes.post(
   "/plans",
   isAuthenticated,
-  allow("subscriptions"),
+  allow.to("subscriptions.create_plan"),
   createSubscriptionPlan
 );
 
@@ -80,7 +80,7 @@ subscriptionRoutes.get("/plans/:planId", getSubscriptionPlanById);
 subscriptionRoutes.patch(
   "/plans/:planId",
   isAuthenticated,
-  allow("subscriptions"),
+  allow.to("subscriptions.edit_plan"),
   updateSubscriptionPlan
 );
 
@@ -92,7 +92,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.delete(
   "/plans/:planId",
   isAuthenticated,
-  allow("subscriptions"),
+  allow.to("subscriptions.delete_plan"),
   deleteSubscriptionPlan
 );
 
@@ -137,7 +137,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.post(
   "/loan/providers",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow.to("loan_access.manage_providers"),
   createLoanProvider
 );
 
@@ -155,7 +155,7 @@ subscriptionRoutes.get("/loan/providers", isAuthenticated, getAllLoanProviders);
 subscriptionRoutes.patch(
   "/loan/providers/:providerId",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow.to("loan_access.manage_providers"),
   updateLoanProviderStatus
 );
 
@@ -167,7 +167,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.get(
   "/loan/traders",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow("loan_access"),
   getAllLoanTraders
 );
 
@@ -179,7 +179,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.patch(
   "/loan/traders/:traderId",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow.to("loan_access.manage_traders"),
   updateTraderRequiresSubscription
 );
 
@@ -191,7 +191,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.get(
   "/loan/access-providers",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow("loan_access"),
   getLoanAccessProviders
 );
 
@@ -203,7 +203,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.patch(
   "/loan/traders/:traderId/unlock-fee",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow.to("loan_access.manage_traders"),
   updateTraderUnlockFee
 );
 
@@ -215,7 +215,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.patch(
   "/loan/traders/:traderId/leftover-policy",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow.to("loan_access.manage_traders"),
   updateTraderLeftoverPolicy
 );
 
@@ -239,7 +239,7 @@ subscriptionRoutes.post(
 subscriptionRoutes.get(
   "/loan/my-subscriptions",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"], "RESTAURANT", "HOTEL", "AFFILIATOR"),
+  allow("loan_access", "RESTAURANT", "HOTEL", "AFFILIATOR"),
   getMyLoanAccess
 );
 
@@ -251,7 +251,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.get(
   "/loan",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow("loan_access"),
   getAllLoanAccess
 );
 
@@ -263,7 +263,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.patch(
   "/loan/:subscriptionId/approve",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow.to("loan_access.approve"),
   approveLoanAccess
 );
 
@@ -275,7 +275,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.patch(
   "/loan/:subscriptionId/reject",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow.to("loan_access.reject"),
   rejectLoanAccess
 );
 
@@ -287,7 +287,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.patch(
   "/loan/:subscriptionId/disable",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow.to("loan_access.enable_disable"),
   disableLoanAccess
 );
 
@@ -299,7 +299,7 @@ subscriptionRoutes.patch(
 subscriptionRoutes.patch(
   "/loan/:subscriptionId/enable",
   isAuthenticated,
-  allow(["subscriptions", "vouchers"]),
+  allow.to("loan_access.enable_disable"),
   enableLoanAccess
 );
 
@@ -403,7 +403,7 @@ subscriptionRoutes.get(
 subscriptionRoutes.post(
   "/admin/create",
   isAuthenticated,
-  allow("subscriptions"),
+  allow.to("subscriptions.assign"),
   adminCreateRestaurantSubscription
 );
 
@@ -415,7 +415,7 @@ subscriptionRoutes.post(
 subscriptionRoutes.post(
   "/check-expired",
   isAuthenticated,
-  allow("subscriptions"),
+  allow.to("subscriptions.check_expired"),
   checkExpiredSubscriptions
 );
 

@@ -41,8 +41,19 @@ import {
   AccessError,
   getEffectivePermissions,
   resolveRoleAssignment,
+  canSeeCustomerType,
+  getCustomerTypeScope,
 } from "../services/access.service";
-import { isDashboardRole } from "../config/permissions";
+import { hasDashboardAccess, isDashboardRole, Permission } from "../config/permissions";
+import { userCan } from "../middleware/authMiddleware";
+import {
+  ManagedUserType,
+  moveUserToTrash,
+  updateManagedUser,
+  UserManagementError,
+} from "../services/user-management.service";
+import { createNotificationService } from "../services/notification.services";
+import { sendRoleChangedEmail } from "../utils/emails";
 
 export class UserController {
   static createFarmer = async (req: Request, res: Response) => {
@@ -71,15 +82,18 @@ export class UserController {
         verified: false,
       });
 
-      if (result.phone) {
-        await OTPService.sendRestaurantSignupOTP(result.phone);
-      }
+      const otpResult = result.phone
+        ? await OTPService.sendRestaurantSignupOTP(result.phone, result.email)
+        : null;
 
-      res.status(201).json({
-        success: true,
+      res.status(otpResult?.success ? 201 : 502).json({
+        success: Boolean(otpResult?.success),
+        accountCreated: true,
         message:
-          "Account created successfully. OTP sent to your phone for verification.",
+          otpResult?.message ??
+          "Account created, but no phone number was available for signup OTP delivery.",
         data: result,
+        otpDelivery: otpResult?.channels,
       });
     } catch (error: any) {
       res.status(400).json({
@@ -145,7 +159,7 @@ export class UserController {
 
       const result = await OTPService.sendRestaurantSignupOTP(phone);
 
-      res.status(result.success ? 200 : 400).json(result);
+      res.status(result.success ? 200 : 502).json(result);
     } catch (error: any) {
       res.status(500).json({
         success: false,
@@ -237,14 +251,19 @@ export class UserController {
 
   static getAllRestaurants = async (req: Request, res: Response) => {
     try {
-      const { page, limit, search } = req.query;
+      const { page, limit, search, customerTypeId } = req.query;
       const paginationQuery = PaginationService.validatePaginationParams(
         page as string,
         limit as string,
       );
+      // Dashboard users only see the customer types their role works with
       const restaurants = await getAllRestaurantsService(
         paginationQuery,
         typeof search === "string" ? search : undefined,
+        {
+          customerTypeId: typeof customerTypeId === "string" && customerTypeId ? customerTypeId : undefined,
+          customerTypeScope: (req as any).user?.customerTypeScope ?? null,
+        },
       );
 
       res.status(200).json({
@@ -309,6 +328,11 @@ export class UserController {
       const { id } = req.params;
       const restaurant = await getRestaurantByIdService(id);
 
+      // Outside the viewer's customer types → treat as not found
+      if (restaurant && !canSeeCustomerType((req as any).user, (restaurant as any).customerTypeId)) {
+        return res.status(404).json({ success: false, message: "Restaurant not found" });
+      }
+
       if (!restaurant) {
         return res.status(404).json({
           success: false,
@@ -352,44 +376,56 @@ export class UserController {
     }
   };
 
-  static updateFarmer = async (req: Request, res: Response) => {
+  // Farmers and restaurants: the user themselves, or a dashboard user with the
+  // "Edit" permission. A new password only from the user or a super admin.
+  static updateFarmer = async (req: Request, res: Response) =>
+    UserController.updateAccount(req, res, "farmer", "farmers.edit", "Farmer updated successfully");
+
+  static updateRestaurant = async (req: Request, res: Response) =>
+    UserController.updateAccount(
+      req,
+      res,
+      "restaurant",
+      "restaurants.edit",
+      "Restaurant updated successfully",
+    );
+
+  private static updateAccount = async (
+    req: Request,
+    res: Response,
+    type: ManagedUserType,
+    permission: Permission,
+    message: string,
+  ) => {
     try {
-      const { id } = req.params;
-      const updateData = req.body;
+      const id = req.params.id as string;
+      const actor = (req as any).user;
+      const isSelf = actor?.id === id;
+      if (!isSelf && !userCan(actor, permission)) {
+        throw new UserManagementError("You don't have permission to edit this user", 403);
+      }
+      // Customers outside the editor's customer types are off limits
+      if (type === "restaurant" && !isSelf) {
+        const customer = await prisma.restaurant.findUnique({ where: { id }, select: { customerTypeId: true } });
+        if (customer && !canSeeCustomerType(actor, customer.customerTypeId)) {
+          throw new UserManagementError("You can only edit customers of your customer types", 403);
+        }
+      }
 
-      const updatedFarmer = await updateFarmerService(id, updateData);
-
-      res.status(200).json({
-        success: true,
-        message: "Farmer updated successfully",
-        data: updatedFarmer,
+      const data = await updateManagedUser(type, id, req.body || {}, {
+        allowPassword: isSelf || actor?.role === Role.SUPERUSER,
       });
+
+      res.status(200).json({ success: true, message, data });
     } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
+      UserController.sendManagementError(res, error);
     }
   };
 
-  static updateRestaurant = async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const updateData = req.body;
-
-      const updatedRestaurant = await updateRestaurantService(id, updateData);
-
-      res.status(200).json({
-        success: true,
-        message: "Restaurant updated successfully",
-        data: updatedRestaurant,
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
+  private static sendManagementError = (res: Response, error: any) => {
+    const status =
+      error instanceof UserManagementError || error instanceof AccessError ? error.status : 400;
+    res.status(status).json({ success: false, message: error.message });
   };
 
   static updateAdmin = async (req: Request, res: Response) => {
@@ -405,12 +441,59 @@ export class UserController {
       }
 
       // Role changes go through the same escalation checks as creation
+      let roleChanged = false;
       if (role !== undefined || adminRoleId !== undefined) {
         if (id === actor.id) throw new AccessError("You cannot change your own role", 400);
-        Object.assign(updateData, await resolveRoleAssignment(actor, { role, adminRoleId }));
+        Object.assign(
+          updateData,
+          await resolveRoleAssignment(actor, { role, adminRoleId }, target.role),
+        );
+        roleChanged = true;
       }
 
-      const updatedAdmin = await updateAdminService(id, updateData);
+      // Details (whitelisted fields, email/phone duplicate checks); a new
+      // password only from a super admin or the admin themselves
+      let updatedAdmin: any = await updateManagedUser("admin", id, updateData, {
+        allowPassword: actor.role === Role.SUPERUSER || id === actor.id,
+      });
+      if (roleChanged) {
+        const { role: newRole, adminRoleId: newAdminRoleId } = updateData;
+        updatedAdmin = await prisma.admin.update({
+          where: { id },
+          data: { role: newRole, adminRoleId: newAdminRoleId },
+          select: { id: true, username: true, email: true, role: true, adminRoleId: true },
+        });
+      }
+
+      if (roleChanged) {
+        const roleName = updateData.adminRoleId
+          ? (await prisma.adminRole.findUnique({ where: { id: updateData.adminRoleId } }))?.name || updateData.role
+          : updateData.role;
+
+        try {
+          await createNotificationService({
+            title: "Your Role Was Updated",
+            message: `Your role has been changed to ${roleName}.`,
+            eventType: "ADMIN_ROLE_CHANGED",
+            targetType: "SPECIFIC_USER",
+            targetId: id,
+            metadata: { roleName, changedBy: actor.id },
+          });
+        } catch (notifError) {
+          console.error("Failed to create role-change notification:", notifError);
+        }
+
+        try {
+          await sendRoleChangedEmail({
+            email: updatedAdmin.email,
+            username: updatedAdmin.username,
+            roleName,
+            changedBy: actor.username,
+          });
+        } catch (emailError) {
+          console.error("Failed to send role-change email:", emailError);
+        }
+      }
 
       res.status(200).json({
         success: true,
@@ -425,62 +508,32 @@ export class UserController {
     }
   };
 
-  static deleteFarmer = async (req: Request, res: Response) => {
+  // Delete = move to the trash (soft delete), super admin only (also enforced
+  // by the routes). Restore / permanent delete live in the trash routes.
+  static deleteFarmer = async (req: Request, res: Response) =>
+    UserController.trashAccount(req, res, "farmer", "Farmer moved to the trash");
+
+  static deleteRestaurant = async (req: Request, res: Response) =>
+    UserController.trashAccount(req, res, "restaurant", "Restaurant moved to the trash");
+
+  static deleteAdmin = async (req: Request, res: Response) =>
+    UserController.trashAccount(req, res, "admin", "User moved to the trash");
+
+  private static trashAccount = async (
+    req: Request,
+    res: Response,
+    type: ManagedUserType,
+    message: string,
+  ) => {
     try {
-      const { id } = req.params;
-      await deleteFarmerService(id);
-
-      res.status(200).json({
-        success: true,
-        message: "Farmer deleted successfully",
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  };
-
-  static deleteRestaurant = async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      await deleteRestaurantService(id);
-
-      res.status(200).json({
-        success: true,
-        message: "Restaurant deleted successfully",
-      });
-    } catch (error: any) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  };
-
-  static deleteAdmin = async (req: Request, res: Response) => {
-    try {
-      const id = req.params.id as string;
       const actor = (req as any).user;
-      if (id === actor.id) throw new AccessError("You cannot delete your own account", 400);
-
-      const target = await prisma.admin.findUnique({ where: { id }, select: { role: true } });
-      if (target?.role === Role.SUPERUSER && actor.role !== Role.SUPERUSER) {
-        throw new AccessError("Only a super admin can delete a super admin");
+      if (actor?.role !== Role.SUPERUSER) {
+        throw new UserManagementError("Only a super admin can delete users", 403);
       }
-
-      await deleteAdminService(id);
-
-      res.status(200).json({
-        success: true,
-        message: "Admin deleted successfully",
-      });
+      await moveUserToTrash(type, req.params.id as string, actor.id);
+      res.status(200).json({ success: true, message });
     } catch (error: any) {
-      res.status(error instanceof AccessError ? error.status : 400).json({
-        success: false,
-        message: error.message,
-      });
+      UserController.sendManagementError(res, error);
     }
   };
 
@@ -746,9 +799,15 @@ export class UserController {
         ...userWithoutPassword
       } = user;
 
-      // Dashboard users get their effective permissions (drives the sidebar)
-      if (isDashboardRole(user.role)) {
+      // Dashboard users (office and field) get their effective permissions (drives the sidebar)
+      if (hasDashboardAccess(user.role)) {
         userWithoutPassword.permissions = await getEffectivePermissions(user);
+        // Customer types they work with (null = all) for the Customers tabs
+        userWithoutPassword.customerTypeScope = await getCustomerTypeScope(user);
+      }
+      // The dashboard reads the role as "adminRole" (the relation is named AdminRole)
+      if (userRole === "admin") {
+        userWithoutPassword.adminRole = user.AdminRole ?? null;
       }
 
       return res.json({
@@ -775,9 +834,10 @@ export class UserController {
 
       const result = await requestPasswordResetService(email);
 
-      res.status(200).json({
-        success: true,
+      res.status(result.success ? 200 : 502).json({
+        success: result.success,
         message: result.message,
+        otpDelivery: result.otpDelivery,
       });
     } catch (error: any) {
       res.status(400).json({
@@ -835,9 +895,10 @@ export class UserController {
 
       const result = await resetPasswordService(token, newPassword);
 
-      res.status(200).json({
-        success: true,
+      res.status(result.success ? 200 : 502).json({
+        success: result.success,
         message: result.message,
+        otpDelivery: result.otpDelivery,
       });
     } catch (error: any) {
       res.status(400).json({
@@ -860,9 +921,10 @@ export class UserController {
 
       const result = await requestPasswordResetViaPhoneService(phone);
 
-      res.status(200).json({
-        success: true,
+      res.status(result.success ? 200 : 502).json({
+        success: result.success,
         message: result.message,
+        otpDelivery: result.otpDelivery,
       });
     } catch (error: any) {
       res.status(400).json({
@@ -956,14 +1018,18 @@ export class UserController {
       const restaurantData = req.body;
       const result = await createRestaurantByAdminService(restaurantData);
 
-      if (result.phone) {
-        await OTPService.sendRestaurantSignupOTP(result.phone);
-      }
+      const otpResult = result.phone
+        ? await OTPService.sendRestaurantSignupOTP(result.phone, result.email)
+        : null;
 
-      res.status(201).json({
-        success: true,
-        message: "Restaurant created successfully. Password sent via SMS.",
+      res.status(otpResult?.success ? 201 : 502).json({
+        success: Boolean(otpResult?.success),
+        accountCreated: true,
+        message:
+          otpResult?.message ??
+          "Restaurant created, but no phone number was available for signup OTP delivery.",
         data: result,
+        otpDelivery: otpResult?.channels,
       });
     } catch (error: any) {
       res.status(400).json({
