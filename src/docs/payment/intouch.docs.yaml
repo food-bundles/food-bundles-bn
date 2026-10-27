@@ -26,7 +26,7 @@ components:
         callbackurl:
           type: string
           description: Override the default callback URL for this transaction
-          example: "https://server.food.rw/webhooks/intouch"
+          example: "https://server-test.food.rw/payments/intouch"
 
     IntouchDepositRequest:
       type: object
@@ -223,7 +223,7 @@ paths:
                   amount: 1000
                   mobilephone: "250781234567"
                   requesttransactionid: "ORDER-2024-001"
-                  callbackurl: "https://server.food.rw/webhooks/intouch"
+                  callbackurl: "https://server-test.food.rw/payments/intouch"
               airtel_payment:
                 summary: Airtel Money payment (250 72x/73x)
                 value:

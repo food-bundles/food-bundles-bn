@@ -31,7 +31,7 @@ components:
           example: "Order ORD-001"
         callbackUrl:
           type: string
-          example: "https://server.food.rw/webhooks/mtn-momo"
+          example: "https://server-test.food.rw/payments/mtn-momo"
 
     MtnPaymentResult:
       type: object
@@ -161,7 +161,7 @@ paths:
                   externalId: "ORDER-2024-003"
                   payerMessage: "FoodBundles Order"
                   payeeNote: "Order ORD-003"
-                  callbackUrl: "https://server.food.rw/webhooks/mtn-momo"
+                  callbackUrl: "https://server-test.food.rw/payments/mtn-momo"
               minimum_amount:
                 summary: Minimum test amount
                 value:
