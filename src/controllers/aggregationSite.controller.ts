@@ -9,6 +9,8 @@ import {
   releaseMembersFromSite,
   siteCandidates,
   autoAssignFarmerSite,
+  createSite,
+  SiteInputError,
   getAssignment,
   getSiteMembers,
   isValidCoordinate,
@@ -88,6 +90,21 @@ export const updateFarmerLocationController = catchAsyncError(
     );
     const sites = await nearestSitesForFarmer(farmerId, 1);
     res.status(200).json({ success: true, message: "Location saved", data: sites });
+  }
+);
+
+// Admin: add a collection point by hand (one that is not in the WFP market list)
+export const createSiteController = catchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const site = await createSite(req.body ?? {});
+      res.status(201).json({ success: true, message: "Aggregation site added", data: site });
+    } catch (error) {
+      if (error instanceof SiteInputError) {
+        return next(new errorHandler({ message: error.message, statusCode: error.status }));
+      }
+      throw error;
+    }
   }
 );
 

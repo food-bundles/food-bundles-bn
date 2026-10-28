@@ -7,6 +7,7 @@ import {
   removeSiteMembersController,
   assignAggregatorSiteController,
   assignAllSitesController,
+  createSiteController,
   assignFarmerSiteController,
   getAssignmentController,
   getSiteMembersController,
@@ -20,6 +21,7 @@ import {
 const aggregationSiteRoutes = Router();
 
 aggregationSiteRoutes.get("/", isAuthenticated, allow.to("markets.view"), listSitesController);
+aggregationSiteRoutes.post("/", isAuthenticated, allow.to("markets.edit"), createSiteController);
 aggregationSiteRoutes.post("/sync-wfp", isAuthenticated, allow.to("markets.edit"), syncSitesController);
 aggregationSiteRoutes.post("/assign-all", isAuthenticated, allow.to("markets.edit"), assignAllSitesController);
 aggregationSiteRoutes.get("/assigned-farmers", isAuthenticated, allow.to("markets.view"), listAssignedFarmersController);
