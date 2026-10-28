@@ -11,6 +11,7 @@ import { FarmerFeedbackStatus, Role } from "@prisma/client";
 import { PaginationService } from "../services/paginationService";
 import { ProductSubmissionInput } from "../types/productTypes";
 import errorHandler, { catchAsyncError } from "../utils/errorhandler.utlity";
+import { MAX_DELIVERY_DAYS_AHEAD } from "../services/aggregationSite.service";
 
 export default class FarmerController {
   static submitFarmerFeedback = async (req: Request, res: Response) => {
@@ -317,19 +318,22 @@ export const submitProductController = catchAsyncError(
       );
     }
 
-    // deliveryDate is optional; when given it must be a valid date that is not in the past
+    // deliveryDate (day and time) is optional; when given it must be a valid moment between now and
+    // two weeks from now. A few minutes of slack cover a phone clock that runs slightly behind.
     let parsedDeliveryDate: Date | undefined;
     if (deliveryDate !== undefined && deliveryDate !== null && deliveryDate !== "") {
       parsedDeliveryDate = new Date(deliveryDate);
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
+      const now = Date.now();
+      const earliest = now - 10 * 60 * 1000;
+      const latest = now + MAX_DELIVERY_DAYS_AHEAD * 24 * 60 * 60 * 1000;
       if (
         isNaN(parsedDeliveryDate.getTime()) ||
-        parsedDeliveryDate.getTime() < startOfToday.getTime()
+        parsedDeliveryDate.getTime() < earliest ||
+        parsedDeliveryDate.getTime() > latest
       ) {
         return next(
           new errorHandler({
-            message: "deliveryDate must be a valid date that is not in the past",
+            message: `deliveryDate must be a day and time between now and ${MAX_DELIVERY_DAYS_AHEAD} days from now`,
             statusCode: 400,
           })
         );

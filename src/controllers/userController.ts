@@ -54,12 +54,14 @@ import {
 } from "../services/user-management.service";
 import { createNotificationService } from "../services/notification.services";
 import { sendRoleChangedEmail } from "../utils/emails";
+import { tryAutoAssign } from "../services/aggregationSite.service";
 
 export class UserController {
   static createFarmer = async (req: Request, res: Response) => {
     try {
       const farmerData = req.body;
       const result = await createFarmerService(farmerData);
+      if ((result as any)?.id) await tryAutoAssign("farmer", (result as any).id);
 
       res.status(201).json({
         success: true,
@@ -202,6 +204,7 @@ export class UserController {
       });
       const adminData = { ...req.body, ...assignment };
       const result = await createAdminService(adminData);
+      if (result.role === Role.AGGREGATOR) await tryAutoAssign("aggregator", result.id);
       const isAdmin = result.role === Role.ADMIN;
       let sms;
 
@@ -415,6 +418,8 @@ export class UserController {
       const data = await updateManagedUser(type, id, req.body || {}, {
         allowPassword: isSelf || actor?.role === Role.SUPERUSER,
       });
+      // A new location means a new nearest site (an admin's choice is kept)
+      if (type === "farmer") await tryAutoAssign("farmer", id);
 
       res.status(200).json({ success: true, message, data });
     } catch (error: any) {
@@ -464,6 +469,9 @@ export class UserController {
           select: { id: true, username: true, email: true, role: true, adminRoleId: true },
         });
       }
+
+      // Aggregators work from the site nearest their district (an admin's choice is kept)
+      await tryAutoAssign("aggregator", id);
 
       if (roleChanged) {
         const roleName = updateData.adminRoleId
@@ -999,6 +1007,7 @@ export class UserController {
     try {
       const farmerData = req.body;
       const result = await createFarmerByAdminService(farmerData);
+      if ((result as any)?.id) await tryAutoAssign("farmer", (result as any).id);
 
       res.status(201).json({
         success: true,

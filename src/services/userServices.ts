@@ -221,6 +221,8 @@ export const getAllFarmersService = async (query: IPaginationQuery) => {
       email: true,
       name: true,
       createdAt: true,
+      siteAssignedByAdmin: true,
+      aggregationSite: { select: { id: true, name: true } },
       submissions: {
         select: {
           id: true,
@@ -931,6 +933,8 @@ export const getAllAdminsService = async (query: IPaginationQuery) => {
       cell: true,
       village: true,
       createdAt: true,
+      siteAssignedByAdmin: true,
+      aggregationSite: { select: { id: true, name: true } },
       AdminRole: { select: { id: true, name: true } }, // relation is named AdminRole in the schema
     },
     orderBy: {
