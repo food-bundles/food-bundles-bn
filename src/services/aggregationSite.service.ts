@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import { randomUUID } from "crypto";
 
 export type PositionSource = "SUBMISSION_PIN" | "FARMER_PIN" | "DISTRICT_CENTER";
 
@@ -90,6 +91,98 @@ export async function syncSitesFromWfp() {
     created++;
   }
   return { markets: markets.length, created };
+}
+
+/** marketName of a site an admin added by hand: unique, and never the name of a WFP market */
+export const MANUAL_MARKET_PREFIX = "manual:";
+
+export class SiteInputError extends Error {
+  constructor(message: string, public status = 400) {
+    super(message);
+  }
+}
+
+/** Centre of the active sites in a province, when the district has none to measure from */
+async function provinceCenter(province?: string | null): Promise<Position | null> {
+  if (!province?.trim()) return null;
+  const sites = await prisma.aggregationSite.findMany({
+    where: { isActive: true, province: { equals: province.trim(), mode: "insensitive" } },
+    select: { latitude: true, longitude: true },
+  });
+  if (sites.length === 0) return null;
+  return {
+    latitude: sites.reduce((sum, s) => sum + s.latitude, 0) / sites.length,
+    longitude: sites.reduce((sum, s) => sum + s.longitude, 0) / sites.length,
+    source: "DISTRICT_CENTER",
+  };
+}
+
+/**
+ * Admin: add a collection point that is not in the WFP market list. It is active right away and the
+ * WFP sync never touches it. People already on a site stay there; "assign all" places those without one.
+ *
+ * Coordinates are optional: without them the site is placed at the centre of its district (or province),
+ * worked out from the other sites there, so nearest-site matching still works. An admin can correct the
+ * exact point later by editing the site.
+ */
+export async function createSite(input: {
+  name: unknown;
+  district?: unknown;
+  province?: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
+  isActive?: unknown;
+}) {
+  const name = typeof input.name === "string" ? input.name.trim() : "";
+  if (!name) throw new SiteInputError("Give the site a name");
+  if (input.isActive !== undefined && typeof input.isActive !== "boolean") {
+    throw new SiteInputError("isActive must be true or false");
+  }
+  const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
+  const district = text(input.district);
+  const province = text(input.province);
+
+  const given = (value: unknown) => value !== undefined && value !== null && value !== "";
+  let latitude: number;
+  let longitude: number;
+  let approximate = false;
+  if (given(input.latitude) || given(input.longitude)) {
+    latitude = Number(input.latitude);
+    longitude = Number(input.longitude);
+    if (!isValidCoordinate(latitude, longitude)) {
+      throw new SiteInputError("latitude and longitude must be valid coordinates");
+    }
+  } else {
+    const center = (await districtCenter(district)) ?? (await provinceCenter(province));
+    if (!center) {
+      throw new SiteInputError(
+        "Add the coordinates, or a district or province that already has other sites, so farmers can be matched to it"
+      );
+    }
+    latitude = center.latitude;
+    longitude = center.longitude;
+    approximate = true;
+  }
+
+  const duplicate = await prisma.aggregationSite.findFirst({
+    where: { name: { equals: name, mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (duplicate) throw new SiteInputError("A site with this name already exists", 409);
+
+  const site = await prisma.aggregationSite.create({
+    data: {
+      name,
+      marketName: `${MANUAL_MARKET_PREFIX}${randomUUID()}`,
+      district,
+      province,
+      latitude,
+      longitude,
+      isActive: (input.isActive as boolean | undefined) ?? true,
+    },
+  });
+  // approximate: placed at the district/province centre because no coordinates were given
+  return { ...site, farmerCount: 0, aggregatorCount: 0, approximate };
 }
 
 /** Centre of the active sites in a district: the best guess for a farmer who never shared a pin. */
