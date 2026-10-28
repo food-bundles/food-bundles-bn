@@ -21,6 +21,10 @@ model Farmer {
   /// Farm position (GPS pin or typed by the farmer); the nearest aggregation site is worked out from it
   latitude               Float?
   longitude              Float?
+  /// Where the farmer delivers: the nearest active site, worked out again whenever the position changes, unless an admin chose it
+  aggregationSiteId      String?
+  aggregationSite        AggregationSite?         @relation("FarmerSite", fields: [aggregationSiteId], references: [id], onDelete: SetNull)
+  siteAssignedByAdmin    Boolean                  @default(false)
   role                   Role                     @default(FARMER)
   preferredLanguage      String?                  @default("KINY")
   password               String?
@@ -54,6 +58,8 @@ model Farmer {
   /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
   deletedAt              DateTime?
   deletedBy              String?
+
+  @@index([aggregationSiteId])
 }
 
 model Restaurant {
@@ -104,8 +110,8 @@ model Restaurant {
   WishlistItem          WishlistItem[]
   deliveryAddresses     DeliveryAddress[]
   /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
-  deletedAt              DateTime?
-  deletedBy              String?
+  deletedAt             DateTime?
+  deletedBy             String?
   /// Aggregators who buy for this customer (e.g. a school)
   aggregatorLinks       AggregatorCustomer[]
   supplyRequests        SupplyRequest[]
@@ -367,6 +373,10 @@ model Admin {
   sector                   String?
   cell                     String?
   village                  String?
+  /// Aggregators: the site they work from (nearest to their district, unless an admin chose it)
+  aggregationSiteId        String?
+  aggregationSite          AggregationSite?      @relation("AggregatorSite", fields: [aggregationSiteId], references: [id], onDelete: SetNull)
+  siteAssignedByAdmin      Boolean               @default(false)
   twoFactorSecret          String?
   twoFactorEnabled         Boolean               @default(false)
   twoFactorBackupCodes     String[]              @default([])
@@ -397,14 +407,15 @@ model Admin {
   walletTransactions       WalletTransaction[]   @relation("WalletTransactionAdmin")
   approvedWithdrawals      WalletTransaction[]   @relation("WithdrawApprover")
   traderTransactions       WalletTransaction[]   @relation("TraderTransactions")
+  /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
+  deletedAt                DateTime?
+  deletedBy                String?
+  /// Customers (schools…) this aggregator buys for
+  aggregatorCustomers      AggregatorCustomer[]  @relation("AggregatorCustomers")
+  supplyRequestsCreated    SupplyRequest[]       @relation("SupplyRequestCreator")
 
   @@index([adminRoleId])
-  /// Soft delete: set when the user is moved to the trash (restorable by a super admin)
-  deletedAt              DateTime?
-  deletedBy              String?
-  /// Customers (schools…) this aggregator buys for
-  aggregatorCustomers      AggregatorCustomer[]       @relation("AggregatorCustomers")
-  supplyRequestsCreated    SupplyRequest[]            @relation("SupplyRequestCreator")
+  @@index([aggregationSiteId])
 }
 
 /// Admin-editable settings stored as JSON by key (e.g. "delivery_fee").
@@ -418,18 +429,18 @@ model AppSetting {
 /// Dashboard role created by a super admin. `permissions` holds keys from the
 /// backend permission catalog (src/config/permissions.ts), e.g. "orders.view".
 model AdminRole {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-  permissions String[] @default([])
+  id              String   @id @default(uuid())
+  name            String   @unique
+  description     String?
+  permissions     String[] @default([])
   /// Customer types (CustomerType ids) this role works with. Empty = all types.
   customerTypeIds String[] @default([])
   /// System roles are created by the backfill (Administrator, Market Prices
   /// Manager) and cannot be deleted.
-  isSystem    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  admins      Admin[]
+  isSystem        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  admins          Admin[]
 }
 
 model Product {
@@ -471,7 +482,6 @@ model Product {
   WishlistItem         WishlistItem[]
   supplyRequestItems   SupplyRequestItem[]
 }
-
 
 model CustomerType {
   id                    String                 @id @default(uuid())
@@ -655,6 +665,10 @@ model Order {
   OrderDelivery       OrderDelivery?
   orderItems          OrderItem[]
   VoucherTransaction  VoucherTransaction[]
+  /// Order created from an aggregator's request list (bought on the customer's behalf)
+  supplyRequestId     String?
+  supplyDate          DateTime?
+  supplyRequest       SupplyRequest?       @relation(fields: [supplyRequestId], references: [id])
 
   @@index([restaurantId])
   @@index([status])
@@ -667,10 +681,6 @@ model Order {
   @@index([paymentLinkToken])
   @@index([flwStatus])
   @@index([cartId])
-  /// Order created from an aggregator's request list (bought on the customer's behalf)
-  supplyRequestId     String?
-  supplyDate          DateTime?
-  supplyRequest       SupplyRequest?       @relation(fields: [supplyRequestId], references: [id])
 }
 
 model OrderItem {
@@ -1686,6 +1696,8 @@ model AggregationSite {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   submissions   FarmerSubmission[]
+  farmers       Farmer[]           @relation("FarmerSite")
+  aggregators   Admin[]            @relation("AggregatorSite")
 
   @@index([district])
   @@index([isActive])
@@ -1712,8 +1724,6 @@ model support_requests {
   @@index([status])
   @@index([ticketNumber])
 }
-
-
 
 model WishlistItem {
   id           String     @id @default(uuid())
@@ -1923,8 +1933,6 @@ enum CardEnrollmentStatus {
   REJECTED
 }
 
-
-
 enum LoanSessionStatus {
   REQUESTED
   APPROVED_LOCKED
@@ -2044,9 +2052,6 @@ enum KycConsentStatus {
   APPROVED
   REJECTED
 }
-
-
-
 
 /// Customers (schools, hotels…) an aggregator buys for
 model AggregatorCustomer {

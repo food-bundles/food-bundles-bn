@@ -9,7 +9,7 @@ export interface FarmerCropDemand {
   neededKg: number;
   ratePerKg: number;
   orderCount: number;
-  /** Name of the aggregation site nearest to the farmer; null when their position is unknown */
+  /** The farmer's aggregation site (the one an admin chose, else the nearest); null when unknown */
   deliveryPoint: string | null;
 }
 
@@ -37,7 +37,11 @@ export async function getFarmerCropDemand(
     _count: { _all: true },
   });
 
-  const [nearestSite] = await nearestSitesForFarmer(farmerId, 1).catch(() => []);
+  // Same site as the farmer's profile shows: the assigned one, else the nearest to them
+  const assigned = await prisma.farmer
+    .findUnique({ where: { id: farmerId }, select: { aggregationSite: { select: { name: true } } } })
+    .catch(() => null);
+  const nearestSite = assigned?.aggregationSite ?? (await nearestSitesForFarmer(farmerId, 1).catch(() => []))[0];
   const byProduct = new Map(grouped.map((g) => [g.productId, g]));
   return crops
     .map((c) => {

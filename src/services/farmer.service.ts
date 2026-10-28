@@ -2,7 +2,7 @@ import { FarmerFeedbackStatus, SubmissionStatus } from "@prisma/client";
 import { answerCounterOffer } from "./submission-flow.service";
 import { IPaginationOptions } from "../types/productVerifyTypes";
 import { PaginationService } from "./paginationService";
-import { nearestSitesForFarmer, siteForSubmission } from "./aggregationSite.service";
+import { autoAssignFarmerSite, nearestSitesForFarmer, siteForSubmission } from "./aggregationSite.service";
 import prisma from "../prisma";
 import { LocationValidationService } from "./location.service";
 import { ProductSubmissionInput } from "../types/productTypes";
@@ -406,20 +406,28 @@ export async function submitProductService(
     }
   }
 
-  // The nearest active aggregation site is assigned automatically (this harvest's pin first, then
-  // the farmer's saved position, then their district). A lookup failure must not block the submission.
-  const [nearestSite] = await nearestSitesForFarmer(submissionData.farmerId, 1, {
-    latitude: submissionData.latitude,
-    longitude: submissionData.longitude,
-  }).catch((error) => {
-    console.error("Failed to find the nearest aggregation site:", error);
-    return [];
-  });
+  // The harvest goes to the farmer's own aggregation site (nearest to them, or the one an admin chose).
+  // A pin sent with this harvest still wins, and a lookup failure must not block the submission.
+  const hasPin = submissionData.latitude != null && submissionData.longitude != null;
+  let siteId: string | undefined;
+  try {
+    if (hasPin) {
+      const [nearestSite] = await nearestSitesForFarmer(submissionData.farmerId, 1, {
+        latitude: submissionData.latitude,
+        longitude: submissionData.longitude,
+      });
+      siteId = nearestSite?.id;
+    } else {
+      siteId = (await autoAssignFarmerSite(submissionData.farmerId)) ?? undefined;
+    }
+  } catch (error) {
+    console.error("Failed to find the aggregation site:", error);
+  }
 
   // Create submission with farmer's location data
   const submission = await prisma.farmerSubmission.create({
     data: {
-      aggregationSiteId: nearestSite?.id,
+      aggregationSiteId: siteId,
       farmerId: submissionData.farmerId,
       productName: productData.productName,
       categoryId: productData.categoryId,

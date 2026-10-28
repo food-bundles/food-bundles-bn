@@ -25,6 +25,7 @@ import {
 } from "../controllers/farmerDashboard.controller";
 
 import {
+  getMySiteController,
   getNearestSitesController,
   updateFarmerLocationController,
 } from "../controllers/aggregationSite.controller";
@@ -54,6 +55,7 @@ farmerDashboardRoutes.patch(
 farmerDashboardRoutes.put("/primary-crops", updatePrimaryCropsController);
 farmerDashboardRoutes.patch("/phone", addFarmerPhoneController);
 farmerDashboardRoutes.get("/nearest-site", getNearestSitesController);
+farmerDashboardRoutes.get("/my-site", getMySiteController);
 farmerDashboardRoutes.patch("/location", updateFarmerLocationController);
 farmerDashboardRoutes.get("/preferences", getFarmerPreferencesController);
 farmerDashboardRoutes.patch("/preferences", updateFarmerPreferencesController);

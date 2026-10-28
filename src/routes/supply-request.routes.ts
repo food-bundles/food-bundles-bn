@@ -37,12 +37,18 @@ const run =
 const user = (req: Request) => (req as any).user;
 
 // ── Farmers ──────────────────────────────────────────────────────────────────
-/** GET /supply-requests/farmer/open — open requests with what is still missing */
+/**
+ * GET /supply-requests/farmer/open — open requests with what is still missing.
+ * A farmer only gets the lines for their own crops, on requests near them; a super user sees them all.
+ */
 supplyRequestRoutes.get(
   "/farmer/open",
   isAuthenticated,
   checkPermission("FARMER"),
-  run(() => listOpenRequestsForFarmers(), "Failed to load requests"),
+  run(
+    (req) => listOpenRequestsForFarmers(user(req).role === "FARMER" ? user(req).id : undefined),
+    "Failed to load requests",
+  ),
 );
 
 /** POST /supply-requests/farmer/items/:itemId/submit { date, quantity, price? } */

@@ -3,6 +3,7 @@ import { userCan } from "../middleware/authMiddleware";
 import { canSeeCustomerType } from "./access.service";
 import { generateOrderNumber } from "./order.services";
 import { createNotificationService } from "./notification.services";
+import { tryAutoAssign } from "./aggregationSite.service";
 
 /**
  * Supply requests: an aggregator lists the products a customer (e.g. a school)
@@ -346,17 +347,57 @@ export const getSupplyRequest = async (user: any, requestId: string) => {
 // ─── Farmers ──────────────────────────────────────────────────────────────────
 
 /**
+ * Where one farmer can supply: their crops, their aggregation site (assigned now if they have none)
+ * and their district. Used to keep a farmer's list to requests for what they grow, near them.
+ */
+const farmerSupplyScope = async (farmerId: string) => {
+  const load = () =>
+    prisma.farmer.findUnique({
+      where: { id: farmerId },
+      select: {
+        district: true,
+        aggregationSite: { select: { id: true, name: true, district: true } },
+        FarmerPrimaryCrop: { select: { productId: true } },
+      },
+    });
+  let farmer = await load();
+  if (farmer && !farmer.aggregationSite) {
+    await tryAutoAssign("farmer", farmerId);
+    farmer = await load();
+  }
+  if (!farmer) return null;
+  const districts = [farmer.district, farmer.aggregationSite?.district]
+    .filter((d): d is string => !!d)
+    .map((d) => d.toLowerCase());
+  return {
+    productIds: farmer.FarmerPrimaryCrop.map((c) => c.productId),
+    site: farmer.aggregationSite,
+    districts: [...new Set(districts)],
+  };
+};
+
+/**
  * Open requests farmers can supply: each product with its next days (up to
  * two weeks) and how much is still missing on each.
+ *
+ * With a farmer id, only the lines for the crops they grow, on requests near them: posted by an
+ * aggregator of their site, or for a customer in their district (or their site's district). A farmer
+ * whose place is not known yet sees every request for their crops. Each request then also says where
+ * to deliver (their site).
  */
-export const listOpenRequestsForFarmers = async () => {
+export const listOpenRequestsForFarmers = async (farmerId?: string) => {
   const today = dayKey(new Date());
+  const scope = farmerId ? await farmerSupplyScope(farmerId) : null;
+  if (farmerId && (!scope || scope.productIds.length === 0)) return [];
+
   const requests = await prisma.supplyRequest.findMany({
     where: { status: "OPEN", endDate: { gte: dayToDate(today) } },
     orderBy: { startDate: "asc" },
     include: {
       restaurant: { select: { district: true, customerType: { select: { name: true } } } },
+      createdBy: { select: { aggregationSiteId: true } },
       items: {
+        ...(scope ? { where: { productId: { in: scope.productIds } } } : {}),
         include: {
           product: { select: { productName: true, unit: true, images: true } },
           submissions: {
@@ -368,7 +409,17 @@ export const listOpenRequestsForFarmers = async () => {
     },
   });
 
+  const isNear = (request: (typeof requests)[number]) => {
+    if (!scope) return true;
+    const placeKnown = !!scope.site || scope.districts.length > 0;
+    if (!placeKnown) return true;
+    if (scope.site && request.createdBy?.aggregationSiteId === scope.site.id) return true;
+    const district = request.restaurant.district?.toLowerCase();
+    return !!district && scope.districts.includes(district);
+  };
+
   return requests
+    .filter(isNear)
     .map((request) => {
       const from = dayKey(request.startDate) > today ? dayKey(request.startDate) : today;
       const to = [addDays(from, 13), dayKey(request.endDate)].sort()[0];
@@ -398,6 +449,7 @@ export const listOpenRequestsForFarmers = async () => {
         district: request.restaurant.district,
         startDate: request.startDate,
         endDate: request.endDate,
+        ...(scope ? { deliveryPoint: scope.site?.name ?? null } : {}),
         lines: lines.filter((l) => l.missing > 0).sort((a, b) => a.date.localeCompare(b.date)),
       };
     })
