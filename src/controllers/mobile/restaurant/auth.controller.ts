@@ -5,6 +5,8 @@ import {
   mobileResetPasswordService,
   mobileUpdateProfileService,
   mobileRestaurantRegisterService,
+  mobileVerifyOTPService,
+  mobileResendOTPService,
 } from "../../../services/mobile/restaurant/auth.service";
 import prisma from "../../../prisma";
 import { verifyToken } from "../../../utils/jwt";
@@ -15,8 +17,37 @@ export const mobileRegister = async (req: Request, res: Response) => {
     if (!name || !email || !tin || !password) {
       return res.status(400).json({ success: false, message: "Name, email, TIN, and password are required" });
     }
+    if (!phone) {
+      return res.status(400).json({ success: false, message: "Phone number is required for OTP verification" });
+    }
     const result = await mobileRestaurantRegisterService({ name, email, phone, tin, password, role: role ?? "RESTAURANT" });
-    res.status(201).json({ success: true, message: "Account created", token: result.token, data: result.user });
+    res.status(201).json({ success: true, message: "Account created. Please verify your phone number.", data: result.user });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const mobileVerifyOTP = async (req: Request, res: Response) => {
+  try {
+    const { phone, otp } = req.body;
+    if (!phone || !otp) {
+      return res.status(400).json({ success: false, message: "Phone and OTP are required" });
+    }
+    const result = await mobileVerifyOTPService(phone, otp);
+    res.status(200).json({ success: true, message: "Phone verified successfully", token: result.token, data: result.user });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const mobileResendOTP = async (req: Request, res: Response) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, message: "Phone number is required" });
+    }
+    const result = await mobileResendOTPService(phone);
+    res.status(result.success ? 200 : 502).json({ success: result.success, message: result.message });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
   }

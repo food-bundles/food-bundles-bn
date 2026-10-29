@@ -1,5 +1,7 @@
 import { loginService, createRestaurantService, requestPasswordResetViaPhoneService, resetPasswordViaPhoneService, updateRestaurantService } from "../../userServices";
 import { generateToken } from "../../../utils/jwt";
+import { OTPService } from "../../otp.service";
+import prisma from "../../../prisma";
 
 export const mobileRestaurantRegisterService = async (data: {
   name: string;
@@ -17,12 +19,41 @@ export const mobileRestaurantRegisterService = async (data: {
     password: data.password,
     role: data.role as any,
     agreed: true,
-    verified: true,
+    verified: false, // stays unverified until OTP confirmed
+  });
+
+  // Send OTP to phone (and email as fallback) for phone verification
+  if (data.phone) {
+    await OTPService.sendRestaurantSignupOTP(data.phone, data.email);
+  }
+
+  const { password: _, ...user } = restaurant as any;
+  return { user };
+};
+
+export const mobileVerifyOTPService = async (phone: string, otp: string) => {
+  const result = await OTPService.verifyOTP(phone, otp, "RESTAURANT_SIGNUP");
+  if (!result.success) throw new Error(result.message);
+
+  // Mark restaurant as verified
+  const restaurant = await prisma.restaurant.update({
+    where: { phone },
+    data: { verified: true },
   });
 
   const token = generateToken({ id: restaurant.id });
   const { password: _, ...user } = restaurant as any;
   return { token, user };
+};
+
+export const mobileResendOTPService = async (phone: string) => {
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { phone },
+    select: { email: true, verified: true },
+  });
+  if (!restaurant) throw new Error("No account found for this phone number");
+  if (restaurant.verified) throw new Error("Account is already verified");
+  return OTPService.sendRestaurantSignupOTP(phone, restaurant.email);
 };
 
 export const mobileRestaurantLoginService = async (credentials: {
