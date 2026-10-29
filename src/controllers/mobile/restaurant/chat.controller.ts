@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../../../prisma";
-import { wsManager } from "../../../index";
+import wsManager from "../../../utils/ws_singleton";
 
 const user = (req: Request) => (req as any).user;
 

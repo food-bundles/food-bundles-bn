@@ -9,7 +9,7 @@ import YAML from "yamljs";
 import { IncomingMessage } from "http";
 import routes from "./routes";
 import { ENV } from "./config";
-import WebSocketManager from "./utils/websocket_manager";
+import wsManagerSingleton from "./utils/ws_singleton";
 import { DeliveryService } from "./services/delivery.service";
 import { scheduleVoucherReminders } from "./jobs/voucher-reminder.job";
 import { scheduleWeeklyPriceUpdate } from "./services/newsletter.service";
@@ -41,7 +41,7 @@ const app = express();
 const httpServer = http.createServer(app);
 
 // Initialize WebSocket Manager
-export const wsManager = new WebSocketManager();
+export const wsManager = wsManagerSingleton;
 wsManager.initialize(httpServer);
 
 app.use(
