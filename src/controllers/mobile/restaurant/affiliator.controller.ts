@@ -3,6 +3,8 @@ import {
   mobileGetAffiliators,
   mobileCreateAffiliator,
   mobileDeleteAffiliator,
+  mobileUpdateAffiliator,
+  mobileGetAffiliatorById,
 } from "../../../services/mobile/restaurant/affiliator.service";
 
 const user = (req: Request) => (req as any).user;
@@ -40,5 +42,24 @@ export const mobileAffiliatorDelete = async (req: Request, res: Response) => {
     res.status(200).json({ message: result.message });
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to delete affiliator" });
+  }
+};
+
+export const mobileAffiliatorGet = async (req: Request, res: Response) => {
+  try {
+    const affiliator = await mobileGetAffiliatorById(req.params.affiliatorId);
+    res.status(200).json({ message: "Affiliator retrieved", data: affiliator });
+  } catch (error: any) {
+    res.status(404).json({ message: error.message || "Affiliator not found" });
+  }
+};
+
+export const mobileAffiliatorUpdate = async (req: Request, res: Response) => {
+  try {
+    const { name, phone } = req.body;
+    const affiliator = await mobileUpdateAffiliator(req.params.affiliatorId, { name, phone });
+    res.status(200).json({ message: "Affiliator updated", data: affiliator });
+  } catch (error: any) {
+    res.status(400).json({ message: error.message || "Failed to update affiliator" });
   }
 };

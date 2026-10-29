@@ -15,6 +15,9 @@ import marketRoutes from "./market.routes";
 import aiRoutes from "./ai.routes";
 import chatRoutes from "./chat.routes";
 import configRoutes from "./config.routes";
+import voucherCardRoutes from "./voucher-card.routes";
+import promoRoutes from "./promo.routes";
+import twoFactorRoutes from "./twoFactor.routes";
 
 const restaurantMobileRouter = Router();
 
@@ -34,5 +37,8 @@ restaurantMobileRouter.use("/market", marketRoutes);
 restaurantMobileRouter.use("/ai", aiRoutes);
 restaurantMobileRouter.use("/chat", chatRoutes);
 restaurantMobileRouter.use("/config", configRoutes);
+restaurantMobileRouter.use("/voucher-card", voucherCardRoutes);
+restaurantMobileRouter.use("/promo", promoRoutes);
+restaurantMobileRouter.use("/2fa", twoFactorRoutes);
 
 export default restaurantMobileRouter;
