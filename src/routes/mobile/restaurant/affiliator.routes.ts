@@ -4,6 +4,8 @@ import {
   mobileAffiliatorsList,
   mobileAffiliatorCreate,
   mobileAffiliatorDelete,
+  mobileAffiliatorGet,
+  mobileAffiliatorUpdate,
 } from "../../../controllers/mobile/restaurant/affiliator.controller";
 
 const router = Router();
@@ -14,6 +16,12 @@ router.get("/", ...guard, mobileAffiliatorsList);
 
 // POST   /mobile/restaurant/affiliators
 router.post("/", ...guard, mobileAffiliatorCreate);
+
+// GET    /mobile/restaurant/affiliators/:affiliatorId
+router.get("/:affiliatorId", ...guard, mobileAffiliatorGet);
+
+// PATCH  /mobile/restaurant/affiliators/:affiliatorId
+router.patch("/:affiliatorId", ...guard, mobileAffiliatorUpdate);
 
 // DELETE /mobile/restaurant/affiliators/:affiliatorId
 router.delete("/:affiliatorId", ...guard, mobileAffiliatorDelete);

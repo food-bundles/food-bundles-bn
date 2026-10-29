@@ -3,6 +3,8 @@ import {
   mobileGetWallet,
   mobileTopUpWallet,
   mobileGetWalletTransactions,
+  mobileVerifyTopUp,
+  mobileGetVoucherTransfers,
 } from "../../../services/mobile/restaurant/wallet.service";
 
 const user = (req: Request) => (req as any).user;
@@ -42,6 +44,29 @@ export const mobileWalletTopUp = async (req: Request, res: Response) => {
     res
       .status(500)
       .json({ message: error.message || "Failed to top up wallet" });
+  }
+};
+
+export const mobileGetVoucherTransfersController = async (req: Request, res: Response) => {
+  try {
+    const transfers = await mobileGetVoucherTransfers((req as any).user.id);
+    res.status(200).json({ message: "Voucher transfers retrieved", data: transfers });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || "Failed to get voucher transfers" });
+  }
+};
+
+export const mobileVerifyTopUpController = async (req: Request, res: Response) => {
+  try {
+    const { txId } = req.params;
+    if (!txId) {
+      res.status(400).json({ message: "Transaction ID is required" });
+      return;
+    }
+    const result = await mobileVerifyTopUp(txId);
+    res.status(200).json({ message: "Verification result", data: result });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || "Failed to verify top-up" });
   }
 };
 
