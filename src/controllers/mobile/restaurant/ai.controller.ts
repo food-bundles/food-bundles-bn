@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import axios from "axios";
+import crypto from "crypto";
 import prisma from "../../../prisma";
+import { cacheGet, cacheSet } from "../../../utils/redis";
 
 const AI_BASE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const AI_SERVICE_SECRET = process.env.AI_SERVICE_SECRET || "";
@@ -90,12 +92,44 @@ async function fetchUserContext(restaurantId: string): Promise<Record<string, un
   }
 }
 
+function aiCacheKey(endpoint: string, question: string, history: any[]): string {
+  const recentHistory = Array.isArray(history) ? history.slice(-6) : [];
+  const raw = endpoint + "||" + question + "||" + JSON.stringify(recentHistory);
+  return "ai:" + crypto.createHash("sha256").update(raw).digest("hex").slice(0, 24);
+}
+
 async function proxyAi(
   endpoint: string,
-  body: object,
+  body: Record<string, any>,
   res: Response,
-  fallback: string
+  fallback: string,
+  cacheable = false,
 ) {
+  const { question, history = [] } = body;
+
+  if (cacheable && question) {
+    const key = aiCacheKey(endpoint, question, history);
+    const cached = await cacheGet(key);
+    if (cached) {
+      try {
+        return res.json({ message: "AI response", data: JSON.parse(cached) });
+      } catch {
+        // cache corrupt — fall through
+      }
+    }
+
+    try {
+      const response = await axios.post(`${AI_BASE_URL}${endpoint}`, body, { timeout: 30000 });
+      await cacheSet(key, JSON.stringify(response.data), 300); // 5 min TTL
+      return res.json({ message: "AI response", data: response.data });
+    } catch (error: any) {
+      if (error.code === "ECONNREFUSED" || error.code === "ETIMEDOUT") {
+        return res.json({ message: "AI response", data: { answer: fallback, platform_url: "https://food.rw" } });
+      }
+      return res.status(500).json({ message: error.message || "AI service error" });
+    }
+  }
+
   try {
     const response = await axios.post(`${AI_BASE_URL}${endpoint}`, body, {
       timeout: 30000,
@@ -170,7 +204,8 @@ export const mobileAiMarketIntelligence = async (req: Request, res: Response) =>
     "/mobile/restaurant/market-intelligence",
     { question, history, user_id: u.id, role: u.role },
     res,
-    "Market intelligence is temporarily unavailable."
+    "Market intelligence is temporarily unavailable.",
+    true, // cacheable — market data doesn't change per user
   );
 };
 
